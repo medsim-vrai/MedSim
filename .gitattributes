@@ -1,0 +1,47 @@
+# Normalize line endings: git stores LF; text files check out as LF everywhere.
+# Keeps diffs clean across macOS/Linux/Windows and matches prettier/eslint/ruff.
+* text=auto eol=lf
+
+# --- Explicit text (LF) ------------------------------------------------------
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.svg   text eol=lf
+*.py    text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.sh    text eol=lf
+*.obj   text eol=lf
+gradlew text eol=lf
+
+# --- Windows-native scripts keep CRLF ---------------------------------------
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# --- Binary (never normalize or text-diff) ----------------------------------
+*.wasm  binary
+*.task  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.wav   binary
+*.mp3   binary
+*.ogg   binary
+*.glb   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.pdf   binary
+*.keystore binary
