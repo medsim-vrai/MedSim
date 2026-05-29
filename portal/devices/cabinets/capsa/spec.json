@@ -1,0 +1,40 @@
+{
+  "device_kind": "cabinet",
+  "device_model": "capsa",
+  "display_name": "Capsa NexsysADC",
+  "manufacturer": "Capsa Healthcare",
+  "screens": ["lock", "login", "menu", "patients", "verbs", "meds", "remove", "scan", "witness", "discrepancies", "override", "count", "restock", "alert"],
+  "controls": {
+    "touch_targets": ["btn-login", "btn-badge", "btn-logout", "btn-home",
+                       "btn-remove", "btn-return", "btn-waste", "btn-count", "btn-discrepancies", "btn-override",
+                       "btn-accept", "btn-cancel", "btn-scan", "btn-ekit"],
+    "screen_fields": ["banner-user", "banner-station", "banner-clock", "banner-discrepancy",
+                       "scr-patient", "scr-med", "scr-status", "scr-loc",
+                       "scan-status", "list-patients", "list-meds"]
+  },
+  "verbs": ["remove", "return", "waste", "count", "discrepancies", "override"],
+  "alert_map": {
+    "scan_success": "scan_success", "scan_mismatch": "scan_mismatch",
+    "transaction_complete": "transaction_complete",
+    "login_success": "login_success", "login_failed": "login_failed",
+    "discrepancy_alert": "discrepancy_alert",
+    "witness_required": "witness_required",
+    "inventory_low": "inventory_low",
+    "ekit_expiration": "ekit_expiration",
+    "drawer_open": "drawer_open",
+    "drawer_failure": "drawer_failure",
+    "network_offline": "network_offline",
+    "security_alert": "security_alert"
+  },
+  "auth": {"methods": ["password", "badge"], "session_timeout_seconds": 600},
+  "ekit_support": true,
+  "medications": [
+    {"id": "med_morphine_10",   "name": "Morphine",      "strength": "10 mg",     "route": "IM", "schedule_class": "II",  "ndc": "41111111101", "count":  8, "par_level": 15, "location": "cam_a", "requires_witness": true,  "wastable": true},
+    {"id": "med_lorazepam_2",   "name": "Lorazepam",     "strength": "2 mg",      "route": "IV", "schedule_class": "IV",  "ndc": "41111111102", "count":  6, "par_level": 12, "location": "cam_b", "requires_witness": true,  "wastable": true},
+    {"id": "med_ekit_codeblue", "name": "Code Blue e-kit","strength": "kit",      "route": "IV", "schedule_class": "Rx",  "ndc": "41111111199", "count":  2, "par_level":  4, "location": "ekit_1", "requires_witness": false, "wastable": false, "expiration_days": 30},
+    {"id": "med_acetaminophen", "name": "Acetaminophen", "strength": "650 mg",    "route": "PO", "schedule_class": "OTC", "ndc": "41111111103", "count": 35, "par_level": 50, "location": "d1_p2", "requires_witness": false, "wastable": false},
+    {"id": "med_ondansetron",   "name": "Ondansetron",   "strength": "4 mg",      "route": "IV", "schedule_class": "Rx",  "ndc": "41111111104", "count": 15, "par_level": 25, "location": "d1_p4", "requires_witness": false, "wastable": false}
+  ],
+  "low_inventory_threshold": 0.3,
+  "critical_inventory_threshold": 0.15
+}

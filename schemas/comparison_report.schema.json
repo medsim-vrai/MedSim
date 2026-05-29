@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ComparisonReport",
+  "description": "MEDSIM V3 — output of the hybrid comparison engine. Persisted in comparison_report table and consumed by the debrief renderer.",
+  "type": "object",
+  "required": ["rules", "rubric", "score"],
+  "properties": {
+    "built_at":   {"type": "number"},
+    "score":      {"type": "number", "minimum": 0, "maximum": 1, "description": "Composite 0..1"},
+    "model":      {"type": "string"},
+    "cost_cents": {"type": "integer", "minimum": 0},
+    "rules": {
+      "type": "object",
+      "properties": {
+        "hits":        {"type": "array", "items": {"type": "object", "properties": {"item": {"type": "string"}, "module": {"type": "string"}, "cat": {"type": "string"}}}},
+        "misses":      {"type": "array", "items": {"type": "object", "properties": {"item": {"type": "string"}, "module": {"type": "string"}, "cat": {"type": "string"}}}},
+        "speculative": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "rubric": {
+      "type": "object",
+      "properties": {
+        "completeness":     {"type": "integer", "minimum": 1, "maximum": 4},
+        "accuracy":         {"type": "integer", "minimum": 1, "maximum": 4},
+        "sbar_quality":     {"type": "integer", "minimum": 1, "maximum": 4},
+        "prioritization":   {"type": "integer", "minimum": 1, "maximum": 4},
+        "safety":           {"type": "integer", "minimum": 1, "maximum": 4},
+        "narrative_feedback": {"type": "string"}
+      }
+    }
+  }
+}

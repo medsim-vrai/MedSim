@@ -1,0 +1,262 @@
+{# M63 — Full chart sections (everything OTHER than the MAR /
+   continuous / tube-feed / PRN / labs blocks the MAR-focused
+   templates already render). Included as a partial so the
+   operator chart (medical_records_chart.html) and the
+   workstation chart (medical_records_workstation_chart.html)
+   share one source of truth for these sections.
+
+   Expected context variables (all optional — sections render only
+   when their data is non-empty):
+     - chief_complaint, code_status (strings)
+     - allergies, problem_list, vitals_baseline, immunizations,
+       family_history, surgical_history, care_team, notes_recent,
+       iv_fluids (lists)
+     - social_history, encounter_meta (dicts)
+     - persona (dict — for demographics) #}
+
+{# ── Alert banner: code status + allergies + chief complaint ──── #}
+{% if chief_complaint or code_status or allergies %}
+<article class="mr-card mr-alert-banner">
+  <div class="mr-alert-row">
+    {% if chief_complaint %}
+      <div class="mr-alert-cell">
+        <span class="mr-alert-label">Chief complaint</span>
+        <strong>{{ chief_complaint }}</strong>
+      </div>
+    {% endif %}
+    {% if code_status %}
+      <div class="mr-alert-cell mr-alert-code">
+        <span class="mr-alert-label">Code status</span>
+        <strong>{{ code_status }}</strong>
+      </div>
+    {% endif %}
+    {% if allergies %}
+      <div class="mr-alert-cell mr-alert-allergies">
+        <span class="mr-alert-label">⚠ Allergies</span>
+        <strong>
+          {% for a in allergies %}{{ a.substance or a.name or a }}{% if a.reaction %} ({{ a.reaction }}){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
+        </strong>
+      </div>
+    {% endif %}
+  </div>
+</article>
+{% endif %}
+
+{# ── Encounter / admission info ────────────────────────────────── #}
+{% if encounter_meta and (encounter_meta.admit_time or encounter_meta.location or encounter_meta.reason) %}
+<article class="mr-card">
+  <h2>🏥 Encounter</h2>
+  <dl class="mr-infusion-dl">
+    {% if encounter_meta.admit_time %}
+      <dt>Admitted</dt><dd>{{ encounter_meta.admit_time }}</dd>
+    {% endif %}
+    {% if encounter_meta.location %}
+      <dt>Location</dt><dd>{{ encounter_meta.location }}</dd>
+    {% endif %}
+    {% if encounter_meta.reason %}
+      <dt>Reason for visit</dt><dd>{{ encounter_meta.reason }}</dd>
+    {% endif %}
+    {% if encounter_meta.type %}
+      <dt>Encounter type</dt><dd>{{ encounter_meta.type }}</dd>
+    {% endif %}
+    {% if encounter_meta.attending %}
+      <dt>Attending</dt><dd>{{ encounter_meta.attending }}</dd>
+    {% endif %}
+  </dl>
+</article>
+{% endif %}
+
+{# ── Problem list ─────────────────────────────────────────────── #}
+{% if problem_list %}
+<article class="mr-card">
+  <h2>📋 Problem list</h2>
+  <ul class="mr-list">
+    {% for p in problem_list %}
+      <li>
+        <strong>{{ p.name or p.problem or p }}</strong>
+        {% if p.icd10 %}<code class="mr-code">{{ p.icd10 }}</code>{% endif %}
+        {% if p.status %}<span class="mr-pill">{{ p.status }}</span>{% endif %}
+        {% if p.onset %}<span class="muted small">since {{ p.onset }}</span>{% endif %}
+        {% if p.note %}<div class="muted small">{{ p.note }}</div>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</article>
+{% endif %}
+
+{# ── Vital signs (most recent) ─────────────────────────────────── #}
+{% if vitals_baseline %}
+<article class="mr-card">
+  <h2>🩺 Vital signs (baseline)</h2>
+  <p class="muted small">Latest documented set. Real-time monitor values live on the Per-Patient Console / Nursing Station.</p>
+  <div class="mr-vitals-grid">
+    {% for v in vitals_baseline %}
+      <div class="mr-vital-cell">
+        <span class="mr-vital-label">{{ v.label or v.name or v.metric or '—' }}</span>
+        <strong class="mr-vital-value">{{ v.value or '—' }}</strong>
+        {% if v.unit %}<span class="muted small">{{ v.unit }}</span>{% endif %}
+        {% if v.ts %}<span class="muted small mr-vital-ts">{{ v.ts }}</span>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</article>
+{% endif %}
+
+{# ── Allergies (full detail) ───────────────────────────────────── #}
+{% if allergies %}
+<article class="mr-card">
+  <h2>⚠ Allergies</h2>
+  <ul class="mr-list">
+    {% for a in allergies %}
+      <li>
+        <strong>{{ a.substance or a.name or a }}</strong>
+        {% if a.reaction %}<span class="muted small">— {{ a.reaction }}</span>{% endif %}
+        {% if a.severity %}<span class="mr-pill mr-pill-{{ (a.severity or '') | lower }}">{{ a.severity }}</span>{% endif %}
+        {% if a.onset %}<span class="muted small">· since {{ a.onset }}</span>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</article>
+{% endif %}
+
+{# ── IV fluids (non-med drips: maintenance / boluses) ──────────── #}
+{% if iv_fluids %}
+<article class="mr-card">
+  <h2>💉 IV fluids</h2>
+  <div class="mr-infusion-list">
+    {% for fl in iv_fluids %}
+      <div class="mr-infusion">
+        <header>
+          <strong>{{ fl.fluid or fl.name or '—' }}</strong>
+          {% if fl.route %}<span class="muted small">via {{ fl.route }}</span>{% endif %}
+        </header>
+        <dl class="mr-infusion-dl">
+          {% if fl.rate_ml_hr %}<dt>Rate</dt><dd>{{ fl.rate_ml_hr }} mL/hr</dd>{% endif %}
+          {% if fl.volume_ml %}<dt>Volume</dt><dd>{{ fl.volume_ml }} mL</dd>{% endif %}
+          {% if fl.additives %}
+            <dt>Additives</dt>
+            <dd>
+              {% for ad in fl.additives %}
+                {{ ad.name }} {{ ad.dose or '' }}{% if not loop.last %}<br>{% endif %}
+              {% endfor %}
+            </dd>
+          {% endif %}
+          {% if fl.indication %}<dt>Indication</dt><dd>{{ fl.indication }}</dd>{% endif %}
+          {% if fl.started_at %}<dt>Started</dt><dd>{{ fl.started_at }}</dd>{% endif %}
+        </dl>
+      </div>
+    {% endfor %}
+  </div>
+</article>
+{% endif %}
+
+{# ── Notes (from the seed — admission, daily, consults) ───────── #}
+{% if notes_recent %}
+<article class="mr-card">
+  <h2>🗒 Recent notes</h2>
+  <ul class="mr-notes-list">
+    {% for n in notes_recent %}
+      <li class="mr-note">
+        <header>
+          <strong>{{ n.title or n.type or 'Note' }}</strong>
+          <span class="muted small">{{ n.author or '—' }} · {{ n.ts or '' }}</span>
+        </header>
+        {% if n.body %}<div class="mr-note-body">{{ n.body }}</div>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</article>
+{% endif %}
+
+{# ── Care team ────────────────────────────────────────────────── #}
+{% if care_team %}
+<article class="mr-card">
+  <h2>👥 Care team</h2>
+  <ul class="mr-list">
+    {% for m in care_team %}
+      <li>
+        <strong>{{ m.name }}</strong>
+        <span class="muted small">{{ m.role or '—' }}</span>
+        {% if m.contact %}<span class="muted small">· {{ m.contact }}</span>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+</article>
+{% endif %}
+
+{# ── History (social + family + surgical + immunizations) ──── #}
+{% if social_history or family_history or surgical_history or immunizations %}
+<article class="mr-card">
+  <h2>📜 History</h2>
+  <div class="mr-history-grid">
+    {% if social_history %}
+      <div class="mr-history-block">
+        <h3>Social</h3>
+        <dl class="mr-history-dl">
+          {% for k, v in social_history.items() %}
+            <dt>{{ k | replace('_', ' ') | title }}</dt><dd>{{ v }}</dd>
+          {% endfor %}
+        </dl>
+      </div>
+    {% endif %}
+    {% if family_history %}
+      <div class="mr-history-block">
+        <h3>Family</h3>
+        <ul class="mr-list mr-list-compact">
+          {% for f in family_history %}
+            <li>
+              <strong>{{ f.relation or f.relative or '—' }}:</strong>
+              {{ f.condition or f.name or f }}
+              {% if f.status %}<span class="muted small">— {{ f.status }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+    {% if surgical_history %}
+      <div class="mr-history-block">
+        <h3>Surgical</h3>
+        <ul class="mr-list mr-list-compact">
+          {% for s in surgical_history %}
+            <li>
+              <strong>{{ s.procedure or s.name or s }}</strong>
+              {% if s.date %}<span class="muted small">· {{ s.date }}</span>{% endif %}
+              {% if s.note %}<div class="muted small">{{ s.note }}</div>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+    {% if immunizations %}
+      <div class="mr-history-block">
+        <h3>Immunizations</h3>
+        <ul class="mr-list mr-list-compact">
+          {% for i in immunizations %}
+            <li>
+              <strong>{{ i.name or i.vaccine or i }}</strong>
+              {% if i.date %}<span class="muted small">· {{ i.date }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+  </div>
+</article>
+{% endif %}
+
+{# ── Demographics & identifiers (always shown) ─────────────────── #}
+<article class="mr-card">
+  <h2>👤 Demographics &amp; identifiers</h2>
+  <dl class="mr-infusion-dl">
+    {% if persona.name %}<dt>Name</dt><dd>{{ persona.name }}</dd>{% endif %}
+    {% if persona.mrn %}<dt>MRN</dt><dd>{{ persona.mrn }}</dd>{% endif %}
+    {% if seed and seed.fin %}<dt>FIN</dt><dd>{{ seed.fin }}</dd>{% endif %}
+    {% if seed and seed.dob %}<dt>Date of birth</dt><dd>{{ seed.dob }}</dd>{% endif %}
+    {% if seed and seed.sex %}<dt>Sex</dt><dd>{{ seed.sex }}</dd>{% endif %}
+    {% if seed and seed.pronouns %}<dt>Pronouns</dt><dd>{{ seed.pronouns }}</dd>{% endif %}
+    {% if seed and seed.weight %}<dt>Weight</dt><dd>{{ seed.weight }}</dd>{% endif %}
+    {% if seed and seed.height %}<dt>Height</dt><dd>{{ seed.height }}</dd>{% endif %}
+    {% if seed and seed.bsa %}<dt>BSA</dt><dd>{{ seed.bsa }} m²</dd>{% endif %}
+    {% if seed and seed.insurance %}<dt>Insurance</dt><dd>{{ seed.insurance }}</dd>{% endif %}
+  </dl>
+</article>

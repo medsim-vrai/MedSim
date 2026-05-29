@@ -1,0 +1,25 @@
+{
+  "comment": "Locked fixture for the speech path. See Claude Code Guide §5.2.",
+  "version": "1",
+  "date": "2026-05-28",
+  "characterId": "fixture-patient-001",
+  "scenarioId": "fixture-scenario-001",
+  "portraitFile": "portrait.png",
+  "utterance": "Good morning. Tell me about your symptoms.",
+  "expectedDurationMs": 2400,
+  "expectedVisemes": [
+    { "t":    0, "id": "viseme_sil", "w": 0.0 },
+    { "t":  150, "id": "jawOpen",    "w": 0.45 },
+    { "t":  300, "id": "mouthFunnel","w": 0.30 },
+    { "t":  600, "id": "viseme_sil", "w": 0.0  },
+    { "t": 1100, "id": "jawOpen",    "w": 0.55 },
+    { "t": 2400, "id": "viseme_sil", "w": 0.0  }
+  ],
+  "expectedBlendshapeSamples": [
+    { "tMs":  500, "weights": { "jawOpen": 0.45, "mouthSmileLeft": 0.05 } },
+    { "tMs": 1200, "weights": { "jawOpen": 0.55, "browInnerUp": 0.10 } },
+    { "tMs": 2300, "weights": { "jawOpen": 0.00, "mouthSmileLeft": 0.05 } }
+  ],
+  "toleranceMs": 50,
+  "toleranceWeight": 0.05
+}

@@ -1,0 +1,15 @@
+{
+  "_meta": {
+    "version": 1,
+    "description": "Enteral nutrition formula catalog. indications maps a condition slug → suggested formula. Used by ehr_seed._build_tube_feeds.",
+    "fields": "name, default_rate_ml_hr, default_target_rate_ml_hr, daily_volume_ml, route (NG / OG / PEG / J-tube), flush_volume_ml, flush_interval_h, indications[]"
+  },
+  "formulas": [
+    {"name": "Jevity 1.2",   "default_rate_ml_hr": 30, "default_target_rate_ml_hr": 60, "daily_volume_ml": 1440, "route": "NG", "flush_volume_ml": 30, "flush_interval_h": 4, "indications": ["delirium", "post_op_stable", "stable_baseline", "alcohol_withdrawal"]},
+    {"name": "Glucerna 1.2", "default_rate_ml_hr": 30, "default_target_rate_ml_hr": 55, "daily_volume_ml": 1320, "route": "NG", "flush_volume_ml": 30, "flush_interval_h": 4, "indications": ["dka", "hyperglycemia_hhs"]},
+    {"name": "Nepro",        "default_rate_ml_hr": 25, "default_target_rate_ml_hr": 50, "daily_volume_ml": 1200, "route": "NG", "flush_volume_ml": 25, "flush_interval_h": 4, "indications": ["aki", "hyperkalemia"]},
+    {"name": "Pulmocare",    "default_rate_ml_hr": 30, "default_target_rate_ml_hr": 55, "daily_volume_ml": 1320, "route": "NG", "flush_volume_ml": 30, "flush_interval_h": 4, "indications": ["copd_exacerbation", "asthma_exacerbation"]},
+    {"name": "Vivonex T.E.N.", "default_rate_ml_hr": 25, "default_target_rate_ml_hr": 50, "daily_volume_ml": 1200, "route": "J-tube", "flush_volume_ml": 25, "flush_interval_h": 4, "indications": ["gi_bleed_upper"]},
+    {"name": "PediaSure 1.0","default_rate_ml_hr": 20, "default_target_rate_ml_hr": 40, "daily_volume_ml": 960,  "route": "NG", "flush_volume_ml": 15, "flush_interval_h": 4, "indications": ["peds_dehydration"]}
+  ]
+}

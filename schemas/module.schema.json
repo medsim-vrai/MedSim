@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "voice4medsim/v5/module.schema.json",
+  "title": "11-section Topic Context Block",
+  "description": "Every NCLEX-aligned module follows this exact 11-section schema (per strategy doc §3). Section names are reserved strings the loader keys off of.",
+  "type": "object",
+  "required": ["id", "title", "nclexDomain", "summary", "conditions", "medications", "devices", "procedures", "primaryTreatments", "alternateTreatments", "scopeOfPractice", "roleHooks", "redFlags"],
+  "properties": {
+    "id":           {"type": "string", "pattern": "^M[0-9]{2}$"},
+    "title":        {"type": "string", "minLength": 1},
+    "nclexDomain":  {"type": "string"},
+    "summary":      {"type": "string"},
+    "schemaVersion":{"type": "integer", "minimum": 1},
+
+    "conditions":         {"type": "array", "items": {"type": "string"}},
+    "medications":        {"type": "array", "items": {"type": "string"}},
+    "devices":            {"type": "array", "items": {"type": "string"}},
+    "procedures":         {"type": "array", "items": {"type": "string"}},
+    "redFlags":           {"type": "array", "items": {"type": "string"}},
+    "primaryTreatments":  {"type": "array", "items": {"type": "string"}},
+    "alternateTreatments":{"type": "array", "items": {"type": "string"}},
+
+    "scopeOfPractice": {
+      "type": "object",
+      "description": "Three roles. 'cannot' is a reserved word that triggers the LPN scope-of-practice gate.",
+      "required": ["LPN", "RN", "Advanced"],
+      "properties": {
+        "LPN":      {"type": "string"},
+        "RN":       {"type": "string"},
+        "Advanced": {"type": "string"}
+      }
+    },
+
+    "roleHooks": {
+      "type": "object",
+      "description": "Per-role canned line + behavior. All 4 role groups required.",
+      "required": ["Patient", "Family", "Clinician", "AlliedHealth"],
+      "properties": {
+        "Patient":      {"type": "string"},
+        "Family":       {"type": "string"},
+        "Clinician":    {"type": "string"},
+        "AlliedHealth": {"type": "string"}
+      }
+    },
+
+    "education":  {"type": "array", "items": {"type": "string"}},
+    "crossRefs":  {"type": "array", "items": {"type": "string", "pattern": "^M[0-9]{2}$"}}
+  },
+
+  "additionalProperties": true
+}

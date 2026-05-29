@@ -1,0 +1,14 @@
+{
+  "device_kind": "patient_integrated_alarm",
+  "device_model": "pia_v1",
+  "label": "Patient Integrated Alarm (PIA)",
+  "description": "Bedside tablet combining call bell, bed alarm, code blue, and intercom on a single screen. M51.",
+  "screens": ["main"],
+  "controls": {
+    "call_bell":     {"label": "Call bell",  "tone": "call_bell"},
+    "bed_alarm":     {"label": "Bed alarm",  "tone": "bed_alarm"},
+    "code_blue":     {"label": "Code BLUE",  "tone": "code_blue"},
+    "intercom":      {"label": "Intercom",   "tone": null}
+  },
+  "alarm_tones": ["call_bell", "bed_alarm", "code_blue"]
+}

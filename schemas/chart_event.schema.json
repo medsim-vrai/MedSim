@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ChartEvent",
+  "description": "MEDSIM V3 — single envelope for every EHR write. Append-only: the chart projection is computed by folding the event stream.",
+  "type": "object",
+  "required": ["type", "surface", "ehr_station_id", "ts_client", "payload"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "note.save", "note.addendum",
+        "vitals.record", "assessment.update",
+        "order.place", "order.modify",
+        "med.administer",
+        "allergy.add", "allergy.remove",
+        "problem.add", "problem.remove",
+        "result.acknowledge",
+        "intake.record", "output.record",
+        "communication.log",
+        "flag.raise",
+        "chart.open",
+        "session.idle", "session.resume"
+      ]
+    },
+    "surface": {
+      "type": "string",
+      "enum": ["chart", "notes", "vitals", "orders", "mar", "results", "allergies", "problems", "comms", "flowsheet", "io", "demographics"]
+    },
+    "patient_id":     {"type": ["string", "null"]},
+    "ehr_station_id": {"type": "string"},
+    "ts_client":      {"type": "integer", "description": "Client clock, ms since epoch"},
+    "payload":        {"type": "object"}
+  }
+}

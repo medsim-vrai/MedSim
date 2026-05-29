@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ persona.name }} · Medical Records · Training Bridge VRAI- MedSim</title>
+  <link rel="stylesheet" href="/static/portal.css">
+  <link rel="stylesheet" href="{{ static_v('medical_records.css') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#143b8a">
+</head>
+<body class="station-body">
+  <main class="mr-ws-page">
+
+    <header class="page-header mr-chart-header">
+      <div>
+        <a href="/students/medical_records?code={{ room_code }}&role={{ role }}&initials={{ initials }}"
+           class="back-link">← Patients</a>
+        <h1>{{ persona.name }}</h1>
+        <p class="muted small">
+          {{ persona.location_label }}
+          {% if encounter_label %} · {{ encounter_label }}{% endif %}
+          {% if persona.mrn %} · MRN {{ persona.mrn }}{% endif %}
+          · current shift: <strong>{{ status.current_shift }}</strong>
+          {% if user %}· charting as <strong>{{ user }} ({{ initials }})</strong>{% endif %}
+        </p>
+        {% if role == "supervisor" or role == "admin" %}
+          <p class="mr-ws-role-badge mr-ws-role-supervisor">
+            🩺 Supervisor session — can add labs / notes
+          </p>
+        {% elif role == "instructor" %}
+          <p class="mr-ws-role-badge mr-ws-role-instructor">
+            👨‍⚕️ Instructor session — can add labs / notes
+          </p>
+        {% endif %}
+      </div>
+      <div class="mr-chart-counters">
+        <span class="mr-counter">⏰ {{ status.due_in_current_shift }} due this shift</span>
+        <span class="mr-counter">💧 {{ status.continuous_count }} infusion{% if status.continuous_count != 1 %}s{% endif %}</span>
+        <span class="mr-counter">🆘 {{ status.prn_count }} PRN</span>
+        <span class="mr-counter">🧪 {{ status.labs_pending }} labs pending</span>
+      </div>
+    </header>
+
+    {# M63 — Full chart sections from the seed (alert banner, problem
+       list, vitals, allergies, IV fluids, notes_recent, care team,
+       history, demographics). Each section renders only when its
+       data is non-empty so the page stays clean for sparse seeds. #}
+    {% include "_medical_records_full_chart.html" %}
+
+    {# Notes & updates inserted by instructor / supervisor / others. #}
+    {% if chart_inserts %}
+    <article class="mr-card">
+      <h2>📝 Notes &amp; Updates</h2>
+      <ul class="mr-inserts-list">
+        {% for ins in chart_inserts %}
+          <li class="mr-insert mr-insert-{{ ins.kind }}">
+            <header>
+              <strong>{{ ins.title }}</strong>
+              <span class="muted small">
+                {{ ins.author_name or 'anonymous' }}
+                ({{ ins.author_initials }}, {{ ins.author_role }})
+              </span>
+            </header>
+            {% if ins.body %}
+              <div class="mr-insert-body">{{ ins.body }}</div>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </article>
+    {% endif %}
+
+    {# Add-to-chart forms — only for instructor / supervisor / admin. #}
+    {% if can_edit %}
+    <article class="mr-card mr-card-add">
+      <h2>📝 Add to chart</h2>
+      <p class="muted small">
+        Add a lab result, doctor's note, or other supporting
+        information to {{ persona.name }}'s chart. Tagged with your
+        identity.
+      </p>
+      <form id="mr-add-form" class="mr-add-form" onsubmit="return false">
+        <input type="hidden" name="persona_id" value="{{ persona.character_id }}">
+        <label>
+          <span>Kind</span>
+          <select id="mr-add-kind" name="kind">
+            <option value="lab">Lab result</option>
+            <option value="doctor_note">Doctor's note</option>
+            <option value="note">Other note / update</option>
+          </select>
+        </label>
+        <label>
+          <span id="mr-add-title-label">Lab name / Title</span>
+          <input type="text" id="mr-add-title" name="title"
+                 placeholder="e.g. CBC, Troponin, Doctor's order" required>
+        </label>
+        <label>
+          <span>Details / Body</span>
+          <textarea id="mr-add-body" name="body" rows="3"
+                    placeholder="Result value + unit, note text, supporting info…"></textarea>
+        </label>
+        <div class="mr-add-actions">
+          <button type="submit" class="primary-action" id="mr-add-submit">+ Add to chart</button>
+          <span id="mr-add-status" class="muted small"></span>
+        </div>
+      </form>
+    </article>
+    {% endif %}
+
+    {# Three-shift MAR — same render as the operator chart. #}
+    <article class="mr-card">
+      <h2>💊 Medication Administration Record</h2>
+      <p class="muted small">
+        Standard three-shift structure. Frequency drives the
+        scheduled administration times.
+      </p>
+      {% if scheduled_meds %}
+        <div class="mr-mar-wrap">
+          <table class="mr-mar-table">
+            <thead>
+              <tr>
+                <th class="mr-mar-med">Medication</th>
+                <th class="mr-mar-route">Route</th>
+                <th class="mr-mar-freq">Frequency</th>
+                {% for shift in shifts %}
+                  <th class="mr-mar-shift">
+                    <strong>{{ shift[0] }}</strong>
+                    <div class="muted small">
+                      {{ '%02d'|format(shift[1]) }}:00 –
+                      {% if shift[2] == 7 %}07:00{% else %}{{ '%02d'|format(shift[2]) }}:00{% endif %}
+                    </div>
+                  </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in scheduled_meds %}
+                <tr>
+                  <td class="mr-mar-med">
+                    <strong>{{ m.name }}</strong>
+                    {% if m.high_alert %}
+                      <span class="mr-high-alert">⚠ HIGH-ALERT</span>
+                    {% endif %}
+                    <div class="muted small">{{ m.dose }}</div>
+                  </td>
+                  <td class="mr-mar-route"><code>{{ m.route or '—' }}</code></td>
+                  <td class="mr-mar-freq"><strong>{{ m.frequency_label }}</strong></td>
+                  {% for shift in shifts %}
+                    <td class="mr-mar-slot">
+                      {% set slot_times = m.shifts[shift[0]] %}
+                      {% if slot_times %}
+                        {% for t in slot_times %}
+                          <span class="mr-slot-time">{{ t }}</span>
+                        {% endfor %}
+                      {% else %}
+                        <span class="muted small">—</span>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="muted small mr-empty-row">No scheduled meds on this MAR.</p>
+      {% endif %}
+    </article>
+
+    {% if continuous_meds %}
+    <article class="mr-card">
+      <h2>💧 Continuous Infusions (IV)</h2>
+      <div class="mr-infusion-list">
+        {% for m in continuous_meds %}
+          <div class="mr-infusion">
+            <header>
+              <strong>{{ m.name }}</strong>
+              {% if m.high_alert %}
+                <span class="mr-high-alert">⚠ HIGH-ALERT</span>
+              {% endif %}
+              <span class="muted small mr-infusion-class">{{ m.drug_class }}</span>
+            </header>
+            <dl class="mr-infusion-dl">
+              <dt>Concentration / dose</dt><dd>{{ m.dose or '—' }}</dd>
+              <dt>Route</dt><dd>{{ m.route or 'IV' }}</dd>
+              <dt>Status</dt>
+              <dd>{{ m.current_status or '—' }}
+                {% if m.first_dose_at %}
+                  <span class="muted small"> · started {{ m.first_dose_at }}</span>
+                {% endif %}
+              </dd>
+              {% if m.rationale %}
+                <dt>Indication</dt><dd>{{ m.rationale }}</dd>
+              {% endif %}
+            </dl>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+    {% endif %}
+
+    {% if tube_feeds %}
+    <article class="mr-card">
+      <h2>🥣 Tube Feeds</h2>
+      <div class="mr-infusion-list">
+        {% for tf in tube_feeds %}
+          <div class="mr-infusion">
+            <header>
+              <strong>{{ tf.formula }}</strong>
+              <span class="muted small">via {{ tf.route }}</span>
+            </header>
+            <dl class="mr-infusion-dl">
+              <dt>Rate</dt>
+              <dd>{{ tf.rate_ml_hr or '—' }} mL/hr
+                {% if tf.target_rate_ml_hr and tf.target_rate_ml_hr != tf.rate_ml_hr %}
+                  <span class="muted small">(target {{ tf.target_rate_ml_hr }} mL/hr)</span>
+                {% endif %}
+              </dd>
+              <dt>Daily volume</dt><dd>{{ tf.daily_volume_ml or '—' }} mL</dd>
+              {% if tf.infused_ml is not none %}
+                <dt>Infused so far</dt><dd>{{ tf.infused_ml }} mL</dd>
+              {% endif %}
+              {% if tf.flush_volume_ml %}
+                <dt>Water flush</dt>
+                <dd>{{ tf.flush_volume_ml }} mL
+                  {% if tf.flush_interval_h %}q{{ tf.flush_interval_h }}h{% endif %}
+                </dd>
+              {% endif %}
+              {% if tf.indication %}
+                <dt>Indication</dt><dd>{{ tf.indication }}</dd>
+              {% endif %}
+            </dl>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+    {% endif %}
+
+    {% if prn_meds %}
+    <article class="mr-card">
+      <h2>🆘 PRN / As-needed</h2>
+      <ul class="mr-prn-list">
+        {% for m in prn_meds %}
+          <li>
+            <strong>{{ m.name }}</strong>
+            <span class="muted small">{{ m.dose }} {{ m.route }}</span>
+            {% if m.high_alert %}<span class="mr-high-alert">⚠ HIGH-ALERT</span>{% endif %}
+            {% if m.rationale %}
+              <div class="muted small">{{ m.rationale }}</div>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </article>
+    {% endif %}
+
+    {% if labs %}
+    <article class="mr-card">
+      <h2>🧪 Labs</h2>
+      <ul class="mr-labs-list">
+        {% for lab in labs %}
+          <li class="mr-lab {% if (lab.status or '') | lower in ('ordered', 'pending', 'in_lab', 'resulting') %}mr-lab-pending{% endif %}">
+            <strong>{{ lab.name or lab.test or 'Lab' }}</strong>
+            {% if lab.value is defined and lab.value is not none %}
+              <span class="mr-lab-value">{{ lab.value }} {{ lab.unit or '' }}</span>
+            {% endif %}
+            {% if lab.status %}
+              <span class="mr-lab-status">{{ lab.status }}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </article>
+    {% endif %}
+
+  </main>
+
+  {% if can_edit %}
+  <script>
+    (function () {
+      const form    = document.getElementById("mr-add-form");
+      const kindEl  = document.getElementById("mr-add-kind");
+      const titleEl = document.getElementById("mr-add-title");
+      const bodyEl  = document.getElementById("mr-add-body");
+      const submit  = document.getElementById("mr-add-submit");
+      const status  = document.getElementById("mr-add-status");
+      const tlabel  = document.getElementById("mr-add-title-label");
+      function updateLabel() {
+        const k = kindEl.value;
+        if (k === "lab") {
+          tlabel.textContent = "Lab name (e.g. CBC, Troponin)";
+          titleEl.placeholder = "Lab name";
+          bodyEl.placeholder  = "Result value + unit (e.g. WBC 12.3 K/µL)";
+        } else if (k === "doctor_note") {
+          tlabel.textContent = "Note title (e.g. Cardiology consult)";
+          titleEl.placeholder = "Note title";
+          bodyEl.placeholder  = "Doctor's note text";
+        } else {
+          tlabel.textContent = "Title";
+          titleEl.placeholder = "Short title";
+          bodyEl.placeholder  = "Note body";
+        }
+      }
+      if (kindEl) {
+        kindEl.addEventListener("change", updateLabel);
+        updateLabel();
+      }
+      if (submit) submit.addEventListener("click", async () => {
+        if (!titleEl.value.trim()) { titleEl.focus(); return; }
+        const body = {
+          kind:             kindEl.value,
+          title:            titleEl.value.trim(),
+          body:             bodyEl.value.trim(),
+          author_name:      {{ user | tojson }},
+          author_initials:  {{ initials | tojson }},
+          author_role:      {{ role | tojson }},
+        };
+        if (status) status.textContent = "saving…";
+        submit.disabled = true;
+        try {
+          const r = await fetch(
+            "/api/medical_records/" + encodeURIComponent({{ persona.character_id | tojson }}) + "/insert",
+            {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body:    JSON.stringify(body),
+            });
+          if (!r.ok) {
+            const detail = await r.text();
+            if (status) status.textContent = "failed: " + detail;
+            return;
+          }
+          if (status) status.textContent = "added — reloading…";
+          setTimeout(() => window.location.reload(), 600);
+        } catch (e) {
+          if (status) status.textContent = "network error";
+        } finally {
+          submit.disabled = false;
+        }
+      });
+    })();
+  </script>
+  {% endif %}
+</body>
+</html>

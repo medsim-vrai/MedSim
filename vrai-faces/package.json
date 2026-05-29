@@ -1,0 +1,22 @@
+{
+  "name": "vrai-faces",
+  "version": "0.1.0-a0",
+  "private": true,
+  "description": "VRAI Faces — translucent animatable 3D avatar surface for MedSim V8.",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.10",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "pnpm -F @vrai/core dev",
+    "build": "pnpm -F @vrai/core build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm -F @vrai/core test:e2e",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

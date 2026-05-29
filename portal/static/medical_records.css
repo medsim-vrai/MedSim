@@ -1,0 +1,542 @@
+/* M61 — Medical Records styling.
+   Picker page → card grid, one per patient. Chart page → shift-MAR
+   table + infusion / tube-feed detail blocks + PRN + labs. */
+
+.mr-empty {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-radius: 8px;
+  padding: 24px;
+  margin: 18px 0;
+}
+
+.mr-picker {
+  margin-top: 16px;
+}
+
+.mr-patient-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.mr-patient-card {
+  display: block;
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-left: 4px solid #143b8a;
+  border-radius: 8px;
+  padding: 12px 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mr-patient-card:hover {
+  border-left-color: #5a4ec3;
+  box-shadow: 0 4px 14px rgba(20, 59, 138, 0.08);
+}
+
+.mr-patient-card-header {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.mr-patient-name { font-size: 15px; color: #0a234f; }
+.mr-patient-loc { margin: 0 0 10px; }
+
+.mr-status-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+.mr-status-cell {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 6px 4px;
+  background: #f4f7fc;
+  border-radius: 4px;
+  text-align: center;
+}
+.mr-status-cell.mr-status-due {
+  background: #fff4e6;
+}
+.mr-status-num {
+  font-size: 18px; font-weight: 800; color: #143b8a;
+  line-height: 1;
+}
+.mr-status-cell.mr-status-due .mr-status-num { color: #c47a04; }
+.mr-status-label {
+  font-size: 10px; color: #6b7896; margin-top: 4px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+/* ── Chart page ─────────────────────────────────────────────────── */
+
+.mr-chart-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; flex-wrap: wrap;
+}
+.mr-chart-counters {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.mr-counter {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #eef2ff;
+  color: #3d2f8a;
+  border: 1px solid #c1c8d6;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: #5a6273;
+  font-size: 12px;
+  text-decoration: none;
+}
+.back-link:hover { color: #143b8a; }
+
+.mr-card {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin: 14px 0;
+}
+.mr-card h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #0a234f;
+}
+.mr-card p { margin: 4px 0 10px; }
+
+.mr-high-alert {
+  background: #fdecea;
+  color: #962d22;
+  border: 1px solid #f5c0c1;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+/* ── Three-shift MAR table ─────────────────────────────────────── */
+
+.mr-mar-wrap { overflow-x: auto; }
+.mr-mar-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.mr-mar-table thead th {
+  background: #f4f7fc;
+  border: 1px solid #dde2ee;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: #3a4a6b;
+}
+.mr-mar-table td {
+  border: 1px solid #e9edf6;
+  padding: 8px 10px;
+  vertical-align: top;
+}
+.mr-mar-med strong { color: #0a234f; }
+.mr-mar-route code {
+  background: #eef2ff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.mr-mar-freq { font-weight: 600; color: #143b8a; }
+.mr-mar-slot {
+  background: #f9fafd;
+  text-align: center;
+  min-width: 90px;
+}
+.mr-slot-time {
+  display: inline-block;
+  margin: 1px 2px;
+  padding: 2px 8px;
+  background: #143b8a;
+  color: #fff;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+}
+.mr-mar-table thead th.mr-mar-shift {
+  text-align: center;
+}
+.mr-empty-row { padding: 18px; text-align: center; color: #6b7896; }
+
+/* ── Infusion + tube-feed detail blocks ────────────────────────── */
+
+.mr-infusion-list {
+  display: flex; flex-direction: column; gap: 10px;
+  margin-top: 8px;
+}
+.mr-infusion {
+  background: #f9fafd;
+  border: 1px solid #e2e6ef;
+  border-left: 3px solid #1f7a3a;
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.mr-infusion header {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.mr-infusion-class {
+  margin-left: auto;
+  font-style: italic;
+}
+
+.mr-infusion-dl {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+.mr-infusion-dl dt {
+  font-weight: 600;
+  color: #5a6273;
+}
+.mr-infusion-dl dd { margin: 0; }
+
+/* ── PRN list ───────────────────────────────────────────────────── */
+
+.mr-prn-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.mr-prn-list li {
+  padding: 6px 10px;
+  border-bottom: 1px solid #f0f3f8;
+}
+.mr-prn-list li:last-child { border-bottom: 0; }
+
+/* ── Labs ───────────────────────────────────────────────────────── */
+
+.mr-labs-list {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.mr-lab {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #f0f3f8;
+}
+.mr-lab:last-child { border-bottom: 0; }
+.mr-lab-value {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-weight: 600;
+}
+.mr-lab-status {
+  font-size: 11px;
+  color: #5a6273;
+  text-transform: lowercase;
+  padding: 1px 8px;
+  background: #eef2ff;
+  border-radius: 10px;
+}
+.mr-lab-pending { background: #fff8eb; }
+.mr-lab-pending .mr-lab-status {
+  background: #fdecea;
+  color: #962d22;
+}
+
+/* M62 — Workstation page layout (standalone, no sidebar). */
+.mr-ws-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px 22px 60px;
+  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+.mr-ws-header h1 { margin: 0 0 4px; color: #0a234f; }
+
+.mr-ws-role-badge {
+  display: inline-block;
+  margin: 6px 0;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.mr-ws-role-supervisor {
+  background: #d4f4dc; color: #1f7a3a; border: 1px solid #93d6a6;
+}
+.mr-ws-role-instructor {
+  background: #fff4e6; color: #c47a04; border: 1px solid #e6b27a;
+}
+
+.mr-ws-identify {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-left: 4px solid #5a4ec3;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 14px 0 12px;
+}
+.mr-ws-identify h2 { margin: 0 0 4px; font-size: 16px; color: #0a234f; }
+.mr-ws-identify-form {
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+  margin-top: 6px;
+}
+.mr-ws-identify-form label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 13px; color: #3a4a6b;
+}
+.mr-ws-identify-form input {
+  padding: 6px 10px;
+  border: 1px solid #c1c8d6; border-radius: 4px;
+  font: inherit; font-size: 13px;
+}
+.mr-ws-identify-form input:focus {
+  outline: none; border-color: #5a4ec3;
+  box-shadow: 0 0 0 2px rgba(90, 78, 195, 0.18);
+}
+
+/* M62 — Notes & Updates list + Add-to-chart form. */
+.mr-inserts-list { margin: 4px 0 0; padding: 0; list-style: none; }
+.mr-insert {
+  padding: 8px 10px;
+  background: #f9fafd;
+  border: 1px solid #e2e6ef;
+  border-left: 3px solid #5a4ec3;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+.mr-insert-lab { border-left-color: #c47a04; }
+.mr-insert-doctor_note { border-left-color: #1f7a3a; }
+.mr-insert header {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.mr-insert-body { font-size: 13px; color: #2c3a55; white-space: pre-wrap; }
+
+.mr-card-add {
+  background: #f0eefb;
+  border-color: #c1c8d6;
+}
+.mr-add-form {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 4px;
+}
+.mr-add-form label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 13px; color: #3a4a6b;
+}
+.mr-add-form input,
+.mr-add-form select,
+.mr-add-form textarea {
+  padding: 6px 10px;
+  border: 1px solid #c1c8d6; border-radius: 4px;
+  font: inherit; font-size: 13px; resize: vertical;
+}
+.mr-add-form input:focus,
+.mr-add-form select:focus,
+.mr-add-form textarea:focus {
+  outline: none; border-color: #5a4ec3;
+  box-shadow: 0 0 0 2px rgba(90, 78, 195, 0.18);
+}
+.mr-add-actions {
+  display: flex; align-items: center; gap: 10px;
+}
+
+/* M62 — Workstation panel on Multi-Patient Control. */
+.mr-ws-launch-panel {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-left: 4px solid #5a4ec3;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 16px 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+.mr-ws-launch-panel h3 { margin: 0 0 4px; font-size: 15px; color: #143b8a; }
+.mr-ws-launch-text p { margin: 4px 0 10px; }
+.mr-ws-launch-btn {
+  display: inline-block;
+  background: #5a4ec3; color: #fff;
+  padding: 8px 14px; border-radius: 6px;
+  font-weight: 700; text-decoration: none;
+}
+.mr-ws-launch-btn:hover { background: #3d2f8a; color: #fff; }
+.mr-ws-launch-qr {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: #f7f8fb; border: 1px solid #dde2ee; border-radius: 6px;
+  padding: 10px 12px; min-width: 160px;
+}
+.mr-ws-launch-qr img {
+  width: 130px; height: auto;
+  background: #fff; padding: 4px;
+  border: 1px solid #dde2ee; border-radius: 4px;
+}
+.mr-ws-launch-qr code {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 10px; color: #5a6273; word-break: break-all;
+}
+
+/* M62 — Nursing Station supervisor button. */
+.ns-supervisor-btn {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 6px 12px;
+  background: #c47a04;
+  color: #fff;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 12px;
+  text-decoration: none;
+  border: 0;
+  cursor: pointer;
+}
+.ns-supervisor-btn:hover { background: #9a5e03; }
+
+/* ── M63 — Full chart sections (alert banner, problem list, vitals,
+   allergies, IV fluids, recent notes, care team, history,
+   demographics). The shared partial uses these classes. */
+
+/* Alert banner: code status + allergies + chief complaint. */
+.mr-alert-banner {
+  background: #fff8eb;
+  border-left: 4px solid #c47a04;
+}
+.mr-alert-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.mr-alert-cell {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.mr-alert-label {
+  font-size: 11px;
+  color: #6b7896;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.mr-alert-cell strong { color: #0a234f; font-size: 14px; }
+.mr-alert-code strong { color: #1f7a3a; }
+.mr-alert-allergies strong { color: #962d22; }
+
+/* Generic list pattern used by problems / allergies / care team /
+   surgical / immunizations / family. */
+.mr-list { margin: 4px 0 0; padding: 0; list-style: none; }
+.mr-list li {
+  padding: 6px 10px;
+  border-bottom: 1px solid #f0f3f8;
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+}
+.mr-list li:last-child { border-bottom: 0; }
+.mr-list-compact li { padding: 4px 6px; font-size: 13px; }
+
+.mr-pill {
+  padding: 1px 8px;
+  background: #eef2ff;
+  color: #3d2f8a;
+  border: 1px solid #c1c8d6;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.mr-pill-severe   { background: #fdecea; color: #962d22; border-color: #f5c0c1; }
+.mr-pill-moderate { background: #fff4e6; color: #c47a04; border-color: #e6b27a; }
+.mr-pill-mild     { background: #eef2ff; color: #3d2f8a; }
+
+.mr-code {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  background: #eef2ff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #3d2f8a;
+}
+
+/* Vitals grid — small tiles with label + value. */
+.mr-vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+.mr-vital-cell {
+  background: #f9fafd;
+  border: 1px solid #e2e6ef;
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: center;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.mr-vital-label {
+  font-size: 11px; color: #6b7896;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.mr-vital-value {
+  font-size: 18px; font-weight: 800; color: #143b8a;
+  line-height: 1;
+}
+.mr-vital-ts { font-size: 10px; }
+
+/* Recent notes list. */
+.mr-notes-list { margin: 4px 0 0; padding: 0; list-style: none; }
+.mr-note {
+  padding: 8px 10px;
+  background: #f9fafd;
+  border: 1px solid #e2e6ef;
+  border-left: 3px solid #143b8a;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+.mr-note header {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.mr-note-body {
+  font-size: 13px; color: #2c3a55;
+  white-space: pre-wrap;
+}
+
+/* History grid — 4 sub-blocks (social, family, surgical, imms). */
+.mr-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+.mr-history-block {
+  background: #f9fafd;
+  border: 1px solid #e2e6ef;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.mr-history-block h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: #143b8a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.mr-history-dl {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 2px 8px;
+  margin: 0;
+  font-size: 12px;
+}
+.mr-history-dl dt { font-weight: 600; color: #5a6273; }
+.mr-history-dl dd { margin: 0; }

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Edit{% else %}New{% endif %} scenario{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>{% if is_edit %}Edit scenario{% else %}New scenario{% endif %}</h1>
+  <a href="/portal/scenarios" class="button-link">← Back to list</a>
+</header>
+
+<form method="post" action="{{ action }}" class="big-form">
+
+  <section class="form-section">
+    <h2>Basics</h2>
+    <div class="grid-2">
+      <label>Name
+        <input type="text" name="name" required value="{{ scenario.name }}"
+               placeholder="e.g. Postoperative sepsis">
+      </label>
+      <label>ID <span class="muted">(slug — auto-generated from name if blank)</span>
+        <input type="text" name="id" value="{{ scenario.id }}" pattern="[a-z0-9_]*"
+               placeholder="auto">
+      </label>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h2>Patient</h2>
+    <div class="grid-2">
+      <label>Age
+        <input type="number" name="patient_age" min="0" max="120"
+               value="{{ scenario.patient.age }}">
+      </label>
+      <label>Sex
+        <input type="text" name="patient_sex" value="{{ scenario.patient.sex }}"
+               placeholder="male / female / other">
+      </label>
+    </div>
+    <label>History
+      <textarea name="patient_history" rows="3"
+                placeholder="e.g. POD #2 from sigmoid resection. PMH: COPD…">{{ scenario.patient.history }}</textarea>
+    </label>
+    <label>Baseline vitals <span class="muted">(one per line — Key: value)</span>
+      <textarea name="patient_vitals" rows="5" class="mono"
+                placeholder="BP: 112/68&#10;HR: 84&#10;RR: 18&#10;SpO2: 96%&#10;T: 37.1 C">{% for k, v in scenario.patient.baseline_vitals.items() %}{{ k }}: {{ v }}
+{% endfor %}</textarea>
+    </label>
+  </section>
+
+  <section class="form-section">
+    <h2>Characters in this scenario</h2>
+    {% if all_characters %}
+      <div class="checkbox-grid">
+        {% for c in all_characters %}
+          <label class="checkbox-row">
+            <input type="checkbox" name="characters" value="{{ c.id }}"
+              {% if c.id in scenario.characters %}checked{% endif %}>
+            <span>
+              <strong>{{ c.name }}</strong>
+              <span class="muted">— {{ c.role or 'no role set' }}</span>
+            </span>
+          </label>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No characters defined yet.
+        <a href="/portal/characters/new">Create one →</a></p>
+    {% endif %}
+  </section>
+
+  <section class="form-section">
+    <h2>Curriculum</h2>
+    <label>Touchpoints <span class="muted">(one per line — what the learner should demonstrate)</span>
+      <textarea name="touchpoints" rows="5"
+                placeholder="Recognize the deterioration trend&#10;Initiate the hour-1 sepsis bundle&#10;Call appropriate consults">{{ scenario.curriculum.touchpoints | join('\n') }}</textarea>
+    </label>
+    <label>Unlocked <span class="muted">(curriculum gates that are unlocked from the start)</span>
+      <textarea name="unlocked" rows="2">{{ scenario.curriculum.unlocked | join('\n') }}</textarea>
+    </label>
+  </section>
+
+  <section class="form-section">
+    <h2>Tools and KB scope <span class="muted">(advanced — leave blank if unsure)</span></h2>
+    <label>Allowed tools <span class="muted">(one per line — e.g. read_chart, place_order)</span>
+      <textarea name="allowed_tools" rows="3">{{ scenario.allowed_tools | join('\n') }}</textarea>
+    </label>
+    <label>KB scope tags <span class="muted">(restrict B3 retrieval — one per line)</span>
+      <textarea name="kb_scope" rows="3">{{ scenario.kb_scope | join('\n') }}</textarea>
+    </label>
+  </section>
+
+  <div class="form-actions">
+    <button type="submit" class="primary-action">{% if is_edit %}Save changes{% else %}Create scenario{% endif %}</button>
+    <a href="/portal/scenarios" class="button-link">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 1010" width="780" height="1010">
+<!-- TRAINING SIMULATION overlay - B. Braun Infusomat Space (large-volume pump, KeyGuard arrow-key input, shown docked in a SpaceStation). Phase 2. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .kcap{font-size:11px;font-weight:bold;fill:#28303a}
+ .kcap2{font-size:9px;font-weight:bold;fill:#28303a}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .devname{font-size:20px;font-weight:bold;fill:#28303a}
+ .sub{font-size:11px;fill:#5b6470}
+ .fld{font-size:11px;fill:#9fb6c4}
+ .scrlbl{font-size:11px;fill:#7fae8e}
+ .badge{font-size:11px;fill:#7c8893}
+</style>
+<defs>
+ <linearGradient id="chassisGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#f4f5f3"/><stop offset="1" stop-color="#dadcd6"/>
+ </linearGradient>
+ <linearGradient id="dockGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#cfd4d8"/><stop offset="1" stop-color="#aeb6bd"/>
+ </linearGradient>
+ <linearGradient id="screenGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#1d3a4a"/><stop offset="1" stop-color="#13262f"/>
+ </linearGradient>
+ <radialGradient id="alarmLed" cx="0.4" cy="0.35" r="0.75">
+  <stop offset="0" stop-color="#ff7a6f"/><stop offset="0.55" stop-color="#D7382E"/><stop offset="1" stop-color="#8d231c"/>
+ </radialGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="780" height="1010" fill="#e7ecf0"/></g>
+
+<g id="chassis">
+ <!-- SpaceStation dock behind the pump -->
+ <rect x="92" y="60" width="596" height="900" rx="20" fill="url(#dockGrad)" stroke="#959ea6" stroke-width="2.5"/>
+ <rect x="92" y="60" width="596" height="34" rx="20" fill="#bcc3c9"/>
+ <text class="sub" x="112" y="83" fill="#3c454d" font-weight="bold">SpaceStation dock</text>
+ <!-- stack rails -->
+ <rect x="104" y="100" width="14" height="852" rx="5" fill="#9aa3aa"/>
+ <rect x="662" y="100" width="14" height="852" rx="5" fill="#9aa3aa"/>
+ <!-- empty docked slot above (hints at stackability) -->
+ <rect x="128" y="104" width="524" height="78" rx="10" fill="#c6ccd0" stroke="#9aa3aa" stroke-width="1.5"/>
+ <text class="sub" x="390" y="148" text-anchor="middle" fill="#7a838b">empty pump slot - units stack here</text>
+ <!-- empty docked slot below -->
+ <rect x="128" y="800" width="524" height="138" rx="10" fill="#c6ccd0" stroke="#9aa3aa" stroke-width="1.5"/>
+ <text class="sub" x="390" y="874" text-anchor="middle" fill="#7a838b">empty pump slot - Perfusor / Infusomat</text>
+
+ <!-- the Infusomat Space pump 'brick' -->
+ <rect x="128" y="196" width="524" height="592" rx="16" fill="url(#chassisGrad)" stroke="#a6aeb3" stroke-width="2.5"/>
+ <!-- dock interlock tabs on the brick -->
+ <rect x="118" y="300" width="14" height="60" rx="4" fill="#b7bec4"/>
+ <rect x="118" y="620" width="14" height="60" rx="4" fill="#b7bec4"/>
+ <rect x="648" y="300" width="14" height="60" rx="4" fill="#b7bec4"/>
+ <rect x="648" y="620" width="14" height="60" rx="4" fill="#b7bec4"/>
+ <!-- brand band -->
+ <rect x="128" y="196" width="524" height="42" rx="16" fill="#5a8a3a"/>
+ <rect x="128" y="222" width="524" height="16" fill="#5a8a3a"/>
+ <text class="devname" x="150" y="225" fill="#ffffff">B. Braun Infusomat Space</text>
+ <text class="sub" x="538" y="225" fill="#ffffff">Large-volume pump</text>
+ <!-- peristaltic door area / set guide on the lower brick face -->
+ <rect x="150" y="742" width="384" height="38" rx="9" fill="#e2e5e0" stroke="#b7bec4" stroke-width="1.5"/>
+ <text class="sub" x="166" y="765" fill="#7a838b">Infusion set door</text>
+ <line x1="300" y1="761" x2="518" y2="761" stroke="#c6ccd0" stroke-width="6" stroke-linecap="round"/>
+ <circle cx="300" cy="761" r="8" fill="#c6ccd0"/>
+ <circle cx="518" cy="761" r="8" fill="#c6ccd0"/>
+</g>
+
+<g id="screen">
+ <!-- compact lit LCD -->
+ <rect x="156" y="256" width="468" height="226" rx="8" fill="#0c1b22"/>
+ <rect id="screen-bg" x="164" y="264" width="452" height="210" rx="5" fill="url(#screenGrad)"/>
+ <!-- top status row -->
+ <text id="scr-mode" class="mono" x="178" y="290" font-size="12" fill="#7fae8e">PRIMARY</text>
+ <text id="scr-status" class="mono" x="300" y="290" font-size="12" font-weight="bold" fill="#7ee0a0">RUN</text>
+ <!-- battery + AC -->
+ <rect x="520" y="280" width="26" height="13" rx="2" fill="none" stroke="#9fb6c4" stroke-width="1.3"/>
+ <rect x="546" y="283" width="3" height="7" fill="#9fb6c4"/>
+ <rect x="522" y="282" width="17" height="9" fill="#7ee0a0"/>
+ <text id="scr-battery" class="mono" x="554" y="291" font-size="10" fill="#9fb6c4">76%</text>
+ <line x1="178" y1="300" x2="602" y2="300" stroke="#2c4b5a" stroke-width="1.2"/>
+ <!-- drug name -->
+ <text id="scr-drug" class="mono" x="178" y="324" font-size="15" font-weight="bold" fill="#E9EEF2">NORADRENALINE</text>
+ <!-- primary rate -->
+ <text class="scrlbl" x="178" y="350">Rate</text>
+ <text id="scr-rate" class="mono" x="178" y="392" font-size="44" fill="#E9EEF2">8.4</text>
+ <text x="296" y="392" font-size="14" fill="#9fb6c4">mL/h</text>
+ <!-- VTBI -->
+ <text class="fld" x="372" y="338">VTBI</text>
+ <text id="scr-vtbi" class="mono" x="372" y="362" font-size="22" fill="#E9EEF2">42</text>
+ <text x="420" y="362" font-size="11" fill="#9fb6c4">mL</text>
+ <!-- time remaining -->
+ <text class="fld" x="372" y="388">Time left</text>
+ <text id="scr-time" class="mono" x="372" y="412" font-size="22" fill="#E9EEF2">5:00</text>
+ <text x="438" y="412" font-size="11" fill="#9fb6c4">h:mm</text>
+ <!-- volume infused + dose footer -->
+ <line x1="178" y1="426" x2="602" y2="426" stroke="#2c4b5a" stroke-width="1.2"/>
+ <text id="scr-vi" class="mono" x="178" y="448" font-size="12" fill="#9fb6c4">VI 158 mL</text>
+ <text id="scr-dose" class="mono" x="300" y="448" font-size="12" fill="#9fb6c4">Dose 0.08 mcg/kg/min</text>
+ <text class="mono" x="178" y="466" font-size="11" fill="#6f93a3">DoseGuard library . wt 70 kg</text>
+ <!-- soft-key prompt strip along screen bottom edge -->
+ <text id="softlabel-1" class="mono" x="232" y="466" font-size="10" fill="#7fae8e" text-anchor="middle" opacity="0"></text>
+</g>
+
+<g id="controls">
+ <!-- contextual soft keys: a row of 3 below the screen -->
+ <g class="key"><rect id="softkey-1" data-control="softkey" x="172" y="496" width="124" height="40" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="234" y="521" text-anchor="middle">BOLUS</text></g>
+ <g class="key"><rect id="softkey-2" data-control="softkey" x="314" y="496" width="124" height="40" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="376" y="521" text-anchor="middle">STATUS</text></g>
+ <g class="key"><rect id="softkey-3" data-control="softkey" x="456" y="496" width="124" height="40" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="518" y="521" text-anchor="middle">FUNCTION</text></g>
+
+ <!-- KeyGuard arrow keypad (NO numeric pad) -->
+ <text class="sub" x="254" y="566" text-anchor="middle" font-weight="bold" fill="#5b6470">KeyGuard arrows - no number pad</text>
+ <!-- diamond arrow cluster -->
+ <g class="key"><rect id="key-up" data-control="hardkey" data-action="ARROW_UP" x="226" y="578" width="56" height="46" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="254,590 266,608 242,608" fill="#28303a"/></g>
+ <g class="key"><rect id="key-left" data-control="hardkey" data-action="ARROW_LEFT" x="168" y="630" width="56" height="46" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="184,653 202,641 202,665" fill="#28303a"/></g>
+ <g class="key"><rect id="key-ok" data-control="hardkey" data-action="OK" x="226" y="630" width="56" height="46" rx="8" fill="#eef4ec" stroke="#a9c79a" stroke-width="1.5"/>
+  <text class="kcap2" x="254" y="657" text-anchor="middle" fill="#3f7330">OK</text></g>
+ <g class="key"><rect id="key-right" data-control="hardkey" data-action="ARROW_RIGHT" x="284" y="630" width="56" height="46" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="324,653 306,641 306,665" fill="#28303a"/></g>
+ <g class="key"><rect id="key-down" data-control="hardkey" data-action="ARROW_DOWN" x="226" y="682" width="56" height="46" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="254,716 266,698 242,698" fill="#28303a"/></g>
+
+ <!-- clear key beside the cluster -->
+ <g class="key"><rect id="key-clear" data-control="hardkey" data-action="CLEAR" x="356" y="578" width="100" height="46" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="406" y="605" text-anchor="middle">CLEAR / C</text></g>
+
+ <!-- Start/Stop and On/Off -->
+ <g class="key"><rect id="key-start" data-control="hardkey" data-action="START" x="356" y="630" width="100" height="46" rx="8" fill="#e7f4ec" stroke="#a9d4ba" stroke-width="1.5"/>
+  <polygon points="377,644 377,662 392,653" fill="#207a43"/>
+  <text class="kcap2" x="424" y="657" text-anchor="middle" fill="#207a43">START</text></g>
+ <g class="key"><rect id="key-stop" data-control="hardkey" data-action="STOP" x="356" y="682" width="100" height="46" rx="8" fill="#fdeceb" stroke="#e0a9a4" stroke-width="1.5"/>
+  <rect x="377" y="699" width="14" height="14" rx="2" fill="#a8322a"/>
+  <text class="kcap2" x="424" y="709" text-anchor="middle" fill="#a8322a">STOP</text></g>
+ <g class="key"><rect id="key-onoff" data-control="hardkey" data-action="ONOFF" x="470" y="578" width="110" height="46" rx="8" fill="#eef1f3" stroke="#c2c8ce" stroke-width="1.5"/>
+  <circle cx="491" cy="601" r="8" fill="none" stroke="#28303a" stroke-width="2"/>
+  <line x1="491" y1="592" x2="491" y2="601" stroke="#28303a" stroke-width="2"/>
+  <text class="kcap2" x="528" y="605" text-anchor="middle">ON / OFF</text></g>
+ <!-- silence key -->
+ <g class="key"><rect id="key-silence" data-control="hardkey" data-action="SILENCE" x="470" y="630" width="110" height="98" rx="8" fill="#fff6e6" stroke="#e6c98a" stroke-width="1.5"/>
+  <path d="M510 662 l10 -8 v34 l-10 -8 h-10 v-10 z" fill="#b07d1d"/>
+  <line x1="496" y1="657" x2="538" y2="689" stroke="#b07d1d" stroke-width="3"/>
+  <text class="kcap2" x="525" y="710" text-anchor="middle" fill="#9a6d18">SILENCE</text></g>
+</g>
+
+<g id="indicators">
+ <!-- PROMINENT FRONT RED ALARM LED -->
+ <circle cx="588" cy="276" r="17" fill="#3a1715" stroke="#2a100e" stroke-width="2"/>
+ <circle id="led-alarm" data-control="led" cx="588" cy="276" r="13" fill="url(#alarmLed)" stroke="#7a1f19" stroke-width="1"/>
+ <circle cx="583" cy="271" r="4" fill="#ffd1cc" opacity="0.85"/>
+ <text class="kcap2" x="588" y="312" text-anchor="middle" fill="#5b6470">ALARM</text>
+
+ <!-- run + AC LEDs, on the lower-right brick face beside the set door -->
+ <circle id="led-run" data-control="led" cx="566" cy="752" r="9" fill="#3DA35D" stroke="#2c7d46" stroke-width="1"/>
+ <circle cx="563" cy="749" r="3" fill="#bfe8cc"/>
+ <text class="sub" x="580" y="756">Run</text>
+ <circle id="led-ac" data-control="led" cx="616" cy="752" r="9" fill="#3E7CB1" stroke="#2f6088" stroke-width="1"/>
+ <circle cx="613" cy="749" r="3" fill="#bcd5e8"/>
+ <text class="sub" x="630" y="756">AC</text>
+</g>
+
+<g id="labels">
+ <text class="badge" x="390" y="982" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="390" y="1000" text-anchor="middle">Simulated interface - B. Braun Infusomat Space large-volume pump (shown docked in a SpaceStation)</text>
+</g>
+</svg>

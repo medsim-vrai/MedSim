@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Cohort debriefs{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_v('debrief_cohort.css') }}">
+
+<header class="page-header">
+  <h1>Cohort debriefs</h1>
+  <p class="muted">Saved cohort debriefs, newest first. Each row is one room that was ended.</p>
+</header>
+
+{% if cohorts %}
+  <table class="cohorts-table">
+    <thead><tr>
+      <th>Room label</th><th>Code</th><th>Encounters</th><th>Generated</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for c in cohorts %}
+        <tr>
+          <td>{{ c.room_label or "(unlabeled)" }}</td>
+          <td><code class="mono">{{ c.room_code }}</code></td>
+          <td>{{ c.encounters_count }}</td>
+          <td class="muted small">{{ c.generated_at }}</td>
+          <td><a class="button-link" href="/portal/debrief/cohort/{{ c.room_id }}">Open →</a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="empty-state">
+    <p class="muted">No cohort debriefs saved yet. End a room from <a href="/portal/room">Multi-Patient Control</a> and the debrief will land here automatically.</p>
+  </div>
+{% endif %}
+{% endblock %}

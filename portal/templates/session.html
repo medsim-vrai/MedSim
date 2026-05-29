@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Session — {{ session.scenario.name }}{% endblock %}
+{% block content %}
+<header class="session-header">
+  <div>
+    <h1>{{ session.scenario.name }}</h1>
+    {% if patient_summary %}<p class="muted">{{ patient_summary }}</p>{% endif %}
+    <p class="muted">
+      You play the student nurse. Pick a character to address, then type
+      what you'd say. This is v0 of the runtime — single-character turns,
+      no RAG, no validators yet.
+    </p>
+  </div>
+  <form method="post" action="/portal/session/{{ session.id }}/end"
+        data-confirm="End this session? In-memory history will be discarded.">
+    <button type="submit" class="danger">End session</button>
+  </form>
+</header>
+
+<div class="chat-container">
+  <div class="chat-log" id="chat-log">
+    {% if not session.history %}
+      <div class="chat-empty">
+        <p>The scene is set. {{ session.characters|length }} character(s) are present:</p>
+        <ul>
+          {% for cid, char in session.characters.items() %}
+            <li><strong>{{ char.name }}</strong> — {{ char.role or 'no role set' }}</li>
+          {% endfor %}
+        </ul>
+        <p>Pick someone to address, then send your first line.</p>
+      </div>
+    {% endif %}
+    {% for turn in session.history %}
+      {% set tname = session.characters[turn.addressee].name if turn.addressee in session.characters else turn.addressee %}
+      <div class="bubble student">
+        <span class="speaker">You → {{ tname }}</span>
+        <p>{{ turn.student_utterance }}</p>
+      </div>
+      <div class="bubble character" data-char="{{ turn.addressee }}">
+        <span class="speaker">{{ tname }}</span>
+        <p>{{ turn.character_response }}</p>
+      </div>
+    {% endfor %}
+  </div>
+
+  <form id="turn-form" class="chat-input" data-session-id="{{ session.id }}">
+    <div class="char-picker">
+      <span class="muted">Address:</span>
+      {% for cid, char in session.characters.items() %}
+        <button type="button" class="char-btn{% if loop.first %} active{% endif %}"
+                data-char-id="{{ cid }}">
+          {{ char.name }}
+        </button>
+      {% endfor %}
+    </div>
+    <div class="input-row">
+      <textarea name="message" rows="2"
+                placeholder="Speak to the selected character (Enter = send, Shift+Enter = newline)"
+                required autofocus></textarea>
+      <button type="submit" class="primary-action">Send</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

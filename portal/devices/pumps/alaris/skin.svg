@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1055" width="900" height="1055">
+<!-- TRAINING SIMULATION overlay - BD Alaris System (PC Unit 8015 + Pump & Syringe modules). Phase 2 anchor. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .kcap{font-size:11px;font-weight:bold;fill:#28303a}
+ .kcap2{font-size:9px;font-weight:bold;fill:#28303a}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .devname{font-size:20px;font-weight:bold;fill:#28303a}
+ .sub{font-size:11px;fill:#5b6470}
+ .fld{font-size:11px;fill:#1b2733}
+ .fldw{font-size:11px;fill:#aebcc6}
+ .badge{font-size:11px;fill:#7c8893}
+</style>
+<defs>
+ <linearGradient id="chassisGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#eef1f3"/><stop offset="1" stop-color="#d4d9dd"/>
+ </linearGradient>
+ <linearGradient id="modGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#e8ebed"/><stop offset="1" stop-color="#cdd3d7"/>
+ </linearGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="900" height="1055" fill="#e7ecf0"/></g>
+
+<g id="chassis">
+ <rect x="150" y="50" width="600" height="495" rx="22" fill="url(#chassisGrad)" stroke="#aeb6bd" stroke-width="2.5"/>
+ <rect x="215" y="565" width="470" height="195" rx="14" fill="url(#modGrad)" stroke="#aeb6bd" stroke-width="2"/>
+ <rect x="215" y="780" width="470" height="205" rx="14" fill="url(#modGrad)" stroke="#aeb6bd" stroke-width="2"/>
+ <text class="devname" x="175" y="92">BD Alaris System</text>
+ <text class="sub" x="176" y="108">PC Unit - Model 8015</text>
+</g>
+
+<g id="screen">
+ <rect x="175" y="118" width="380" height="248" rx="8" fill="#20262b"/>
+ <rect id="screen-bg" x="183" y="126" width="364" height="232" rx="4" fill="#eef2f4"/>
+ <!-- status bar -->
+ <rect x="183" y="126" width="364" height="26" fill="#0e7c8a"/>
+ <text x="193" y="143" font-size="11" font-weight="bold" fill="#ffffff">Adult ICU</text>
+ <rect x="470" y="133" width="22" height="11" rx="2" fill="none" stroke="#ffffff" stroke-width="1.2"/>
+ <rect x="492" y="136" width="2.5" height="5" fill="#ffffff"/>
+ <rect x="472" y="135" width="15" height="7" fill="#ffffff"/>
+ <text id="scr-battery" x="500" y="143" font-size="10" fill="#ffffff">100%</text>
+ <!-- channel A card -->
+ <rect x="191" y="160" width="348" height="92" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
+ <rect x="199" y="166" width="22" height="22" rx="3" fill="#0e7c8a"/>
+ <text x="210" y="182" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">A</text>
+ <text id="scr-drug" x="229" y="182" font-size="13" font-weight="bold" fill="#1b2733">NOREPINEPHRINE</text>
+ <circle cx="442" cy="177" r="11" fill="#0e7c8a"/>
+ <text x="442" y="181" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">G</text>
+ <rect id="scr-status" x="461" y="166" width="70" height="22" rx="11" fill="#3DA35D"/>
+ <text x="496" y="181" font-size="9" font-weight="bold" fill="#ffffff" text-anchor="middle">INFUSING</text>
+ <text id="scr-rate" class="mono" x="201" y="234" font-size="30" fill="#1b2733">12.4</text>
+ <text x="279" y="234" font-size="12" fill="#5b6470">mL/h</text>
+ <text id="scr-dose" class="fld" x="332" y="210">Dose 5.0 mcg/kg/min</text>
+ <text id="scr-vtbi" class="fld" x="332" y="227">VTBI 47 mL</text>
+ <text id="scr-vi" class="fld" x="332" y="244">VI 203 mL</text>
+ <text id="scr-time" class="fld" x="455" y="244">0:42 left</text>
+ <!-- channel B card -->
+ <rect x="191" y="260" width="348" height="90" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
+ <rect x="199" y="266" width="22" height="22" rx="3" fill="#0e7c8a"/>
+ <text x="210" y="282" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">B</text>
+ <text x="229" y="282" font-size="13" font-weight="bold" fill="#1b2733">SODIUM CHLORIDE 0.9%</text>
+ <rect x="461" y="266" width="70" height="22" rx="11" fill="#3DA35D"/>
+ <text x="496" y="281" font-size="9" font-weight="bold" fill="#ffffff" text-anchor="middle">INFUSING</text>
+ <text class="mono" x="201" y="332" font-size="30" fill="#1b2733">75</text>
+ <text x="251" y="332" font-size="12" fill="#5b6470">mL/h</text>
+ <text class="fld" x="332" y="312">VTBI 250 mL</text>
+ <text class="fld" x="332" y="329">VI 90 mL</text>
+ <text class="fld" x="455" y="329">3:13 left</text>
+</g>
+
+<g id="controls">
+ <!-- soft keys (right of screen) -->
+ <g><rect id="softkey-1" data-control="softkey" x="570" y="118" width="108" height="54" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="624" y="149" text-anchor="middle">GUARDRAILS</text></g>
+ <g><rect id="softkey-2" data-control="softkey" x="570" y="180" width="108" height="54" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="624" y="211" text-anchor="middle">SECONDARY</text></g>
+ <g><rect id="softkey-3" data-control="softkey" x="570" y="242" width="108" height="54" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="624" y="273" text-anchor="middle">BOLUS</text></g>
+ <g><rect id="softkey-4" data-control="softkey" x="570" y="304" width="108" height="54" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="624" y="335" text-anchor="middle">PRESSURE</text></g>
+ <!-- numeric keypad -->
+ <g class="key"><rect id="key-1" data-control="hardkey" data-action="1" x="180" y="386" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="209" y="408" text-anchor="middle">1</text></g>
+ <g class="key"><rect id="key-2" data-control="hardkey" data-action="2" x="246" y="386" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="275" y="408" text-anchor="middle">2</text></g>
+ <g class="key"><rect id="key-3" data-control="hardkey" data-action="3" x="312" y="386" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="341" y="408" text-anchor="middle">3</text></g>
+ <g class="key"><rect id="key-4" data-control="hardkey" data-action="4" x="180" y="426" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="209" y="448" text-anchor="middle">4</text></g>
+ <g class="key"><rect id="key-5" data-control="hardkey" data-action="5" x="246" y="426" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="275" y="448" text-anchor="middle">5</text></g>
+ <g class="key"><rect id="key-6" data-control="hardkey" data-action="6" x="312" y="426" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="341" y="448" text-anchor="middle">6</text></g>
+ <g class="key"><rect id="key-7" data-control="hardkey" data-action="7" x="180" y="466" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="209" y="488" text-anchor="middle">7</text></g>
+ <g class="key"><rect id="key-8" data-control="hardkey" data-action="8" x="246" y="466" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="275" y="488" text-anchor="middle">8</text></g>
+ <g class="key"><rect id="key-9" data-control="hardkey" data-action="9" x="312" y="466" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="341" y="488" text-anchor="middle">9</text></g>
+ <g class="key"><rect id="key-decimal" data-control="hardkey" data-action="." x="180" y="506" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="209" y="528" text-anchor="middle">.</text></g>
+ <g class="key"><rect id="key-0" data-control="hardkey" data-action="0" x="246" y="506" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="275" y="528" text-anchor="middle">0</text></g>
+ <g class="key"><rect id="key-clear" data-control="hardkey" data-action="CLEAR" x="312" y="506" width="58" height="34" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="341" y="527" text-anchor="middle">CLEAR</text></g>
+ <!-- hard keys (2x2) -->
+ <g class="key"><rect id="key-channel-select" data-control="hardkey" data-action="CHANNEL_SELECT" x="408" y="386" width="130" height="62" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="473" y="413" text-anchor="middle">CHANNEL</text><text class="kcap2" x="473" y="426" text-anchor="middle">SELECT</text></g>
+ <g class="key"><rect id="key-options" data-control="hardkey" data-action="OPTIONS" x="546" y="386" width="130" height="62" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="611" y="421" text-anchor="middle">OPTIONS</text></g>
+ <g class="key"><rect id="key-silence" data-control="hardkey" data-action="SILENCE" x="408" y="456" width="130" height="62" rx="7" fill="#fdeceb" stroke="#e0a9a4" stroke-width="1.5"/><text class="kcap" x="473" y="491" text-anchor="middle" fill="#a8322a">SILENCE</text></g>
+ <g class="key"><rect id="key-onoff" data-control="hardkey" data-action="ONOFF" x="546" y="456" width="130" height="62" rx="7" fill="#eef1f3" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="611" y="483" text-anchor="middle">SYSTEM</text><text class="kcap2" x="611" y="496" text-anchor="middle">ON / OFF</text></g>
+
+ <!-- module 1: Pump Module -->
+ <rect x="238" y="602" width="250" height="140" rx="5" fill="#0e1a24"/>
+ <text x="252" y="626" font-size="11" fill="#7fd6e0">A  NOREPINEPHRINE</text>
+ <text class="mono" x="252" y="676" font-size="28" fill="#E9EEF2">12.4</text>
+ <text x="338" y="676" font-size="12" fill="#9fb0bd">mL/h</text>
+ <text x="252" y="704" font-size="12" font-weight="bold" fill="#3DA35D">INFUSING</text>
+ <path d="M452 642 q9 13 0 22 q-9 -9 0 -22 Z" fill="#7fd6e0"/>
+ <text class="fldw" x="252" y="728">VTBI 47 mL</text>
+ <g class="key"><rect id="key-mod1-select" data-control="hardkey" x="506" y="606" width="160" height="30" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="586" y="625" text-anchor="middle">CHANNEL SELECT</text></g>
+ <g class="key"><rect id="key-mod1-start" data-control="hardkey" data-action="START" x="506" y="641" width="160" height="30" rx="6" fill="#e7f4ec" stroke="#a9d4ba" stroke-width="1.5"/><text class="kcap2" x="586" y="660" text-anchor="middle" fill="#207a43">START</text></g>
+ <g class="key"><rect id="key-mod1-pause" data-control="hardkey" data-action="PAUSE" x="506" y="676" width="160" height="30" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="586" y="695" text-anchor="middle">PAUSE</text></g>
+ <g class="key"><rect id="key-mod1-off" data-control="hardkey" x="506" y="711" width="160" height="30" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="586" y="730" text-anchor="middle">CHANNEL OFF</text></g>
+ <text class="sub" x="238" y="756">Pump Module - 8100</text>
+
+ <!-- module 2: Syringe Module -->
+ <rect x="250" y="794" width="380" height="20" rx="10" fill="#cbd2d7" stroke="#aeb6bd" stroke-width="1"/>
+ <rect x="250" y="799" width="120" height="10" rx="3" fill="#9aa6ad"/>
+ <circle cx="250" cy="804" r="7" fill="#9aa6ad"/>
+ <rect x="238" y="826" width="250" height="135" rx="5" fill="#0e1a24"/>
+ <text x="252" y="850" font-size="11" fill="#7fd6e0">B  SODIUM CHLORIDE 0.9%</text>
+ <text class="mono" x="252" y="898" font-size="28" fill="#E9EEF2">75</text>
+ <text x="304" y="898" font-size="12" fill="#9fb0bd">mL/h</text>
+ <text x="252" y="926" font-size="12" font-weight="bold" fill="#3DA35D">INFUSING</text>
+ <text class="fldw" x="252" y="949">VTBI 250 mL</text>
+ <g class="key"><rect id="key-mod2-select" data-control="hardkey" x="506" y="830" width="160" height="30" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="586" y="849" text-anchor="middle">CHANNEL SELECT</text></g>
+ <g class="key"><rect id="key-mod2-start" data-control="hardkey" data-action="START" x="506" y="865" width="160" height="30" rx="6" fill="#e7f4ec" stroke="#a9d4ba" stroke-width="1.5"/><text class="kcap2" x="586" y="884" text-anchor="middle" fill="#207a43">START</text></g>
+ <g class="key"><rect id="key-mod2-pause" data-control="hardkey" data-action="PAUSE" x="506" y="900" width="160" height="30" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="586" y="919" text-anchor="middle">PAUSE</text></g>
+ <g class="key"><rect id="key-mod2-off" data-control="hardkey" x="506" y="935" width="160" height="30" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="586" y="954" text-anchor="middle">CHANNEL OFF</text></g>
+ <text class="sub" x="238" y="977">Syringe Module - 8110</text>
+</g>
+
+<g id="indicators">
+ <circle id="led-ch-a" data-control="led" cx="468" cy="588" r="9" fill="#3DA35D" stroke="#2c7d46" stroke-width="1"/>
+ <circle cx="465" cy="585" r="3" fill="#bfe8cc"/>
+ <text class="sub" x="484" y="592">Channel A</text>
+ <circle id="led-ch-b" data-control="led" cx="468" cy="812" r="9" fill="#3DA35D" stroke="#2c7d46" stroke-width="1"/>
+ <circle cx="465" cy="809" r="3" fill="#bfe8cc"/>
+ <text class="sub" x="484" y="816">Channel B</text>
+</g>
+
+<g id="labels">
+ <text class="badge" x="450" y="1012" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="450" y="1030" text-anchor="middle">Simulated interface - BD Alaris System (PC Unit 8015 with Pump &amp; Syringe modules)</text>
+</g>
+</svg>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Station — {{ persona.name }}</title>
+  <link rel="stylesheet" href="/static/portal.css">
+  <link rel="stylesheet" href="/static/station.css">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1f3a63">
+</head>
+<body class="station-body">
+  <header class="station-header">
+    <div>
+      <h1>{{ persona.name }}</h1>
+      <p class="muted small">{{ persona.role }} · {{ session.scenario_name }}</p>
+    </div>
+    <span class="badge {% if persona.safetyClass == 'high-risk' %}danger{% elif persona.safetyClass == 'sensitive' %}warn{% else %}ok{% endif %}">{{ persona.safetyClass }}</span>
+  </header>
+
+  <div class="station-chat" id="chat-log">
+    {% for h in history %}
+      <div class="bubble student"><span class="speaker">Student</span><p>{{ h.user }}</p></div>
+      <div class="bubble character"><span class="speaker">{{ h.character_name or persona.name }}</span><p>{{ h.character }}</p></div>
+    {% endfor %}
+    {% if not history %}
+      <div class="chat-empty muted">
+        <p>You are <strong>{{ persona.name }}</strong>. Speak or type as the student would, and this character will respond.</p>
+        <p class="small">Knowledge scope: {{ persona.knowledgeScope }}</p>
+        {% if persona.alteredState %}<p class="small"><strong>Altered state:</strong> {{ persona.alteredState }}</p>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="station-controls">
+    <div class="mode-toggle">
+      <label><input type="radio" name="mode" value="ptt" checked> Push to talk</label>
+      <label><input type="radio" name="mode" value="text"> Type</label>
+      <span class="latency-pill" id="latency-pill">—</span>
+    </div>
+
+    <div class="voice-controls" id="voice-controls">
+      <button id="talk-btn" class="talk-btn" type="button">
+        <span class="talk-label">Hold to talk</span>
+        <span class="talk-status" id="talk-status">Idle</span>
+      </button>
+      <div id="interim-text" class="interim-text" aria-live="polite"></div>
+    </div>
+
+    <form class="text-controls" id="text-form" hidden>
+      <textarea name="message" rows="2" placeholder="Type as the student…"></textarea>
+      <button type="submit" class="primary-action">Send</button>
+    </form>
+  </div>
+
+  <script>
+    window.MEDSIM2_STATION = {
+      join_code: {{ session.join_code | tojson }},
+      station_id: {{ station.station_id | tojson }},
+      persona_name: {{ persona.name | tojson }},
+      voice_profile: {{ voice_profile | tojson }},
+      voice_id: {{ voice_id | tojson }}
+    };
+  </script>
+  <script src="{{ static_v('tts_client.js') }}"></script>
+  <script src="{{ static_v('station_chat.js') }}"></script>
+</body>
+</html>

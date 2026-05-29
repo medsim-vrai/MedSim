@@ -1,0 +1,54 @@
+{
+  "_meta": {
+    "description": "Nursing program → week → module mapping. Mirrors the Voice4MedSim_v6 program selector in the control-room wizard (step 3A). Three programs, each week of focus pre-populates the matching NCLEX modules from portal/data/modules.json.",
+    "schema_note": "module IDs reference portal/data/modules.json (M02 communication, M03 PPE, M06 pharma, M07 routes, M08 pain, M22 diabetes, M32 sepsis, M39 mental health, M42 end-of-life). Keep aligned with library._MODULE_TITLES."
+  },
+  "programs": [
+    {
+      "id": "LPN",
+      "label": "LPN — Licensed Practical Nurse",
+      "phases": ["Foundations", "Adult Med-Surg", "Mental Health", "Capstone"],
+      "weeks": [
+        {"week": 1, "phase": "Foundations",    "focus": "Therapeutic communication + handoff", "modules": ["M02"]},
+        {"week": 2, "phase": "Foundations",    "focus": "Infection control & PPE",             "modules": ["M03"]},
+        {"week": 3, "phase": "Foundations",    "focus": "Pharmacology principles",             "modules": ["M06"]},
+        {"week": 4, "phase": "Foundations",    "focus": "Routes of administration",            "modules": ["M07"]},
+        {"week": 5, "phase": "Adult Med-Surg", "focus": "Pain assessment & management",        "modules": ["M08"]},
+        {"week": 6, "phase": "Adult Med-Surg", "focus": "Sepsis recognition & hour-1 bundle",  "modules": ["M32","M08"]},
+        {"week": 7, "phase": "Adult Med-Surg", "focus": "Diabetes & metabolic emergencies",    "modules": ["M22"]},
+        {"week": 8, "phase": "Mental Health",  "focus": "Mood disorders + suicide screening",  "modules": ["M39"]},
+        {"week": 9, "phase": "Capstone",       "focus": "End-of-life conversations",           "modules": ["M42","M02"]}
+      ]
+    },
+    {
+      "id": "ADN-RN",
+      "label": "ADN — Associate Degree RN",
+      "phases": ["Term 1", "Term 2", "Term 3", "Term 4"],
+      "weeks": [
+        {"week": 1, "phase": "Term 1", "focus": "Communication + infection control",       "modules": ["M02","M03"]},
+        {"week": 2, "phase": "Term 1", "focus": "Pharmacology + routes",                   "modules": ["M06","M07"]},
+        {"week": 3, "phase": "Term 2", "focus": "Pain management & analgesia",             "modules": ["M08"]},
+        {"week": 4, "phase": "Term 2", "focus": "Sepsis & escalation",                     "modules": ["M32","M08"]},
+        {"week": 5, "phase": "Term 3", "focus": "Diabetes & DKA / HHS",                    "modules": ["M22"]},
+        {"week": 6, "phase": "Term 3", "focus": "Mental-health crisis intervention",       "modules": ["M39"]},
+        {"week": 7, "phase": "Term 4", "focus": "End-of-life + goals-of-care",             "modules": ["M42","M02"]},
+        {"week": 8, "phase": "Term 4", "focus": "Capstone — multi-system",                 "modules": ["M02","M06","M08","M22","M32","M39","M42"]}
+      ]
+    },
+    {
+      "id": "BSN-RN",
+      "label": "BSN — Bachelor of Science in Nursing",
+      "phases": ["Year 1", "Year 2", "Year 3", "Year 4"],
+      "weeks": [
+        {"week": 1, "phase": "Year 1", "focus": "Therapeutic communication foundations",   "modules": ["M02"]},
+        {"week": 2, "phase": "Year 1", "focus": "Standard + transmission precautions",     "modules": ["M03"]},
+        {"week": 3, "phase": "Year 2", "focus": "Pharmacology + routes of administration", "modules": ["M06","M07"]},
+        {"week": 4, "phase": "Year 2", "focus": "Pain management",                         "modules": ["M08"]},
+        {"week": 5, "phase": "Year 3", "focus": "Sepsis bundle + escalation",              "modules": ["M32","M08"]},
+        {"week": 6, "phase": "Year 3", "focus": "Diabetes & metabolic emergencies",        "modules": ["M22"]},
+        {"week": 7, "phase": "Year 4", "focus": "Mental health — SI, mood, substance",     "modules": ["M39","M06"]},
+        {"week": 8, "phase": "Year 4", "focus": "Goals-of-care + interprofessional",       "modules": ["M02","M42","M32"]}
+      ]
+    }
+  ]
+}

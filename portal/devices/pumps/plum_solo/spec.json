@@ -1,0 +1,43 @@
+{
+  "device_kind": "pump_iv",
+  "device_model": "plum_solo",
+  "display_name": "ICU Medical Plum Solo",
+  "manufacturer": "ICU Medical",
+  "channels": ["A"],
+  "screens": ["off", "home", "drug_library", "program", "running", "alarmed", "silenced"],
+  "controls": {
+    "hardkeys": ["key-onoff", "key-options", "key-clear", "key-silence",
+      "key-mod1-start", "key-mod1-pause", "key-mod1-off", "key-mod1-select",
+      "key-0", "key-1", "key-2", "key-3", "key-4", "key-5", "key-6", "key-7", "key-8", "key-9", "key-decimal"
+    ],
+    "softkeys": ["softkey-1", "softkey-2", "softkey-3", "softkey-4"],
+    "screen_fields": ["scr-drug", "scr-rate", "scr-dose", "scr-vtbi", "scr-vi", "scr-time", "scr-status", "scr-battery", "scr-mode"]
+  },
+  "alarm_map": {
+    "air_in_line":          "air_in_line",
+    "occlusion_downstream": "occlusion_downstream",
+    "occlusion_upstream":   "occlusion_upstream",
+    "infusion_complete":    "infusion_complete",
+    "low_battery":          "low_battery",
+    "depleted_battery":     "depleted_battery"
+  },
+  "silence_seconds": 120,
+  "programming": {
+    "fields": [
+      {"id": "scr-rate", "label": "Rate (mL/hr)", "attribute": "rate_ml_hr", "max_digits": 4, "allow_decimal": true,  "per_channel": true, "default_channel": "A"},
+      {"id": "scr-vtbi", "label": "VTBI (mL)",    "attribute": "vtbi_ml",    "max_digits": 4, "allow_decimal": false, "per_channel": true, "default_channel": "A"}
+    ],
+    "default_channel": "A",
+    "advance_keys":    ["softkey-1", "softkey-2"],
+    "channel_keys":    {"key-mod1-select": "A"},
+    "clear_key":       "key-clear",
+    "start_keys":      {"key-mod1-start": "A"},
+    "auto_drug":       "ns"
+  },
+  "drug_library": [
+    {"code": "ns",      "label": "0.9% NaCl",       "kind": "fluid", "default_rate_ml_hr": 100, "limits": {"rate_ml_hr": {"hard_min": 1, "soft_min": 10, "soft_max": 500, "hard_max": 999}}},
+    {"code": "d5w",     "label": "D5W",             "kind": "fluid", "default_rate_ml_hr": 75,  "limits": {"rate_ml_hr": {"hard_min": 1, "soft_min": 10, "soft_max": 500, "hard_max": 999}}},
+    {"code": "basic_infusion", "label": "Basic Infusion (no library)", "kind": "manual", "limits": null}
+  ],
+  "battery": {"capacity_minutes": 300, "low_threshold_minutes": 30, "depleted_threshold_minutes": 5}
+}

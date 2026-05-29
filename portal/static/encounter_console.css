@@ -1,0 +1,707 @@
+/* MEDSIM V7 Phase 7 M22 — Per-Patient Console scaffold. The styling
+   keeps the v6 control_ops aesthetic but adds a card grid for the
+   five-section drill-in. */
+
+.console-header {
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 2px solid #143b8a;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.console-header-right {
+  display: flex; gap: 8px; align-items: center;
+}
+.console-header-right button {
+  background: #eef2fb; color: #143b8a; border: 0;
+  padding: 8px 14px; border-radius: 6px; font: inherit;
+  font-weight: 700; cursor: pointer;
+}
+.console-header-right button:hover { background: #dde7fb; }
+
+/* M34 — primary action: launch the EHR for this bed in a new window. */
+.console-header-right .header-action {
+  background: #1f7a3a; color: #fff;
+  padding: 8px 14px; border-radius: 6px;
+  font: inherit; font-weight: 700;
+  text-decoration: none;
+  display: inline-block;
+}
+.console-header-right .header-action:hover {
+  background: #186730;
+}
+.console-header-right .header-action-disabled {
+  background: #e1e5ee; color: #8a8f9d;
+  cursor: not-allowed;
+}
+.console-header-right .header-action-disabled:hover {
+  background: #e1e5ee;
+}
+.console-header h1 {
+  margin: 4px 0;
+  font-size: 19px;
+  color: #143b8a;
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+.back-link {
+  display: inline-block;
+  font-size: 13px; color: #143b8a;
+  text-decoration: none; margin-bottom: 2px;
+}
+.back-link:hover { text-decoration: underline; }
+.encounter-join {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 13px; font-weight: 600;
+  background: #eef2fb; padding: 2px 8px; border-radius: 4px;
+  letter-spacing: .06em;
+}
+
+.badge {
+  padding: 2px 8px; border-radius: 99px;
+  font-size: 10px; font-weight: 700; letter-spacing: .08em;
+  background: #eef2fb; color: #143b8a;
+}
+.badge.clone {
+  background: #fdf3dc; color: #905a08;
+}
+
+.console-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 14px;
+  padding: 16px;
+}
+.console-card {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.console-card h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: #143b8a;
+}
+
+.telemetry-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin: 10px 0;
+}
+.telemetry-cell {
+  background: #f7f8fb;
+  border: 1px solid #dde2ee;
+  border-radius: 6px;
+  padding: 8px 6px;
+  text-align: center;
+}
+.telemetry-cell .label {
+  display: block;
+  font-size: 10px;
+  color: #5a6273;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.telemetry-cell .value {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a2a4a;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+}
+
+.ecg-canvas {
+  margin-top: 8px;
+  min-height: 110px;
+  background: #06120c;
+  /* M48 — muted ECG trace color (was saturated #5dffae which read
+     as a halo against the dark canvas). Keep it readable but not
+     glowing. */
+  color: #7fc99a;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 11px;
+  position: relative;
+}
+.ecg-canvas svg { width: 100%; height: 100%; }
+.ecg-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 12px; font-weight: 400;
+}
+
+.device-list {
+  list-style: none; padding: 0; margin: 8px 0;
+}
+.device-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: #f7f8fb;
+  border: 1px solid #dde2ee;
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.override-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.scene-form-console {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.scene-form-console label {
+  display: flex; flex-direction: column; gap: 4px; font-size: 13px;
+}
+.scene-form-console select,
+.scene-form-console textarea {
+  padding: 6px 8px;
+  border: 1px solid #c1c8d6;
+  border-radius: 4px;
+  font: inherit;
+}
+.scene-form-console textarea { font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 12px; }
+.scene-form-console .primary-action {
+  background: #1f7a3a; color: #fff; border: 0;
+  padding: 8px 14px; border-radius: 6px; font: inherit; font-weight: 700;
+  cursor: pointer; align-self: flex-start;
+}
+
+.chart-recent {
+  list-style: none; padding: 0; margin: 8px 0;
+  max-height: 220px; overflow-y: auto;
+  font-size: 12px;
+}
+.chart-recent li {
+  padding: 4px 6px;
+  border-bottom: 1px dashed #eef2fb;
+}
+.chart-recent .type {
+  display: inline-block;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  background: #eef2fb; color: #143b8a;
+  padding: 1px 6px; border-radius: 3px;
+  font-size: 10px; margin-right: 4px;
+}
+
+/* M30 — transcript pane */
+.transcript-pane {
+  max-height: 280px;
+  overflow-y: auto;
+  background: #f7f8fb;
+  border: 1px solid #dde2ee;
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 6px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.transcript-row {
+  padding: 6px 8px; border-radius: 4px;
+}
+.transcript-row.tr-student   { background: #eef2fb; }
+.transcript-row.tr-character { background: #fff; border: 1px solid #dde2ee; }
+.transcript-row .tr-meta {
+  display: flex; gap: 8px; align-items: baseline;
+  font-size: 10px; margin-bottom: 2px;
+}
+.transcript-row .tr-time { color: #5a6273; font-family: "SF Mono","Menlo",monospace; }
+.transcript-row .tr-text { font-size: 13px; line-height: 1.4; color: #1a2a4a; }
+
+/* M30 + M33 — voice picker grid (character name + role + voice + test + engage) */
+.voice-grid {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 6px;
+}
+.voice-row {
+  display: grid;
+  /* name+role  |  voice select  |  test+engage actions */
+  grid-template-columns: 1.4fr 1.4fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  background: #f7f8fb;
+  border: 1px solid #dde2ee;
+  border-radius: 6px;
+}
+.voice-row select {
+  padding: 5px 8px; border: 1px solid #c1c8d6; border-radius: 4px;
+  font: inherit; font-size: 12px;
+  min-width: 0;
+}
+.voice-row .char-label {
+  display: flex; flex-direction: column; gap: 2px;
+  font-size: 13px; line-height: 1.2;
+}
+.voice-row .char-name {
+  font-weight: 700; color: #1a2a4a;
+}
+.voice-row .char-role-tag {
+  display: inline-block;
+  font-size: 10px; font-weight: 600;
+  letter-spacing: .05em;
+  background: #eef2fb; color: #143b8a;
+  padding: 1px 6px; border-radius: 3px;
+  align-self: flex-start;
+  margin-top: 1px;
+}
+.voice-row .char-role-tag.patient {
+  background: #fdf3dc; color: #905a08;
+}
+.voice-row .char-pid {
+  font-family: "SF Mono","Menlo","Consolas", monospace;
+  font-size: 10px; color: #5a6273;
+}
+.voice-row .char-actions {
+  display: flex; gap: 4px; align-items: center;
+}
+.voice-row .char-test,
+.voice-row .char-engage {
+  font-size: 11px; font-weight: 700;
+  padding: 5px 8px;
+  border: 1px solid #c1c8d6;
+  border-radius: 4px;
+  background: #fff;
+  color: #143b8a;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.voice-row .char-test:hover,
+.voice-row .char-engage:hover {
+  background: #eef2fb;
+}
+.voice-row .char-test:disabled {
+  opacity: .55; cursor: wait;
+}
+@media (max-width: 700px) {
+  .voice-row {
+    grid-template-columns: 1fr;
+  }
+  .voice-row .char-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* M30 — lead student picker */
+#lead-student-picker {
+  width: 100%; padding: 6px 8px;
+  border: 1px solid #c1c8d6; border-radius: 4px;
+  font: inherit; margin-top: 4px;
+}
+
+/* M31 — QR-codes card. M36 — bumped to 4 columns to fit the nurse-station cell. */
+.qr-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  margin: 10px 0;
+}
+.qr-cell.qr-cell-nurse {
+  background: #f1f8f3;
+  border-color: #c7e5d1;
+}
+.qr-cell.qr-cell-nurse .qr-label { color: #186730; }
+.qr-cell {
+  background: #f7f8fb; border: 1px solid #dde2ee;
+  border-radius: 6px; padding: 8px; text-align: center;
+}
+.qr-label {
+  font-weight: 700; color: #143b8a; font-size: 12px; margin-bottom: 4px;
+}
+.qr-img {
+  width: 100%; max-width: 130px; height: auto;
+  background: #fff; padding: 4px; border: 1px solid #dde2ee;
+  border-radius: 4px;
+}
+.qr-url {
+  display: block; margin-top: 4px;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 9px; color: #5a6273; word-break: break-all;
+}
+/* M34 — "skip the QR, launch on this device" hint under the EHR cell. */
+.qr-launch-here {
+  display: inline-block; margin-top: 6px;
+  font-size: 11px; font-weight: 700;
+  background: #1f7a3a; color: #fff;
+  padding: 4px 10px; border-radius: 4px;
+  text-decoration: none;
+}
+.qr-launch-here:hover { background: #186730; }
+
+/* M41 — per-encounter print-QR link under the QR-codes card footer. */
+.qr-print-link {
+  display: inline-block;
+  font-size: 12px; font-weight: 700;
+  background: #143b8a; color: #fff;
+  padding: 6px 12px; border-radius: 4px;
+  text-decoration: none;
+  margin-top: 4px;
+}
+.qr-print-link:hover { background: #0f2c66; }
+
+/* M42 — Manage devices button (replaces the v6 ops-view link-out). */
+.device-manage-btn {
+  display: inline-block;
+  font: inherit; font-size: 12px; font-weight: 700;
+  background: #143b8a; color: #fff;
+  padding: 6px 12px; border: 0; border-radius: 4px;
+  cursor: pointer;
+}
+.device-manage-btn:hover { background: #0f2c66; }
+@media (max-width: 1000px) {
+  .qr-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .qr-grid { grid-template-columns: 1fr; }
+}
+
+/* M39 — Engage chat dialog (in-encounter modal). */
+.engage-dialog {
+  width: min(900px, 92vw);
+  height: min(720px, 88vh);
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.35);
+  background: #fff;
+  overflow: hidden;
+}
+.engage-dialog::backdrop {
+  background: rgba(20, 30, 60, 0.55);
+}
+.engage-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #143b8a;
+  color: #fff;
+  border-bottom: 1px solid #0f2c66;
+}
+.engage-dialog-header h3 {
+  margin: 0; font-size: 15px; font-weight: 700; color: #fff;
+}
+.engage-dialog-actions {
+  display: flex; gap: 8px; align-items: center;
+}
+.engage-dialog-popout,
+.engage-dialog-close {
+  background: rgba(255,255,255,0.14);
+  color: #fff;
+  border: 0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.engage-dialog-popout:hover,
+.engage-dialog-close:hover {
+  background: rgba(255,255,255,0.28);
+}
+.engage-dialog-frame {
+  width: 100%;
+  height: calc(100% - 44px);
+  border: 0;
+  background: #fff;
+  display: block;
+}
+
+/* M45 — Inline device control cards in the encounter Devices card.
+   Each bound device renders with full controls (assign, inject,
+   clear, advance time) so the instructor doesn't have to reopen
+   the Managed Devices modal for everyday operations. */
+.device-list .device-card {
+  /* Override the older `.device-list li { display: flex }` rule
+     above so the card lays out as a vertical block. */
+  display: block;
+  list-style: none;
+  border: 1px solid #dde2ee;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: #fff;
+  justify-content: initial;
+}
+.device-card .device-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.device-card .device-card-name {
+  font-size: 13px;
+  color: #1a2a4a;
+}
+.device-card .device-card-meta {
+  font-size: 11px;
+  color: #5a6273;
+  display: flex; align-items: center; gap: 4px;
+}
+.dev-dot {
+  font-size: 14px;
+  line-height: 1;
+}
+.dev-dot.dev-online  { color: #1f7a3a; }
+.dev-dot.dev-offline { color: #c47a04; }
+
+.device-card .device-card-assignment {
+  display: flex; align-items: center; gap: 8px;
+  margin: 4px 0;
+}
+.device-card .device-card-assignment select {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid #c1c8d6;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 12px;
+  min-width: 0;
+}
+.device-card .dev-pid {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 10px;
+}
+
+.dev-alarm-list {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0;
+  background: #fdf3dc;
+  border: 1px solid #c47a04;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+.dev-alarm-list .dev-alarm-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 2px 0;
+  font-size: 12px;
+}
+.dev-alarm-tone {
+  font-weight: 700; color: #553e0a;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+}
+
+.device-card .device-card-actions {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  align-items: center;
+  margin-top: 6px;
+}
+.dev-tone-picker {
+  padding: 3px 6px;
+  border: 1px solid #c1c8d6;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+}
+.dev-btn-sm {
+  font-size: 11px; font-weight: 700;
+  padding: 4px 8px;
+  background: #eef2fb;
+  color: #143b8a;
+  border: 1px solid #c1c8d6;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.dev-btn-sm:hover { background: #dde7fb; }
+.dev-btn-sm:disabled { opacity: .55; cursor: wait; }
+.dev-btn-inject {
+  background: #fdf3dc;
+  color: #905a08;
+  border-color: #c47a04;
+}
+.dev-btn-inject:hover { background: #f8e2a8; }
+.dev-time-group {
+  display: inline-flex; gap: 2px;
+  margin-left: auto;
+}
+
+/* M46 — Per-device QR strip on inline device cards. Operators can
+   scan with a phone OR print via the M41 QR sheet (which now also
+   renders these device QRs per encounter). */
+.device-card .device-card-qr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+  padding: 4px 6px;
+  background: #f7f8fb;
+  border: 1px solid #dde2ee;
+  border-radius: 4px;
+}
+.device-card-qr-img {
+  width: 56px;
+  height: 56px;
+  background: #fff;
+  padding: 2px;
+  border: 1px solid #dde2ee;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.device-card-qr-url {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 9px;
+  color: #5a6273;
+  word-break: break-all;
+  line-height: 1.3;
+}
+
+/* M51 — Patient Integrated Alarm instructor-mirror panel inside the
+   device card. Lets the instructor trigger any of the 4 PIA events
+   without scanning the QR. */
+.device-card-pia {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #c1c8d6;
+}
+.pia-mirror-row {
+  display: flex; flex-wrap: wrap; gap: 4px;
+}
+.pia-mirror-btn {
+  flex: 1; min-width: 90px;
+}
+.pia-mirror-btn.pia-mirror-cb {
+  background: #962d22; color: #fff; border-color: #962d22;
+}
+.pia-mirror-btn.pia-mirror-cb:hover { background: #b8392c; }
+
+/* ── M53 — Read-only lead-label reference banner ──────────────────
+   The instructor sets the lead via the Multi-Patient Control panel;
+   that label appears here as a read-only banner above the M30
+   roster-picker so the bedside instructor sees who's leading
+   without round-tripping to the dashboard. Hidden when no label. */
+.lead-label-ref {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  background: #f0eefb;
+  border: 1px solid #d2cdf0;
+  border-left: 3px solid #5a4ec3;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #2c3a55;
+}
+.lead-label-ref strong { color: #3d2f8a; }
+
+/* ── M53 bugfix — Header lead pill ────────────────────────────────
+   The "· 🎓 Lead: …" pill in the encounter title row needs to stand
+   out so the operator sees the lead at a glance. Indigo accent ties
+   it to the Multi-Patient Control lead-assignments panel (same color
+   accent over there). */
+#lead-student-banner {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 2px 8px;
+  background: #f0eefb;
+  color: #3d2f8a;
+  border: 1px solid #d2cdf0;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+#lead-student-banner[hidden] { display: none; }
+#lead-student-banner strong { color: #2a1f6b; }
+
+/* ── M55 — Medications card ───────────────────────────────────────
+   Collapsible (matches the M54 nurse-station threshold panel
+   pattern). Header is a click target with a rotating caret. Each
+   persona section lists checkboxes for every med in the seed MAR;
+   ticked = active at scenario start = shows on med cart. */
+.meds-card .meds-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+  margin: 0; padding: 0;
+}
+.meds-card .meds-toggle:hover { color: #143b8a; }
+.meds-card .meds-toggle:focus { outline: 2px solid #5a89ff; outline-offset: 2px; }
+.meds-caret {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: #6e7a96;
+}
+.meds-card:not(.meds-collapsed) .meds-caret {
+  transform: rotate(90deg);
+}
+.meds-card.meds-collapsed .meds-body { display: none; }
+.meds-card.meds-collapsed .meds-toggle { margin-bottom: 0; }
+
+.meds-personas {
+  display: flex; flex-direction: column; gap: 10px;
+  margin-top: 8px;
+}
+.meds-persona {
+  background: #f7f8fb;
+  border: 1px solid #e2e6ef;
+  border-left: 3px solid #5a4ec3;     /* indigo accent — matches M53 */
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.meds-persona-header {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.meds-persona-header strong { color: #2c3a55; }
+.meds-status {
+  margin-left: auto;
+  padding: 2px 6px;
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.meds-reset {
+  font-size: 11px;
+  color: #5a4ec3;
+  background: none; border: none; cursor: pointer;
+  text-decoration: underline;
+}
+.meds-reset:hover { color: #2a1f6b; }
+.meds-rows {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.meds-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 6px;
+  background: #fff;
+  border: 1px solid #e2e6ef;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.meds-row:hover { background: #f0eefb; }
+.meds-cb { margin: 0; }
+.meds-name { font-weight: 600; color: #2c3a55; }
+.meds-dose { margin-left: auto; }
+.meds-high-alert {
+  background: #ffe6e6;
+  color: #a02437;
+  border: 1px solid #f7a8b3;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* ── M57 — Lead-card empty-state hint ─────────────────────────────
+   Shown when no lead label has been set, so the card isn't visually
+   empty after we stripped the M30 picker + paragraph. */
+.lead-empty-hint {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  background: #f7f8fb;
+  border: 1px dashed #c1c8d6;
+  border-radius: 4px;
+  color: #5a6273;
+}
+.lead-empty-hint[hidden] { display: none; }
+.lead-empty-hint strong { color: #3d2f8a; }

@@ -1,0 +1,60 @@
+{
+  "device_kind": "pump_enteral",
+  "device_model": "kangaroo_omni",
+  "display_name": "Cardinal Kangaroo OMNI",
+  "manufacturer": "Cardinal Health",
+  "modes": ["continuous", "intermittent", "flush"],
+  "screens": ["off", "home", "program", "running", "paused", "alarmed", "feed_complete"],
+  "screen_color_by_state": {
+    "off":            "#1b2733",
+    "home":           "#3E7CB1",
+    "program":        "#3E7CB1",
+    "running":        "#3DA35D",
+    "paused":         "#6B4F2F",
+    "alarmed":        "#D7382E",
+    "feed_complete":  "#3DA35D"
+  },
+  "controls": {
+    "hardkeys": ["key-onoff", "key-start", "key-pause", "key-silence", "key-clear"],
+    "softkeys": ["softkey-1", "softkey-2", "softkey-3", "softkey-4"],
+    "screen_fields": ["scr-mode", "scr-rate", "scr-volume", "scr-fed", "scr-flush-q", "scr-time", "scr-status", "scr-battery"]
+  },
+  "alarm_map": {
+    "patient_tube_blocked":   "occlusion_downstream",
+    "feed_error":             "occlusion_upstream",
+    "flush_error":            "occlusion_upstream",
+    "cassette_dislodged":     "door_open",
+    "low_battery":            "low_battery",
+    "depleted_battery":       "depleted_battery",
+    "system_error":           "system_error",
+    "feed_complete":          "feed_complete",
+    "callback_reminder":      "callback_reminder"
+  },
+  "silence_seconds": 120,
+  "programming": {
+    "fields": [
+      {"id": "scr-rate",  "label": "Rate (mL/hr)",      "attribute": "rate_ml_hr",      "min": 1,  "max": 600, "step": 5,  "per_channel": false},
+      {"id": "scr-vi",    "label": "Volume (mL)",       "attribute": "volume_ml",       "min": 0,  "max": 3000, "step": 25, "per_channel": false},
+      {"id": "scr-flush", "label": "Flush volume (mL)", "attribute": "flush_volume_ml", "min": 0,  "max": 250,  "step": 5,  "per_channel": false}
+    ],
+    "default_channel": "",
+    "advance_keys":    ["softkey-2", "softkey-3"],
+    "channel_keys":    {},
+    "inc_key":         "key-up",
+    "dec_key":         "key-down",
+    "start_keys":      {"softkey-1": ""},
+    "input_mode":      "stepper"
+  },
+  "default_program": {
+    "mode":          "continuous",
+    "rate_ml_hr":     85,
+    "volume_ml":      500,
+    "flush_volume_ml": 25,
+    "flush_interval_hr": 4
+  },
+  "battery": {
+    "capacity_minutes": 480,
+    "low_threshold_minutes": 30,
+    "depleted_threshold_minutes": 5
+  }
+}

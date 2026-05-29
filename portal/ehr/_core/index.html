@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MEDSIM V5 — Medical Records</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brand:#143b8a; --brand-ink:#0a234f; --accent:#c47a04;
+    --bg:#eef1f7; --panel:#fff; --ink:#0c1733; --ink2:#3a4a6b; --ink3:#6b7896;
+    --line:#dde2ee; --ok:#1f7a3a; --warn:#c47a04; --danger:#a02437;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,system-ui,sans-serif;font-size:13px;line-height:1.45;
+    -webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;cursor:pointer}
+  input,textarea,select{font:inherit;color:inherit}
+  #app{min-height:100vh;display:flex;flex-direction:column}
+  .v5-loading{padding:60px;text-align:center;color:var(--ink3)}
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="app"><div class="v5-loading">Loading the medical record…</div></div>
+
+<script>
+  // V5 bootstrap — injected by the FastAPI route at request time.
+  window.MEDSIM_V3 = {{ bootstrap_json | safe }};
+</script>
+<script src="/ehr-static/_core/themes.js"></script>
+<script type="text/babel" src="/ehr-static/_core/ehr_app.jsx"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+Clinical Alarm WAV Files — Manifest
+====================================
+
+01_bed_exit_alarm.wav
+  Bed exit alarm — patient-side warble
+
+02_call_bell.wav
+  Call bell — patient room chime
+
+03_code_blue.wav
+  Code blue — emergency response cue
+
+04_nurses_station_ecg_high_priority.wav
+  Nurses station — ECG waveform alarm — HIGH priority
+
+05_nurses_station_hr_high_priority.wav
+  Nurses station — Heart rate alarm — HIGH priority
+
+06_nurses_station_spo2_high_priority.wav
+  Nurses station — O2 saturation (SpO2) alarm — HIGH priority
+
+07_nurses_station_rr_high_priority.wav
+  Nurses station — Respiration rate alarm — HIGH priority
+
+08_nurses_station_ecg_medium_priority.wav
+  Nurses station — ECG waveform alarm — MEDIUM priority
+
+09_nurses_station_hr_medium_priority.wav
+  Nurses station — Heart rate alarm — MEDIUM priority
+
+10_nurses_station_spo2_medium_priority.wav
+  Nurses station — O2 saturation (SpO2) alarm — MEDIUM priority
+
+11_nurses_station_rr_medium_priority.wav
+  Nurses station — Respiration rate alarm — MEDIUM priority
+
+12_nurses_station_ecg_low_priority.wav
+  Nurses station — ECG waveform alarm — LOW priority
+
+13_nurses_station_hr_low_priority.wav
+  Nurses station — Heart rate alarm — LOW priority
+
+14_nurses_station_spo2_low_priority.wav
+  Nurses station — O2 saturation (SpO2) alarm — LOW priority
+
+15_nurses_station_rr_low_priority.wav
+  Nurses station — Respiration rate alarm — LOW priority
+

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Join Training Bridge VRAI- MedSim session</title>
+  <link rel="stylesheet" href="/static/portal.css">
+  <link rel="stylesheet" href="/static/station.css">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1f3a63">
+</head>
+<body class="station-body">
+  <main class="join-card">
+    <h1>Join a Training Bridge VRAI- MedSim session</h1>
+    <p class="muted">Enter the 6-character join code shown on the control-room screen, then pick the persona you'll play.</p>
+
+    <form method="post" action="/join" id="join-form">
+      <label>Join code
+        <input type="text" name="code" id="code-input" maxlength="6" required pattern="[A-Za-z0-9]{4,6}" autocapitalize="characters" value="{{ code or '' }}" placeholder="e.g. AB23XY">
+      </label>
+      <label>Persona
+        <select name="persona_id" id="persona-select" required>
+          <option value="">— choose after entering code —</option>
+        </select>
+      </label>
+      <p id="join-status" class="muted small"></p>
+      <button type="submit" class="primary-action" id="btn-join" disabled>Join as station</button>
+    </form>
+
+    <p class="muted small" style="margin-top:24px;">
+      Scanned a QR code? Your join code is filled in already — just pick a persona and tap Join.
+    </p>
+  </main>
+  <script src="/static/station.js"></script>
+</body>
+</html>

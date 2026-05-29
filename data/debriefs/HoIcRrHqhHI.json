@@ -1,0 +1,668 @@
+{
+  "session_id": "HoIcRrHqhHI",
+  "join_code": "JTC3TU",
+  "scenario_name": "Substance \u00b7 Alcohol withdrawal (CIWA-Ar)",
+  "scenario_notes": "30-min sim. CIWA-Ar scoring, benzodiazepine selection and titration, escalation criteria for telemetry/ICU, de-escalation of paranoid hallucinations without restraints. High-risk persona \u2014 instructor in the loop.",
+  "scenario_text": "52-year-old man admitted with acute pancreatitis. Reports last alcoholic drink 36 hours ago \u2014 daily heavy use prior. Now tremulous, diaphoretic, anxious. Reports seeing 'spiders on the wall.' Last CIWA-Ar score: 14. Lorazepam 2 mg IV q1h PRN ordered but pharmacy delayed delivery; smart pump alarming on dose-range check. Charge nurse paged, pharmacist available.",
+  "program_id": "BSN-RN",
+  "week": 7,
+  "selected_modules": [
+    "M02",
+    "M06",
+    "M39"
+  ],
+  "selected_personas": [
+    "P-002",
+    "P-004",
+    "P-006",
+    "P-016"
+  ],
+  "stations": [],
+  "started_at": 1779412598.5852532,
+  "ended_at": 1779412918.216021,
+  "duration_seconds": 319,
+  "summary": {
+    "total_turns": 14,
+    "round_trips": 7,
+    "student_turns": 7,
+    "character_turns": 7,
+    "station_turns": 0,
+    "operator_turns": 7,
+    "personas_engaged": 2,
+    "duration_seconds": 319,
+    "duration_pretty": "5m 19s",
+    "latency_p50_ms": 1940,
+    "latency_mean_ms": 2036,
+    "latency_p95_ms": 2403,
+    "latency_max_ms": 2418
+  },
+  "ncjmm_coverage": {
+    "recognize-cues": 0,
+    "analyze-cues": 0,
+    "prioritize-hypotheses": 0,
+    "generate-solutions": 0,
+    "take-action": 7,
+    "evaluate-outcomes": 0
+  },
+  "role_group_distribution": {
+    "Clinician": 2,
+    "Allied Health": 0,
+    "Patient": 5,
+    "Family": 0
+  },
+  "safety_class_distribution": {
+    "baseline": 2,
+    "sensitive": 0,
+    "high-risk": 5
+  },
+  "personas_engagement": [
+    {
+      "id": "P-016",
+      "name": "Mr. Doyle",
+      "role": "Alcohol Withdrawal",
+      "role_group": "Patient",
+      "safety_class": "high-risk",
+      "altered_state": "alcohol-withdrawal",
+      "turns": 5,
+      "avg_latency_ms": 1908,
+      "engaged": true
+    },
+    {
+      "id": "P-004",
+      "name": "Charge Nurse Kim",
+      "role": "Charge RN",
+      "role_group": "Clinician",
+      "safety_class": "baseline",
+      "altered_state": null,
+      "turns": 2,
+      "avg_latency_ms": 2358,
+      "engaged": true
+    },
+    {
+      "id": "P-002",
+      "name": "Dr. Patel",
+      "role": "Hospitalist",
+      "role_group": "Clinician",
+      "safety_class": "baseline",
+      "altered_state": null,
+      "turns": 0,
+      "avg_latency_ms": null,
+      "engaged": false
+    },
+    {
+      "id": "P-006",
+      "name": "Pharmacist Lee",
+      "role": "Inpatient Pharmacist",
+      "role_group": "Allied Health",
+      "safety_class": "baseline",
+      "altered_state": null,
+      "turns": 0,
+      "avg_latency_ms": null,
+      "engaged": false
+    }
+  ],
+  "objective_alignment": [
+    {
+      "module_id": "M02",
+      "module_title": "Therapeutic communication & handoff",
+      "nclex_domain": "",
+      "summary": "Therapeutic communication: open-ended questions, reflection, silence, validation. SBAR handoff. Cultural humility. Trauma-informed care. De-escalation.",
+      "categories": {
+        "conditions": {
+          "label": "Conditions",
+          "total": 5,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "any encounter requiring history-taking",
+            "shift-change handoff",
+            "transfer to higher level of care",
+            "difficult conversations",
+            "language/literacy barriers"
+          ],
+          "unmatched": [
+            "any encounter requiring history-taking",
+            "shift-change handoff",
+            "transfer to higher level of care",
+            "difficult conversations",
+            "language/literacy barriers"
+          ]
+        },
+        "medications": {
+          "label": "Medications",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "devices": {
+          "label": "Devices",
+          "total": 3,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "interpreter phone/video",
+            "communication boards",
+            "writing tools for nonverbal patients"
+          ],
+          "unmatched": [
+            "interpreter phone/video",
+            "communication boards",
+            "writing tools for nonverbal patients"
+          ]
+        },
+        "procedures": {
+          "label": "Procedures",
+          "total": 4,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "SBAR (Situation/Background/Assessment/Recommendation)",
+            "ISBARR variant",
+            "teach-back method",
+            "open-ended \u2192 focused \u2192 confirmation funnel"
+          ],
+          "unmatched": [
+            "SBAR (Situation/Background/Assessment/Recommendation)",
+            "ISBARR variant",
+            "teach-back method",
+            "open-ended \u2192 focused \u2192 confirmation funnel"
+          ]
+        },
+        "primaryTreatments": {
+          "label": "Primary treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "alternateTreatments": {
+          "label": "Alternate treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "redFlags": {
+          "label": "Red flags",
+          "total": 4,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "closed body language",
+            "yes/no answers from a patient who normally elaborates",
+            "family speaking for the patient",
+            "frequent interruptions"
+          ],
+          "unmatched": [
+            "closed body language",
+            "yes/no answers from a patient who normally elaborates",
+            "family speaking for the patient",
+            "frequent interruptions"
+          ]
+        }
+      },
+      "total_items": 16,
+      "total_matched": 0,
+      "coverage_percent": 0,
+      "role_hooks": {
+        "Patient": "I appreciate you taking the time to listen. Most nurses just rush in.",
+        "Family": "I just want someone to actually tell me what is happening.",
+        "Clinician": "Give me an SBAR \u2014 situation, background, assessment, recommendation. Don't bury the lead.",
+        "AlliedHealth": "I'll need a quick handoff before I take them to imaging \u2014 anything I should know?"
+      },
+      "scope_of_practice": {
+        "LPN": "Conduct routine communication, document, escalate concerns to RN. Cannot independently lead complex goals-of-care discussions.",
+        "RN": "Lead SBAR handoff, conduct patient/family teaching, initiate goals-of-care conversations within scope, escalate to provider.",
+        "Advanced": "Lead family meetings, deliver bad news, coordinate goals-of-care with palliative/social work."
+      }
+    },
+    {
+      "module_id": "M06",
+      "module_title": "Pharmacology principles & dose calc",
+      "nclex_domain": "",
+      "summary": "Pharmacology principles: pharmacokinetics, pharmacodynamics, dose calculation, weight-based dosing, renal/hepatic adjustment, high-alert medications, look-alike-sound-alike pairs.",
+      "categories": {
+        "conditions": {
+          "label": "Conditions",
+          "total": 3,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "any medication order",
+            "dose calculation tasks",
+            "renal/hepatic dosing scenarios"
+          ],
+          "unmatched": [
+            "any medication order",
+            "dose calculation tasks",
+            "renal/hepatic dosing scenarios"
+          ]
+        },
+        "medications": {
+          "label": "Medications",
+          "total": 1,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "high-alert: insulin, heparin, opioids, chemotherapy, concentrated electrolytes (KCl)"
+          ],
+          "unmatched": [
+            "high-alert: insulin, heparin, opioids, chemotherapy, concentrated electrolytes (KCl)"
+          ]
+        },
+        "devices": {
+          "label": "Devices",
+          "total": 3,
+          "matched": 1,
+          "matches": [
+            "smart pump (drug library, soft/hard limits)"
+          ],
+          "all_items": [
+            "smart pump (drug library, soft/hard limits)",
+            "barcode scanner",
+            "automated dispensing cabinet"
+          ],
+          "unmatched": [
+            "barcode scanner",
+            "automated dispensing cabinet"
+          ]
+        },
+        "procedures": {
+          "label": "Procedures",
+          "total": 3,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "five rights (right patient, drug, dose, route, time) + extended (documentation, indication, response)",
+            "independent double-check for high-alert meds",
+            "med math: D/H \u00d7 Q, weight-based mg/kg, drip rate calculation"
+          ],
+          "unmatched": [
+            "five rights (right patient, drug, dose, route, time) + extended (documentation, indication, response)",
+            "independent double-check for high-alert meds",
+            "med math: D/H \u00d7 Q, weight-based mg/kg, drip rate calculation"
+          ]
+        },
+        "primaryTreatments": {
+          "label": "Primary treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "alternateTreatments": {
+          "label": "Alternate treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "redFlags": {
+          "label": "Red flags",
+          "total": 3,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "pump alarm overridden without scrutiny",
+            "high-alert med without independent double-check",
+            "look-alike pair (e.g., hydromorphone vs. morphine) confused"
+          ],
+          "unmatched": [
+            "pump alarm overridden without scrutiny",
+            "high-alert med without independent double-check",
+            "look-alike pair (e.g., hydromorphone vs. morphine) confused"
+          ]
+        }
+      },
+      "total_items": 13,
+      "total_matched": 1,
+      "coverage_percent": 7,
+      "role_hooks": {
+        "Patient": "Wait \u2014 that's a different color than my usual pill. Is that the same thing?",
+        "Family": "He's on so many medications now. What are these for?",
+        "Clinician": "Run the math on me before you push anything high-alert.",
+        "AlliedHealth": "Pharmacy here \u2014 that combination has a known QT-prolongation interaction. I'd choose an alternative."
+      },
+      "scope_of_practice": {
+        "LPN": "Calculate and administer routine ordered medications by approved routes; cannot administer IV push opioids in most states.",
+        "RN": "Administer all routes, IV push, titrate per protocol, manage smart pumps, perform independent double-checks.",
+        "Advanced": "Prescribe, adjust based on labs, manage anticoagulation/insulin titration protocols."
+      }
+    },
+    {
+      "module_id": "M39",
+      "module_title": "Mood disorders & suicide risk",
+      "nclex_domain": "",
+      "summary": "Mood disorders (MDD, bipolar, dysthymia), anxiety disorders, suicidal ideation assessment, therapeutic milieu, safety planning.",
+      "categories": {
+        "conditions": {
+          "label": "Conditions",
+          "total": 6,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "major depressive disorder",
+            "bipolar disorder",
+            "generalized anxiety",
+            "panic disorder",
+            "PTSD",
+            "passive vs. active suicidal ideation"
+          ],
+          "unmatched": [
+            "major depressive disorder",
+            "bipolar disorder",
+            "generalized anxiety",
+            "panic disorder",
+            "PTSD",
+            "passive vs. active suicidal ideation"
+          ]
+        },
+        "medications": {
+          "label": "Medications",
+          "total": 6,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "SSRIs: fluoxetine, sertraline, escitalopram",
+            "SNRIs: venlafaxine, duloxetine",
+            "atypical: bupropion, mirtazapine",
+            "benzodiazepines (short-term anxiety only)",
+            "lithium (narrow therapeutic index 0.6-1.2 mEq/L)",
+            "valproate, lamotrigine, quetiapine for bipolar"
+          ],
+          "unmatched": [
+            "SSRIs: fluoxetine, sertraline, escitalopram",
+            "SNRIs: venlafaxine, duloxetine",
+            "atypical: bupropion, mirtazapine",
+            "benzodiazepines (short-term anxiety only)",
+            "lithium (narrow therapeutic index 0.6-1.2 mEq/L)",
+            "valproate, lamotrigine, quetiapine for bipolar"
+          ]
+        },
+        "devices": {
+          "label": "Devices",
+          "total": 3,
+          "matched": 1,
+          "matches": [
+            "1:1 sitter for high-risk SI"
+          ],
+          "all_items": [
+            "safety-rounded environment (no cords, no breakable items)",
+            "1:1 sitter for high-risk SI",
+            "PHQ-9, Columbia Suicide Severity Rating Scale"
+          ],
+          "unmatched": [
+            "safety-rounded environment (no cords, no breakable items)",
+            "PHQ-9, Columbia Suicide Severity Rating Scale"
+          ]
+        },
+        "procedures": {
+          "label": "Procedures",
+          "total": 5,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "safety/contract for safety",
+            "PHQ-9 routinely on admission and as ordered",
+            "Columbia scale for SI severity",
+            "lithium level, watch for toxicity (>1.5 = tremor, GI, ataxia)",
+            "MAOI dietary restrictions (no aged cheese, wine)"
+          ],
+          "unmatched": [
+            "safety/contract for safety",
+            "PHQ-9 routinely on admission and as ordered",
+            "Columbia scale for SI severity",
+            "lithium level, watch for toxicity (>1.5 = tremor, GI, ataxia)",
+            "MAOI dietary restrictions (no aged cheese, wine)"
+          ]
+        },
+        "primaryTreatments": {
+          "label": "Primary treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "alternateTreatments": {
+          "label": "Alternate treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "redFlags": {
+          "label": "Red flags",
+          "total": 5,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "plan + means + intent for self-harm",
+            "command auditory hallucinations to harm self/others",
+            "lithium toxicity signs",
+            "serotonin syndrome with multiple serotonergic agents",
+            "abrupt antidepressant discontinuation syndrome"
+          ],
+          "unmatched": [
+            "plan + means + intent for self-harm",
+            "command auditory hallucinations to harm self/others",
+            "lithium toxicity signs",
+            "serotonin syndrome with multiple serotonergic agents",
+            "abrupt antidepressant discontinuation syndrome"
+          ]
+        }
+      },
+      "total_items": 25,
+      "total_matched": 1,
+      "coverage_percent": 4,
+      "role_hooks": {
+        "Patient": "I just feel empty. Most days I don't see the point of getting out of bed.",
+        "Family": "I'm scared he's going to hurt himself. He won't talk to me anymore.",
+        "Clinician": "Have you done a Columbia? I want to know severity before we move forward.",
+        "AlliedHealth": "Social work here \u2014 let's start the safety plan and identify a follow-up therapist before discharge."
+      },
+      "scope_of_practice": {
+        "LPN": "Therapeutic communication, observe and document mood/affect/SI, administer ordered psychotropics, recognize and report safety concerns immediately.",
+        "RN": "Comprehensive psych assessment including SI/HI, lead milieu, manage psychotropic titration, develop safety plan with patient, coordinate with psychiatry.",
+        "Advanced": "PMHNP/psychiatrist \u2014 diagnose, prescribe, manage involuntary holds, ECT planning, complex pharmacotherapy."
+      }
+    }
+  ],
+  "documentation_alignment": {
+    "available": false,
+    "composite": 0.0,
+    "model": null,
+    "built_at": null,
+    "rubric": {},
+    "rules": {
+      "hits": [],
+      "misses": [],
+      "speculative": [],
+      "by_module": [],
+      "totals": {}
+    },
+    "notes_meta": [],
+    "note_count": 0,
+    "signed_count": 0
+  },
+  "orders_alignment": {
+    "total_orders": 0,
+    "by_category": {},
+    "priority_dist": {
+      "routine": 0,
+      "stat": 0,
+      "now": 0
+    },
+    "rationale_quality": 0.0,
+    "trigger_latency_s": []
+  },
+  "ehr_id": "helix",
+  "charting_locked_at": null,
+  "transcript": [
+    {
+      "ts": 1779412667.505863,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "student",
+      "text": "how are we feeling today",
+      "latency_ms": null,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412667.5068629,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "character",
+      "text": "*wrings hands, eyes darting toward the corner of the room*\n\nNot... not good, honestly. My hands won't stop shaking and I feel like I'm crawling out of my skin. And there's\u2014there's something moving over there on the wall. *voice cracks slightly* Is anyone else seeing that? \n\nI know I shouldn't have let it go this far with the drinking, but right now I just... I need something to calm down. When's that medication coming?",
+      "latency_ms": 2418,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412707.83636,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "student",
+      "text": "I'll check with the nurse on your medication have you ever gone through detox before",
+      "latency_ms": null,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412707.83736,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "character",
+      "text": "*eyes dart nervously to the corner of the room, then back to you*\n\nYeah... yeah, I tried once, couple years back. But it wasn't like this. My hands won't stop shaking and I keep seeing things that aren't... \n\n*swallows hard, wringing hands*\n\nPlease, I need something. The last time was bad but I don't remember it being this bad. How long until that medication gets here?",
+      "latency_ms": 1940,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412741.608692,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "student",
+      "text": "I'm going to step out and check with",
+      "latency_ms": null,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412741.6096919,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "character",
+      "text": "*grips the bed rail, eyes darting toward the corner of the room*\n\nWait\u2014wait, don't leave me alone in here. There's... there's something moving over there. My hands won't stop shaking. When's that medication coming? I need something, I can't... I can't sit with this feeling.",
+      "latency_ms": 1722,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412764.786462,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "student",
+      "text": "let me ring the call",
+      "latency_ms": null,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412764.787462,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "character",
+      "text": "*grips the bed rail tightly, eyes darting toward the corner of the room*\n\nYeah... yeah, please. I need something, nurse. My hands won't stop shaking and there's... there's things moving over there. I can't... I need help.",
+      "latency_ms": 1723,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412791.811382,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-004",
+      "persona_name": "Charge Nurse Kim",
+      "direction": "student",
+      "text": "hi I wanted to check on Mr Doyle's detox medication and where he is on the protocol",
+      "latency_ms": null,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412791.812382,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-004",
+      "persona_name": "Charge Nurse Kim",
+      "direction": "character",
+      "text": "Hey, good timing. His CIWA score was at 14 last check, so he's moderate-risk right now\u2014we need those benzos moving. Pharmacy's got a hold-up on the lorazepam dose verification with the smart pump. I've got the pharmacist on standby to sort it out. Once that clears, we're running q1h PRN protocol. You checked on him recently\u2014how's he looking vitally?",
+      "latency_ms": 2370,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412835.34919,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-004",
+      "persona_name": "Charge Nurse Kim",
+      "direction": "student",
+      "text": "his symptoms are getting worse that more muscle twitching starting to have delusions and hallucinations panic and anxiety levels are higher blood pressure is elevated and increased pulse and breathing",
+      "latency_ms": null,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412835.35019,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-004",
+      "persona_name": "Charge Nurse Kim",
+      "direction": "character",
+      "text": "Listen\u2014get that patient on continuous pulse ox and cardiac monitoring right now if he isn't already. I'm calling pharmacy directly about that lorazepam delay\u2014we need those meds *now*, not in an hour. Check his last CIWA score and get me a new one immediately. And notify the hospitalist that his withdrawal's escalating\u2014he may need ICU-level monitoring if this progresses. You stay with him, keep him oriented, and let me know the second anything changes.",
+      "latency_ms": 2347,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412876.608821,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "student",
+      "text": "Mr Doyle the good news is the medication is on the way",
+      "latency_ms": null,
+      "ncjmm_step": "take-action"
+    },
+    {
+      "ts": 1779412876.6098208,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-016",
+      "persona_name": "Mr. Doyle",
+      "direction": "character",
+      "text": "*wringing hands, eyes darting to the corner of the room*\n\nGood... that's good, but\u2014 *voice shaking* \u2014can you see them? The spiders, they keep moving across... I need something NOW. My hands won't stop shaking and my heart's racing like crazy. How much longer? I can't... I really can't sit with this much longer.",
+      "latency_ms": 1738,
+      "ncjmm_step": "take-action"
+    }
+  ],
+  "_meta": {
+    "generated_at": 1779412918.216021,
+    "generator": "medsim3.debrief v1"
+  }
+}

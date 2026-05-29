@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Training Bridge VRAI- MedSim · QR Sheet · Room {{ room_code }}</title>
+  <style>
+    /* M41 — Print-friendly QR sheet. Each encounter is one page. */
+    @page { size: letter portrait; margin: 0.4in; }
+    body {
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+      color: #000;
+      margin: 0;
+      background: #f0f2f5;  /* light gray off-page (screen only) */
+    }
+    .actions {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      border-bottom: 1px solid #c8cdd6;
+      padding: 8px 16px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      z-index: 10;
+    }
+    .actions button, .actions a {
+      background: #143b8a;
+      color: #fff;
+      border: 0;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .actions .secondary {
+      background: #eef2fb;
+      color: #143b8a;
+    }
+    .actions .meta {
+      margin-left: auto;
+      color: #5a6273;
+      font-size: 12px;
+    }
+
+    .qr-page {
+      background: #fff;
+      width: 7.7in;
+      min-height: 10.2in;
+      margin: 12px auto;
+      padding: 0.4in 0.5in;
+      box-sizing: border-box;
+      border: 1px solid #d8dce5;  /* visible on screen, hidden in print */
+      page-break-after: always;
+    }
+    .qr-page:last-of-type { page-break-after: auto; }
+
+    .qr-page-header {
+      border-bottom: 3px solid #143b8a;
+      padding-bottom: 10px;
+      margin-bottom: 16px;
+    }
+    .brand-title {
+      font-size: 22pt;
+      font-weight: 800;
+      color: #143b8a;
+      letter-spacing: -0.5px;
+      margin: 0;
+    }
+    .brand-subtitle {
+      font-size: 10pt;
+      color: #5a6273;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin: 2px 0 0;
+    }
+    .patient-banner {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #fdf3dc;
+      border: 1px solid #c47a04;
+      border-radius: 6px;
+      font-size: 13pt;
+      color: #553e0a;
+    }
+    .patient-banner strong {
+      color: #1a2a4a;
+      font-size: 14pt;
+    }
+    .patient-banner .persona-id {
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 10pt;
+      color: #5a6273;
+    }
+
+    .encounter-meta {
+      margin: 12px 0 18px;
+      padding: 10px 12px;
+      background: #eef2fb;
+      border-left: 4px solid #143b8a;
+      border-radius: 4px;
+    }
+    .encounter-meta .scenario-name {
+      font-size: 14pt;
+      font-weight: 700;
+      color: #1a2a4a;
+      margin: 0 0 6px;
+    }
+    .encounter-meta .codes {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      font-size: 11pt;
+    }
+    .encounter-meta .codes code {
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-weight: 700;
+      background: #fff;
+      border: 1px solid #c8cdd6;
+      padding: 1px 8px;
+      border-radius: 3px;
+      letter-spacing: 0.1em;
+    }
+    .encounter-meta .codes-label {
+      color: #5a6273;
+      font-size: 10pt;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .qr-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.25in;
+      margin-top: 12px;
+    }
+    .qr-block {
+      border: 1px solid #c8cdd6;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+      background: #fff;
+      page-break-inside: avoid;
+    }
+    .qr-block.nurse {
+      background: #f1f8f3;
+      border-color: #1f7a3a;
+    }
+    .qr-block.nurse .qr-block-label {
+      color: #186730;
+    }
+    .qr-block-label {
+      font-size: 12pt;
+      font-weight: 700;
+      color: #143b8a;
+      margin: 0 0 4px;
+    }
+    .qr-block-sublabel {
+      font-size: 9pt;
+      color: #5a6273;
+      margin: 0 0 10px;
+    }
+    .qr-block-img {
+      width: 2.2in;
+      height: 2.2in;
+      background: #fff;
+      padding: 4px;
+      border: 1px solid #d8dce5;
+      border-radius: 4px;
+    }
+    .qr-block-url {
+      display: block;
+      margin-top: 8px;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 8pt;
+      color: #5a6273;
+      word-break: break-all;
+    }
+
+    .empty-notice {
+      padding: 40px;
+      text-align: center;
+      color: #5a6273;
+      font-size: 14pt;
+    }
+
+    /* M46 — Per-device QR section (appears under the 4 station QRs
+       when devices are bound to this encounter). */
+    .device-qr-section {
+      margin-top: 16px;
+      padding-top: 10px;
+      border-top: 1px dashed #c8cdd6;
+    }
+    .device-qr-section-title {
+      font-size: 13pt;
+      font-weight: 700;
+      color: #143b8a;
+      margin: 0 0 8px;
+    }
+    .device-qr-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.15in;
+    }
+    .device-qr-block {
+      border: 1px solid #c8cdd6;
+      border-radius: 5px;
+      padding: 8px;
+      text-align: center;
+      background: #fff;
+      page-break-inside: avoid;
+    }
+    .device-qr-block-label {
+      font-size: 10pt;
+      font-weight: 700;
+      color: #1a2a4a;
+      margin: 0 0 2px;
+    }
+    .device-qr-block-sublabel {
+      font-size: 8pt;
+      color: #5a6273;
+      margin: 0 0 6px;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    }
+    .device-qr-block-img {
+      width: 1.4in;
+      height: 1.4in;
+      background: #fff;
+      padding: 2px;
+      border: 1px solid #d8dce5;
+      border-radius: 3px;
+    }
+    .device-qr-block-url {
+      display: block;
+      margin-top: 4px;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 7pt;
+      color: #5a6273;
+      word-break: break-all;
+    }
+
+    /* PRINT — hide actions; remove gray bg + paper drop-shadow */
+    @media print {
+      body { background: #fff; }
+      .actions { display: none; }
+      .qr-page {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        width: auto;
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="actions">
+    <button type="button" onclick="window.print()">🖨 Print</button>
+    <a class="secondary" href="/portal/room">← Back to Multi-Patient Control</a>
+    <span class="meta">
+      Room <code>{{ room_code }}</code> ·
+      {{ encounters | length }} encounter{{ '' if encounters | length == 1 else 's' }}
+      {% if scope_label %}· {{ scope_label }}{% endif %}
+    </span>
+  </div>
+
+  {% if not encounters %}
+    <div class="qr-page">
+      <p class="empty-notice">No encounters to print.</p>
+    </div>
+  {% endif %}
+
+  {% for enc in encounters %}
+    <section class="qr-page">
+      <header class="qr-page-header">
+        <h1 class="brand-title">Training Bridge VRAI- MedSim</h1>
+        <p class="brand-subtitle">Multi-patient simulation — station join sheet</p>
+        <div class="patient-banner">
+          <strong>Patient character:</strong>
+          {% if enc.patient_name %}{{ enc.patient_name }}{% else %}—{% endif %}
+          <span class="persona-id">({{ enc.patient_persona_id or '—' }}{% if enc.patient_role %} · {{ enc.patient_role }}{% endif %})</span>
+        </div>
+      </header>
+
+      <div class="encounter-meta">
+        <p class="scenario-name">{{ enc.label or enc.scenario_name }}</p>
+        <div class="codes">
+          <span><span class="codes-label">Room code</span> <code>{{ room_code }}</code></span>
+          <span><span class="codes-label">Bed join code</span> <code>{{ enc.join_code }}</code></span>
+          {% if enc.ehr_id %}
+            <span><span class="codes-label">EHR system</span> <code>{{ enc.ehr_id }}</code></span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="qr-grid">
+        <div class="qr-block">
+          <p class="qr-block-label">💬 Chat station</p>
+          <p class="qr-block-sublabel">Bedside student joins to chat with the patient.</p>
+          <img class="qr-block-img"
+               src="/api/qr.svg?data={{ (base_url ~ '/join?code=' ~ enc.join_code) | urlencode }}"
+               alt="Chat station QR for {{ enc.join_code }}">
+          <code class="qr-block-url">{{ base_url }}/join?code={{ enc.join_code }}</code>
+        </div>
+
+        <div class="qr-block">
+          <p class="qr-block-label">📋 EHR station</p>
+          <p class="qr-block-sublabel">{% if enc.ehr_id %}{{ enc.ehr_id }}{% else %}Records system{% endif %} — chart, notes, orders.</p>
+          <img class="qr-block-img"
+               src="/api/qr.svg?data={{ (base_url ~ '/ehr/join?code=' ~ enc.join_code) | urlencode }}"
+               alt="EHR station QR for {{ enc.join_code }}">
+          <code class="qr-block-url">{{ base_url }}/ehr/join?code={{ enc.join_code }}</code>
+        </div>
+
+        <div class="qr-block">
+          <p class="qr-block-label">⚕ Device station</p>
+          <p class="qr-block-sublabel">IV pumps, cabinets, call bells — joined per bed.</p>
+          <img class="qr-block-img"
+               src="/api/qr.svg?data={{ (base_url ~ '/device/join?code=' ~ enc.join_code) | urlencode }}"
+               alt="Device station QR for {{ enc.join_code }}">
+          <code class="qr-block-url">{{ base_url }}/device/join?code={{ enc.join_code }}</code>
+        </div>
+
+        <div class="qr-block nurse">
+          <p class="qr-block-label">🩺 Nursing Station</p>
+          <p class="qr-block-sublabel">Supervisor view — uses the <strong>room code</strong>, not the bed join code.</p>
+          <img class="qr-block-img"
+               src="/api/qr.svg?data={{ (base_url ~ '/portal/students/join?code=' ~ room_code) | urlencode }}"
+               alt="Nursing Station QR for room {{ room_code }}">
+          <code class="qr-block-url">{{ base_url }}/portal/students/join?code={{ room_code }}</code>
+        </div>
+      </div>
+
+      {# M46 — per-encounter device QRs. One small block per bound device so the operator can print the sheet and stick each QR on the actual hardware (or hand to the bedside). #}
+      {% if enc.devices %}
+        <div class="device-qr-section">
+          <h3 class="device-qr-section-title">📟 Devices ({{ enc.devices | length }})</h3>
+          <div class="device-qr-grid">
+            {% for d in enc.devices %}
+              <div class="device-qr-block">
+                <p class="device-qr-block-label">{{ d.label }}</p>
+                <p class="device-qr-block-sublabel">{{ d.device_kind }} · {{ d.device_model }}</p>
+                <img class="device-qr-block-img"
+                     src="/api/qr.svg?data={{ (base_url ~ '/device/join?code=' ~ enc.join_code ~ '&station=' ~ d.station_id) | urlencode }}"
+                     alt="Device QR for {{ d.label }}">
+                <code class="device-qr-block-url">{{ base_url }}/device/join?code={{ enc.join_code }}&amp;station={{ d.station_id }}</code>
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+    </section>
+  {% endfor %}
+
+</body>
+</html>

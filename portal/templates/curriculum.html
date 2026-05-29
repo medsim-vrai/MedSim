@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Curriculum{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/control.css">
+<header class="page-header">
+  <h1>Curriculum</h1>
+  <span class="muted small">{{ modules | length }} NCLEX modules · {{ programs | length }} programs</span>
+</header>
+
+<section class="section">
+  <h2>Programs</h2>
+  {% for p in programs %}
+    <details class="check-card">
+      <summary><strong>{{ p.label }}</strong> · {{ p.weeks | length }} weeks</summary>
+      <table class="data" style="margin-top:8px;">
+        <thead><tr><th>Week</th><th>Phase</th><th>Focus</th><th>Modules</th></tr></thead>
+        <tbody>
+          {% for w in p.weeks %}
+            <tr>
+              <td>{{ w.week }}</td>
+              <td>{{ w.phase }}</td>
+              <td>{{ w.focus }}</td>
+              <td><code>{{ w.modules | join(', ') }}</code></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+  {% endfor %}
+</section>
+
+<section class="section">
+  <h2>Modules (NCLEX-aligned, 11-section schema)</h2>
+  <p class="muted small">Each module has: summary, conditions, medications, devices, procedures, primary/alternate treatments, scope of practice (LPN/RN/Advanced), role hooks (Patient/Family/Clinician/AlliedHealth), red flags. Verbatim from Voice4MedSim_v6 <code>context_seed.json</code>.</p>
+  {% for m in modules %}
+    <details class="check-card">
+      <summary><strong>{{ m.id }} · {{ m.title | default(m.id) }}</strong> <span class="muted small">{{ m.nclexDomain | default('—') }}</span></summary>
+      <p class="small"><strong>Summary.</strong> {{ m.summary }}</p>
+      {% if m.conditions %}<p class="small"><strong>Conditions:</strong> {{ m.conditions | join('; ') }}</p>{% endif %}
+      {% if m.medications %}<p class="small"><strong>Medications:</strong> {{ m.medications | join('; ') }}</p>{% endif %}
+      {% if m.devices %}<p class="small"><strong>Devices:</strong> {{ m.devices | join('; ') }}</p>{% endif %}
+      {% if m.procedures %}<p class="small"><strong>Procedures:</strong> {{ m.procedures | join('; ') }}</p>{% endif %}
+      {% if m.redFlags %}<p class="small"><strong>Red flags:</strong> {{ m.redFlags | join('; ') }}</p>{% endif %}
+      {% if m.scopeOfPractice %}
+        <p class="small"><strong>Scope of practice</strong></p>
+        <ul class="small">
+          {% if m.scopeOfPractice.LPN %}<li><strong>LPN:</strong> {{ m.scopeOfPractice.LPN }}</li>{% endif %}
+          {% if m.scopeOfPractice.RN %}<li><strong>RN:</strong> {{ m.scopeOfPractice.RN }}</li>{% endif %}
+          {% if m.scopeOfPractice.Advanced %}<li><strong>Advanced:</strong> {{ m.scopeOfPractice.Advanced }}</li>{% endif %}
+        </ul>
+      {% endif %}
+      {% if m.roleHooks %}
+        <p class="small"><strong>Role hooks</strong></p>
+        <ul class="small">
+          {% for role, line in m.roleHooks.items() %}<li><strong>{{ role }}:</strong> {{ line }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    </details>
+  {% endfor %}
+</section>
+{% endblock %}

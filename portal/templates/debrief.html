@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Debriefs{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/debrief.css">
+
+<header class="page-header">
+  <h1>Debriefs</h1>
+  <span class="muted small">Aligned to NCSBN NCJMM cognitive cycle + selected curriculum modules.</span>
+</header>
+
+{% if has_live %}
+  <section class="check-card" style="border-left:4px solid #2f7d32;">
+    <header style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;">
+      <div>
+        <h2 style="margin:0;">Live session in progress</h2>
+        <p class="muted small">{{ live_scenario_name }} · {{ live_turn_count }} transcript entries</p>
+      </div>
+      <a href="/portal/debrief/current" class="primary-action">Preview live debrief →</a>
+    </header>
+  </section>
+{% endif %}
+
+<p class="muted">Debriefs are written automatically when an operator ends a session. Each one captures the full transcript, NCJMM cognitive-cycle coverage, curriculum-objective alignment, and per-persona engagement metrics. Stored as JSON in <code>data/debriefs/</code>.</p>
+
+{% if not debriefs %}
+  <div class="empty">
+    <p>No saved debriefs yet.</p>
+    <p>Run a scenario from the <a href="/portal/control">control room</a>, end the session, and the debrief is saved automatically.</p>
+  </div>
+{% else %}
+  <div class="card-list">
+    {% for d in debriefs %}
+      <article class="entity-card">
+        <header>
+          <h2>{{ d.scenario_name }}</h2>
+          <code>{{ d.session_id }}</code>
+        </header>
+        <dl class="meta">
+          <div><dt>Duration</dt><dd>{{ (d.duration_seconds // 60) }}m {{ (d.duration_seconds % 60) }}s</dd></div>
+          <div><dt>Turns</dt><dd>{{ d.total_turns }}</dd></div>
+          <div><dt>Personas</dt><dd>{{ d.personas_count }}</dd></div>
+          <div><dt>Modules</dt><dd>{{ d.modules_count }}</dd></div>
+        </dl>
+        <div class="actions">
+          <a href="/portal/debrief/{{ d.session_id }}" class="primary-action">Open →</a>
+          <a href="/api/debrief/{{ d.session_id }}" class="button-link" download>Download JSON</a>
+          <span class="muted small">{{ d.size_kb }} KB</span>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

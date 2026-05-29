@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Medical Records Workstation · Training Bridge VRAI- MedSim</title>
+  <link rel="stylesheet" href="/static/portal.css">
+  <link rel="stylesheet" href="{{ static_v('medical_records.css') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#143b8a">
+</head>
+<body class="station-body">
+  <main class="mr-ws-page">
+    <header class="mr-ws-header">
+      <h1>📋 Medical Records Workstation</h1>
+      <p class="muted">
+        Pick a patient to open their chart. Multiple students can use
+        this device — each visit is independent. The instructor (and
+        any nursing supervisor who entered via the Nursing Station's
+        Supervisor button) can also add labs, doctor's notes, and
+        other chart updates.
+      </p>
+      {% if role == "supervisor" or role == "admin" %}
+        <p class="mr-ws-role-badge mr-ws-role-supervisor">
+          🩺 Supervisor session · {{ initials }}
+        </p>
+      {% elif role == "instructor" %}
+        <p class="mr-ws-role-badge mr-ws-role-instructor">
+          👨‍⚕️ Instructor session
+        </p>
+      {% endif %}
+    </header>
+
+    {% if not patients %}
+      <section class="mr-empty">
+        <h2>No active session</h2>
+        <p class="muted">
+          The Multi-Patient Control room hasn't started a session yet,
+          or this room code is wrong. Ask your instructor to start a
+          room or check the QR code.
+        </p>
+      </section>
+    {% else %}
+      <section class="mr-ws-identify">
+        <h2>Who's charting?</h2>
+        <p class="muted small">
+          Identify yourself so chart entries are tagged with your name.
+          For routine bedside charting, just your display name and 2
+          initials. The fields are remembered for the next chart you
+          open from this workstation.
+        </p>
+        <form id="mr-ws-identify-form" class="mr-ws-identify-form" onsubmit="return false">
+          <label>
+            <span>Display name</span>
+            <input type="text" id="mr-ws-name" name="user"
+                   placeholder="e.g. Alice P." spellcheck="false"
+                   autocomplete="off" required>
+          </label>
+          <label>
+            <span>Initials (2)</span>
+            <input type="text" id="mr-ws-initials" name="initials"
+                   placeholder="AP" maxlength="3" spellcheck="false"
+                   autocomplete="off"
+                   pattern="[A-Za-z]{2,3}"
+                   value="{{ initials }}" required>
+          </label>
+          <p class="muted small">
+            Your role:
+            <strong>
+              {% if role == "supervisor" %}Nursing supervisor (admin)
+              {% elif role == "instructor" %}Instructor (admin)
+              {% else %}Bedside student
+              {% endif %}
+            </strong>
+          </p>
+        </form>
+      </section>
+
+      <section class="mr-picker">
+        <h2>Pick a patient</h2>
+        <p class="muted small">
+          {{ patients | length }} patient{% if patients | length != 1 %}s{% endif %}
+          · current shift:
+          <strong>{{ patients[0].status.current_shift }}</strong>
+        </p>
+        <div class="mr-patient-grid">
+          {% for p in patients %}
+            <a class="mr-patient-card mr-ws-patient-card"
+               data-character-id="{{ p.character_id }}"
+               href="#"
+               role="button">
+              <header class="mr-patient-card-header">
+                <strong class="mr-patient-name">{{ p.name }}</strong>
+                <span class="muted small">{{ p.character_id }}</span>
+              </header>
+              <p class="muted small mr-patient-loc">
+                {{ p.location_label }}
+                {% if p.encounter_label %} · {{ p.encounter_label }}{% endif %}
+                {% if p.mrn %} · MRN {{ p.mrn }}{% endif %}
+              </p>
+              <div class="mr-status-grid">
+                <div class="mr-status-cell">
+                  <span class="mr-status-num">{{ p.status.med_count }}</span>
+                  <span class="mr-status-label">meds</span>
+                </div>
+                <div class="mr-status-cell mr-status-due">
+                  <span class="mr-status-num">{{ p.status.due_in_current_shift }}</span>
+                  <span class="mr-status-label">this shift</span>
+                </div>
+                <div class="mr-status-cell">
+                  <span class="mr-status-num">{{ p.status.continuous_count }}</span>
+                  <span class="mr-status-label">drips</span>
+                </div>
+                <div class="mr-status-cell">
+                  <span class="mr-status-num">{{ p.status.prn_count }}</span>
+                  <span class="mr-status-label">PRN</span>
+                </div>
+                <div class="mr-status-cell">
+                  <span class="mr-status-num">{{ p.status.labs_pending }}</span>
+                  <span class="mr-status-label">labs</span>
+                </div>
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+  </main>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code") || "";
+      const role = params.get("role") || "student";
+      // Restore name + initials from sessionStorage so a student
+      // walking up to the workstation doesn't have to retype across
+      // multiple patient charts.
+      const STORAGE_NAME = "medsim_ws_name";
+      const STORAGE_INIT = "medsim_ws_initials";
+      const nameEl = document.getElementById("mr-ws-name");
+      const initEl = document.getElementById("mr-ws-initials");
+      try {
+        const savedName = sessionStorage.getItem(STORAGE_NAME);
+        const savedInit = sessionStorage.getItem(STORAGE_INIT);
+        if (savedName && nameEl && !nameEl.value) nameEl.value = savedName;
+        if (savedInit && initEl && !initEl.value) initEl.value = savedInit;
+      } catch (e) { /* private browsing — ignore */ }
+
+      document.querySelectorAll(".mr-ws-patient-card").forEach((card) => {
+        card.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const cid = card.dataset.characterId;
+          if (!cid) return;
+          const u = (nameEl && nameEl.value || "").trim();
+          const i = (initEl && initEl.value || "").toUpperCase().trim();
+          if (!u || !i) {
+            (nameEl || initEl)?.focus();
+            alert("Enter your display name AND initials before opening a chart.");
+            return;
+          }
+          if (i.length < 2) {
+            initEl?.focus();
+            alert("Initials must be at least 2 characters.");
+            return;
+          }
+          // Persist for the next chart-open from this workstation.
+          try {
+            sessionStorage.setItem(STORAGE_NAME, u);
+            sessionStorage.setItem(STORAGE_INIT, i);
+          } catch (e) { /* ignore */ }
+          const qs = new URLSearchParams({
+            code, user: u, initials: i, role,
+          });
+          window.location = `/students/medical_records/${encodeURIComponent(cid)}?${qs.toString()}`;
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

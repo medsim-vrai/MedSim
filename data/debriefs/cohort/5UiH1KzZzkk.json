@@ -1,0 +1,154 @@
+{
+  "room_id": "5UiH1KzZzkk",
+  "room_code": "8WVTN2",
+  "room_label": "Room A",
+  "room_status": "active",
+  "encounters": [
+    {
+      "session_id": "ZnbMKXKfvjY",
+      "join_code": "X86DU2",
+      "scenario_name": "Bed 1",
+      "scenario_notes": "",
+      "scenario_text": "",
+      "program_id": null,
+      "week": null,
+      "selected_modules": [],
+      "selected_personas": [],
+      "stations": [],
+      "started_at": 1779930913.636898,
+      "ended_at": 1779930913.6379,
+      "duration_seconds": 0,
+      "summary": {
+        "total_turns": 0,
+        "round_trips": 0,
+        "student_turns": 0,
+        "character_turns": 0,
+        "station_turns": 0,
+        "operator_turns": 0,
+        "personas_engaged": 0,
+        "duration_seconds": 0,
+        "duration_pretty": "0s",
+        "latency_p50_ms": null,
+        "latency_mean_ms": null,
+        "latency_p95_ms": null,
+        "latency_max_ms": null
+      },
+      "ncjmm_coverage": {
+        "recognize-cues": 0,
+        "analyze-cues": 0,
+        "prioritize-hypotheses": 0,
+        "generate-solutions": 0,
+        "take-action": 0,
+        "evaluate-outcomes": 0
+      },
+      "role_group_distribution": {
+        "Clinician": 0,
+        "Allied Health": 0,
+        "Patient": 0,
+        "Family": 0
+      },
+      "safety_class_distribution": {
+        "baseline": 0,
+        "sensitive": 0,
+        "high-risk": 0
+      },
+      "personas_engagement": [],
+      "objective_alignment": [],
+      "documentation_alignment": {
+        "available": false,
+        "composite": 0.0,
+        "model": null,
+        "built_at": null,
+        "rubric": {},
+        "rules": {
+          "hits": [],
+          "misses": [],
+          "speculative": [],
+          "by_module": [],
+          "totals": {}
+        },
+        "notes_meta": [],
+        "note_count": 0,
+        "signed_count": 0
+      },
+      "orders_alignment": {
+        "total_orders": 0,
+        "by_category": {},
+        "priority_dist": {
+          "routine": 0,
+          "stat": 0,
+          "now": 0
+        },
+        "rationale_quality": 0.0,
+        "trigger_latency_s": []
+      },
+      "ehr_id": "helix",
+      "charting_locked_at": null,
+      "transcript": [],
+      "devices": [],
+      "device_timeline": [],
+      "alarm_log": [],
+      "medication_dispense_log": [],
+      "pump_program_log": [],
+      "_meta": {
+        "generated_at": 1779930913.6379,
+        "generator": "medsim6.debrief v1"
+      },
+      "lead_student_id": null,
+      "lead_student_name": null,
+      "encounter_label": "Bed 1"
+    }
+  ],
+  "pearls": {
+    "reactions": {
+      "prompt": "How did this run go for each of you?",
+      "notes": ""
+    },
+    "description": {
+      "prompt": "Let's walk through what happened.",
+      "facts": [
+        "1 encounter with 0 students total.",
+        "Average duration per encounter: 0s.",
+        "Total chat turns across cohort: 0.",
+        "Total chart events across cohort: 0."
+      ]
+    },
+    "analysis": {
+      "prompt": "What did you notice? What surprised you?",
+      "performance_frames": [
+        {
+          "session_id": "ZnbMKXKfvjY",
+          "scenario_name": "Bed 1",
+          "ncjmm_coverage": {
+            "recognize-cues": 0,
+            "analyze-cues": 0,
+            "prioritize-hypotheses": 0,
+            "generate-solutions": 0,
+            "take-action": 0,
+            "evaluate-outcomes": 0
+          },
+          "duration_seconds": 0,
+          "turns": 0
+        }
+      ],
+      "persona_engagement_ranked": []
+    },
+    "application": {
+      "prompt": "What will you do differently next shift?",
+      "commitments": []
+    },
+    "summary": {
+      "encounters_count": 1,
+      "students_count": 0,
+      "total_chat_turns": 0,
+      "total_chart_events": 0,
+      "total_duration_seconds": 0,
+      "avg_duration_per_encounter_seconds": 0.0,
+      "avg_turns_per_encounter": 0.0
+    }
+  },
+  "_meta": {
+    "generated_at": 1779930913.6379688,
+    "generator": "medsim7.debrief.cohort v1"
+  }
+}

@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+{% block title %}{{ encounter.encounter_label or encounter.scenario_name }} · Per-Patient Console{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_v('encounter_console.css') }}">
+
+<header class="console-header">
+  <div class="console-header-left">
+    <a href="/portal/room" class="back-link">← Back to Multi-Patient Control</a>
+    <h1>
+      {{ encounter.encounter_label or encounter.scenario_name }}
+      <span class="encounter-join">{{ encounter.join_code }}</span>
+    </h1>
+    <p class="muted small">
+      Patient persona: <code>{{ encounter.patient_persona_id or "—" }}</code>
+      · EHR: {{ encounter.ehr_id or "—" }}
+      · Chart mode: <strong>{{ encounter.chart_mode }}</strong>
+      {% if encounter.cloned_from_id %}
+        · <span class="badge clone">CLONE of {{ encounter.cloned_from_id }}</span>
+      {% endif %}
+      · State: <span id="enc-state" class="badge">{{ encounter.state | upper }}</span>
+      {# M30 + M53 — Header lead-pill. Shows whichever lead is set:
+         the M53 free-text label (typed on Multi-Patient Control) wins,
+         else the M30 roster-picked student's name. Server-side
+         rendering so it's visible on first paint without waiting for
+         the 2 s JS state poll. JS pollState refreshes it live. #}
+      {% set _hdr_lead = (encounter.lead_label or '').strip() %}
+      <span id="lead-student-banner"
+            {% if not _hdr_lead %}hidden{% endif %}>
+        · 🎓 Lead: <strong id="lead-student-name">{{ _hdr_lead }}</strong>
+      </span>
+    </p>
+  </div>
+  <div class="console-header-right">
+    {# M35 — per-encounter scenario controls, mirroring the master header on /portal/room. Per-encounter End does NOT fire the cohort debrief (that only happens when master End fires on /portal/room). #}
+    <button type="button" id="btn-enc-start" class="primary-action"
+            data-encounter-id="{{ encounter.id }}"
+            title="Start this scenario. Also creates the instructor 'Engage' chat stations for every persona on this bed.">
+      ▶ Start
+    </button>
+    <button type="button" id="btn-enc-pause" class="secondary"
+            data-encounter-id="{{ encounter.id }}"
+            title="Pause this scenario only.">
+      ⏸ Pause
+    </button>
+    <button type="button" id="btn-enc-end" class="danger"
+            data-encounter-id="{{ encounter.id }}"
+            data-confirm="End this encounter? The bed will be marked ended but the cohort debrief is NOT saved until you press 'End all (debrief)' on the master control."
+            title="End this scenario. Does NOT save the cohort debrief — that only happens on master End.">
+      ⏹ End
+    </button>
+    {% if encounter.ehr_id %}
+      <a id="btn-launch-ehr" class="header-action"
+         href="/portal/room/encounter/{{ encounter.id }}/launch_ehr"
+         target="_blank" rel="noopener"
+         title="Open the {{ encounter.ehr_id }} medical record for this bed in a new window. Instructor session — full chart, notes, vitals, and order entry.">
+        📋 Open EHR ({{ encounter.ehr_id }})
+      </a>
+    {% else %}
+      <span class="header-action header-action-disabled"
+            title="No EHR configured for this encounter. Pick one in the wizard's per-row Scenario drawer.">
+        📋 No EHR configured
+      </span>
+    {% endif %}
+    <button type="button" id="btn-popout" class="secondary"
+            title="Open this encounter console in a new window so you can spread the multi-patient view across monitors">
+      ↗ Pop out
+    </button>
+  </div>
+</header>
+
+<section class="console-grid">
+
+  <!-- Telemetry strip — M23 fills with live snapshot poll. -->
+  <article class="console-card" id="card-telemetry">
+    <h2>Live telemetry</h2>
+    <p class="muted small">Derived from the encounter's latest vitals.record event. (M23)</p>
+    <div class="telemetry-strip" id="telemetry-strip">
+      <div class="telemetry-cell"><span class="label">HR</span><span class="value" id="t-hr">—</span></div>
+      <div class="telemetry-cell"><span class="label">BP</span><span class="value" id="t-bp">—/—</span></div>
+      <div class="telemetry-cell"><span class="label">SpO₂</span><span class="value" id="t-spo2">—</span></div>
+      <div class="telemetry-cell"><span class="label">RR</span><span class="value" id="t-rr">—</span></div>
+      <div class="telemetry-cell"><span class="label">T</span><span class="value" id="t-temp">—</span></div>
+    </div>
+    <p class="muted small" id="telemetry-last-update">awaiting first poll…</p>
+  </article>
+
+  <!-- ECG strip — M24 fills with a continuous SVG render. -->
+  <article class="console-card" id="card-ecg">
+    <h2>ECG strip</h2>
+    <p class="muted small">
+      <label>Waveform
+        <select id="ecg-waveform-picker" disabled>
+          <option value="">— loading… —</option>
+        </select>
+      </label>
+      <label class="ecg-toggle">
+        <input type="checkbox" id="ecg-enabled" disabled>
+        Show ECG on Nursing Station strip
+      </label>
+    </p>
+    <div class="ecg-canvas" id="ecg-canvas">
+      <!-- M24 renderer paints SVG here -->
+      <p class="muted small">ECG library loads in M24.</p>
+    </div>
+  </article>
+
+  <!-- Device list — M25/M30 surfaces bound devices with kind + state. M42 adds the inline manager modal. -->
+  <article class="console-card" id="card-devices">
+    <h2>Devices</h2>
+    <p class="muted small">Pumps, cabinets, and future-device buttons (call bell / bed alarm / code blue / fire alarm) joined to this encounter via QR.</p>
+    <ul class="device-list" id="device-list">
+      <li class="muted small">No devices bound.</li>
+    </ul>
+    <p class="muted small">Available kinds: <span id="device-kinds-summary">—</span></p>
+    {# M42 — inline device manager. Replaces the old "Open v6 ops view" link-out. Opens the full device-management UI in a modal scoped to this encounter; the add-device patient defaults to this encounter's primary persona. M43 — renamed "Manage devices" → "Managed devices" so it reads as "the panel showing devices managed for this bed" rather than implying a link-out. #}
+    <p>
+      <button type="button" id="btn-manage-devices" class="device-manage-btn"
+              title="Open the device + medication manager for this bed in a modal. Stays in the encounter window.">
+        🔧 Managed devices
+      </button>
+    </p>
+  </article>
+
+  {# M55 — Medications card. Click the H2 to expand/collapse the
+     per-persona med lists. Each med has a checkbox the instructor
+     ticks to mark it active at start; only ticked meds appear on
+     the M47 med-cart for that patient. Defaults to "all active"
+     for back-compat with pre-M55 carts.
+
+     Rendered collapsed by default (matches the M54 threshold panel
+     pattern) so the card list doesn't crowd above-the-fold. #}
+  <article class="console-card meds-card meds-collapsed" id="card-medications">
+    <h2 class="meds-toggle" id="meds-toggle"
+        role="button" tabindex="0"
+        aria-expanded="false" aria-controls="meds-body"
+        title="Click to expand/collapse the scenario's medication list">
+      <span class="meds-caret" aria-hidden="true">▸</span>
+      💊 Medications
+      <span class="muted small">— mark which meds are active at scenario start</span>
+    </h2>
+    <div class="meds-body" id="meds-body">
+      <p class="muted small">
+        Each medication in the persona's MAR seed appears here. Tick
+        the box to keep it on the med cart's available list. Unticked
+        meds are hidden from the cart for this patient. <em>If you
+        don't interact here, every med appears on the cart (back-compat).</em>
+      </p>
+      <div id="meds-personas" class="meds-personas">
+        <p class="muted small">loading medications…</p>
+      </div>
+    </div>
+  </article>
+
+  <!-- M31 — Network / QR codes: chat + EHR + device station joins. -->
+  <article class="console-card" id="card-network">
+    <h2>📱 Connection · QR codes</h2>
+    <p class="muted small">Each station scans a QR (or types the URL) to join this bed. Same access pattern as the v6 single-patient ops view, scoped to this encounter's join code.</p>
+    <div class="qr-grid">
+      <div class="qr-cell">
+        <div class="qr-label">Chat station</div>
+        <img class="qr-img"
+             src="/api/qr.svg?data={{ (base_url ~ '/join?code=' ~ encounter.join_code) | urlencode }}"
+             alt="Chat station QR for {{ encounter.join_code }}">
+        <code class="qr-url">{{ base_url }}/join?code={{ encounter.join_code }}</code>
+      </div>
+      <div class="qr-cell">
+        <div class="qr-label">EHR station</div>
+        <img class="qr-img"
+             src="/api/qr.svg?data={{ (base_url ~ '/ehr/join?code=' ~ encounter.join_code) | urlencode }}"
+             alt="EHR station QR for {{ encounter.join_code }}">
+        <code class="qr-url">{{ base_url }}/ehr/join?code={{ encounter.join_code }}</code>
+        {% if encounter.ehr_id %}
+          <a class="qr-launch-here"
+             href="/portal/room/encounter/{{ encounter.id }}/launch_ehr"
+             target="_blank" rel="noopener"
+             title="Skip the QR — open the {{ encounter.ehr_id }} chart for this bed right here, in a new window.">
+            📋 Open EHR on this device
+          </a>
+        {% endif %}
+      </div>
+      <div class="qr-cell">
+        <div class="qr-label">Device station</div>
+        <img class="qr-img"
+             src="/api/qr.svg?data={{ (base_url ~ '/device/join?code=' ~ encounter.join_code) | urlencode }}"
+             alt="Device station QR for {{ encounter.join_code }}">
+        <code class="qr-url">{{ base_url }}/device/join?code={{ encounter.join_code }}</code>
+      </div>
+      {# M36 — 4th cell: Nursing Station QR (room-scoped, not encounter-scoped). The Nursing Station supervises every bed in the room, so the QR encodes the room_code, not this encounter's join_code. #}
+      <div class="qr-cell qr-cell-nurse">
+        <div class="qr-label">🩺 Nursing Station</div>
+        <img class="qr-img"
+             src="/api/qr.svg?data={{ (base_url ~ '/portal/students/join?code=' ~ room.room_code) | urlencode }}"
+             alt="Nursing Station QR for room {{ room.room_code }}">
+        <code class="qr-url">{{ base_url }}/portal/students/join?code={{ room.room_code }}</code>
+        <a class="qr-launch-here"
+           href="/portal/control/launch_nurse_station"
+           target="_blank" rel="noopener"
+           title="Skip the QR — open the Nursing Station on this device in a new window.">
+          🩺 Open here
+        </a>
+      </div>
+    </div>
+    <p class="muted small">Join code: <code>{{ encounter.join_code }}</code>. Chat / EHR / Device stations scan once; the join code authenticates them for this encounter. The Nursing Station uses the <strong>room code</strong> <code>{{ room.room_code }}</code> instead — it supervises every bed.</p>
+    {# M41 — print just THIS encounter's QR codes (handy when handing the sheet to one bed's team). #}
+    <p>
+      <a class="qr-print-link"
+         href="/portal/control/qr_print?encounter_id={{ encounter.id }}"
+         target="_blank" rel="noopener"
+         title="Open a print-friendly sheet with all QR codes for this encounter only. Browser print sends to paper or PDF.">
+        🖨 Print QR codes for this encounter
+      </a>
+    </p>
+  </article>
+
+  {# Lead student card.  Pre-M53-cleanup carried the M30 roster
+     picker + a long explanatory paragraph + a "Lead (roster)" label
+     + a status line.  Operator: "remove the other parts in the
+     leads area since they add no value … Lead (roster) and the
+     listing pull down." The M53 free-text label set on Multi-Patient
+     Control is the source of truth now; this card is read-only.
+
+     What's left:
+       * Card heading.
+       * M53 read-only banner (server-side rendered when label set;
+         JS _updateLeadLabelRef refreshes it live on poll).
+       * One-line placeholder for the empty state pointing the
+         operator at the Multi-Patient Control panel. #}
+  <article class="console-card" id="card-lead-student">
+    <h2>🎓 Lead student</h2>
+    {% set _card_lead = (encounter.lead_label or '').strip() %}
+    <div class="lead-label-ref" id="lead-label-ref"
+         {% if not _card_lead %}hidden{% endif %}>
+      <strong>👤 Lead assignment:</strong>
+      <span id="lead-label-ref-text">{{ _card_lead }}</span>
+      <span class="muted small">— set from Multi-Patient Control</span>
+    </div>
+    <p class="muted small lead-empty-hint" id="lead-empty-hint"
+       {% if _card_lead %}hidden{% endif %}>
+      No lead assigned yet. Set one on the Multi-Patient Control
+      <strong>👤 Lead assignments</strong> panel.
+    </p>
+  </article>
+
+  <!-- Live transcript (M30) -->
+  <article class="console-card" id="card-transcript">
+    <h2>🗨 Live transcript</h2>
+    <p class="muted small">Recent chat turns from this encounter's bedside station(s). Newest at bottom. (Pop out to expand to the full chat log for instructor monitoring.)</p>
+    <div class="transcript-pane" id="transcript-pane">
+      <p class="muted small">No turns yet.</p>
+    </div>
+    <p class="muted small" id="transcript-meta">—</p>
+  </article>
+
+  <!-- Voice + engage per character (M30 + M33) -->
+  <article class="console-card" id="card-voice">
+    <h2>🎙 Characters · voices · engage</h2>
+    <p class="muted small">Every persona assigned to this encounter. Pick an ElevenLabs voice per character (cleared rows fall back to browser SpeechSynthesis). <strong>▶ Test</strong> previews the selected voice. <strong>💬 Engage</strong> opens a chat window so you can play that character yourself.</p>
+    <div class="voice-grid" id="voice-grid">
+      <p class="muted small">Loading…</p>
+    </div>
+    <p class="muted small" id="voice-status"></p>
+  </article>
+
+  <!-- Telemetry overrides — M25 (instructor force-set per metric). -->
+  <article class="console-card" id="card-overrides">
+    <h2>Telemetry overrides</h2>
+    <p class="muted small">Force a specific reading instead of deriving it from the chart. Useful for "what if the BP keeps dropping" demos. (M25)</p>
+    <div class="override-grid" id="override-grid">
+      <p class="muted small">Override controls land in M25.</p>
+    </div>
+  </article>
+
+  <!-- Quick scene inject — pre-targeted to this encounter. -->
+  <article class="console-card" id="card-scene">
+    <h2>Inject scene at this bed</h2>
+    <p class="muted small">Pre-targeted scene injector (M7 palette).</p>
+    <form id="scene-form-console" class="scene-form-console">
+      <label>
+        Scene kind
+        <select id="scene-kind-console">
+          <option value="vitals.drop">vitals.drop — hypotensive crash</option>
+          <option value="vitals.rise">vitals.rise — sympathetic surge</option>
+          <option value="lab.result">lab.result — new abnormal panel</option>
+          <option value="family.arrives">family.arrives — visitor at bedside</option>
+          <option value="pump.alarm">pump.alarm — IV occlusion</option>
+          <option value="code.blue">code.blue — full arrest</option>
+          <option value="note.instructor">note.instructor — free-text drop</option>
+        </select>
+      </label>
+      <label>
+        Params (JSON, optional)
+        <textarea id="scene-params-console" rows="2" placeholder='e.g. {"sbp": 70}'></textarea>
+      </label>
+      <button type="submit" class="primary-action">⚡ Inject</button>
+      <span id="scene-status-console" class="muted small"></span>
+    </form>
+  </article>
+
+  <!-- Chart event recent — read-only window into what students wrote. -->
+  <article class="console-card" id="card-chart">
+    <h2>Recent chart events</h2>
+    <p class="muted small">Newest 20 chart_event rows for this encounter.</p>
+    <ul class="chart-recent" id="chart-recent">
+      <li class="muted small">awaiting first poll…</li>
+    </ul>
+  </article>
+
+</section>
+
+{# M42 — Inline device manager modal. The iframe loads /portal/control/ops scoped to this encounter's join code + patient persona, with embed=1 so the ops view's top header is hidden (no double headers). Add-device patient defaults to this bed's primary persona. #}
+<dialog id="devices-dialog" class="engage-dialog">
+  <header class="engage-dialog-header">
+    <h3 id="devices-dialog-title">🔧 Managed devices · {{ encounter.encounter_label or encounter.scenario_name }}</h3>
+    <div class="engage-dialog-actions">
+      <a id="devices-dialog-popout" class="engage-dialog-popout"
+         href="/portal/control/ops?join={{ encounter.join_code }}&patient_persona_id={{ encounter.patient_persona_id or '' }}"
+         target="_blank" rel="noopener"
+         title="Open the device manager in a separate window if you want it on a second monitor.">↗ Pop out</a>
+      <button type="button" id="devices-dialog-close"
+              class="engage-dialog-close"
+              title="Close the device manager and return to the encounter console.">✕ Close</button>
+    </div>
+  </header>
+  <iframe id="devices-dialog-frame"
+          class="engage-dialog-frame"
+          title="Device manager for this encounter"
+          src="about:blank"></iframe>
+</dialog>
+
+{# M39 — Engage chat opens here as a modal dialog instead of a new tab. The dialog body is an iframe pointed at /portal/engage/{eid}/{pid}, which 303-redirects to the bound INST- station chat. The instructor stays inside the encounter console for the whole conversation. #}
+<dialog id="engage-dialog" class="engage-dialog">
+  <header class="engage-dialog-header">
+    <h3 id="engage-dialog-title">💬 Engage</h3>
+    <div class="engage-dialog-actions">
+      <a id="engage-dialog-popout" class="engage-dialog-popout"
+         href="#" target="_blank" rel="noopener"
+         title="Pop the chat out into a separate window if you want to drag it to a second monitor.">↗ Pop out</a>
+      <button type="button" id="engage-dialog-close"
+              class="engage-dialog-close"
+              title="Close the chat and return to the encounter console.">✕ Close</button>
+    </div>
+  </header>
+  <iframe id="engage-dialog-frame"
+          class="engage-dialog-frame"
+          title="Chat with the character"
+          allow="microphone; autoplay"
+          src="about:blank"></iframe>
+</dialog>
+
+<script>
+  window.ENCOUNTER_CONSOLE = {
+    encounterId: {{ encounter.id | tojson }},
+    joinCode:    {{ encounter.join_code | tojson }},
+    roomCode:    {{ room.room_code | tojson }},
+  };
+</script>
+<script src="{{ static_v('ecg_strip.js') }}"></script>
+<script src="{{ static_v('encounter_console.js') }}"></script>
+{% endblock %}

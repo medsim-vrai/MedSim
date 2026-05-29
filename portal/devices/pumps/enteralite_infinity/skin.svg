@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1080" width="760" height="1080">
+<!-- TRAINING SIMULATION overlay - Moog EnteraLite Infinity ambulatory enteral feeding pump. Segmented LCD + membrane keypad. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .kcap{font-size:11px;font-weight:bold;fill:#28303a}
+ .kcap2{font-size:8.5px;font-weight:bold;fill:#28303a}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .devname{font-size:20px;font-weight:bold;fill:#ffffff}
+ .sub{font-size:11px;fill:#fbe2cf}
+ .lcdlbl{font-size:9px;font-weight:bold;fill:#3a4a3f;letter-spacing:0.5px}
+ .lcdsm{font-size:8px;font-weight:bold;fill:#3a4a3f}
+ .badge{font-size:11px;fill:#7c8893}
+</style>
+<defs>
+ <linearGradient id="caseGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#f08a3c"/><stop offset="1" stop-color="#d56a1e"/>
+ </linearGradient>
+ <linearGradient id="bezelGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#3a2410"/><stop offset="1" stop-color="#1c1208"/>
+ </linearGradient>
+ <linearGradient id="lcdGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#c4d6b6"/><stop offset="1" stop-color="#a9c098"/>
+ </linearGradient>
+ <radialGradient id="wheelGrad" cx="0.4" cy="0.35" r="0.8">
+  <stop offset="0" stop-color="#46505a"/><stop offset="1" stop-color="#171c22"/>
+ </radialGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="760" height="1080" fill="#e7ecf0"/></g>
+
+<g id="chassis">
+ <!-- compact ambulatory orange case -->
+ <rect x="120" y="60" width="520" height="900" rx="40" fill="url(#caseGrad)" stroke="#b9560f" stroke-width="3"/>
+ <rect x="136" y="76" width="488" height="868" rx="32" fill="none" stroke="#f4a96a" stroke-width="1.4" opacity="0.7"/>
+ <!-- carry handle slot at top -->
+ <rect x="320" y="44" width="120" height="22" rx="11" fill="#d56a1e" stroke="#b9560f" stroke-width="2"/>
+ <rect x="334" y="50" width="92" height="9" rx="4.5" fill="#2a1808"/>
+ <!-- device name plate -->
+ <rect x="160" y="92" width="440" height="40" rx="8" fill="#c25e16"/>
+ <text class="devname" x="180" y="119">EnteraLite Infinity</text>
+ <text class="sub" x="430" y="117" font-size="10">Moog - Ambulatory Enteral Feeding Pump</text>
+</g>
+
+<g id="screen">
+ <!-- segmented LCD bezel -->
+ <rect x="160" y="146" width="440" height="200" rx="12" fill="url(#bezelGrad)"/>
+ <rect id="screen-bg" x="176" y="162" width="408" height="168" rx="6" fill="url(#lcdGrad)" stroke="#7d9168" stroke-width="1.5"/>
+
+ <!-- top status row: battery / run / running status -->
+ <!-- battery fuel gauge -->
+ <rect x="190" y="172" width="46" height="18" rx="2.5" fill="none" stroke="#3a4a3f" stroke-width="1.6"/>
+ <rect x="236" y="177" width="3.5" height="8" fill="#3a4a3f"/>
+ <rect id="scr-battery" x="193" y="175" width="9" height="12" fill="#3a4a3f"/>
+ <rect x="204" y="175" width="9" height="12" fill="#3a4a3f"/>
+ <rect x="215" y="175" width="9" height="12" fill="#3a4a3f"/>
+ <rect x="226" y="175" width="9" height="12" fill="none" stroke="#3a4a3f" stroke-width="0.8"/>
+ <text class="lcdsm" x="244" y="186">BATT</text>
+ <!-- run symbol: rotating arcs around centre dot -->
+ <g id="scr-run">
+  <circle cx="320" cy="181" r="3" fill="#2c6b3a"/>
+  <path d="M310 181 a10 10 0 0 1 6 -9" fill="none" stroke="#2c6b3a" stroke-width="3" stroke-linecap="round"/>
+  <path d="M330 181 a10 10 0 0 1 -6 9" fill="none" stroke="#2c6b3a" stroke-width="3" stroke-linecap="round"/>
+ </g>
+ <text class="lcdsm" x="336" y="186" fill="#2c6b3a">RUN</text>
+ <!-- RUNNING status shown on the LCD itself -->
+ <rect id="scr-status" data-control="display-field" x="470" y="170" width="100" height="22" rx="11" fill="#2c6b3a"/>
+ <text x="520" y="185" font-size="10" font-weight="bold" fill="#dff0e3" text-anchor="middle">RUNNING</text>
+
+ <!-- large primary numeral: RATE -->
+ <text id="scr-rate" class="mono" x="196" y="262" font-size="64" font-weight="bold" fill="#1c2a1f">125</text>
+ <text class="lcdlbl" x="202" y="280">RATE  mL/hr</text>
+
+ <!-- secondary readouts: DOSE and FEED INTERVAL -->
+ <line x1="396" y1="200" x2="396" y2="312" stroke="#7d9168" stroke-width="1.2"/>
+ <text id="scr-dose" class="mono" x="410" y="232" font-size="26" font-weight="bold" fill="#1c2a1f">320</text>
+ <text class="lcdlbl" x="412" y="247">DOSE  mL</text>
+ <text id="scr-vi" class="mono" x="410" y="290" font-size="26" font-weight="bold" fill="#1c2a1f">180</text>
+ <text class="lcdlbl" x="412" y="305">VOL TOTL  mL</text>
+ <!-- fixed function-word strip along bottom of LCD -->
+ <text class="lcdsm" x="196" y="322" fill="#2c6b3a">FEED INT NONE</text>
+</g>
+
+<g id="controls">
+ <!-- membrane keypad: labelled keys -->
+ <!-- Row 1: ON/OFF, PRIME -->
+ <g class="key"><rect id="key-onoff" data-control="hardkey" data-action="ONOFF" x="160" y="360" width="208" height="42" rx="9" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="264" y="385" text-anchor="middle">ON / OFF</text></g>
+ <g class="key"><rect id="key-prime" data-control="hardkey" data-action="PRIME" x="382" y="360" width="208" height="42" rx="9" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="486" y="385" text-anchor="middle">PRIME</text></g>
+ <!-- Row 2: RUN/PAUSE wide green -->
+ <g class="key"><rect id="key-run" data-control="hardkey" data-action="RUN_PAUSE" x="160" y="410" width="430" height="46" rx="9" fill="#e7f4ec" stroke="#a9d4ba" stroke-width="1.8"/><text class="kcap" x="375" y="438" text-anchor="middle" fill="#207a43">RUN / PAUSE</text></g>
+ <!-- Row 3: RATE/DOSE, FEED INT -->
+ <g class="key"><rect id="key-rate-dose" data-control="hardkey" data-action="RATE_DOSE" x="160" y="464" width="208" height="42" rx="9" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="264" y="489" text-anchor="middle">RATE / DOSE</text></g>
+ <g class="key"><rect id="key-feed-int" data-control="hardkey" data-action="FEED_INT" x="382" y="464" width="208" height="42" rx="9" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="486" y="489" text-anchor="middle">FEED INT</text></g>
+ <!-- Row 4: VOL/TOTAL, CLEAR -->
+ <g class="key"><rect id="key-vol-total" data-control="hardkey" data-action="VOL_TOTAL" x="160" y="514" width="208" height="42" rx="9" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="264" y="539" text-anchor="middle">VOL / TOTAL</text></g>
+ <g class="key"><rect id="key-clear" data-control="hardkey" data-action="CLEAR" x="382" y="514" width="208" height="42" rx="9" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="486" y="539" text-anchor="middle">CLEAR</text></g>
+ <!-- Row 5: minus / plus keys -->
+ <g class="key"><rect id="key-down" data-control="hardkey" data-action="MINUS" x="160" y="564" width="208" height="46" rx="9" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="264" y="593" text-anchor="middle" font-size="20">&#8722;</text></g>
+ <g class="key"><rect id="key-up" data-control="hardkey" data-action="PLUS" x="382" y="564" width="208" height="46" rx="9" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="486" y="593" text-anchor="middle" font-size="20">+</text></g>
+
+ <!-- pump door / wheel housing -->
+ <rect x="160" y="636" width="440" height="262" rx="16" fill="#c25e16" stroke="#b9560f" stroke-width="2"/>
+ <text class="sub" x="176" y="657" font-size="10" fill="#fbe2cf" font-weight="bold">PUMP DOOR</text>
+
+ <!-- pump wheel inside door -->
+ <circle cx="270" cy="772" r="52" fill="url(#wheelGrad)" stroke="#0c0f12" stroke-width="2"/>
+ <circle cx="270" cy="772" r="33" fill="#20262d" stroke="#0c0f12" stroke-width="1.4"/>
+ <circle cx="270" cy="772" r="9" fill="#3a444e"/>
+ <circle cx="270" cy="726" r="6" fill="#586470"/>
+ <circle cx="306" cy="754" r="6" fill="#586470"/>
+ <circle cx="306" cy="790" r="6" fill="#586470"/>
+ <circle cx="270" cy="818" r="6" fill="#586470"/>
+ <circle cx="234" cy="790" r="6" fill="#586470"/>
+ <circle cx="234" cy="754" r="6" fill="#586470"/>
+ <text class="sub" x="270" y="852" font-size="10" fill="#fbe2cf" text-anchor="middle">PUMP WHEEL</text>
+
+ <!-- cassette receptacle + tubing path with sensors -->
+ <rect x="372" y="676" width="208" height="186" rx="8" fill="#a94e10" stroke="#b9560f" stroke-width="1.5"/>
+ <text class="sub" x="388" y="697" font-size="9" fill="#fbe2cf" font-weight="bold">CASSETTE / FLUID PATH</text>
+ <path d="M408 706 q-6 70 0 140" fill="none" stroke="#2f8f9c" stroke-width="6" stroke-linecap="round"/>
+ <circle cx="406" cy="730" r="7" fill="#1b2733"/>
+ <text class="kcap2" x="420" y="734" font-size="8" fill="#fbe2cf">UPSTREAM SENSOR</text>
+ <circle cx="404" cy="778" r="7" fill="#1b2733"/>
+ <text class="kcap2" x="420" y="782" font-size="8" fill="#fbe2cf">AIR-IN-LINE</text>
+ <circle cx="406" cy="826" r="7" fill="#1b2733"/>
+ <text class="kcap2" x="420" y="830" font-size="8" fill="#fbe2cf">DOWNSTREAM</text>
+</g>
+
+<g id="indicators">
+ <!-- AC / RUN / BATT indicator LEDs as a horizontal row fully inside the chassis -->
+ <circle id="led-ac" data-control="led" cx="210" cy="922" r="9" fill="#5b6470" stroke="#3a4046" stroke-width="1"/>
+ <circle cx="207" cy="919" r="3" fill="#9aa3ad"/>
+ <text x="228" y="926" font-size="10" fill="#fbe2cf">AC</text>
+ <circle id="led-run" data-control="led" cx="340" cy="922" r="9" fill="#3DA35D" stroke="#2c7d46" stroke-width="1"/>
+ <circle cx="337" cy="919" r="3" fill="#bfe8cc"/>
+ <text x="358" y="926" font-size="10" fill="#fbe2cf">RUN</text>
+ <circle id="led-battery" data-control="led" cx="470" cy="922" r="9" fill="#E6A032" stroke="#b87d1f" stroke-width="1"/>
+ <circle cx="467" cy="919" r="3" fill="#f6dca8"/>
+ <text x="488" y="926" font-size="10" fill="#fbe2cf">BATT</text>
+</g>
+
+<g id="labels">
+ <text class="badge" x="380" y="1000" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="380" y="1020" text-anchor="middle">Simulated interface - Moog EnteraLite Infinity ambulatory enteral feeding pump</text>
+</g>
+</svg>

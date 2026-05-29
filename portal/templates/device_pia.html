@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Patient Integrated Alarm · {{ station.label or station.id }} · Training Bridge VRAI- MedSim</title>
+  <link rel="stylesheet" href="/static/pia_app.css">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#11192f">
+</head>
+<body class="pia-body">
+  <div class="pia-frame" id="pia-frame">
+    <header class="pia-header">
+      <div>
+        <h1>{{ station.label or "Patient Integrated Alarm" }}</h1>
+        <p class="muted small">Bed · Code Blue · Call Bell · Intercom</p>
+      </div>
+      <div class="pia-status">
+        <span class="pia-dot" id="pia-status-dot"></span>
+        <span id="pia-status-text">Connected</span>
+      </div>
+    </header>
+
+    {# M51 — Active-alarm banner. The PIA polls /api/room/alarms; if
+       ANY alarm (especially code blue) is active anywhere in the
+       room, the banner shows it as a "location" cue so the bedside
+       student knows there's a code at, e.g., Bed 2. #}
+    <div class="pia-cascade-banner" id="pia-cascade" hidden>
+      <span class="pia-cascade-icon">🚨</span>
+      <span class="pia-cascade-text" id="pia-cascade-text"></span>
+    </div>
+
+    <main class="pia-grid">
+      <button type="button" class="pia-btn pia-btn-call-bell"
+              data-action="call_bell">
+        <span class="pia-btn-icon">🔔</span>
+        <span class="pia-btn-label">Call Bell</span>
+        <span class="pia-btn-sub">Summon staff</span>
+      </button>
+      <button type="button" class="pia-btn pia-btn-bed-alarm"
+              data-action="bed_alarm">
+        <span class="pia-btn-icon">🛏</span>
+        <span class="pia-btn-label">Bed Alarm</span>
+        <span class="pia-btn-sub">Patient out of bed</span>
+      </button>
+      <button type="button" class="pia-btn pia-btn-code-blue"
+              data-action="code_blue"
+              data-confirm="Trigger CODE BLUE? This raises a room-wide critical alarm.">
+        <span class="pia-btn-icon">🚨</span>
+        <span class="pia-btn-label">Code Blue</span>
+        <span class="pia-btn-sub">Cardiac / respiratory arrest</span>
+      </button>
+      <button type="button" class="pia-btn pia-btn-intercom"
+              data-action="intercom_request">
+        <span class="pia-btn-icon">🎙</span>
+        <span class="pia-btn-label">Intercom</span>
+        <span class="pia-btn-sub">Page nurses station</span>
+      </button>
+    </main>
+
+    <footer class="pia-footer">
+      <p class="muted small" id="pia-last-event">No events yet.</p>
+    </footer>
+  </div>
+
+  <script>
+    window.PIA_CONFIG = {
+      stationId: {{ station.id | tojson }},
+      joinCode:  {{ join_code | tojson }},
+      label:     {{ (station.label or "Patient Integrated Alarm") | tojson }},
+    };
+  </script>
+  <script src="/static/pia_app.js"></script>
+</body>
+</html>

@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1180" width="900" height="1180">
+<!-- TRAINING SIMULATION overlay - TouchPoint Medical medDispense C Series automated dispensing cabinet. Phase 2. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .dev{font-size:19px;font-weight:bold;fill:#28303a}
+ .badge{font-size:11px;fill:#7c8893}
+ .ui{font-size:11px;fill:#1b2733}
+ .uih{font-size:13px;font-weight:bold;fill:#15324f}
+ .sub{font-size:9px;fill:#5b6470}
+ .btn{font-size:8.5px;font-weight:bold}
+</style>
+<defs>
+ <linearGradient id="chassis" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#f4f5f6"/><stop offset="1" stop-color="#d9dde0"/>
+ </linearGradient>
+ <linearGradient id="drawer" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#eceef0"/><stop offset="1" stop-color="#d2d7da"/>
+ </linearGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="900" height="1180" fill="#e7ecf0"/></g>
+
+<g id="cabinet">
+ <!-- compact education-oriented cabinet: shorter chassis, fewer drawers, mobile base -->
+ <rect x="140" y="50" width="620" height="970" rx="20" fill="url(#chassis)" stroke="#aeb6bd" stroke-width="2.5"/>
+ <text class="dev" x="175" y="84">TouchPoint medDispense  -  C Series ADC</text>
+ <!-- drawer stack : 4 drawers -->
+ <rect x="178" y="586" width="544" height="92" rx="6" fill="url(#drawer)" stroke="#aeb6bd" stroke-width="1.5"/>
+ <rect x="320" y="620" width="260" height="13" rx="6.5" fill="#b3bbc2"/>
+ <text class="sub" x="192" y="606">Drawer 1  -  Standard drawer</text>
+ <!-- drawer 2 : lit / guided light -->
+ <rect id="drawer-lit" x="178" y="684" width="544" height="92" rx="6" fill="#e8edf2" stroke="#4F6680" stroke-width="3"/>
+ <rect x="320" y="718" width="260" height="13" rx="6.5" fill="#9aaabf"/>
+ <rect x="186" y="690" width="9" height="80" rx="3" fill="#4F6680"/>
+ <circle cx="700" cy="730" r="9" fill="#4F6680" stroke="#34465b" stroke-width="1"/>
+ <circle cx="697" cy="727" r="3" fill="#c3cedb"/>
+ <text class="sub" x="206" y="704" fill="#3a4d63">Drawer 2  -  Matrix drawer  -  guided light active</text>
+ <rect x="178" y="782" width="544" height="92" rx="6" fill="url(#drawer)" stroke="#aeb6bd" stroke-width="1.5"/>
+ <rect x="320" y="816" width="260" height="13" rx="6.5" fill="#b3bbc2"/>
+ <text class="sub" x="192" y="802">Drawer 3  -  Double-wide drawer</text>
+ <rect x="178" y="878" width="544" height="100" rx="6" fill="url(#drawer)" stroke="#aeb6bd" stroke-width="1.5"/>
+ <rect x="320" y="924" width="260" height="13" rx="6.5" fill="#b3bbc2"/>
+ <text class="sub" x="192" y="898">Drawer 4  -  Bulk storage</text>
+ <!-- mobile base -->
+ <rect x="200" y="1020" width="500" height="22" rx="6" fill="#c2c8ce" stroke="#aeb6bd" stroke-width="1.5"/>
+ <circle cx="248" cy="1058" r="20" fill="#cbd1d6" stroke="#9aa3ad" stroke-width="3"/>
+ <circle cx="248" cy="1058" r="7" fill="#9aa3ad"/>
+ <circle cx="652" cy="1058" r="20" fill="#cbd1d6" stroke="#9aa3ad" stroke-width="3"/>
+ <circle cx="652" cy="1058" r="7" fill="#9aa3ad"/>
+</g>
+
+<g id="screen">
+ <rect x="175" y="92" width="550" height="472" rx="11" fill="#20262b"/>
+ <rect id="screen-bg" x="187" y="104" width="526" height="448" rx="4" fill="#eef2f4"/>
+</g>
+
+<g id="ui">
+ <!-- banner -->
+ <rect id="banner" x="187" y="104" width="526" height="46" fill="#4F6680"/>
+ <path id="btn-home" data-control="touch-button" data-action="HOME"
+   d="M199 137 v-14 l12 -9 l12 9 v14 z" fill="none" stroke="#ffffff" stroke-width="1.8"/>
+ <text id="banner-station" x="226" y="132" font-size="12" font-weight="bold" fill="#ffffff">TouchPoint medDispense  -  Sim Lab 1</text>
+ <text id="banner-user" x="467" y="132" font-size="11" fill="#d2dae3">T. NGUYEN, RN</text>
+ <circle id="banner-discrepancy" data-control="led" cx="585" cy="127" r="10" fill="#E6A032"/>
+ <text x="585" y="131" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">!</text>
+ <circle id="led-online" data-control="led" cx="613" cy="127" r="6" fill="#3DA35D" stroke="#ffffff" stroke-width="1"/>
+ <text id="scr-clock" class="mono" x="635" y="131" font-size="12" fill="#ffffff">11:05</text>
+ <!-- patient context strip -->
+ <rect x="195" y="158" width="510" height="38" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
+ <text x="207" y="175" class="sub">PATIENT</text>
+ <text id="scr-patient" x="207" y="188" class="ui" font-weight="bold">HOLLAND, JAMES</text>
+ <text id="scr-loc" x="360" y="182" class="ui">MRN 2208745      Room 207</text>
+ <!-- list header -->
+ <text class="uih" x="195" y="222">Remove  -  select a medication</text>
+ <!-- medication list -->
+ <g id="list-meds">
+  <rect id="row-1" data-control="display" x="195" y="230" width="510" height="42" rx="4" fill="#e1e7ee" stroke="#4F6680" stroke-width="1.5"/>
+  <text id="scr-med" x="208" y="247" class="ui" font-weight="bold">Morphine 2 mg / 1 mL injection</text>
+  <text x="208" y="262" class="sub">Drawer 2  -  Matrix cell C4  -  controlled substance</text>
+  <text x="690" y="256" font-size="15" fill="#4F6680" text-anchor="end">&#10003;</text>
+  <rect id="row-2" data-control="display" x="195" y="278" width="510" height="42" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
+  <text x="208" y="295" class="ui">Metoprolol 25 mg tablet</text>
+  <text x="208" y="310" class="sub">Drawer 1  -  Bin 09</text>
+  <text x="690" y="304" font-size="14" fill="#9aa3ad" text-anchor="end">&#8250;</text>
+  <rect id="row-3" data-control="display" x="195" y="326" width="510" height="42" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
+  <text x="208" y="343" class="ui">Ceftriaxone 1 g / 50 mL IVPB</text>
+  <text x="208" y="358" class="sub">Drawer 3  -  Bin 04</text>
+  <text x="690" y="352" font-size="14" fill="#9aa3ad" text-anchor="end">&#8250;</text>
+ </g>
+ <!-- barcode scan panel -->
+ <rect id="scan-panel" x="195" y="378" width="510" height="74" rx="6" fill="#e8edf2" stroke="#4F6680" stroke-width="1.5"/>
+ <g id="barcode">
+  <rect x="210" y="396" width="3" height="40" fill="#1b2733"/>
+  <rect x="216" y="396" width="6" height="40" fill="#1b2733"/>
+  <rect x="226" y="396" width="2" height="40" fill="#1b2733"/>
+  <rect x="231" y="396" width="5" height="40" fill="#1b2733"/>
+  <rect x="240" y="396" width="3" height="40" fill="#1b2733"/>
+  <rect x="247" y="396" width="6" height="40" fill="#1b2733"/>
+  <rect x="257" y="396" width="2" height="40" fill="#1b2733"/>
+  <rect x="262" y="396" width="4" height="40" fill="#1b2733"/>
+ </g>
+ <text class="uih" x="285" y="402" font-size="12">SCAN MEDICATION BARCODE TO VERIFY</text>
+ <rect id="scan-field" data-control="scan-field" x="285" y="412" width="300" height="28" rx="4" fill="#ffffff" stroke="#9aa3ad" stroke-width="1"/>
+ <text x="296" y="430" class="sub" font-size="10">Awaiting barcode...</text>
+ <circle cx="606" cy="426" r="6" fill="#3DA35D"/>
+ <text id="scan-status" x="620" y="430" class="sub" font-size="10" fill="#207a43">Ready</text>
+ <!-- action bar -->
+ <g id="actionbar">
+  <rect id="btn-remove" data-control="touch-button" data-action="REMOVE" x="195" y="462" width="79" height="58" rx="6" fill="#4F6680"/>
+  <text class="btn" x="234" y="495" fill="#ffffff" text-anchor="middle">REMOVE</text>
+  <rect id="btn-return" data-control="touch-button" data-action="RETURN" x="280" y="462" width="79" height="58" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.3"/>
+  <text class="btn" x="319" y="495" fill="#28303a" text-anchor="middle">RETURN</text>
+  <rect id="btn-waste" data-control="touch-button" data-action="WASTE" x="365" y="462" width="79" height="58" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.3"/>
+  <text class="btn" x="404" y="495" fill="#28303a" text-anchor="middle">WASTE</text>
+  <rect id="btn-count" data-control="touch-button" data-action="COUNT" x="450" y="462" width="79" height="58" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.3"/>
+  <text class="btn" x="489" y="495" fill="#28303a" text-anchor="middle">COUNT</text>
+  <rect id="btn-discrepancies" data-control="touch-button" data-action="DISCREPANCIES" x="535" y="462" width="79" height="58" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.3"/>
+  <text class="btn" x="574" y="488" fill="#28303a" text-anchor="middle" font-size="7.6">DISCREP-</text>
+  <text class="btn" x="574" y="499" fill="#28303a" text-anchor="middle" font-size="7.6">ANCIES</text>
+  <rect id="btn-override" data-control="touch-button" data-action="OVERRIDE" x="620" y="462" width="79" height="58" rx="6" fill="#fdeceb" stroke="#e0a9a4" stroke-width="1.3"/>
+  <text class="btn" x="659" y="495" fill="#a8322a" text-anchor="middle">OVERRIDE</text>
+ </g>
+</g>
+
+<g id="labels">
+ <text class="badge" x="450" y="1150" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="450" y="1168" text-anchor="middle">Simulated interface - TouchPoint Medical medDispense C Series automated dispensing cabinet</text>
+</g>
+</svg>

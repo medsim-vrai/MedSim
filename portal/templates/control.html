@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block title %}Control room{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/control.css">
+
+<header class="page-header">
+  <h1>Control room — setup wizard</h1>
+  {% if active_session %}
+    <a href="/portal/control/ops" class="button-link">→ Active session ({{ active_session.join_code }})</a>
+  {% endif %}
+</header>
+
+{% if not has_api_key %}
+  <div class="banner warn">
+    <strong>Anthropic API key not set.</strong>
+    Add it on the <a href="/portal/credentials">Credentials</a> tab before starting a session.
+  </div>
+{% endif %}
+
+<!-- V7 — Mode toggle. Single Patient keeps every v6 wizard behavior 1:1.
+     Room of N hides Step 4 (single-encounter personas) and shows Step
+     4r (per-encounter editor) instead. Submit branches in control.js:
+     single → POST /portal/control/start (form), room → POST /api/room/start (JSON). -->
+<div class="mode-toggle" id="mode-toggle">
+  <label class="mode-card" data-mode="single">
+    <input type="radio" name="wizard_mode" value="single" checked>
+    <div>
+      <strong>Single patient</strong>
+      <p class="muted small">One scenario, one encounter. Multiple students share the chat + EHR. (v6 default behavior.)</p>
+    </div>
+  </label>
+  <label class="mode-card" data-mode="room">
+    <input type="radio" name="wizard_mode" value="room">
+    <div>
+      <strong>Room of N <span class="v-pill">v7</span></strong>
+      <p class="muted small">Multiple encounters under one instructor. Each encounter has its own persona, join code, and chart. (v7 multi-patient mode.)</p>
+    </div>
+  </label>
+</div>
+
+<div class="wizard-steps">
+  <div class="step active" data-step="1">1 · System check</div>
+  <div class="step"        data-step="2"  data-step-single>2 · Scenario</div>
+  <div class="step"        data-step="2b" data-step-single>2b · Records system</div>
+  <div class="step"        data-step="3"  data-step-single>3 · Curriculum context</div>
+  <div class="step"        data-step="4"  data-step-single>4 · Characters</div>
+  <div class="step"        data-step="4r" data-step-room hidden>2 · Encounters</div>
+  <div class="step"        data-step="5">5 · Network</div>
+</div>
+
+<form id="control-form" method="post" action="/portal/control/start">
+
+  <!-- Step 1 — system check -->
+  <section class="wiz-pane active" data-pane="1">
+    <h2>System check</h2>
+    <p class="muted">Verifying browser support for the operator workstation.</p>
+    <div class="grid-2">
+      <div class="check-card" id="chk-browser"><h3>Browser</h3><p>checking…</p></div>
+      <div class="check-card" id="chk-mic"><h3>Microphone</h3><p>not yet requested</p><button type="button" class="secondary" id="btn-mic">Test microphone</button></div>
+      <div class="check-card" id="chk-stt"><h3>Speech recognition</h3><p>checking…</p></div>
+      <div class="check-card" id="chk-tts"><h3>Speech synthesis</h3><p>checking…</p></div>
+      <div class="check-card" id="chk-host"><h3>Host binding</h3><p>checking…</p></div>
+      <div class="check-card" id="chk-key"><h3>Anthropic key</h3><p>{% if has_api_key %}<span class="badge ok">Stored</span>{% else %}<span class="badge warn">Missing</span>{% endif %}</p></div>
+    </div>
+    <div class="wizard-actions"><button type="button" class="primary-action" data-next>Continue →</button></div>
+  </section>
+
+  <!-- Step 2 — scenario (single mode only; room mode authors per-bed
+       in Step 4r so this pane is hidden via data-pane-single). -->
+  <section class="wiz-pane" data-pane="2" data-pane-single>
+    <h2>Scenario</h2>
+
+    <label>Start from a template <span class="muted small">(optional — auto-fills all wizard fields)</span>
+      <select id="template-select">
+        <option value="">— Custom (write your own) —</option>
+        {% if samples %}
+          <optgroup label="Sample scenarios">
+            {% for s in samples %}
+              <option value="sample:{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </optgroup>
+        {% endif %}
+        {% if v1_scenarios %}
+          <optgroup label="Your saved scenarios (v1, partial fill)">
+            {% for s in v1_scenarios %}
+              <option value="v1:{{ s.id }}">{{ s.name }}{% if s.patient_summary %} — {{ s.patient_summary[:60] }}{% endif %}</option>
+            {% endfor %}
+          </optgroup>
+        {% endif %}
+      </select>
+    </label>
+    <div id="template-summary" class="muted small" style="min-height:1.2em;margin-top:6px;"></div>
+
+    <label>Scenario name *
+      <input type="text" name="scenario_name" required data-required-single
+             placeholder="e.g. ED — Sepsis with delirious elderly patient">
+    </label>
+    <label>Notes (pre-brief, learning objectives, escalation triggers)
+      <textarea name="scenario_notes" rows="4"></textarea>
+    </label>
+    <div class="wizard-actions">
+      <button type="button" class="secondary" data-back>← Back</button>
+      <button type="button" class="primary-action" data-next>Continue →</button>
+    </div>
+  </section>
+
+  <!-- Step 2b — Records system (V3); single-mode only. -->
+  <section class="wiz-pane" data-pane="2b" data-pane-single>
+    <h2>Records system <span class="muted small">(V3)</span></h2>
+    <p class="muted">Pick the EHR the student will document into. The chart is pre-populated from the primary persona + selected modules. Students join the EHR on a separate device via the second QR code on the ops view.</p>
+
+    <div class="ehr-radio-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0;">
+      {% for e in ehrs %}
+        <label class="ehr-radio-card" style="border:2px solid #dde2ee;border-radius:8px;padding:14px;cursor:pointer;display:block;">
+          <input type="radio" name="ehr_id" value="{{ e.id }}" {% if loop.first %}checked{% endif %} style="float:right;">
+          <strong style="color:{{ e.accent }};font-size:14px;">{{ e.name }}</strong>
+          <p class="muted small" style="margin:2px 0 6px;">{{ e.subtitle }}</p>
+          <p class="small" style="color:#3a4a6b;line-height:1.4;">{{ e.blurb }}</p>
+          <a href="/ehr/demo/{{ e.id }}" target="_blank" class="muted small" style="display:inline-block;margin-top:6px;">Preview →</a>
+        </label>
+      {% endfor %}
+    </div>
+
+    <div class="check-card" style="background:#fdf3dc;border:1px solid #c47a04;padding:10px 12px;font-size:12px;color:#553e0a;">
+      <strong>Data hygiene:</strong> all chart content is synthetic. Don't paste real PHI into the scenario fields above — the system will warn if scenario text contains a real-looking MRN (10+ contiguous digits).
+    </div>
+
+    <div class="wizard-actions">
+      <button type="button" class="secondary" data-back>← Back</button>
+      <button type="button" class="primary-action" data-next>Continue →</button>
+    </div>
+  </section>
+
+  <!-- Step 3 — curriculum context (single mode only; in room mode each
+       encounter row in Step 4r has its own Curriculum drawer). -->
+  <section class="wiz-pane" data-pane="3" data-pane-single>
+    <h2>Curriculum context</h2>
+    <p class="muted">Anchor the simulation to a point in a nursing curriculum. Pick a program + week to pre-populate modules, then add or remove individual modules. Or skip and rely on the free-form text.</p>
+
+    <div class="check-card">
+      <h3>A · Program-based</h3>
+      <div class="grid-2">
+        <label>Program
+          <select name="program_id" id="ctx-program">
+            <option value="">— none —</option>
+            {% for p in programs %}<option value="{{ p.id }}">{{ p.label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Week
+          <select name="week" id="ctx-week" disabled><option value="">—</option></select>
+        </label>
+      </div>
+      <div class="muted small" id="ctx-week-focus"></div>
+    </div>
+
+    <div class="check-card">
+      <h3>B · Module selection</h3>
+      <p class="muted small">10 curated NCLEX modules with full 11-section content (conditions, medications, devices, procedures, treatments, scope of practice for LPN/RN/Advanced, role hooks, red flags). Modules selected via Program in A are auto-checked.</p>
+      <input type="text" id="ctx-module-filter" placeholder="filter by ID, title, or NCLEX domain…">
+      <div class="module-list">
+        {% for m in modules %}
+          <label class="module-row" data-id="{{ m.id }}" data-title="{{ m.title | default(m.id) }}" data-domain="{{ m.nclexDomain | default('') }}">
+            <input type="checkbox" name="modules" value="{{ m.id }}">
+            <span>
+              <strong>{{ m.id }} · {{ m.title | default(m.id) }}</strong>
+              <span class="muted small">{{ m.nclexDomain | default('—') }}</span>
+              <span class="muted small">{{ (m.summary | default(''))[:140] }}{% if (m.summary | default('')) | length > 140 %}…{% endif %}</span>
+            </span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="check-card">
+      <h3>C · General scenario context (free-form)</h3>
+      <textarea name="scenario_text" rows="5" placeholder="e.g. Postop day 1 status post laparoscopic cholecystectomy. 58yo woman, hx HTN. Reports 8/10 abdominal pain. Learning objectives: pain reassessment, PCA safety, RN-LPN delegation."></textarea>
+    </div>
+
+    <div class="wizard-actions">
+      <button type="button" class="secondary" data-back>← Back</button>
+      <button type="button" class="primary-action" data-next>Continue →</button>
+    </div>
+  </section>
+
+  <!-- Step 4 — characters -->
+  <section class="wiz-pane" data-pane="4">
+    <h2>Characters — pick from the 24-persona library</h2>
+    <p class="muted">Tick each persona this scenario will use. High-risk personas (altered states like psychosis, delirium, withdrawal) require an instructor in the loop — verify before selecting.</p>
+    <div class="role-tabs">
+      <button type="button" class="role-tab active" data-filter="all">All</button>
+      <button type="button" class="role-tab" data-filter="Clinician">Clinicians</button>
+      <button type="button" class="role-tab" data-filter="Allied Health">Allied Health</button>
+      <button type="button" class="role-tab" data-filter="Patient">Patients</button>
+      <button type="button" class="role-tab" data-filter="Family">Family</button>
+    </div>
+    <div class="persona-grid" id="persona-grid">
+      {% for p in personas %}
+        <label class="persona-card safety-{{ p.safetyClass }}" data-role-group="{{ p.roleGroup }}">
+          <input type="checkbox" name="personas" value="{{ p.id }}">
+          <div class="persona-card-body">
+            <header>
+              <strong>{{ p.name }}</strong>
+              <code class="muted">{{ p.id }}</code>
+            </header>
+            <p class="role">{{ p.role }}</p>
+            <p class="muted small">{{ p.knowledgeScope }}</p>
+            <div class="persona-tags">
+              <span class="tag">{{ p.roleGroup }}</span>
+              <span class="tag age">age {{ p.ageRange }}</span>
+              {% if p.alteredState %}<span class="tag altered">{{ p.alteredState }}</span>{% endif %}
+              <span class="tag safety-{{ p.safetyClass }}">{{ p.safetyClass }}</span>
+            </div>
+          </div>
+        </label>
+      {% endfor %}
+    </div>
+    <div class="muted small"><span id="personas-selected-count">0</span> selected</div>
+    <div class="wizard-actions">
+      <button type="button" class="secondary" data-back>← Back</button>
+      <button type="button" class="primary-action" data-next>Continue →</button>
+    </div>
+  </section>
+
+  <!-- Step 4r — Encounters (v7 room mode). Hidden in single mode.
+       Each row produces one Encounter in the active room. The Step 4
+       (Characters) pane above is the single-mode equivalent — only
+       one of the two ever runs through the validator + finalize. -->
+  <section class="wiz-pane" data-pane="4r" data-pane-room hidden>
+    <h2>Encounter authoring</h2>
+    <p class="muted">In room mode, <strong>each bed is its own scenario</strong>. Pick the number of beds, then open the Scenario / Characters / Curriculum drawers on each row to author it like a single-patient session. Once every row is filled in, hit <em>Continue →</em> for the network launch step.</p>
+
+    <div class="grid-3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;max-width:760px">
+      <label>Room label
+        <input type="text" id="room-label-input" name="room_label"
+               placeholder="e.g. ICU Tuesday cohort"
+               value="">
+      </label>
+      <label>How many encounters?
+        <input type="number" id="room-n" min="2" max="10" value="4">
+      </label>
+      <label>Default chart mode
+        <select id="room-chart-mode">
+          <option value="shared">Shared — every student writes into the same chart</option>
+          <option value="private_clone">Private clone — each student gets their own chart copy</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="encounter-editor" id="room-encounter-rows">
+      <!-- Rows rendered by control.js -->
+    </div>
+
+    <div class="wizard-actions">
+      <button type="button" class="secondary" data-back>← Back</button>
+      <button type="button" class="primary-action" data-next>Continue →</button>
+    </div>
+  </section>
+
+  <!-- Step 5 — network -->
+  <section class="wiz-pane" data-pane="5">
+    <h2>Network — start the session</h2>
+    <p class="muted">Starting the session generates a join code. Mobile devices scan the QR code (or open the URL directly) to join as stations.</p>
+    <div class="check-card">
+      <h3>Host binding</h3>
+      <p class="muted small">LAN access requires the server to bind <code>0.0.0.0</code> (use <em>Start Portal (iPad mode)</em>). Detected LAN IP: <code>{{ lan_ip }}</code></p>
+      <p class="muted small">Base URL stations will use: <code>{{ base_url }}</code></p>
+    </div>
+    <div class="wizard-actions">
+      <button type="button" class="secondary" data-back>← Back</button>
+      <button type="submit" class="primary-action">Start session →</button>
+    </div>
+    <div id="start-result" class="test-result"></div>
+  </section>
+</form>
+
+<script>
+  window.MEDSIM2 = {
+    programs: {{ programs | tojson }},
+    moduleIds: {{ (modules | map(attribute='id') | list) | tojson }},
+    samples: {{ samples | tojson }},
+    v1Scenarios: {{ v1_scenarios | tojson }},
+    baseUrl: {{ base_url | tojson }},
+    // V7 — pared-down persona list the Room-of-N editor uses to
+    // populate per-encounter persona dropdowns. Same source as the
+    // Step 4 grid; just id + name + role for compactness.
+    personasForRoom: [
+      {% for p in personas %}{"id": {{ p.id | tojson }}, "name": {{ p.name | tojson }}, "role": {{ p.role | tojson }}, "roleGroup": {{ p.roleGroup | tojson }}, "safetyClass": {{ p.safetyClass | tojson }}}{{ "," if not loop.last }}{% endfor %}
+    ],
+    // V7 M31 — modules + programs exposed to JS so the room-mode
+    // editor's per-row curriculum picker can render the same options
+    // the single-patient Step 3 shows.
+    modulesForRoom: [
+      {% for m in modules %}{"id": {{ m.id | tojson }}, "title": {{ (m.title | default(m.id)) | tojson }}, "nclexDomain": {{ (m.nclexDomain | default('')) | tojson }}}{{ "," if not loop.last }}{% endfor %}
+    ],
+    programsForRoom: [
+      {% for p in programs %}{"id": {{ p.id | tojson }}, "label": {{ p.label | tojson }}}{{ "," if not loop.last }}{% endfor %}
+    ],
+    ehrIds: [
+      {% for e in ehrs %}{"id": {{ e.id | tojson }}, "name": {{ e.name | tojson }}}{{ "," if not loop.last }}{% endfor %}
+    ],
+    // V7 M12 — Activity catalog for the room-mode Step 4r picker.
+    // Each entry: {activity_id, label, seed_persona_id, seed_modules,
+    // scenario_text, default_chart_mode, is_builtin}.
+    activitiesForRoom: {{ activities_for_room | tojson }}
+  };
+</script>
+<script src="{{ static_v('control.js') }}"></script>
+{% endblock %}

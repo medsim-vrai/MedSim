@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}Multi-Patient Control{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_v('control_room.css') }}">
+
+<header class="room-topbar">
+  <div class="room-topbar-left">
+    <h1 class="room-title" id="room-title">Multi-Patient Control</h1>
+    <span class="muted small">
+      Room code <code class="room-code" id="room-code">—</code>
+    </span>
+    <span class="badge" id="room-status">—</span>
+  </div>
+  <div class="room-topbar-right">
+    {# M35 — master scenario controls: Start launches all beds + auto-registers instructor stations; Pause freezes; End saves the cohort debrief. #}
+    <button type="button" id="btn-start-all" class="primary-action"
+            title="Launch every scenario simultaneously. Auto-creates the instructor's 'Engage' chat stations for every persona on every bed.">
+      ▶ Start all scenarios
+    </button>
+    <button type="button" id="btn-freeze" class="secondary"
+            title="Pause every encounter in the room.">
+      ⏸ Pause all
+    </button>
+    <button type="button" id="btn-scene"  class="secondary"
+            title="Inject a scene into one or many encounters">
+      ⚡ Inject scene
+    </button>
+    {# M41 — print all QR codes (one page per encounter) #}
+    <a id="btn-qr-print" class="secondary"
+       href="/portal/control/qr_print" target="_blank" rel="noopener"
+       title="Print a QR-code sheet covering every encounter in the room. One page per bed with chat/EHR/device/nursing QRs.">
+      🖨 Print QR codes
+    </a>
+    <button type="button" id="btn-debrief" class="secondary"
+            title="Open cohort debrief (after end)">
+      📋 Cohort debrief
+    </button>
+    <button type="button" id="btn-end"    class="danger"
+            data-confirm="End the room? Every encounter will be ended, stations disconnected, and the cohort debrief saved."
+            title="End the room. Saves the cohort PEARLS debrief.">
+      ⏹ End all (debrief)
+    </button>
+  </div>
+</header>
+
+<section class="room-empty" id="room-empty" hidden>
+  <h2>No active room.</h2>
+  <p class="muted">
+    Start a room from the
+    <a href="/portal/control">control-room wizard</a>'s
+    "Room of N" branch (M6) — or
+    <button type="button" id="btn-quickstart" class="link">quickstart a 2-bed demo room</button>
+    (uses the M4 <code>/api/room/start</code> endpoint with two placeholder encounters).
+  </p>
+</section>
+
+{# M47 — Room-level med carts panel. Renders only when a room is active. The operator creates carts here, links each cart to one or more encounters, and stations get a QR + the cart UI shows ALL linked encounters' patients with their meds grouped by patient name. Dispense events fire from the cart UI write a transcript entry to the encounter that owns the patient. #}
+{% if room %}
+<section class="med-carts-panel">
+  <div class="med-carts-header">
+    <h3>🛒 Med carts</h3>
+    <p class="muted small">Create a room-level cart, link it to the encounters whose patients use it. The cart's MAR shows all linked patients with their medications. Dispense events write a transcript entry to the right encounter.</p>
+  </div>
+  {# M56 — Create form now exposes a checklist of every encounter in
+     the room so the operator picks which beds the cart is linked to
+     at creation time. Without M56 the create POST only sent {label}
+     and the back-end fell back to the FIRST encounter as the cart's
+     only link — surprising operators who expected multi-bed carts.
+
+     The checkboxes are pre-rendered server-side (one per encounter
+     in `room.encounters`) so they're present on first paint. If the
+     operator ticks none, we keep the legacy back-end fallback (first
+     encounter becomes the primary) so the simple workflow still
+     works with a single click. #}
+  <form id="med-cart-create-form" class="med-cart-create-form">
+    <div class="med-cart-create-row">
+      <input type="text" id="med-cart-label"
+             placeholder="Cart label (e.g. ICU Cart A)" required>
+      <button type="submit" class="primary-action">+ Add med cart</button>
+      {# M56-bugfix — live counter so the operator can verify how
+         many encounters they've ticked BEFORE clicking submit. Was
+         silently linking just the first encounter when the count
+         was 0 (often because of stale cached HTML where the
+         checkboxes hadn't rendered yet). #}
+      <span id="med-cart-tick-count" class="med-cart-tick-count">
+        Will link 0 encounters
+      </span>
+      <span id="med-cart-create-status" class="muted small"></span>
+    </div>
+    <fieldset class="med-cart-encs-fieldset">
+      <legend class="small muted">Link this cart to which encounters?
+        <span class="muted small">— tick all that apply; the first ticked becomes the cart's primary. If none are ticked the first encounter is used.</span>
+      </legend>
+      {# M59-bugfix — "All / None" quick toggles so the operator
+         doesn't have to tick beds one at a time when the cart is
+         meant to serve the whole room (the most common case).
+         Helps avoid the partial-selection footgun the original bug
+         report came from. #}
+      <div class="med-cart-encs-quick">
+        <button type="button" id="med-cart-create-all"
+                class="dev-btn-sm"
+                title="Tick every encounter so the cart is linked to all beds.">
+          ✓ All beds
+        </button>
+        <button type="button" id="med-cart-create-none"
+                class="dev-btn-sm"
+                title="Untick every encounter.">
+          ✗ None
+        </button>
+      </div>
+      <div class="med-cart-encs-checklist">
+        {% for enc in room.encounters %}
+          <label class="med-cart-enc-check">
+            <input type="checkbox"
+                   class="med-cart-create-enc-cb"
+                   data-encounter-id="{{ enc.id }}"
+                   value="{{ enc.id }}">
+            <span>{{ enc.encounter_label or enc.scenario_name }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+  </form>
+  <div id="med-carts-list" class="med-carts-list">
+    <p class="muted small">loading carts…</p>
+  </div>
+</section>
+{% endif %}
+
+{# M53 — Lead assignments panel. Free-text lead label per encounter
+   (or bulk-applied across several beds). The instructor can type a
+   single student's name, a group label, or a comma-separated list —
+   whatever is most useful for THIS drill. Stored on each Encounter's
+   `lead_label` field; the per-encounter console shows it read-only
+   as a reference banner. Distinct from M30's roster-picked
+   `lead_student_id` (which the per-encounter UI still owns) — the
+   M53 label wins for display purposes when both are set. #}
+{% if room %}
+<section class="lead-assign-panel" id="lead-assign-panel">
+  <div class="lead-assign-header">
+    <h3>👤 Lead assignments</h3>
+    <p class="muted small">
+      Type a lead student's name, a group label ("Team Alpha"), or a comma-separated student list. <strong>Per row:</strong> type and press <kbd>Enter</kbd> (or tab away) to auto-save — no Apply button click needed. <strong>Bulk:</strong> type a label in the bulk box, tick rows, click <em>Apply to checked</em>. If the bulk box is empty, the bulk button applies whatever you've typed into each checked row's own input. Each encounter's per-patient console shows the lead as a reference.
+    </p>
+  </div>
+
+  {# Per-encounter rows — render server-side from `room.encounters` so
+     they're present on first paint, then control_room.js refreshes the
+     bound values on the regular /api/room/state poll. #}
+  <div id="lead-assign-rows" class="lead-assign-rows">
+    {% for enc in room.encounters %}
+    <div class="lead-assign-row" data-encounter-id="{{ enc.id }}">
+      <label class="lead-assign-check">
+        <input type="checkbox" class="lead-assign-cb" data-encounter-id="{{ enc.id }}">
+        <span class="lead-assign-enc-label">{{ enc.encounter_label or enc.scenario_name }}</span>
+      </label>
+      <input type="text"
+             class="lead-assign-input"
+             data-encounter-id="{{ enc.id }}"
+             placeholder='e.g. "Alice Pham" or "Team Alpha" or "Alice, Bob, Charlie"'
+             value="{{ enc.lead_label or '' }}">
+      <button type="button" class="lead-assign-apply secondary"
+              data-encounter-id="{{ enc.id }}">Apply</button>
+      <button type="button" class="lead-assign-clear link"
+              data-encounter-id="{{ enc.id }}"
+              title="Clear this encounter's lead label">Clear</button>
+      <span class="lead-assign-status muted small"
+            data-encounter-id="{{ enc.id }}"></span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="lead-assign-bulk">
+    <strong>Bulk apply:</strong>
+    <input type="text" id="lead-bulk-input"
+           placeholder="Lead name, group, or list…">
+    <button type="button" id="lead-bulk-apply" class="primary-action"
+            title="Write this label to every checked encounter above">
+      Apply to checked encounters
+    </button>
+    <button type="button" id="lead-bulk-checkall" class="link"
+            title="Toggle the check on every row">
+      Check / uncheck all
+    </button>
+    <span id="lead-bulk-status" class="muted small"></span>
+  </div>
+</section>
+{% endif %}
+
+{# M62 — Medical Records workstation launch. QR for students to scan
+   from a shared tablet/workstation. Button for the instructor to open
+   it on their own machine in a new window. The entry route lists
+   active patients; student types name + initials then opens a chart. #}
+{% if room %}
+<section class="mr-ws-launch-panel">
+  <div class="mr-ws-launch-text">
+    <h3>📋 Medical Records Workstation</h3>
+    <p class="muted small">
+      Public workstation for students to enter patient data + read
+      labs / orders / MAR. Scan the QR on a separate device to host
+      it there, or click <em>Open Workstation</em> to launch it in a
+      new tab on this machine.
+    </p>
+    <a class="mr-ws-launch-btn"
+       href="/students/medical_records?code={{ room.room_code }}"
+       target="_blank" rel="noopener">
+      📋 Open Workstation
+    </a>
+  </div>
+  <div class="mr-ws-launch-qr">
+    <img src="/api/qr.svg?data={{ (base_url ~ '/students/medical_records?code=' ~ room.room_code) | urlencode }}"
+         alt="Medical Records workstation QR for room {{ room.room_code }}">
+    <code>{{ base_url }}/students/medical_records?code={{ room.room_code }}</code>
+  </div>
+</section>
+{% endif %}
+
+{# M36 — Nursing Station launch panel. Renders only when a room is active. The QR is for a separate tablet/laptop to scan into the public student-join page (where the scanner picks the "Nursing Station" role). The button opens the Nursing Station in a new tab on the instructor's machine, auto-registering an instructor nurse-station student behind the scenes. #}
+{% if room %}
+<section class="nurse-station-launch">
+  <div class="nurse-station-launch-text">
+    <h3>🩺 Nursing Station</h3>
+    <p class="muted small">Supervisor view — multi-bed telemetry + alarms + intercom. Scan the QR on a separate device to host the Nursing Station there, or click <em>Open Nursing Station</em> to launch it in a new tab on this machine.</p>
+    <a class="nurse-station-launch-btn"
+       href="/portal/control/launch_nurse_station"
+       target="_blank" rel="noopener"
+       title="Open the Nursing Station in a new window. Auto-creates an instructor nurse-station seat.">
+      🩺 Open Nursing Station (new window)
+    </a>
+  </div>
+  <div class="nurse-station-launch-qr">
+    <img class="nurse-station-qr-img"
+         src="/api/qr.svg?data={{ (base_url ~ '/portal/students/join?code=' ~ room.room_code) | urlencode }}"
+         alt="Nursing Station QR for room {{ room.room_code }}">
+    <code class="nurse-station-qr-url">{{ base_url }}/portal/students/join?code={{ room.room_code }}</code>
+  </div>
+</section>
+{% endif %}
+
+<section class="room-grid-wrap" id="room-grid-wrap">
+  <div class="room-meta">
+    <span class="muted small" id="meta-encounter-count">0 encounters</span>
+    <span class="muted small" id="meta-student-count">0 students</span>
+    <span class="muted small" id="meta-last-poll">last poll —</span>
+  </div>
+  <div class="encounter-grid" id="encounter-grid">
+    <!-- Encounter cards rendered by control_room.js from /api/room/state -->
+  </div>
+</section>
+
+<!-- Scene injector dialog (built lazily by control_room.js when btn-scene is clicked) -->
+<dialog id="scene-dialog" class="scene-dialog">
+  <form method="dialog" class="scene-form" id="scene-form">
+    <h3>Inject a scene</h3>
+    <label>
+      Targets
+      <select id="scene-targets" required>
+        <option value="all">All encounters</option>
+        <!-- per-encounter <option>s populated dynamically -->
+      </select>
+    </label>
+    <label>
+      Scene kind
+      <select id="scene-kind" required>
+        <option value="vitals.drop">vitals.drop — hypotensive crash</option>
+        <option value="vitals.rise">vitals.rise — sympathetic surge</option>
+        <option value="lab.result">lab.result — new abnormal panel</option>
+        <option value="family.arrives">family.arrives — visitor at bedside</option>
+        <option value="pump.alarm">pump.alarm — IV occlusion</option>
+        <option value="code.blue">code.blue — full arrest</option>
+        <option value="note.instructor">note.instructor — free-text drop</option>
+      </select>
+    </label>
+    <label>
+      Params (JSON, optional)
+      <textarea id="scene-params" rows="3" placeholder='e.g. {"hr_delta": -10}'></textarea>
+    </label>
+    <div class="scene-form-actions">
+      <button type="button" value="cancel" id="scene-cancel" class="secondary">Cancel</button>
+      <button type="submit" value="ok" class="primary-action">Inject</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="{{ static_v('control_room.js') }}"></script>
+{% endblock %}

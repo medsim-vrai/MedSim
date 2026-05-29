@@ -1,0 +1,48 @@
+{
+  "device_kind": "pump_iv",
+  "device_model": "infusomat_space",
+  "display_name": "B. Braun Infusomat Space",
+  "manufacturer": "B. Braun",
+  "channels": ["A"],
+  "screens": ["off", "home", "program", "running", "alarmed", "silenced"],
+  "controls": {
+    "hardkeys": ["key-onoff", "key-options", "key-clear", "key-silence",
+      "key-mod1-start", "key-mod1-pause", "key-mod1-off", "key-mod1-select",
+      "key-up", "key-down", "key-left", "key-right"
+    ],
+    "softkeys": ["softkey-1", "softkey-2", "softkey-3", "softkey-4"],
+    "screen_fields": ["scr-drug", "scr-rate", "scr-dose", "scr-vtbi", "scr-vi", "scr-time", "scr-status", "scr-battery", "scr-mode"]
+  },
+  "alarm_map": {
+    "air_in_line":          "air_in_line",
+    "occlusion_downstream": "occlusion_downstream",
+    "occlusion_upstream":   "occlusion_upstream",
+    "near_end_prealarm":    "near_end_prealarm",
+    "infusion_complete":    "infusion_complete",
+    "door_open":            "door_open",
+    "low_battery":          "low_battery",
+    "depleted_battery":     "depleted_battery",
+    "callback_reminder":    "callback_reminder"
+  },
+  "silence_seconds": 120,
+  "programming": {
+    "fields": [
+      {"id": "scr-rate", "label": "Rate (mL/hr)", "attribute": "rate_ml_hr", "min": 1, "max": 1200, "step": 5,  "per_channel": true, "default_channel": "A"},
+      {"id": "scr-vtbi", "label": "VTBI (mL)",    "attribute": "vtbi_ml",    "min": 0, "max": 9999, "step": 10, "per_channel": true, "default_channel": "A"}
+    ],
+    "default_channel": "A",
+    "advance_keys":    ["softkey-2", "softkey-3"],
+    "channel_keys":    {"key-mod1-select": "A"},
+    "inc_key":         "key-up",
+    "dec_key":         "key-down",
+    "start_keys":      {"key-mod1-start": "A"},
+    "input_mode":      "stepper",
+    "auto_drug":       "ns"
+  },
+  "drug_library": [
+    {"code": "ns",      "label": "0.9% NaCl",       "kind": "fluid", "default_rate_ml_hr": 100, "limits": {"rate_ml_hr": {"hard_min": 1, "soft_min": 10, "soft_max": 999, "hard_max": 1200}}},
+    {"code": "lr",      "label": "Lactated Ringer's","kind": "fluid", "default_rate_ml_hr": 125, "limits": {"rate_ml_hr": {"hard_min": 1, "soft_min": 10, "soft_max": 999, "hard_max": 1200}}},
+    {"code": "basic_infusion", "label": "Basic Infusion (no library)", "kind": "manual", "limits": null}
+  ],
+  "battery": {"capacity_minutes": 360, "low_threshold_minutes": 30, "depleted_threshold_minutes": 5}
+}

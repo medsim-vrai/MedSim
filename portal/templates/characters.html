@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Characters{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>Characters</h1>
+  <a href="/portal/characters/new" class="primary-action">+ New character</a>
+</header>
+
+<p class="muted">Character cards stored as YAML in <code>characters/</code>.
+   Per §3.1 of the PDF, each card binds identity, voice, knowledge
+   boundary, teaching stance, scope of action, and scene contract.</p>
+
+{% if not characters %}
+  <div class="empty">
+    <p>No characters yet.</p>
+    <p><a href="/portal/characters/new">Create one</a>, or
+       <a href="/portal/home">load the example team from the Home page</a>.</p>
+  </div>
+{% else %}
+  <div class="card-list">
+    {% for c in characters %}
+      <article class="entity-card {% if c.error %}error{% endif %}">
+        <header>
+          <h2>{{ c.name }}</h2>
+          <code>{{ c.id }}</code>
+        </header>
+        {% if c.error %}
+          <p class="error">YAML error: {{ c.error }}</p>
+        {% else %}
+          {% if c.role %}<p class="role">{{ c.role }}</p>{% endif %}
+          {% if c.teaching_stance %}
+            <p class="muted snippet">
+              {{ c.teaching_stance[:160] }}{% if c.teaching_stance|length > 160 %}…{% endif %}
+            </p>
+          {% endif %}
+        {% endif %}
+        <div class="actions">
+          <a href="/portal/characters/{{ c.id }}/edit" class="button-link">Edit</a>
+          <form method="post" action="/portal/characters/{{ c.id }}/duplicate" class="inline-action">
+            <button type="submit" class="secondary">Duplicate</button>
+          </form>
+          <form method="post" action="/portal/characters/{{ c.id }}/delete"
+                class="inline-action" data-confirm="Delete character '{{ c.name }}'?">
+            <button type="submit" class="danger">Delete</button>
+          </form>
+        </div>
+      </article>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

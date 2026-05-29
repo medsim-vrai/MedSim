@@ -1,0 +1,263 @@
+/* MEDSIM 2 — debrief detail view styles. */
+
+.db-section {
+  background: white;
+  border: 1px solid #e3e7ec;
+  border-radius: 8px;
+  padding: 20px 24px;
+  margin: 18px 0;
+}
+.db-section h2 { margin: 0 0 10px; }
+.db-section > p.muted { margin-top: 0; }
+
+/* ---- Summary tiles ---- */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.summary-tile {
+  background: #f6f7f9;
+  border: 1px solid #e3e7ec;
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.summary-tile .v {
+  font-size: 1.7em;
+  font-weight: 700;
+  color: #1d2733;
+  line-height: 1.1;
+}
+.summary-tile .v .unit { font-size: 0.5em; color: #6b7785; margin-left: 2px; }
+.summary-tile .k {
+  color: #6b7785;
+  font-size: 0.78em;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---- NCJMM coverage chart ---- */
+.ncjmm-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.ncjmm-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 50px;
+  gap: 12px;
+  align-items: center;
+}
+.ncjmm-row .label {
+  font-size: 0.88em;
+  color: #1d2733;
+  font-family: ui-monospace, "SF Mono", Consolas, Menlo, monospace;
+}
+.ncjmm-row .bar-wrap {
+  height: 22px;
+  background: #eef2f8;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #d8e0ea;
+}
+.ncjmm-row .bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4a86c8, #1f3a63);
+  transition: width 0.4s ease-out;
+  min-width: 2px;
+}
+.ncjmm-row.empty .bar { background: #d8dee9; }
+.ncjmm-row .count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95em;
+  color: #4f5862;
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .ncjmm-row { grid-template-columns: 130px 1fr 40px; gap: 8px; }
+  .ncjmm-row .label { font-size: 0.78em; }
+}
+
+/* ---- Objective alignment ---- */
+.obj-card {
+  background: #fafbfd;
+  border: 1px solid #e3e7ec;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 10px 0;
+}
+.obj-card summary {
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.obj-card summary strong { font-size: 1em; }
+.obj-card summary > .coverage-pill {
+  margin-left: auto;
+  font-size: 0.82em;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+.coverage-pill.good { background: #dff5e2; color: #2f7d32; }
+.coverage-pill.warn { background: #fdf3cd; color: #6b4500; }
+.coverage-pill.low  { background: #fdecea; color: #962d22; }
+
+.obj-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.obj-cat {
+  background: white;
+  border: 1px solid #e3e7ec;
+  border-radius: 4px;
+  padding: 10px 12px;
+}
+.obj-cat header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.obj-cat header strong { font-size: 0.92em; }
+.match-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0;
+  font-size: 0.85em;
+}
+.match-list li { padding: 2px 0; }
+.match-list.good li { color: #2f7d32; }
+.match-list.unmatched li { color: #6b7785; padding-left: 2px; }
+.obj-cat details summary { font-size: 0.85em; cursor: pointer; margin-top: 4px; }
+
+/* ---- Persona engagement table ---- */
+.db-section table.data {
+  margin-top: 10px;
+}
+.db-section table.data td.right,
+.db-section table.data th.right { text-align: right; font-variant-numeric: tabular-nums; }
+.db-section table.data tr.muted-row td { color: #9aa3ad; }
+
+/* ---- Interaction distributions ---- */
+.dist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.dist-card {
+  background: #fafbfd;
+  border: 1px solid #e3e7ec;
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+.dist-card h3 { margin: 0 0 10px; font-size: 0.95em; }
+.dist-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 40px;
+  gap: 10px;
+  align-items: center;
+  margin: 4px 0;
+}
+.dist-label { font-size: 0.85em; }
+.dist-bar-wrap {
+  height: 16px;
+  background: #eef2f8;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid #d8e0ea;
+}
+.dist-bar {
+  height: 100%;
+  background: #4a86c8;
+  transition: width 0.3s ease-out;
+  min-width: 2px;
+}
+.dist-bar.rg-clinician     { background: #1d6dd1; }
+.dist-bar.rg-allied-health { background: #2f7d4f; }
+.dist-bar.rg-patient       { background: #d9822b; }
+.dist-bar.rg-family        { background: #6b3a8a; }
+.dist-bar.sc-baseline      { background: #2f7d32; }
+.dist-bar.sc-sensitive     { background: #d9822b; }
+.dist-bar.sc-high-risk     { background: #c0392b; }
+.dist-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88em;
+  color: #4f5862;
+}
+
+/* ---- Per-turn transcript (debrief view) ---- */
+.debrief-transcript {
+  background: #fafbfd;
+  border: 1px solid #e3e7ec;
+  border-radius: 6px;
+  padding: 10px;
+  max-height: 600px;
+  overflow-y: auto;
+  font-size: 0.92em;
+}
+.debrief-transcript .turn {
+  padding: 8px 10px;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+.debrief-transcript .turn.student {
+  background: #eaf2fc;
+  border-left-color: #1d6dd1;
+}
+.debrief-transcript .turn.character {
+  background: #f0f3f6;
+  border-left-color: #6b7785;
+}
+.debrief-transcript .turn.source-operator.student {
+  background: #fdf3cd;
+  border-left-color: #d9822b;
+}
+.debrief-transcript .turn-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.debrief-transcript .turn-head .who { color: #4f5862; }
+.debrief-transcript .turn-head .who strong.char-name { color: #1d6dd1; }
+.debrief-transcript .turn-head .lat-pill {
+  font-size: 0.7em;
+  background: #eef0f3;
+  color: #6b7785;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-family: ui-monospace, monospace;
+  margin-left: 4px;
+}
+.debrief-transcript .turn-head .chip {
+  font-size: 0.7em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  margin-left: auto;
+  font-family: ui-monospace, "SF Mono", Consolas, Menlo, monospace;
+}
+.chip.ncjmm-recognize-cues        { background: #e8f4fd; color: #155aaa; }
+.chip.ncjmm-analyze-cues          { background: #fbeeff; color: #6b3a8a; }
+.chip.ncjmm-prioritize-hypotheses { background: #fdf3cd; color: #6b4500; }
+.chip.ncjmm-generate-solutions    { background: #e8f7eb; color: #2f7d32; }
+.chip.ncjmm-take-action           { background: #fdecea; color: #962d22; }
+.chip.ncjmm-evaluate-outcomes     { background: #e0f0f7; color: #1f5a78; }
+
+.debrief-transcript .msg {
+  margin-top: 4px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}

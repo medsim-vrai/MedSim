@@ -1,0 +1,47 @@
+{
+  "device_kind": "pump_iv",
+  "device_model": "plum360",
+  "display_name": "ICU Medical Plum 360",
+  "manufacturer": "ICU Medical",
+  "channels": ["A", "B"],
+  "screens": ["off", "home", "channel_select", "drug_library", "program", "running", "alarmed", "silenced"],
+  "controls": {
+    "hardkeys": [
+      "key-onoff", "key-channel-select", "key-options", "key-clear", "key-silence",
+      "key-mod1-start", "key-mod1-pause", "key-mod1-off", "key-mod1-select",
+      "key-mod2-start", "key-mod2-pause", "key-mod2-off", "key-mod2-select",
+      "key-0", "key-1", "key-2", "key-3", "key-4", "key-5", "key-6", "key-7", "key-8", "key-9", "key-decimal"
+    ],
+    "softkeys": ["softkey-1", "softkey-2", "softkey-3", "softkey-4"],
+    "screen_fields": ["scr-channel", "scr-drug", "scr-rate", "scr-dose", "scr-vtbi", "scr-vi", "scr-time", "scr-status", "scr-battery", "scr-mode"]
+  },
+  "alarm_map": {
+    "air_in_line":          "air_in_line",
+    "occlusion_downstream": "occlusion_downstream",
+    "occlusion_upstream":   "occlusion_upstream",
+    "infusion_complete":    "infusion_complete",
+    "low_battery":          "low_battery",
+    "depleted_battery":     "depleted_battery",
+    "system_error":         "system_error",
+    "callback_reminder":    "callback_reminder"
+  },
+  "silence_seconds": 120,
+  "programming": {
+    "fields": [
+      {"id": "scr-rate", "label": "Rate (mL/hr)", "attribute": "rate_ml_hr", "max_digits": 4, "allow_decimal": true,  "per_channel": true},
+      {"id": "scr-vtbi", "label": "VTBI (mL)",    "attribute": "vtbi_ml",    "max_digits": 4, "allow_decimal": false, "per_channel": true}
+    ],
+    "default_channel": "A",
+    "advance_keys":    ["key-channel-select", "softkey-1"],
+    "channel_keys":    {"key-mod1-select": "A", "key-mod2-select": "B"},
+    "clear_key":       "key-clear",
+    "start_keys":      {"key-mod1-start": "A", "key-mod2-start": "B"},
+    "auto_drug":       "ns"
+  },
+  "drug_library": [
+    {"code": "ns",       "label": "0.9% NaCl",                 "kind": "fluid", "default_rate_ml_hr": 125, "limits": {"rate_ml_hr": {"hard_min": 1, "soft_min": 10, "soft_max": 999, "hard_max": 999}}},
+    {"code": "heparin",  "label": "Heparin 25,000 U / 250 mL", "kind": "drug",  "default_dose_units_kg_hr": 18, "limits": {"dose_units_kg_hr": {"hard_min": 1, "soft_min": 12, "soft_max": 25, "hard_max": 40}}},
+    {"code": "basic_infusion", "label": "Basic Infusion (no library)", "kind": "manual", "limits": null}
+  ],
+  "battery": {"capacity_minutes": 360, "low_threshold_minutes": 30, "depleted_threshold_minutes": 5}
+}

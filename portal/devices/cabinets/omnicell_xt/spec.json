@@ -1,0 +1,40 @@
+{
+  "device_kind": "cabinet",
+  "device_model": "omnicell_xt",
+  "display_name": "Omnicell XT",
+  "manufacturer": "Omnicell",
+  "screens": ["lock", "login", "menu", "patients", "verbs", "meds", "remove", "scan", "witness", "discrepancies", "override", "count", "restock", "alert"],
+  "controls": {
+    "touch_targets": ["btn-login", "btn-bioid", "btn-badge", "btn-logout", "btn-home",
+                       "btn-remove", "btn-return", "btn-waste", "btn-count", "btn-discrepancies", "btn-override",
+                       "btn-accept", "btn-cancel", "btn-scan"],
+    "screen_fields": ["banner-user", "banner-station", "banner-clock", "banner-discrepancy",
+                       "scr-patient", "scr-med", "scr-status", "scr-loc",
+                       "scan-status", "list-patients", "list-meds"]
+  },
+  "verbs": ["remove", "return", "waste", "count", "discrepancies", "override"],
+  "alert_map": {
+    "scan_success": "scan_success", "scan_mismatch": "scan_mismatch",
+    "transaction_complete": "transaction_complete",
+    "login_success": "login_success", "login_failed": "login_failed",
+    "discrepancy_alert": "discrepancy_alert",
+    "witness_required": "witness_required",
+    "inventory_low": "inventory_low",
+    "drawer_open": "drawer_open",
+    "drawer_failure": "drawer_failure",
+    "network_offline": "network_offline",
+    "security_alert": "security_alert"
+  },
+  "auth": {"methods": ["pin", "badge", "fingerprint"], "session_timeout_seconds": 600},
+  "guiding_lights": true,
+  "medications": [
+    {"id": "med_morphine_10",   "name": "Morphine",      "strength": "10 mg",      "route": "IM", "schedule_class": "II",  "ndc": "21111111101", "count": 12, "par_level": 20, "location": "d2_p5", "requires_witness": true,  "wastable": true},
+    {"id": "med_lorazepam_2",   "name": "Lorazepam",     "strength": "2 mg",       "route": "IV", "schedule_class": "IV",  "ndc": "21111111102", "count":  8, "par_level": 15, "location": "d2_p3", "requires_witness": true,  "wastable": true},
+    {"id": "med_acetaminophen", "name": "Acetaminophen", "strength": "650 mg",     "route": "PO", "schedule_class": "OTC", "ndc": "21111111103", "count": 40, "par_level": 60, "location": "d1_p2", "requires_witness": false, "wastable": false},
+    {"id": "med_ondansetron",   "name": "Ondansetron",   "strength": "4 mg",       "route": "IV", "schedule_class": "Rx",  "ndc": "21111111104", "count": 18, "par_level": 25, "location": "d1_p4", "requires_witness": false, "wastable": false},
+    {"id": "med_heparin_5000",  "name": "Heparin",       "strength": "5000 U",     "route": "SC", "schedule_class": "Rx",  "ndc": "21111111105", "count": 22, "par_level": 30, "location": "d1_p7", "requires_witness": false, "wastable": false},
+    {"id": "med_norepi_4mg",    "name": "Norepinephrine","strength": "4 mg/250 mL","route": "IV", "schedule_class": "Rx",  "ndc": "21111111106", "count":  6, "par_level": 12, "location": "d3_p1", "requires_witness": false, "wastable": true}
+  ],
+  "low_inventory_threshold": 0.3,
+  "critical_inventory_threshold": 0.15
+}

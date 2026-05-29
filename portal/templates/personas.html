@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Personas{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/control.css">
+<header class="page-header">
+  <h1>Persona library (24)</h1>
+  <span class="muted small">From Voice4MedSim_v6 Appendix A</span>
+</header>
+<p class="muted">Read-only viewer. Personas with <span class="tag altered">altered states</span> or <span class="tag safety-high-risk">high-risk</span> safety class require an instructor in the loop.</p>
+
+<div class="role-tabs">
+  <button type="button" class="role-tab active" data-filter="all">All ({{ personas | length }})</button>
+  <button type="button" class="role-tab" data-filter="Clinician">Clinicians ({{ personas | selectattr('roleGroup','equalto','Clinician') | list | length }})</button>
+  <button type="button" class="role-tab" data-filter="Allied Health">Allied Health ({{ personas | selectattr('roleGroup','equalto','Allied Health') | list | length }})</button>
+  <button type="button" class="role-tab" data-filter="Patient">Patients ({{ personas | selectattr('roleGroup','equalto','Patient') | list | length }})</button>
+  <button type="button" class="role-tab" data-filter="Family">Family ({{ personas | selectattr('roleGroup','equalto','Family') | list | length }})</button>
+</div>
+
+<div class="persona-grid" id="persona-grid">
+  {% for p in personas %}
+    <article class="persona-card safety-{{ p.safetyClass }} display-only" data-role-group="{{ p.roleGroup }}">
+      <div class="persona-card-body">
+        <header><strong>{{ p.name }}</strong><code class="muted">{{ p.id }}</code></header>
+        <p class="role">{{ p.role }}</p>
+        <p class="muted small">{{ p.knowledgeScope }}</p>
+        <div class="persona-tags">
+          <span class="tag">{{ p.roleGroup }}</span>
+          <span class="tag age">age {{ p.ageRange }}</span>
+          {% if p.alteredState %}<span class="tag altered">{{ p.alteredState }}</span>{% endif %}
+          <span class="tag safety-{{ p.safetyClass }}">{{ p.safetyClass }}</span>
+        </div>
+      </div>
+    </article>
+  {% endfor %}
+</div>
+
+<section class="section">
+  <h2>Behavioral-state vector (§6.2)</h2>
+  <p class="muted small">Each persona instance can be parameterized with these 7 dimensions to shift behavior during a session (e.g. raise pain, induce hyperactive cognition).</p>
+  <table class="data">
+    <thead><tr><th>Key</th><th>Label</th><th>Type</th><th>Range / Options</th><th>Default</th></tr></thead>
+    <tbody>
+      {% for d in behavioral_dimensions %}
+        <tr>
+          <td><code>{{ d.key }}</code></td>
+          <td>{{ d.label }}</td>
+          <td>{{ d.type }}</td>
+          <td>{% if d.type == 'range' %}{{ d.min }} – {{ d.max }}{% else %}{{ d.options | join(', ') }}{% endif %}</td>
+          <td>{{ d.default }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script>
+  document.querySelectorAll('.role-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.role-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.dataset.filter;
+      document.querySelectorAll('#persona-grid .persona-card').forEach(card => {
+        card.style.display = (filter === 'all' || card.dataset.roleGroup === filter) ? '' : 'none';
+      });
+    });
+  });
+</script>
+{% endblock %}

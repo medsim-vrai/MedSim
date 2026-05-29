@@ -1,0 +1,45 @@
+{
+  "device_kind": "pump_enteral",
+  "device_model": "enteralite_infinity",
+  "display_name": "Moog EnteraLite Infinity",
+  "manufacturer": "Moog",
+  "modes": ["continuous"],
+  "screens": ["off", "home", "program", "running", "paused", "alarmed", "feed_complete"],
+  "screen_color_by_state": {
+    "off": "#1b2733", "home": "#5b6470", "program": "#5b6470",
+    "running": "#3DA35D", "paused": "#6B4F2F", "alarmed": "#D7382E", "feed_complete": "#3DA35D"
+  },
+  "controls": {
+    "hardkeys": ["key-onoff", "key-run", "key-pause", "key-silence", "key-prime", "key-rate", "key-dose", "key-clear",
+                 "key-plus", "key-minus", "key-rate-dose-toggle"],
+    "softkeys": [],
+    "screen_fields": ["scr-rate", "scr-dose", "scr-fed", "scr-status", "scr-battery"]
+  },
+  "alarm_map": {
+    "no_flow_out":        "occlusion_downstream",
+    "no_flow_in":         "occlusion_upstream",
+    "no_food":            "occlusion_upstream",
+    "load_set":           "door_open",
+    "low_battery":        "low_battery",
+    "depleted_battery":   "depleted_battery",
+    "system_error":       "system_error",
+    "dose_done":          "dose_done",
+    "callback_reminder":  "callback_reminder"
+  },
+  "silence_seconds": 120,
+  "programming": {
+    "fields": [
+      {"id": "scr-rate", "label": "Rate (mL/hr)",  "attribute": "rate_ml_hr", "min": 1, "max": 600, "step": 1, "per_channel": false},
+      {"id": "scr-dose", "label": "Dose (mL)",     "attribute": "volume_ml",  "min": 0, "max": 3000,"step": 25,"per_channel": false}
+    ],
+    "default_channel": "",
+    "advance_keys":   ["key-rate-dose-toggle"],
+    "channel_keys":   {},
+    "inc_key":        "key-plus",
+    "dec_key":        "key-minus",
+    "start_keys":     {"key-run": ""},
+    "input_mode":     "stepper"
+  },
+  "default_program": {"mode": "continuous", "rate_ml_hr": 60, "volume_ml": 500, "flush_volume_ml": 0},
+  "battery": {"capacity_minutes": 1440, "low_threshold_minutes": 60, "depleted_threshold_minutes": 10}
+}

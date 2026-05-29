@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Edit{% else %}New{% endif %} character{% endblock %}
+{% block content %}
+<header class="page-header">
+  <h1>{% if is_edit %}Edit character{% else %}New character{% endif %}</h1>
+  <a href="/portal/characters" class="button-link">← Back to list</a>
+</header>
+
+<form method="post" action="{{ action }}" class="big-form">
+
+  <section class="form-section">
+    <h2>Basics</h2>
+    <div class="grid-2">
+      <label>Name
+        <input type="text" name="name" required value="{{ character.name }}"
+               placeholder="e.g. Dr. Anjali Patel">
+      </label>
+      <label>ID <span class="muted">(slug — auto-generated if blank)</span>
+        <input type="text" name="id" value="{{ character.id }}" pattern="[a-z0-9_]*"
+               placeholder="auto">
+      </label>
+    </div>
+    <label>Role
+      <input type="text" name="role" value="{{ character.role }}"
+             placeholder="e.g. Hospitalist attending">
+    </label>
+  </section>
+
+  <section class="form-section">
+    <h2>Identity <span class="muted">(concrete specifics make the voice land)</span></h2>
+    <div class="grid-2">
+      <label>Years of experience
+        <input type="number" name="years_experience" min="0" max="60"
+               value="{{ character.identity.years_experience }}">
+      </label>
+      <label>Shift
+        <input type="text" name="shift" value="{{ character.identity.shift }}"
+               placeholder="Day / Night / Float">
+      </label>
+    </div>
+    <label>Training site
+      <input type="text" name="training_site" value="{{ character.identity.training_site }}">
+    </label>
+    <label>Mood today
+      <input type="text" name="mood_today" value="{{ character.identity.mood_today }}"
+             placeholder="e.g. Focused. Slightly tired.">
+    </label>
+  </section>
+
+  <section class="form-section">
+    <h2>Voice</h2>
+    <div class="grid-2">
+      <label>Register
+        <input type="text" name="voice_register" value="{{ character.voice.register }}"
+               placeholder="e.g. Dry, occasionally wry. Asks before tells.">
+      </label>
+      <label>Sentence length
+        <select name="voice_sentence_length">
+          <option value="short" {% if character.voice.sentence_length == 'short' %}selected{% endif %}>Short</option>
+          <option value="medium" {% if character.voice.sentence_length == 'medium' %}selected{% endif %}>Medium</option>
+          <option value="long" {% if character.voice.sentence_length == 'long' %}selected{% endif %}>Long</option>
+        </select>
+      </label>
+    </div>
+    <label>Example utterances <span class="muted">(one per line — 3 to 5 short examples)</span>
+      <textarea name="voice_examples" rows="5"
+                placeholder="What's your read?&#10;OK, walk me through it.&#10;Confirm the dose back to me.">{{ character.voice.examples | join('\n') }}</textarea>
+    </label>
+    <label>Never says <span class="muted">(one per line — phrases out of character)</span>
+      <textarea name="voice_never_says" rows="3">{{ character.voice.never_says | join('\n') }}</textarea>
+    </label>
+  </section>
+
+  <section class="form-section">
+    <h2>Behavior and knowledge</h2>
+    <label>Knowledge boundary <span class="muted">(what this role plausibly knows)</span>
+      <textarea name="knowledge_boundary" rows="3"
+                placeholder="e.g. Knows the institutional sepsis protocol cold. Defers to pharmacy on incompatibilities.">{{ character.knowledge_boundary }}</textarea>
+    </label>
+    <label>Teaching stance <span class="muted">(how much this character volunteers vs. asks)</span>
+      <textarea name="teaching_stance" rows="3"
+                placeholder="e.g. Socratic. Prompts first. Names answers only when pressed twice.">{{ character.teaching_stance }}</textarea>
+    </label>
+  </section>
+
+  <section class="form-section">
+    <h2>Scope and contract</h2>
+    <label>Scope of action <span class="muted">(tools this character can call — one per line)</span>
+      <textarea name="scope_of_action" rows="3"
+                placeholder="place_order&#10;read_chart&#10;page_team">{{ character.scope_of_action | join('\n') }}</textarea>
+    </label>
+    <label>Scene contract <span class="muted">(hard rules — one per line)</span>
+      <textarea name="scene_contract" rows="6"
+                placeholder="Never disclose the diagnosis until the student names it first.&#10;Confirm any order with dose and route, in closed-loop format.">{{ character.scene_contract | join('\n') }}</textarea>
+    </label>
+  </section>
+
+  <div class="form-actions">
+    <button type="submit" class="primary-action">{% if is_edit %}Save changes{% else %}Create character{% endif %}</button>
+    <a href="/portal/characters" class="button-link">Cancel</a>
+  </div>
+</form>
+{% endblock %}

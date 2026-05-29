@@ -1,0 +1,135 @@
+/* MEDSIM V7 — cohort debrief UI (M15). PEARLS-tabbed layout. */
+
+.cohort-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #143b8a;
+}
+.cohort-header h1 { margin: 0; color: #143b8a; }
+.cohort-actions { display: flex; gap: 8px; align-items: center; }
+
+.mono { font-family: "SF Mono", "Menlo", "Consolas", monospace;
+        background: #eef2fb; padding: 2px 6px; border-radius: 3px; }
+
+.pearls-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 14px 0;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #dde2ee;
+}
+.pearls-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: #5a6273;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+}
+.pearls-tab:hover  { background: #eef2fb; }
+.pearls-tab.active {
+  background: #fff;
+  border-color: #dde2ee;
+  color: #143b8a;
+}
+.pearls-panel { display: none; padding: 16px 0; }
+.pearls-panel.active { display: block; }
+
+.pearls-panel h2 { margin: 0 0 4px; color: #143b8a; }
+.pearls-panel h3 { margin: 18px 0 6px; color: #1a2a4a; font-size: 14px; }
+.pearls-panel textarea {
+  width: 100%; padding: 10px;
+  border: 1px solid #c1c8d6; border-radius: 6px;
+  font: inherit; resize: vertical; box-sizing: border-box;
+}
+.pearls-panel .actions { display: flex; gap: 12px; align-items: center; margin-top: 6px; }
+
+.facts-list { margin: 6px 0; padding-left: 20px; line-height: 1.6; }
+
+.performance-frames {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.performance-frames th, .performance-frames td {
+  border: 1px solid #dde2ee; padding: 6px 10px; text-align: left;
+}
+.performance-frames th { background: #eef2fb; }
+
+.pill {
+  display: inline-block;
+  background: #eef2fb; color: #143b8a;
+  padding: 2px 8px; border-radius: 99px;
+  font-size: 11px; font-weight: 700; margin: 2px 4px 2px 0;
+}
+.pill.err { background: #fce6c5; color: #905a08; }
+
+.ranked-list { margin: 6px 0; padding-left: 20px; }
+
+.commitments { list-style: none; padding: 0; }
+.commitments li {
+  display: flex; gap: 8px; align-items: center;
+  padding: 6px 10px;
+  background: #f7f8fb; border: 1px solid #dde2ee;
+  border-radius: 6px; margin-bottom: 6px;
+}
+.commitment-text { flex: 1; }
+.commitment-remove {
+  background: transparent; border: 0; color: #962d22;
+  font-size: 14px; cursor: pointer;
+}
+.commitment-input-row { display: flex; gap: 8px; margin-top: 10px; }
+.commitment-input-row input {
+  flex: 1; padding: 8px 10px;
+  border: 1px solid #c1c8d6; border-radius: 6px; font: inherit;
+}
+
+.encounter-facet {
+  margin-bottom: 8px;
+  border: 1px solid #dde2ee; border-radius: 6px;
+  background: #fff; padding: 8px 12px;
+}
+.encounter-facet summary { cursor: pointer; }
+.encounter-facet[open] { background: #fafbff; }
+.facet-body { padding: 8px 4px 0; }
+.facet-grid {
+  display: grid; grid-template-columns: 1fr 3fr;
+  gap: 4px 12px; margin: 8px 0;
+}
+.facet-grid dt { color: #5a6273; }
+.transcript { padding-left: 18px; }
+.transcript li { margin-bottom: 4px; font-size: 13px; }
+
+.summary-grid {
+  display: grid; grid-template-columns: 2fr 1fr;
+  gap: 6px 16px; max-width: 500px; font-size: 14px;
+}
+.summary-grid dt { color: #5a6273; }
+.summary-grid dd { margin: 0; font-weight: 600; }
+
+.cohorts-table { width: 100%; border-collapse: collapse; }
+.cohorts-table th, .cohorts-table td {
+  border-bottom: 1px solid #dde2ee; padding: 8px 10px; text-align: left;
+}
+.cohorts-table th { background: #eef2fb; }
+
+.empty-state {
+  padding: 20px; background: #f7f8fb;
+  border: 1px dashed #c2c8d6; border-radius: 8px; text-align: center;
+}
+
+@media print {
+  .pearls-tabs, .cohort-actions, .commitment-input-row,
+  .commitment-remove { display: none !important; }
+  .pearls-panel { display: block !important; page-break-inside: avoid; }
+  .pearls-panel h2 { page-break-before: always; }
+  .pearls-panel:first-of-type h2 { page-break-before: auto; }
+  .encounter-facet { page-break-inside: avoid; }
+  .encounter-facet[open] details, details { open: true; }
+}

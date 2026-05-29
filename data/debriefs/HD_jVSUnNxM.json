@@ -1,0 +1,568 @@
+{
+  "session_id": "HD_jVSUnNxM",
+  "join_code": "MVFV24",
+  "scenario_name": "ED \u00b7 Sepsis with hyperactive delirium",
+  "scenario_notes": "30-min sim. Pre-brief: postop POD#2 from sigmoid resection, family at bedside. Learning objectives: (1) recognize trending vitals as sepsis; (2) hour-1 bundle + appropriate consult; (3) manage hyperactive delirium without restraints when possible; (4) closed-loop communication with attending.",
+  "scenario_text": "78-year-old male POD #2 from sigmoid resection. Vitals trending \u2014 last set: T 38.7\u00b0C, HR 122, BP 84/52, RR 26, SpO2 91% on 2 L NC. Lactate 4.2 just back from the lab. Patient now hyperactive \u2014 picking at his IV, paranoid about staff entering the room. Wife at bedside crying. Charge nurse paged for assistance. Pre-existing COPD.",
+  "program_id": "ADN-RN",
+  "week": 4,
+  "selected_modules": [
+    "M02",
+    "M08",
+    "M32"
+  ],
+  "selected_personas": [
+    "P-001",
+    "P-004",
+    "P-008",
+    "P-014",
+    "P-020"
+  ],
+  "stations": [],
+  "started_at": 1778987047.106213,
+  "ended_at": 1778987105.013458,
+  "duration_seconds": 57,
+  "summary": {
+    "total_turns": 2,
+    "round_trips": 1,
+    "student_turns": 1,
+    "character_turns": 1,
+    "station_turns": 0,
+    "operator_turns": 1,
+    "personas_engaged": 1,
+    "duration_seconds": 57,
+    "duration_pretty": "57s",
+    "latency_p50_ms": 2120,
+    "latency_mean_ms": 2120,
+    "latency_p95_ms": 2120,
+    "latency_max_ms": 2120
+  },
+  "ncjmm_coverage": {
+    "recognize-cues": 1,
+    "analyze-cues": 0,
+    "prioritize-hypotheses": 0,
+    "generate-solutions": 0,
+    "take-action": 0,
+    "evaluate-outcomes": 0
+  },
+  "role_group_distribution": {
+    "Clinician": 0,
+    "Allied Health": 0,
+    "Patient": 1,
+    "Family": 0
+  },
+  "safety_class_distribution": {
+    "baseline": 0,
+    "sensitive": 0,
+    "high-risk": 1
+  },
+  "personas_engagement": [
+    {
+      "id": "P-014",
+      "name": "Mr. Hayes",
+      "role": "Hyperactive Delirium",
+      "role_group": "Patient",
+      "safety_class": "high-risk",
+      "altered_state": "delirium",
+      "turns": 1,
+      "avg_latency_ms": 2120,
+      "engaged": true
+    },
+    {
+      "id": "P-001",
+      "name": "Dr. Reyes",
+      "role": "ED Attending",
+      "role_group": "Clinician",
+      "safety_class": "baseline",
+      "altered_state": null,
+      "turns": 0,
+      "avg_latency_ms": null,
+      "engaged": false
+    },
+    {
+      "id": "P-004",
+      "name": "Charge Nurse Kim",
+      "role": "Charge RN",
+      "role_group": "Clinician",
+      "safety_class": "baseline",
+      "altered_state": null,
+      "turns": 0,
+      "avg_latency_ms": null,
+      "engaged": false
+    },
+    {
+      "id": "P-008",
+      "name": "RT Alvarez",
+      "role": "Respiratory Therapist",
+      "role_group": "Allied Health",
+      "safety_class": "baseline",
+      "altered_state": null,
+      "turns": 0,
+      "avg_latency_ms": null,
+      "engaged": false
+    },
+    {
+      "id": "P-020",
+      "name": "Anxious Spouse",
+      "role": "Spouse \u2014 Anxious",
+      "role_group": "Family",
+      "safety_class": "sensitive",
+      "altered_state": null,
+      "turns": 0,
+      "avg_latency_ms": null,
+      "engaged": false
+    }
+  ],
+  "objective_alignment": [
+    {
+      "module_id": "M02",
+      "module_title": "Therapeutic communication & handoff",
+      "nclex_domain": "",
+      "summary": "Therapeutic communication: open-ended questions, reflection, silence, validation. SBAR handoff. Cultural humility. Trauma-informed care. De-escalation.",
+      "categories": {
+        "conditions": {
+          "label": "Conditions",
+          "total": 5,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "any encounter requiring history-taking",
+            "shift-change handoff",
+            "transfer to higher level of care",
+            "difficult conversations",
+            "language/literacy barriers"
+          ],
+          "unmatched": [
+            "any encounter requiring history-taking",
+            "shift-change handoff",
+            "transfer to higher level of care",
+            "difficult conversations",
+            "language/literacy barriers"
+          ]
+        },
+        "medications": {
+          "label": "Medications",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "devices": {
+          "label": "Devices",
+          "total": 3,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "interpreter phone/video",
+            "communication boards",
+            "writing tools for nonverbal patients"
+          ],
+          "unmatched": [
+            "interpreter phone/video",
+            "communication boards",
+            "writing tools for nonverbal patients"
+          ]
+        },
+        "procedures": {
+          "label": "Procedures",
+          "total": 4,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "SBAR (Situation/Background/Assessment/Recommendation)",
+            "ISBARR variant",
+            "teach-back method",
+            "open-ended \u2192 focused \u2192 confirmation funnel"
+          ],
+          "unmatched": [
+            "SBAR (Situation/Background/Assessment/Recommendation)",
+            "ISBARR variant",
+            "teach-back method",
+            "open-ended \u2192 focused \u2192 confirmation funnel"
+          ]
+        },
+        "primaryTreatments": {
+          "label": "Primary treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "alternateTreatments": {
+          "label": "Alternate treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "redFlags": {
+          "label": "Red flags",
+          "total": 4,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "closed body language",
+            "yes/no answers from a patient who normally elaborates",
+            "family speaking for the patient",
+            "frequent interruptions"
+          ],
+          "unmatched": [
+            "closed body language",
+            "yes/no answers from a patient who normally elaborates",
+            "family speaking for the patient",
+            "frequent interruptions"
+          ]
+        }
+      },
+      "total_items": 16,
+      "total_matched": 0,
+      "coverage_percent": 0,
+      "role_hooks": {
+        "Patient": "I appreciate you taking the time to listen. Most nurses just rush in.",
+        "Family": "I just want someone to actually tell me what is happening.",
+        "Clinician": "Give me an SBAR \u2014 situation, background, assessment, recommendation. Don't bury the lead.",
+        "AlliedHealth": "I'll need a quick handoff before I take them to imaging \u2014 anything I should know?"
+      },
+      "scope_of_practice": {
+        "LPN": "Conduct routine communication, document, escalate concerns to RN. Cannot independently lead complex goals-of-care discussions.",
+        "RN": "Lead SBAR handoff, conduct patient/family teaching, initiate goals-of-care conversations within scope, escalate to provider.",
+        "Advanced": "Lead family meetings, deliver bad news, coordinate goals-of-care with palliative/social work."
+      }
+    },
+    {
+      "module_id": "M08",
+      "module_title": "Pain management",
+      "nclex_domain": "",
+      "summary": "Acute vs. chronic pain, multimodal analgesia, opioid stewardship, PCA, epidural, non-pharmacologic methods, pain in special populations.",
+      "categories": {
+        "conditions": {
+          "label": "Conditions",
+          "total": 6,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "postoperative pain",
+            "cancer pain",
+            "chronic low back pain",
+            "sickle cell crisis",
+            "neuropathic pain",
+            "procedural pain"
+          ],
+          "unmatched": [
+            "postoperative pain",
+            "cancer pain",
+            "chronic low back pain",
+            "sickle cell crisis",
+            "neuropathic pain",
+            "procedural pain"
+          ]
+        },
+        "medications": {
+          "label": "Medications",
+          "total": 6,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "acetaminophen (max 3-4 g/day, lower in liver disease)",
+            "NSAIDs (ibuprofen, ketorolac \u2014 max 5 days IV)",
+            "opioids: morphine, hydromorphone, fentanyl, oxycodone, hydrocodone",
+            "adjuvants: gabapentin, pregabalin, duloxetine, amitriptyline, capsaicin",
+            "naloxone (reversal)",
+            "lidocaine"
+          ],
+          "unmatched": [
+            "acetaminophen (max 3-4 g/day, lower in liver disease)",
+            "NSAIDs (ibuprofen, ketorolac \u2014 max 5 days IV)",
+            "opioids: morphine, hydromorphone, fentanyl, oxycodone, hydrocodone",
+            "adjuvants: gabapentin, pregabalin, duloxetine, amitriptyline, capsaicin",
+            "naloxone (reversal)",
+            "lidocaine"
+          ]
+        },
+        "devices": {
+          "label": "Devices",
+          "total": 6,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "PCA pump (basal + bolus + lockout)",
+            "epidural catheter",
+            "peripheral nerve catheter",
+            "TENS unit",
+            "ice/heat",
+            "capnography during opioid drip"
+          ],
+          "unmatched": [
+            "PCA pump (basal + bolus + lockout)",
+            "epidural catheter",
+            "peripheral nerve catheter",
+            "TENS unit",
+            "ice/heat",
+            "capnography during opioid drip"
+          ]
+        },
+        "procedures": {
+          "label": "Procedures",
+          "total": 4,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "0-10 numeric pain scale, FLACC (peds), PAINAD (dementia), Wong-Baker faces",
+            "multimodal stacking: acetaminophen + NSAID + opioid",
+            "PCA loading dose, basal rate, demand bolus",
+            "naloxone administration: 0.04-0.4 mg IV/IM/SC, repeat q2-3 min, watch for re-narcotization"
+          ],
+          "unmatched": [
+            "0-10 numeric pain scale, FLACC (peds), PAINAD (dementia), Wong-Baker faces",
+            "multimodal stacking: acetaminophen + NSAID + opioid",
+            "PCA loading dose, basal rate, demand bolus",
+            "naloxone administration: 0.04-0.4 mg IV/IM/SC, repeat q2-3 min, watch for re-narcotization"
+          ]
+        },
+        "primaryTreatments": {
+          "label": "Primary treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "alternateTreatments": {
+          "label": "Alternate treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "redFlags": {
+          "label": "Red flags",
+          "total": 4,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "respiratory rate < 10/min",
+            "sedation score: difficult to arouse",
+            "pinpoint pupils with sedation = opioid toxicity",
+            "opioid withdrawal: yawning, lacrimation, mydriasis, piloerection, GI symptoms"
+          ],
+          "unmatched": [
+            "respiratory rate < 10/min",
+            "sedation score: difficult to arouse",
+            "pinpoint pupils with sedation = opioid toxicity",
+            "opioid withdrawal: yawning, lacrimation, mydriasis, piloerection, GI symptoms"
+          ]
+        }
+      },
+      "total_items": 26,
+      "total_matched": 0,
+      "coverage_percent": 0,
+      "role_hooks": {
+        "Patient": "My pain is 10/10 and you're not listening.",
+        "Family": "Why isn't anyone giving him anything? He's clearly hurting.",
+        "Clinician": "Has she had her q4 dose? Let's add a scheduled NSAID and reassess.",
+        "AlliedHealth": "Pharmacy \u2014 for renal/hepatic dose adjustment; PT for movement strategies; spiritual care for total pain."
+      },
+      "scope_of_practice": {
+        "LPN": "Reassess pain after intervention, administer ordered analgesics by approved route. Cannot manage PCA programming or epidural in most states. Recognize and report respiratory depression.",
+        "RN": "Administer IV opioids, manage PCA, monitor epidural, titrate per protocol, administer naloxone, lead pain reassessment, request order changes.",
+        "Advanced": "Order regional anesthesia, manage acute pain service, prescribe controlled substances per DEA registration, initiate buprenorphine."
+      }
+    },
+    {
+      "module_id": "M32",
+      "module_title": "Sepsis & septic shock",
+      "nclex_domain": "",
+      "summary": "Sepsis (suspected infection + organ dysfunction), septic shock (vasopressor-requiring hypotension + lactate>2), Hour-1 bundle, qSOFA, fluid resuscitation, source control.",
+      "categories": {
+        "conditions": {
+          "label": "Conditions",
+          "total": 6,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "pneumonia",
+            "UTI/urosepsis",
+            "skin/soft-tissue infection",
+            "intra-abdominal infection",
+            "central line-associated bloodstream infection",
+            "post-op infection"
+          ],
+          "unmatched": [
+            "pneumonia",
+            "UTI/urosepsis",
+            "skin/soft-tissue infection",
+            "intra-abdominal infection",
+            "central line-associated bloodstream infection",
+            "post-op infection"
+          ]
+        },
+        "medications": {
+          "label": "Medications",
+          "total": 5,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "broad-spectrum antibiotics within 1 hour (vancomycin + cefepime/piperacillin-tazobactam typical)",
+            "30 mL/kg crystalloid bolus",
+            "norepinephrine (first-line vasopressor)",
+            "vasopressin (add-on)",
+            "hydrocortisone (refractory shock)"
+          ],
+          "unmatched": [
+            "broad-spectrum antibiotics within 1 hour (vancomycin + cefepime/piperacillin-tazobactam typical)",
+            "30 mL/kg crystalloid bolus",
+            "norepinephrine (first-line vasopressor)",
+            "vasopressin (add-on)",
+            "hydrocortisone (refractory shock)"
+          ]
+        },
+        "devices": {
+          "label": "Devices",
+          "total": 5,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "central line (CVC) for pressors",
+            "arterial line for BP monitoring",
+            "Foley for hourly UOP",
+            "lactate point-of-care",
+            "blood culture bottles \u00d7 2 sets"
+          ],
+          "unmatched": [
+            "central line (CVC) for pressors",
+            "arterial line for BP monitoring",
+            "Foley for hourly UOP",
+            "lactate point-of-care",
+            "blood culture bottles \u00d7 2 sets"
+          ]
+        },
+        "procedures": {
+          "label": "Procedures",
+          "total": 3,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "Hour-1 bundle: lactate, blood cultures BEFORE antibiotics, antibiotics, 30 mL/kg fluids if hypotensive or lactate>4, pressors for MAP<65 after fluids",
+            "qSOFA: RR\u226522, AMS, SBP\u2264100",
+            "source control (drain abscess, remove infected line)"
+          ],
+          "unmatched": [
+            "Hour-1 bundle: lactate, blood cultures BEFORE antibiotics, antibiotics, 30 mL/kg fluids if hypotensive or lactate>4, pressors for MAP<65 after fluids",
+            "qSOFA: RR\u226522, AMS, SBP\u2264100",
+            "source control (drain abscess, remove infected line)"
+          ]
+        },
+        "primaryTreatments": {
+          "label": "Primary treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "alternateTreatments": {
+          "label": "Alternate treatments",
+          "total": 0,
+          "matched": 0,
+          "matches": [],
+          "all_items": [],
+          "unmatched": []
+        },
+        "redFlags": {
+          "label": "Red flags",
+          "total": 4,
+          "matched": 0,
+          "matches": [],
+          "all_items": [
+            "lactate trending up despite resuscitation",
+            "MAP < 65 despite norepinephrine 30 mcg/min",
+            "AMS, oliguria, mottled skin",
+            "peripheral hypoperfusion + warm extremities (early) \u2192 cold + mottled (late)"
+          ],
+          "unmatched": [
+            "lactate trending up despite resuscitation",
+            "MAP < 65 despite norepinephrine 30 mcg/min",
+            "AMS, oliguria, mottled skin",
+            "peripheral hypoperfusion + warm extremities (early) \u2192 cold + mottled (late)"
+          ]
+        }
+      },
+      "total_items": 23,
+      "total_matched": 0,
+      "coverage_percent": 0,
+      "role_hooks": {
+        "Patient": "I just feel really off, like I'm not myself. I'm cold but the nurse says I have a fever.",
+        "Family": "He was fine yesterday. Now he doesn't even know who I am.",
+        "Clinician": "Get me a lactate and blood cultures off two sites before we hang the antibiotics. Then 30 per kg of LR wide open.",
+        "AlliedHealth": "Lab here \u2014 preliminary cultures at 24 hours show gram-positive cocci in clusters. I've called the team."
+      },
+      "scope_of_practice": {
+        "LPN": "Recognize early sepsis signs (fever/hypothermia, tachycardia, AMS), report immediately, support fluid administration and monitoring.",
+        "RN": "Initiate sepsis bundle, draw cultures, hang antibiotics, manage fluids and pressors per protocol, monitor lactate trend, escalate to ICU.",
+        "Advanced": "Diagnose, order workup, manage vasopressors, lead ICU resuscitation, source control, antibiotic stewardship."
+      }
+    }
+  ],
+  "documentation_alignment": {
+    "available": false,
+    "composite": 0.0,
+    "model": null,
+    "built_at": null,
+    "rubric": {},
+    "rules": {
+      "hits": [],
+      "misses": [],
+      "speculative": [],
+      "by_module": [],
+      "totals": {}
+    },
+    "notes_meta": [],
+    "note_count": 0,
+    "signed_count": 0
+  },
+  "orders_alignment": {
+    "total_orders": 0,
+    "by_category": {},
+    "priority_dist": {
+      "routine": 0,
+      "stat": 0,
+      "now": 0
+    },
+    "rationale_quality": 0.0,
+    "trigger_latency_s": []
+  },
+  "ehr_id": "helix",
+  "charting_locked_at": null,
+  "transcript": [
+    {
+      "ts": 1778987067.816132,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-014",
+      "persona_name": "Mr. Hayes",
+      "direction": "student",
+      "text": "Mr Hayes do you see monkeys little tiny monkey",
+      "latency_ms": null,
+      "ncjmm_step": "recognize-cues"
+    },
+    {
+      "ts": 1778987067.817132,
+      "source": "operator",
+      "source_label": "Operator (control room)",
+      "persona_id": "P-014",
+      "persona_name": "Mr. Hayes",
+      "direction": "character",
+      "text": "What? Monkeys? No, no... *looks around sharply* ...there's something in the... the tubes, aren't there? Why are you asking me that? Are *you* seeing them? Get them away from my arm\u2014no, don't touch the... *pulls hand back abruptly* ...is someone at the door again?",
+      "latency_ms": 2120,
+      "ncjmm_step": "recognize-cues"
+    }
+  ],
+  "_meta": {
+    "generated_at": 1778987105.013458,
+    "generator": "medsim3.debrief v1"
+  }
+}

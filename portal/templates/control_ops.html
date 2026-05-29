@@ -1,0 +1,386 @@
+{% extends "base.html" %}
+{% block title %}Control room — ops{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/control.css">
+
+<header class="page-header" id="ops-header" style="position:sticky;top:0;z-index:40;background:#fff;border-bottom:2px solid #143b8a;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+    <h1 style="margin:0;font-size:18px">{{ session.scenario_name }}</h1>
+    <span class="muted small">Join <code class="join-code">{{ session.join_code }}</code></span>
+    <span id="state-badge" class="badge ok" style="padding:3px 10px;border-radius:99px;font-weight:600;font-size:11px;letter-spacing:.08em">{{ session.state | upper }}</span>
+    <span id="hdr-state-badge" hidden></span>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button type="button" id="hdr-btn-start"  class="primary-action" hidden style="background:#1f7a3a;color:#fff;border:0;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer">▶ START</button>
+    <button type="button" id="hdr-btn-pause"  class="secondary"      hidden style="background:#E6A032;color:#fff;border:0;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer">⏸ PAUSE</button>
+    <button type="button" id="hdr-btn-resume" class="primary-action" hidden style="background:#1f7a3a;color:#fff;border:0;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer">▶ RESUME</button>
+    <form method="post" action="/portal/control/end" data-confirm="End the active session? Connected stations will be disconnected.">
+      <button type="submit" class="danger" id="hdr-btn-stop" style="background:#962d22;color:#fff;border:0;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer">⏹ STOP</button>
+    </form>
+  </div>
+</header>
+
+<div class="ops-grid">
+
+  <!-- TOP-LEFT — Invite stations (QR) -->
+  <section class="check-card" id="seed-report-card" hidden style="grid-column: 1 / -1;">
+    <h2>Chart seed report
+      <span id="seed-report-condition" class="muted small" style="float:right"></span>
+    </h2>
+    <p class="muted small">Auto-built when the scenario launched. Patient vitals, MAR, IVs, and tube feeds were randomized inside the condition's expected ranges. Anything flagged here likely needs a quick review before students join.</p>
+    <div id="seed-report-warnings" style="margin-top:10px"></div>
+    <div id="seed-report-corrections" style="margin-top:8px"></div>
+  </section>
+
+  <section class="check-card" id="med-checklist-card" hidden style="grid-column: 1 / -1;">
+    <h2>Medication checklist
+      <span class="muted small" id="med-checklist-summary" style="float:right"></span>
+    </h2>
+    <p class="muted small">Auto-populated from the condition's standard-of-care timeline. Uncheck any med you want to <strong>exclude</strong> from the chart before students join. High-alert meds are flagged.</p>
+    <div id="med-checklist" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:8px"></div>
+  </section>
+
+  <section class="check-card">
+    <h2>Invite stations</h2>
+    <p class="muted small">Two QR codes — one per device role. <strong>Chat</strong> = verbal encounter (1 station per persona). <strong>EHR</strong> = chart documentation (any device).</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;">
+      <div>
+        <div class="muted small" style="font-weight:600;margin-bottom:4px;">CHAT</div>
+        <div class="qr-display">
+          <img class="qr-img" alt="Chat QR" src="/api/qr.svg?data={{ (base_url + '/join?code=' + session.join_code) | urlencode }}&scale=5">
+        </div>
+        <p class="join-url small"><code>{{ base_url }}/join?code={{ session.join_code }}</code></p>
+      </div>
+      <div>
+        <div class="muted small" style="font-weight:600;margin-bottom:4px;">EHR ({{ session.ehr_id or '—' }})</div>
+        <div class="qr-display">
+          {% if session.ehr_id %}
+            <img class="qr-img" alt="EHR QR" src="/api/ehr/qr.svg?code={{ session.join_code }}&scale=5">
+          {% else %}
+            <div class="muted small" style="padding:18px;border:1px dashed #dde2ee;border-radius:8px;text-align:center;">No EHR configured for this session.</div>
+          {% endif %}
+        </div>
+        <p class="join-url small"><code>{{ base_url }}/ehr/join?code={{ session.join_code }}</code></p>
+        {% if session.ehr_id %}
+          <a href="/portal/control/launch_ehr" target="medsim_ehr_window" rel="noopener"
+             id="btn-launch-ehr" class="primary-action"
+             style="display:block;box-sizing:border-box;text-align:center;text-decoration:none;width:100%;margin-top:6px;font-size:12px;padding:7px 8px;">
+            🖥 Launch EHR on this device
+          </a>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if session.ehr_id %}
+      <p class="muted small" style="margin-top:6px;">
+        <strong>Launch EHR on this device</strong> opens the full Medical Records interface — chart, notes, vitals, and order entry (labs, imaging, meds) — in a new window here, no second device or QR scan needed. Useful for testing and small training installs. Everything done in that window is logged to the session like any EHR station.
+      </p>
+    {% endif %}
+
+    {% if lan_ip in ('127.0.0.1','') or base_url.startswith('http://127') or base_url.startswith('http://localhost') %}
+      <div class="banner warn small">
+        <strong>Localhost binding detected.</strong> Mobile devices on your Wi-Fi can't reach these URLs. Restart with <em>Start Portal (iPad mode)</em>.
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- TOP-MIDDLE — Connected stations -->
+  <section class="check-card">
+    <h2>Connected stations <span class="muted small" id="station-count">(0)</span></h2>
+    <p class="muted small">Live roster. Refresh every 3s. <span id="online-count" class="muted small"></span></p>
+    <div id="station-grid" class="station-grid">
+      <p class="muted">No stations connected yet. Share the QR code.</p>
+    </div>
+  </section>
+
+  <!-- TOP-RIGHT — Session context -->
+  <section class="check-card">
+    <h2>Session context</h2>
+    {% if session.program_id or session.week %}
+      <p><strong>Program:</strong> {{ session.program_id or '—' }} · <strong>Week:</strong> {{ session.week or '—' }}</p>
+    {% endif %}
+    {% if modules_in_use %}
+      <p><strong>Modules ({{ modules_in_use | length }}):</strong></p>
+      <ul class="small">
+        {% for m in modules_in_use %}<li><code>{{ m.id }}</code> {{ m.title or m.id }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% if session.scenario_text %}
+      <details>
+        <summary>Scenario outline</summary>
+        <p class="small">{{ session.scenario_text }}</p>
+      </details>
+    {% endif %}
+    <p><strong>Personas in session ({{ personas_in_use | length }}):</strong></p>
+    <ul class="small">
+      {% for p in personas_in_use %}
+        <li><code>{{ p.id }}</code> {{ p.name }} — {{ p.role }}{% if p.alteredState %} <span class="tag altered">{{ p.alteredState }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <!-- BOTTOM-LEFT — Operator PTT panel (engage a character) -->
+  <section class="check-card op-ptt-card">
+    <h2>Engage a character (operator)</h2>
+    <p class="muted small">Tap a persona below, then hold the talk button and speak. The character will reply in their voice and the exchange will appear in the transcript.</p>
+    <div class="op-persona-chips" id="op-persona-chips">
+      {% for p in personas_in_use %}
+        <button type="button" class="op-persona-chip{% if loop.first %} active{% endif %}"
+                data-persona-id="{{ p.id }}"
+                data-persona-name="{{ p.name }}">
+          {{ p.name }}
+          <span class="muted small">{{ p.role }}</span>
+        </button>
+      {% endfor %}
+    </div>
+    <button id="op-talk-btn" class="op-talk-btn" type="button">
+      <span class="op-talk-label">Hold to talk</span>
+      <span class="op-talk-status" id="op-talk-status">Idle</span>
+    </button>
+    <div id="op-interim" class="interim-text" aria-live="polite"></div>
+    <div id="op-stt-banner" class="banner warn small" hidden>
+      Voice recognition unavailable in this browser. Use Chrome or Edge for the operator PTT.
+    </div>
+  </section>
+
+  <!-- BOTTOM-MIDDLE+RIGHT — Live transcript -->
+  <section class="check-card transcript-card">
+    <h2>Live transcript <span class="muted small" id="t-count">(0 turns)</span></h2>
+    <p class="muted small">All turns from every station + operator, time-ordered.</p>
+    <div id="transcript" class="transcript">
+      <p class="muted">No turns yet.</p>
+    </div>
+  </section>
+
+  <!-- V4 — Character voices (ElevenLabs) -->
+  <section class="check-card" style="grid-column: 1 / -1;">
+    <h2>Character voices <span class="muted small">(V4 · ElevenLabs)</span>
+      <span class="muted small" id="voice-health" style="float:right;">checking…</span>
+    </h2>
+    <p class="muted small">Pick a neural voice for each character — 5 options filtered by the persona's sex, age, and ethnicity. Preview before assigning. If ElevenLabs is unavailable the station falls back to the browser voice automatically.</p>
+    <div id="voice-grid" class="voice-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+      {% for p in personas_in_use %}
+        <div class="voice-card" data-persona-id="{{ p.id }}" style="border:1px solid #dde2ee;border-radius:8px;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;">
+            <strong>{{ p.name }}</strong>
+            <code class="muted small">{{ p.id }}</code>
+          </div>
+          <p class="muted small" style="margin:2px 0 8px;">{{ p.role }}{% if p.alteredState %} · {{ p.alteredState }}{% endif %}</p>
+          <select class="voice-select" data-persona-id="{{ p.id }}" style="width:100%;padding:6px 8px;border:1px solid #dde2ee;border-radius:5px;">
+            <option value="browser">Loading voices…</option>
+          </select>
+          <div style="display:flex;gap:6px;margin-top:8px;align-items:center;">
+            <button type="button" class="secondary voice-preview" data-persona-id="{{ p.id }}" style="padding:4px 10px;font-size:12px;">▶ Preview</button>
+            <span class="muted small voice-status" data-persona-id="{{ p.id }}"></span>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% if session.ehr_id %}
+  <!-- V3 — EHR station roster + charting controls -->
+  <section class="check-card" style="grid-column: 1 / -1;">
+    <h2>EHR stations <span class="muted small" id="ehr-station-count">(0)</span>
+      <span class="muted small" style="margin-left:8px;">— {{ session.ehr_id }}</span>
+      <span class="muted small" id="ehr-event-count" style="float:right;">0 events</span>
+    </h2>
+    <p class="muted small">Live roster of devices documenting into the chart. Heartbeat 20s.</p>
+    <div id="ehr-station-grid" class="station-grid">
+      <p class="muted">No EHR stations connected yet. Share the EHR QR.</p>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button type="button" id="btn-charting-complete" class="primary-action" disabled
+              data-locked="{{ '1' if session.charting_locked_at else '0' }}">
+        ✓ Charting complete · run comparison
+      </button>
+      <a href="/portal/ehr_admin" target="_blank" class="button-link">EHR admin →</a>
+      <span class="muted small" id="charting-complete-status"></span>
+    </div>
+    <p class="muted small" style="margin-top:6px;">
+      Clicking <strong>Charting complete</strong> runs the hybrid comparison engine (rules + Haiku 4.5 rubric), freezes the chart UI, and appends Documentation/Orders alignment cards to the debrief. Disabled until at least one chart event has been captured.
+    </p>
+  </section>
+  {% endif %}
+
+  <!-- V6 — Simulated devices roster + alarm-injection -->
+  <section class="check-card" id="devices-card" style="grid-column: 1 / -1;">
+    <h2>Simulated devices <span class="muted small" id="device-count">(0)</span>
+      <span class="muted small" style="float:right;" id="device-online-count">0 online</span>
+    </h2>
+    <p class="muted small">
+      Mint a device, assign it to a character, and hand the QR to a student tablet.
+      Once installed on the home screen the icon reopens the same device next class.
+      Instructor alarms hit the device over WebSocket in under a second.
+    </p>
+    <div style="margin-bottom:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button type="button" id="btn-add-device" class="primary-action">+ Add device (mint QR)</button>
+      <span class="muted small" id="devices-card-kinds-note">Pumps and Pyxis cabinets are supported in v6.0.</span>
+    </div>
+    <div id="device-grid" class="station-grid">
+      <p class="muted">No devices yet. Click <strong>Add device</strong> to mint one.</p>
+    </div>
+  </section>
+</div>
+
+<!-- Add-device modal -->
+<div id="add-device-modal" class="modal-backdrop" hidden>
+  <div class="modal-card">
+    <h2 style="margin-top:0">Add a simulated device</h2>
+    <p class="muted small">Pick the device kind, model, and a human-readable label (e.g. "Bedside Pump A"). The mint creates the station and returns a QR the student scans on their phone or tablet.</p>
+    <form id="add-device-form">
+      <label class="form-row">
+        <span>Device kind</span>
+        <select name="device_kind" id="ad-kind" required></select>
+      </label>
+      <label class="form-row">
+        <span>Model</span>
+        <select name="device_model" id="ad-model" required></select>
+      </label>
+      <label class="form-row">
+        <span>Label</span>
+        <input type="text" name="label" id="ad-label" maxlength="40"
+               placeholder="e.g. Bed 3 IV / Cart A" required>
+      </label>
+      <label class="form-row">
+        <span>Assign to character</span>
+        <select name="character_id" id="ad-char">
+          <option value="">— unassigned —</option>
+        </select>
+      </label>
+      <div class="form-buttons">
+        <button type="button" id="ad-cancel" class="secondary">Cancel</button>
+        <button type="submit" class="primary-action">Mint device + QR</button>
+      </div>
+    </form>
+    <div id="ad-qr-result" hidden style="margin-top:18px">
+      <h3 style="margin:0 0 6px">Device QR</h3>
+      <p class="muted small" id="ad-qr-caption"></p>
+      <div id="ad-qr-svg" style="text-align:center;background:#fff;padding:16px;border:1px solid #dde2ee;border-radius:8px"></div>
+      <p class="muted small" id="ad-qr-url" style="word-break:break-all;margin-top:6px"></p>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" id="ad-done" class="primary-action">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Per-device inject panel (opened from a roster card) -->
+<div id="device-detail-modal" class="modal-backdrop" hidden>
+  <div class="modal-card" style="max-width:560px">
+    <h2 style="margin-top:0" id="dd-title">Device detail</h2>
+    <div id="dd-meta" class="muted small" style="margin-bottom:14px"></div>
+
+    <h3 style="margin:0 0 6px">Character assignment</h3>
+    <form id="dd-assign-form" style="display:flex;gap:8px;align-items:center;margin-bottom:18px">
+      <select id="dd-char" style="flex:1"></select>
+      <button type="submit" class="primary-action">Reassign</button>
+    </form>
+
+    <h3 style="margin:0 0 6px">Inject alarm / fault</h3>
+    <form id="dd-inject-form" style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <select id="dd-tone" style="flex:1"></select>
+      <button type="submit" class="danger">⚠️ Fire</button>
+    </form>
+    <p class="muted small" id="dd-inject-hint">Alarm catalogue is filtered to alarms valid for this device kind.</p>
+
+    <h3 style="margin:14px 0 6px">Recent events</h3>
+    <div id="dd-events" style="max-height:200px;overflow-y:auto;background:#f4f5f8;border-radius:6px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.5"></div>
+
+    <div style="margin-top:18px;display:flex;justify-content:flex-end">
+      <button type="button" id="dd-close" class="secondary">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="ops-controls">
+  <button type="button" id="btn-pause" class="secondary">Pause</button>
+  <button type="button" id="btn-resume" class="primary-action" hidden>Resume</button>
+  <a href="/portal/debrief/current" class="button-link" target="_blank" title="Open the live debrief in a new tab — computed on the fly from the current transcript.">📊 Preview debrief</a>
+  <form method="post" action="/portal/control/end" data-confirm="End the scenario? A debrief will be saved and connected stations will be disconnected." style="display:inline;margin:0;">
+    <button type="submit" class="end-scenario-btn" title="Normal end — saves a debrief and disconnects stations.">✓ End scenario</button>
+  </form>
+  <button type="button" id="btn-kill" class="danger" title="Emergency pause — freezes every station immediately. Does NOT end the session.">⛔ Kill switch</button>
+</div>
+
+<p class="muted small" style="margin-top:8px;">
+  <strong>End scenario</strong> normally finishes the session and writes the debrief.
+  <strong>Kill switch</strong> is an emergency pause — use during a high-risk persona crisis, then come back to End scenario when safe.
+</p>
+
+<script>
+  window.MEDSIM2_OPS = {
+    join_code: {{ session.join_code | tojson }},
+    base_url: {{ base_url | tojson }},
+    personas: {{ personas_in_use | tojson }},
+    ehr_id:   {{ (session.ehr_id or '') | tojson }},
+    locked:   {{ (session.charting_locked_at is not none) | tojson }},
+    voice_assignments: {{ session.voice_assignments | tojson }},
+    // M42 — set when the ops view is opened scoped to an encounter
+    // (?join=… &patient_persona_id=…). The add-device modal defaults
+    // its patient-assignment dropdown to this value instead of
+    // "— unassigned —", so an instructor adding a device from a
+    // bed's manager doesn't have to re-pick the same patient every
+    // time. Empty string when no scope was passed.
+    default_device_patient_id: {{ (default_device_patient_id or '') | tojson }},
+    // M42 — when set, the page is being shown inside an iframe on
+    // the encounter console; CSS hides the ops-view top header so
+    // the operator doesn't see two stacked control bars.
+    embed_mode: {{ embed_mode | tojson }}
+  };
+</script>
+{% if embed_mode %}
+<style>
+  /* M44 — embed mode (loaded inside the encounter console's
+     "Managed devices" modal): show ONLY the simulated-devices card,
+     hide everything else. The M42 hide list relied on class names
+     that don't actually exist in the template, so cards like invite-
+     stations / connected-stations / session-context / PTT / transcript
+     / voices / EHR-stations were all still visible. The result felt
+     "like an entire control room page" per operator feedback.
+     This rewrite is explicit: hide every direct child of body and
+     every .check-card sibling of #devices-card, then re-show only
+     what's needed. The add-device modal floats on top so it stays
+     visible when triggered. */
+  body > * { display: none !important; }
+  body > #devices-card,
+  body > .container,
+  body > [class*="layout"],
+  body > script,
+  body > #add-device-modal,
+  body > #device-detail-modal {
+    display: revert !important;
+  }
+  body .check-card { display: none !important; }
+  body #devices-card { display: block !important; }
+  /* Sidebars/nav from base.html sometimes wrap content — kill them too. */
+  .topbar, .sidebar, .nav-group, header.page-header,
+  #ops-header, #seed-report-card, #med-checklist-card {
+    display: none !important;
+  }
+  /* M46 — kill the session control footer (Pause / Resume / End
+     scenario / Kill switch) + its explanatory paragraph. Those are
+     session-level controls that conflict with M35's per-encounter
+     Start/Pause/End in the encounter console's header — operator
+     would see two competing sets of controls. */
+  .ops-controls,
+  .ops-controls + p {
+    display: none !important;
+  }
+  body { padding: 0 !important; margin: 0 !important; background: #fff !important; }
+  /* Tighten the layout container so the devices card uses the full width. */
+  .layout, .container, main, .content { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+  #devices-card {
+    margin: 12px !important;
+    box-shadow: none !important;
+    border: 1px solid #e0e3eb !important;
+  }
+</style>
+{% endif %}
+<script src="{{ static_v('tts_client.js') }}"></script>
+<script src="{{ static_v('control_ops.js') }}"></script>
+<script src="{{ static_v('control_ops_ehr.js') }}"></script>
+<script src="{{ static_v('control_ops_voices.js') }}"></script>
+<script src="{{ static_v('control_ops_devices.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>{{ station.label or device_model }} — Training Bridge VRAI- MedSim device</title>
+  <link rel="manifest" href="/static/devices/manifest.json">
+  <link rel="apple-touch-icon" href="/static/devices/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="VRAI- MedSim Device">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a234f">
+  <link rel="stylesheet" href="{{ static_v('devices/device.css') }}">
+</head>
+<body data-join-code="{{ join_code }}" data-station-id="{{ station.id }}" data-device-kind="{{ device_kind }}" data-device-model="{{ device_model }}">
+  <div id="device-root">
+    <div id="device-loading">Loading device…</div>
+    <div id="device-skin"></div>
+    <div id="device-overlay">
+      <div id="paused-banner" hidden>SCENARIO PAUSED</div>
+      <div id="badge">TRAINING SIMULATION — NOT A MEDICAL DEVICE</div>
+    </div>
+  </div>
+  <audio id="device-audio" preload="auto"></audio>
+  <script src="{{ static_v('devices/device_app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<h1>Training Bridge VRAI- MedSim</h1>
+<p class="muted">Multi-station medical simulation with a 24-persona library,
+   NCLEX-aligned curriculum context, and QR-code mobile onboarding.</p>
+
+<section class="section">
+  <h2>System readiness</h2>
+  <div class="status-grid">
+    <article class="status-card {{ 'ok' if ready.anthropic else 'warn' }}">
+      <header><span class="status-dot"></span><h3>Anthropic API key</h3></header>
+      <p>{% if ready.anthropic %}Stored. Ready to launch a session.{% else %}Not set — required.{% endif %}</p>
+      <a href="/portal/credentials" class="button-link">Manage →</a>
+    </article>
+    <article class="status-card {{ 'ok' if ready.embedding else 'info' }}">
+      <header><span class="status-dot"></span><h3>Embedding key</h3></header>
+      <p>{% if ready.embedding %}Stored ({{ ready.embedding_provider }}).{% else %}Optional — for future KB.{% endif %}</p>
+      <a href="/portal/credentials" class="button-link">Manage →</a>
+    </article>
+    <article class="status-card ok">
+      <header><span class="status-dot"></span><h3>Personas</h3></header>
+      <p>24 starter personas loaded.</p>
+      <a href="/portal/personas" class="button-link">View library →</a>
+    </article>
+    <article class="status-card ok">
+      <header><span class="status-dot"></span><h3>Curriculum</h3></header>
+      <p>9 NCLEX modules · 3 nursing programs.</p>
+      <a href="/portal/curriculum" class="button-link">View →</a>
+    </article>
+  </div>
+</section>
+
+<section class="empty-large" style="margin-top:24px;">
+  <h2>Start a teaching session</h2>
+  <p>The control-room wizard walks you through 5 steps: system check →
+     scenario → curriculum context → characters → network. The final step
+     generates QR codes that mobile devices scan to join as stations.</p>
+  <a href="/portal/control" class="primary-action">Open control room →</a>
+</section>
+
+<section class="section">
+  <h2>What's new in v2</h2>
+  <ul class="muted">
+    <li><strong>24-persona library</strong> — 5 clinicians, 6 allied health, 9 patients (4 altered-state: delirium, alcohol withdrawal, stimulant tox, psychosis), 4 family.</li>
+    <li><strong>Curriculum context</strong> — programs (LPN/ADN-RN/BSN-RN) → weeks → NCLEX modules (11-section schema, ported from Voice4MedSim_v6).</li>
+    <li><strong>Control room</strong> — 5-step setup wizard plus a live ops view with station roster, transcript, and kill switch.</li>
+    <li><strong>QR code onboarding</strong> — phones, tablets, and other Macs scan to join as stations on the LAN.</li>
+  </ul>
+</section>
+
+<section class="section">
+  <h2>Quick actions</h2>
+  <div class="action-grid">
+    <a href="/portal/control" class="action-tile">
+      <strong>Start a session</strong>
+      <span class="muted">Open the control-room wizard.</span>
+    </a>
+    <a href="/portal/personas" class="action-tile">
+      <strong>Browse personas</strong>
+      <span class="muted">24-character starter library.</span>
+    </a>
+    <a href="/portal/curriculum" class="action-tile">
+      <strong>Browse curriculum</strong>
+      <span class="muted">NCLEX-aligned modules + program week mapping.</span>
+    </a>
+    <a href="/portal/credentials" class="action-tile">
+      <strong>Credentials</strong>
+      <span class="muted">Manage API keys in the encrypted vault.</span>
+    </a>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "version": 1,
+    "description": "IV solution catalog for ehr_seed._build_iv_fluids. indications maps a condition slug → preferred fluid. default_rate_ml_hr is the typical maintenance rate; bolus_ml is set for resuscitation indications.",
+    "fields": "name, default_rate_ml_hr, bag_volume_ml, bolus_ml (or null), indications[], line_site_default"
+  },
+  "fluids": [
+    {"name": "0.9% NaCl",                "default_rate_ml_hr": 125, "bag_volume_ml": 1000, "bolus_ml": 1000, "indications": ["sepsis", "septic_shock", "trauma_blunt", "gi_bleed_upper", "anaphylaxis", "ob_postpartum_hemorrhage", "peds_dehydration", "hyperkalemia"], "line_site_default": "L forearm 20g PIV"},
+    {"name": "Lactated Ringer's",        "default_rate_ml_hr": 125, "bag_volume_ml": 1000, "bolus_ml": 1000, "indications": ["sepsis", "trauma_blunt", "post_op_stable", "peds_dehydration", "ob_postpartum_hemorrhage"],            "line_site_default": "R AC 18g PIV"},
+    {"name": "D5 0.45% NaCl",            "default_rate_ml_hr": 75,  "bag_volume_ml": 1000, "bolus_ml": null, "indications": ["stable_baseline", "post_op_stable", "delirium", "alcohol_withdrawal"], "line_site_default": "R forearm 20g PIV"},
+    {"name": "D5W",                      "default_rate_ml_hr": 75,  "bag_volume_ml": 1000, "bolus_ml": null, "indications": ["hyperglycemia_hhs", "stable_baseline"],                 "line_site_default": "L forearm 20g PIV"},
+    {"name": "0.45% NaCl",               "default_rate_ml_hr": 150, "bag_volume_ml": 1000, "bolus_ml": null, "indications": ["hyperglycemia_hhs", "dka"],                              "line_site_default": "R AC 18g PIV"},
+    {"name": "0.9% NaCl + 20 mEq KCl",   "default_rate_ml_hr": 100, "bag_volume_ml": 1000, "bolus_ml": null, "indications": ["dka", "alcohol_withdrawal"],                              "line_site_default": "L AC 18g PIV"},
+    {"name": "Albumin 5%",               "default_rate_ml_hr": 250, "bag_volume_ml": 500,  "bolus_ml": 500,  "indications": ["septic_shock", "ob_postpartum_hemorrhage"],                "line_site_default": "R AC 18g PIV"},
+    {"name": "PRBC",                     "default_rate_ml_hr": 125, "bag_volume_ml": 300,  "bolus_ml": null, "indications": ["gi_bleed_upper", "trauma_blunt", "ob_postpartum_hemorrhage"], "line_site_default": "R AC 18g PIV (or central line)"}
+  ]
+}

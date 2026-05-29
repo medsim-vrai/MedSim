@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 1010" width="820" height="1010">
+<!-- TRAINING SIMULATION overlay - ICU Medical Plum Solo (next-gen single-line LVP, colour display). PROVISIONAL design - verify vs official operator manual. Phase 2. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .kcap{font-size:11px;font-weight:bold;fill:#28303a}
+ .kcap2{font-size:9px;font-weight:bold;fill:#28303a}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .devname{font-size:20px;font-weight:bold;fill:#28303a}
+ .sub{font-size:11px;fill:#5b6470}
+ .badge{font-size:11px;fill:#7c8893}
+</style>
+<defs>
+ <linearGradient id="chassisGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#eef0f2"/><stop offset="1" stop-color="#cfd4d8"/>
+ </linearGradient>
+ <linearGradient id="scrGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#f4f7fa"/><stop offset="1" stop-color="#e4eaef"/>
+ </linearGradient>
+ <linearGradient id="hdrGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#2f6f9e"/><stop offset="1" stop-color="#23597f"/>
+ </linearGradient>
+ <radialGradient id="alarmLed" cx="0.4" cy="0.35" r="0.75">
+  <stop offset="0" stop-color="#ff7a6f"/><stop offset="0.55" stop-color="#D7382E"/><stop offset="1" stop-color="#8d231c"/>
+ </radialGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="820" height="1010" fill="#e7ecf0"/></g>
+
+<g id="chassis">
+ <rect x="110" y="56" width="600" height="858" rx="22" fill="url(#chassisGrad)" stroke="#a6aeb3" stroke-width="2.5"/>
+ <!-- brand band -->
+ <rect x="110" y="56" width="600" height="46" rx="22" fill="#23597f"/>
+ <rect x="110" y="84" width="600" height="18" fill="#23597f"/>
+ <text class="devname" x="134" y="87" fill="#ffffff">ICU Medical Plum Solo</text>
+ <text class="sub" x="556" y="87" fill="#dbe9f3">Precision IV pump</text>
+ <!-- cassette door region at the base -->
+ <rect x="150" y="724" width="520" height="118" rx="12" fill="#e0e3e6" stroke="#b7bec4" stroke-width="1.6"/>
+ <text class="sub" x="168" y="746" fill="#7a838b">Cassette door</text>
+ <rect x="300" y="754" width="220" height="70" rx="8" fill="#d2d7db" stroke="#b7bec4" stroke-width="1.4"/>
+ <text class="sub" x="410" y="794" text-anchor="middle" fill="#8a929a">administration set cassette</text>
+</g>
+
+<g id="screen">
+ <!-- modern COLOUR display -->
+ <rect x="150" y="120" width="520" height="316" rx="10" fill="#11202b"/>
+ <rect id="screen-bg" x="160" y="130" width="500" height="296" rx="6" fill="url(#scrGrad)"/>
+ <!-- colour status header -->
+ <rect x="160" y="130" width="500" height="34" rx="6" fill="url(#hdrGrad)"/>
+ <rect x="160" y="150" width="500" height="14" fill="#23597f"/>
+ <text x="174" y="152" font-size="12" font-weight="bold" fill="#ffffff">Adult ICU</text>
+ <text class="mono" x="320" y="152" font-size="11" fill="#cfe0ec">MedNet connected</text>
+ <!-- wifi glyph -->
+ <path d="M452 150 a10 10 0 0 1 16 0" fill="none" stroke="#cfe0ec" stroke-width="2"/>
+ <path d="M456 152 a5 5 0 0 1 8 0" fill="none" stroke="#cfe0ec" stroke-width="2"/>
+ <circle cx="460" cy="154" r="2" fill="#cfe0ec"/>
+ <!-- battery -->
+ <rect x="600" y="142" width="26" height="13" rx="2" fill="none" stroke="#ffffff" stroke-width="1.3"/>
+ <rect x="626" y="145" width="3" height="7" fill="#ffffff"/>
+ <rect x="602" y="144" width="18" height="9" fill="#ffffff"/>
+ <text id="scr-battery" class="mono" x="634" y="153" font-size="10" fill="#ffffff">88%</text>
+
+ <!-- single-line delivery card -->
+ <rect x="174" y="178" width="472" height="158" rx="8" fill="#ffffff" stroke="#d4dade" stroke-width="1.2"/>
+ <!-- line tag -->
+ <rect x="184" y="188" width="40" height="22" rx="5" fill="#2f6f9e"/>
+ <text x="204" y="204" font-size="13" font-weight="bold" fill="#ffffff" text-anchor="middle">A</text>
+ <text id="scr-drug" x="234" y="204" font-size="15" font-weight="bold" fill="#1b2733">VANCOMYCIN</text>
+ <!-- running status pill -->
+ <rect id="scr-status" x="540" y="186" width="96" height="26" rx="13" fill="#3DA35D"/>
+ <text x="588" y="204" font-size="10" font-weight="bold" fill="#ffffff" text-anchor="middle">INFUSING</text>
+ <!-- big rate -->
+ <text class="mono" x="196" y="234" font-size="11" fill="#5b6470">Rate</text>
+ <text id="scr-rate" class="mono" x="194" y="284" font-size="44" fill="#1b2733">125</text>
+ <text x="306" y="280" font-size="14" fill="#5b6470">mL/h</text>
+ <!-- right column fields -->
+ <line x1="372" y1="222" x2="372" y2="320" stroke="#dde3e7" stroke-width="1.4"/>
+ <text class="mono" x="392" y="240" font-size="11" fill="#5b6470">Dose</text>
+ <text id="scr-dose" class="mono" x="392" y="258" font-size="14" fill="#1b2733">15 mg/kg</text>
+ <text class="mono" x="392" y="282" font-size="11" fill="#5b6470">VTBI</text>
+ <text id="scr-vtbi" class="mono" x="392" y="300" font-size="14" fill="#1b2733">160 mL</text>
+ <text class="mono" x="520" y="240" font-size="11" fill="#5b6470">VI</text>
+ <text id="scr-vi" class="mono" x="520" y="258" font-size="14" fill="#1b2733">90 mL</text>
+ <text class="mono" x="520" y="282" font-size="11" fill="#5b6470">Time left</text>
+ <text id="scr-time" class="mono" x="520" y="300" font-size="14" fill="#1b2733">1:17</text>
+ <!-- progress bar -->
+ <rect x="196" y="312" width="430" height="12" rx="6" fill="#e4eaef"/>
+ <rect x="196" y="312" width="155" height="12" rx="6" fill="#3DA35D"/>
+ <!-- soft-key contextual labels along screen bottom -->
+ <rect x="160" y="386" width="500" height="40" fill="#eef2f5"/>
+ <text id="softlabel-1" class="mono" x="225" y="411" font-size="11" font-weight="bold" fill="#23597f" text-anchor="middle">DETAILS</text>
+ <text id="softlabel-2" class="mono" x="350" y="411" font-size="11" font-weight="bold" fill="#23597f" text-anchor="middle">SECONDARY</text>
+ <text id="softlabel-3" class="mono" x="475" y="411" font-size="11" font-weight="bold" fill="#23597f" text-anchor="middle">BOLUS</text>
+ <text id="softlabel-4" class="mono" x="595" y="411" font-size="11" font-weight="bold" fill="#23597f" text-anchor="middle">MENU</text>
+</g>
+
+<g id="controls">
+ <!-- 4 soft keys beneath the screen, aligned to the on-screen labels -->
+ <g class="key"><rect id="softkey-1" data-control="softkey" x="178" y="448" width="94" height="40" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="225,458 233,470 217,470" fill="#9aa3aa"/></g>
+ <g class="key"><rect id="softkey-2" data-control="softkey" x="303" y="448" width="94" height="40" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="350,458 358,470 342,470" fill="#9aa3aa"/></g>
+ <g class="key"><rect id="softkey-3" data-control="softkey" x="428" y="448" width="94" height="40" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="475,458 483,470 467,470" fill="#9aa3aa"/></g>
+ <g class="key"><rect id="softkey-4" data-control="softkey" x="548" y="448" width="94" height="40" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="595,458 603,470 587,470" fill="#9aa3aa"/></g>
+
+ <!-- numeric keypad (Plum line retains a physical keypad) -->
+ <g class="key"><rect id="key-1" data-control="hardkey" data-action="1" x="178" y="512" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="209" y="538" text-anchor="middle">1</text></g>
+ <g class="key"><rect id="key-2" data-control="hardkey" data-action="2" x="248" y="512" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="279" y="538" text-anchor="middle">2</text></g>
+ <g class="key"><rect id="key-3" data-control="hardkey" data-action="3" x="318" y="512" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="349" y="538" text-anchor="middle">3</text></g>
+ <g class="key"><rect id="key-4" data-control="hardkey" data-action="4" x="178" y="558" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="209" y="584" text-anchor="middle">4</text></g>
+ <g class="key"><rect id="key-5" data-control="hardkey" data-action="5" x="248" y="558" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="279" y="584" text-anchor="middle">5</text></g>
+ <g class="key"><rect id="key-6" data-control="hardkey" data-action="6" x="318" y="558" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="349" y="584" text-anchor="middle">6</text></g>
+ <g class="key"><rect id="key-7" data-control="hardkey" data-action="7" x="178" y="604" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="209" y="630" text-anchor="middle">7</text></g>
+ <g class="key"><rect id="key-8" data-control="hardkey" data-action="8" x="248" y="604" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="279" y="630" text-anchor="middle">8</text></g>
+ <g class="key"><rect id="key-9" data-control="hardkey" data-action="9" x="318" y="604" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="349" y="630" text-anchor="middle">9</text></g>
+ <g class="key"><rect id="key-decimal" data-control="hardkey" data-action="." x="178" y="650" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="209" y="676" text-anchor="middle">.</text></g>
+ <g class="key"><rect id="key-0" data-control="hardkey" data-action="0" x="248" y="650" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="279" y="676" text-anchor="middle">0</text></g>
+ <g class="key"><rect id="key-clear" data-control="hardkey" data-action="CLEAR" x="318" y="650" width="62" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="349" y="675" text-anchor="middle">C</text></g>
+
+ <!-- navigation arrows (SELECT cluster) -->
+ <text class="sub" x="464" y="508" text-anchor="middle" fill="#5b6470">SELECT</text>
+ <g class="key"><rect id="key-up" data-control="hardkey" data-action="UP" x="436" y="514" width="56" height="38" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="464,524 474,540 454,540" fill="#28303a"/></g>
+ <g class="key"><rect id="key-down" data-control="hardkey" data-action="DOWN" x="436" y="558" width="56" height="38" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <polygon points="464,590 474,574 454,574" fill="#28303a"/></g>
+
+ <!-- key hard keys: START / STOP -->
+ <g class="key"><rect id="key-start" data-control="hardkey" data-action="START" x="504" y="514" width="138" height="56" rx="8" fill="#e7f4ec" stroke="#a9d4ba" stroke-width="1.5"/>
+  <polygon points="528,531 528,553 545,542" fill="#207a43"/>
+  <text class="kcap" x="586" y="547" text-anchor="middle" fill="#207a43">START</text></g>
+ <g class="key"><rect id="key-stop" data-control="hardkey" data-action="STOP" x="504" y="576" width="138" height="56" rx="8" fill="#fdeceb" stroke="#e0a9a4" stroke-width="1.5"/>
+  <rect x="528" y="594" width="18" height="18" rx="2" fill="#a8322a"/>
+  <text class="kcap" x="588" y="609" text-anchor="middle" fill="#a8322a">STOP</text></g>
+
+ <!-- silence / audio pause -->
+ <g class="key"><rect id="key-silence" data-control="hardkey" data-action="SILENCE" x="436" y="602" width="56" height="88" rx="8" fill="#fff6e6" stroke="#e6c98a" stroke-width="1.5"/>
+  <path d="M456 632 l10 -8 v34 l-10 -8 h-9 v-10 z" fill="#b07d1d"/>
+  <line x1="445" y1="628" x2="481" y2="658" stroke="#b07d1d" stroke-width="2.6"/>
+  <text class="kcap2" x="464" y="678" text-anchor="middle" fill="#9a6d18">AUDIO</text></g>
+
+ <!-- on/off + lock keypad -->
+ <g class="key"><rect id="key-onoff" data-control="hardkey" data-action="ONOFF" x="504" y="638" width="68" height="52" rx="8" fill="#eef1f3" stroke="#c2c8ce" stroke-width="1.5"/>
+  <circle cx="538" cy="660" r="9" fill="none" stroke="#28303a" stroke-width="2"/>
+  <line x1="538" y1="650" x2="538" y2="660" stroke="#28303a" stroke-width="2"/>
+  <text class="kcap2" x="538" y="685" text-anchor="middle">ON/OFF</text></g>
+ <g class="key"><rect id="key-lock" data-control="hardkey" data-action="LOCK" x="578" y="638" width="64" height="52" rx="8" fill="#eef1f3" stroke="#c2c8ce" stroke-width="1.5"/>
+  <rect x="603" y="658" width="14" height="11" rx="2" fill="#28303a"/>
+  <path d="M606 658 v-4 a4 4 0 0 1 8 0 v4" fill="none" stroke="#28303a" stroke-width="2"/>
+  <text class="kcap2" x="610" y="685" text-anchor="middle">LOCK</text></g>
+</g>
+
+<g id="indicators">
+ <!-- single-line flow indicator above the screen -->
+ <circle id="led-run" data-control="led" cx="186" cy="112" r="9" fill="#3DA35D" stroke="#2c7d46" stroke-width="1"/>
+ <circle cx="183" cy="109" r="3" fill="#bfe8cc"/>
+ <text class="sub" x="202" y="116">Line A flow</text>
+
+ <!-- 3-tier high/medium/low alarm LED stack on the chassis -->
+ <circle id="led-alarm" data-control="led" cx="640" cy="116" r="13" fill="url(#alarmLed)" stroke="#7a1f19" stroke-width="1"/>
+ <circle cx="635" cy="111" r="3.5" fill="#ffd1cc" opacity="0.85"/>
+ <circle id="led-caution" data-control="led" cx="608" cy="116" r="9" fill="#5b6470" stroke="#444b54" stroke-width="1"/>
+ <circle id="led-ac" data-control="led" cx="582" cy="116" r="9" fill="#3E7CB1" stroke="#2f6088" stroke-width="1"/>
+ <text class="sub" x="556" y="142">AC . Med . High alarm</text>
+</g>
+
+<g id="labels">
+ <text class="badge" x="410" y="958" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="410" y="976" text-anchor="middle">Simulated interface - ICU Medical Plum Solo single-line infusion pump</text>
+ <text class="badge" x="410" y="994" text-anchor="middle" fill="#b07d1d">PROVISIONAL design - layout to be verified against official ICU Medical operator manuals</text>
+</g>
+</svg>

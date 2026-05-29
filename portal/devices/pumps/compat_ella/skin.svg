@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 1000" width="780" height="1000">
+<!-- TRAINING SIMULATION overlay - Nestle Compat Ella portable cassette enteral feeding pump. Colour screen + icon keypad. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .kcap{font-size:11px;font-weight:bold;fill:#28303a}
+ .kcap2{font-size:8.5px;font-weight:bold;fill:#28303a}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .devname{font-size:20px;font-weight:bold;fill:#1b2733}
+ .sub{font-size:11px;fill:#5b6470}
+ .badge{font-size:11px;fill:#7c8893}
+</style>
+<defs>
+ <linearGradient id="caseGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#fbfcfd"/><stop offset="1" stop-color="#dde3e8"/>
+ </linearGradient>
+ <linearGradient id="bezelGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#33393f"/><stop offset="1" stop-color="#181c20"/>
+ </linearGradient>
+ <linearGradient id="scrGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eef2f5"/>
+ </linearGradient>
+ <radialGradient id="wheelGrad" cx="0.4" cy="0.35" r="0.8">
+  <stop offset="0" stop-color="#46505a"/><stop offset="1" stop-color="#171c22"/>
+ </radialGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="780" height="1000" fill="#e7ecf0"/></g>
+
+<g id="chassis">
+ <!-- compact portable rounded case -->
+ <rect x="160" y="56" width="460" height="700" rx="44" fill="url(#caseGrad)" stroke="#b3bcc4" stroke-width="3"/>
+ <rect x="176" y="72" width="428" height="668" rx="36" fill="none" stroke="#ffffff" stroke-width="1.4" opacity="0.8"/>
+ <!-- carry handle -->
+ <rect x="330" y="40" width="120" height="22" rx="11" fill="#dde3e8" stroke="#b3bcc4" stroke-width="2"/>
+ <rect x="344" y="46" width="92" height="9" rx="4.5" fill="#aab3bb"/>
+ <!-- name plate -->
+ <text class="devname" x="200" y="106">Compat Ella</text>
+ <text class="sub" x="201" y="124">Nestle Health Science - Enteral Feeding Pump</text>
+ <!-- cassette door with thumb tab + PUSH symbol -->
+ <rect x="200" y="540" width="380" height="172" rx="18" fill="#eef2f5" stroke="#b3bcc4" stroke-width="2"/>
+ <text class="sub" x="218" y="560" font-size="9">CASSETTE DOOR</text>
+ <!-- thumb tab to open door -->
+ <rect x="196" y="600" width="20" height="56" rx="8" fill="#d3dadf" stroke="#b3bcc4" stroke-width="1.5"/>
+ <line x1="203" y1="612" x2="203" y2="644" stroke="#9aa3ab" stroke-width="1.4"/>
+ <line x1="209" y1="612" x2="209" y2="644" stroke="#9aa3ab" stroke-width="1.4"/>
+ <text class="sub" x="172" y="678" font-size="8" transform="rotate(-90 172 678)">THUMB TAB</text>
+</g>
+
+<g id="screen">
+ <!-- large colour screen -->
+ <rect x="200" y="142" width="380" height="232" rx="14" fill="url(#bezelGrad)"/>
+ <rect id="screen-bg" x="216" y="158" width="348" height="200" rx="7" fill="url(#scrGrad)" stroke="#c4ccd2" stroke-width="1.2"/>
+
+ <!-- header bar -->
+ <rect x="216" y="158" width="348" height="30" rx="7" fill="#3DA35D"/>
+ <rect x="216" y="174" width="348" height="14" fill="#3DA35D"/>
+ <text id="scr-mode" x="230" y="178" font-size="12" font-weight="bold" fill="#ffffff">CONTINUOUS</text>
+ <!-- battery in header -->
+ <rect x="510" y="166" width="26" height="13" rx="2.5" fill="none" stroke="#ffffff" stroke-width="1.4"/>
+ <rect x="536" y="169" width="3" height="7" fill="#ffffff"/>
+ <rect x="512" y="168" width="17" height="9" fill="#ffffff"/>
+ <text id="scr-battery" x="542" y="177" font-size="9" fill="#ffffff">84%</text>
+
+ <!-- running green icon row -->
+ <g id="scr-run">
+  <circle cx="245" cy="232" r="20" fill="none" stroke="#3DA35D" stroke-width="3"/>
+  <path d="M239 222 v20 l18 -10 Z" fill="#3DA35D"/>
+ </g>
+ <text x="280" y="222" font-size="14" font-weight="bold" fill="#3DA35D">RUNNING</text>
+ <!-- droplet flow indicator -->
+ <path d="M280 234 q7 11 0 21 q-7 -10 0 -21 Z" fill="#3DA35D"/>
+
+ <!-- primary running value: RATE (green = running) -->
+ <text id="scr-rate" class="mono" x="316" y="252" font-size="42" font-weight="bold" fill="#3DA35D">150</text>
+ <text x="438" y="252" font-size="13" fill="#3DA35D">mL/hr</text>
+
+ <!-- info line: blue characters = information -->
+ <text id="scr-vi" x="232" y="296" font-size="13" fill="#3E7CB1">VOLUME GIVEN THIS THERAPY</text>
+ <text id="scr-volume" class="mono" x="232" y="324" font-size="22" font-weight="bold" fill="#3E7CB1">640</text>
+ <text x="288" y="324" font-size="12" fill="#3E7CB1">/ 1000 mL</text>
+ <!-- programming-context black text sample -->
+ <text id="scr-status" x="380" y="324" font-size="12" font-weight="bold" fill="#1b2733">SET RATE OK</text>
+ <!-- colour-key legend strip -->
+ <text x="232" y="348" font-size="8" fill="#5b6470">BLACK programming  GREEN running  BLUE info  RED alarm</text>
+</g>
+
+<g id="controls">
+ <!-- ergonomic physical icon keypad -->
+ <!-- Row 1: Power, Start/Pause -->
+ <g class="key"><rect id="key-power" data-control="hardkey" data-action="POWER" x="200" y="388" width="120" height="44" rx="10" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <circle cx="232" cy="410" r="9" fill="none" stroke="#28303a" stroke-width="2"/><line x1="232" y1="400" x2="232" y2="411" stroke="#28303a" stroke-width="2"/>
+  <text class="kcap2" x="270" y="414" text-anchor="middle">POWER</text></g>
+ <g class="key"><rect id="key-start" data-control="hardkey" data-action="START_PAUSE" x="330" y="388" width="250" height="44" rx="10" fill="#e7f4ec" stroke="#a9d4ba" stroke-width="1.8"/>
+  <path d="M362 400 v20 l16 -10 Z" fill="#207a43"/>
+  <rect x="388" y="400" width="5" height="20" fill="#207a43"/><rect x="397" y="400" width="5" height="20" fill="#207a43"/>
+  <text class="kcap2" x="478" y="414" text-anchor="middle" fill="#207a43">START / PAUSE</text></g>
+ <!-- Row 2: Prime, Up, Down -->
+ <g class="key"><rect id="key-prime" data-control="hardkey" data-action="PRIME" x="200" y="440" width="120" height="44" rx="10" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="260" y="466" text-anchor="middle">PRIME</text></g>
+ <g class="key"><rect id="key-up" data-control="hardkey" data-action="PLUS" x="330" y="440" width="120" height="44" rx="10" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="390" y="468" text-anchor="middle" font-size="20">+</text></g>
+ <g class="key"><rect id="key-down" data-control="hardkey" data-action="MINUS" x="460" y="440" width="120" height="44" rx="10" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="520" y="468" text-anchor="middle" font-size="20">&#8722;</text></g>
+ <!-- Row 3: Scroll/Select, Clear -->
+ <g class="key"><rect id="key-options" data-control="hardkey" data-action="SCROLL_SELECT" x="200" y="492" width="250" height="44" rx="10" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="325" y="518" text-anchor="middle">SCROLL / SELECT</text></g>
+ <g class="key"><rect id="key-clear" data-control="hardkey" data-action="CLEAR" x="460" y="492" width="120" height="44" rx="10" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="520" y="518" text-anchor="middle">CLEAR</text></g>
+
+ <!-- pump rotor inside cassette door -->
+ <circle cx="280" cy="626" r="50" fill="url(#wheelGrad)" stroke="#0c0f12" stroke-width="2"/>
+ <circle cx="280" cy="626" r="31" fill="#20262d" stroke="#0c0f12" stroke-width="1.4"/>
+ <circle cx="280" cy="626" r="8" fill="#3a444e"/>
+ <circle cx="280" cy="584" r="5.5" fill="#586470"/>
+ <circle cx="314" cy="608" r="5.5" fill="#586470"/>
+ <circle cx="314" cy="644" r="5.5" fill="#586470"/>
+ <circle cx="280" cy="668" r="5.5" fill="#586470"/>
+ <circle cx="246" cy="644" r="5.5" fill="#586470"/>
+ <circle cx="246" cy="608" r="5.5" fill="#586470"/>
+ <!-- cassette body with loading arrow -->
+ <rect x="356" y="566" width="200" height="124" rx="10" fill="#dbe2e7" stroke="#b3bcc4" stroke-width="1.5"/>
+ <text class="sub" x="372" y="588" font-size="9">CASSETTE</text>
+ <path d="M396 612 h70 l-12 -10 m12 10 l-12 10" fill="none" stroke="#3E7CB1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+ <text x="400" y="640" font-size="9" fill="#5b6470">load direction</text>
+ <!-- PUSH close symbol -->
+ <rect x="448" y="652" width="92" height="30" rx="6" fill="#cdd5db" stroke="#aab3bb" stroke-width="1.4"/>
+ <text x="494" y="672" font-size="12" font-weight="bold" fill="#28303a" text-anchor="middle">PUSH</text>
+ <path d="M428 667 h12 l-6 -6 m6 6 l-6 6" fill="none" stroke="#28303a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+
+ <!-- History + Settings keys below the door -->
+ <g class="key"><rect id="key-options-history" data-control="hardkey" data-action="HISTORY" x="200" y="708" width="185" height="44" rx="10" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="292" y="734" text-anchor="middle">HISTORY</text></g>
+ <g class="key"><rect id="key-options-settings" data-control="hardkey" data-action="SETTINGS" x="395" y="708" width="185" height="44" rx="10" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap2" x="487" y="734" text-anchor="middle">SETTINGS</text></g>
+</g>
+
+<g id="indicators">
+ <!-- status LEDs in a row above the screen, inside the case -->
+ <circle id="led-run" data-control="led" cx="446" cy="104" r="8" fill="#3DA35D" stroke="#2c7d46" stroke-width="1"/>
+ <circle cx="443.5" cy="101.5" r="2.6" fill="#bfe8cc"/>
+ <text class="sub" x="458" y="108" font-size="9">RUN</text>
+ <circle id="led-alarm" data-control="led" cx="500" cy="104" r="8" fill="#5b6470" stroke="#3a4046" stroke-width="1"/>
+ <circle cx="497.5" cy="101.5" r="2.6" fill="#9aa3ad"/>
+ <text class="sub" x="512" y="108" font-size="9">ALARM</text>
+ <circle id="led-ac" data-control="led" cx="566" cy="104" r="8" fill="#3E7CB1" stroke="#2c5d87" stroke-width="1"/>
+ <circle cx="563.5" cy="101.5" r="2.6" fill="#bcd6ea"/>
+ <text class="sub" x="578" y="108" font-size="9">AC</text>
+</g>
+
+<g id="labels">
+ <text class="badge" x="390" y="864" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="390" y="884" text-anchor="middle">Simulated interface - Nestle Health Science Compat Ella enteral feeding pump</text>
+</g>
+</svg>

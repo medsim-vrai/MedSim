@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "description": "Static fallback voice catalog for MEDSIM V4. Used when the live ElevenLabs /v1/voices fetch is unavailable (no key, offline, API error). These are long-standing ElevenLabs premade voice IDs. The live catalog is richer and more diverse — this set keeps voice selection functional offline. gender/age/accent follow ElevenLabs' own label vocabulary.",
+    "note": "Legacy premade voices skew american/british. The live /v1/voices catalog surfaces the full accent/ethnicity range; candidates_for() prefers the live catalog whenever it is reachable."
+  },
+  "voices": [
+    {"voice_id": "21m00Tcm4TlvDq8ikWAM", "name": "Rachel",   "gender": "female", "age": "middle_aged", "accent": "american",      "descriptive": "calm"},
+    {"voice_id": "AZnzlk1XvdvUeBnXmlld", "name": "Domi",     "gender": "female", "age": "young",       "accent": "american",      "descriptive": "strong"},
+    {"voice_id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah",    "gender": "female", "age": "young",       "accent": "american",      "descriptive": "soft"},
+    {"voice_id": "MF3mGyEYCl7XYWbV9V6O", "name": "Elli",     "gender": "female", "age": "young",       "accent": "american",      "descriptive": "emotional"},
+    {"voice_id": "LcfcDJNUP1GQjkzn1xUU", "name": "Emily",    "gender": "female", "age": "young",       "accent": "american",      "descriptive": "calm"},
+    {"voice_id": "ThT5KcBeYPX3keUQqHPh", "name": "Dorothy",  "gender": "female", "age": "young",       "accent": "british",       "descriptive": "pleasant"},
+    {"voice_id": "Xb7hH8MSUJpSbSDYk0k2", "name": "Alice",    "gender": "female", "age": "middle_aged", "accent": "british",       "descriptive": "confident"},
+    {"voice_id": "XrExE9yKIg1WjnnlVkGX", "name": "Matilda",  "gender": "female", "age": "middle_aged", "accent": "american",      "descriptive": "warm"},
+    {"voice_id": "pFZP5JQG7iQjIQuC4Bku", "name": "Lily",     "gender": "female", "age": "middle_aged", "accent": "british",       "descriptive": "warm"},
+    {"voice_id": "pMsXgVXv3BLzUgSXRplE", "name": "Serena",   "gender": "female", "age": "middle_aged", "accent": "american",      "descriptive": "pleasant"},
+    {"voice_id": "oWAxZDx7w5VEj9dCyTzz", "name": "Grace",    "gender": "female", "age": "young",       "accent": "american-southern", "descriptive": "gentle"},
+    {"voice_id": "jsCqWAovK2LkecY7zXl4", "name": "Freya",    "gender": "female", "age": "young",       "accent": "american",      "descriptive": "expressive"},
+    {"voice_id": "piTKgcLEGmPE4e6mEKli", "name": "Nicole",   "gender": "female", "age": "young",       "accent": "american",      "descriptive": "soft"},
+    {"voice_id": "XB0fDUnXU5powFXDhCwa", "name": "Charlotte", "gender": "female", "age": "young",      "accent": "swedish",       "descriptive": "warm"},
+    {"voice_id": "z9fAnlkpzviPz146aGWa", "name": "Glinda",   "gender": "female", "age": "middle_aged", "accent": "american",      "descriptive": "characterful"},
+    {"voice_id": "jBpfuIE2acCO8z3wKNLl", "name": "Gigi",     "gender": "female", "age": "young",       "accent": "american",      "descriptive": "childish"},
+    {"voice_id": "ErXwobaYiN019PkySvjV", "name": "Antoni",   "gender": "male",   "age": "young",       "accent": "american",      "descriptive": "well-rounded"},
+    {"voice_id": "VR6AewLTigWG4xSOukaG", "name": "Arnold",   "gender": "male",   "age": "middle_aged", "accent": "american",      "descriptive": "crisp"},
+    {"voice_id": "pNInz6obpgDQGcFmaJgB", "name": "Adam",     "gender": "male",   "age": "middle_aged", "accent": "american",      "descriptive": "deep"},
+    {"voice_id": "TxGEqnHWrfWFTfGW9XjX", "name": "Josh",     "gender": "male",   "age": "young",       "accent": "american",      "descriptive": "deep"},
+    {"voice_id": "yoZ06aMxZJJ28mfd3POQ", "name": "Sam",      "gender": "male",   "age": "young",       "accent": "american",      "descriptive": "raspy"},
+    {"voice_id": "29vD33N1CtxCmqQRPOHJ", "name": "Drew",     "gender": "male",   "age": "middle_aged", "accent": "american",      "descriptive": "well-rounded"},
+    {"voice_id": "2EiwWnXFnvU5JabPnv8n", "name": "Clyde",    "gender": "male",   "age": "middle_aged", "accent": "american",      "descriptive": "characterful"},
+    {"voice_id": "CYw3kZ02Hs0563khs1Fj", "name": "Dave",     "gender": "male",   "age": "young",       "accent": "british",       "descriptive": "conversational"},
+    {"voice_id": "D38z5RcWu1voky8WS1ja", "name": "Fin",      "gender": "male",   "age": "old",         "accent": "irish",         "descriptive": "characterful"},
+    {"voice_id": "JBFqnCBsd6RMkjVDRZzb", "name": "George",   "gender": "male",   "age": "middle_aged", "accent": "british",       "descriptive": "warm"},
+    {"voice_id": "N2lVS1w4EtoT3dr4eOWO", "name": "Callum",   "gender": "male",   "age": "middle_aged", "accent": "transatlantic", "descriptive": "intense"},
+    {"voice_id": "TX3LPaxmHKxFdv7VOQHJ", "name": "Liam",     "gender": "male",   "age": "young",       "accent": "american",      "descriptive": "neutral"},
+    {"voice_id": "bVMeCyTHy58xNoL34h3p", "name": "Jeremy",   "gender": "male",   "age": "young",       "accent": "irish",         "descriptive": "excited"},
+    {"voice_id": "flq6f7yk4E4fJM5XTYuZ", "name": "Michael",  "gender": "male",   "age": "old",         "accent": "american",      "descriptive": "calm"},
+    {"voice_id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel",   "gender": "male",   "age": "middle_aged", "accent": "british",       "descriptive": "deep"},
+    {"voice_id": "pqHfZKP75CvOlQylNhV4", "name": "Bill",     "gender": "male",   "age": "old",         "accent": "american",      "descriptive": "trustworthy"},
+    {"voice_id": "g5CIjZEefAph4nQFvHAz", "name": "Ethan",    "gender": "male",   "age": "young",       "accent": "american",      "descriptive": "soft"},
+    {"voice_id": "ZQe5CZNOzWyzPSCn5a3c", "name": "James",    "gender": "male",   "age": "old",         "accent": "australian",    "descriptive": "calm"},
+    {"voice_id": "Zlb1dXrM653N07WRdFW3", "name": "Joseph",   "gender": "male",   "age": "middle_aged", "accent": "british",       "descriptive": "articulate"}
+  ]
+}

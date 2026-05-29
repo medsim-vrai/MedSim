@@ -1,0 +1,40 @@
+{
+  "device_kind": "pump_enteral",
+  "device_model": "sentinel",
+  "display_name": "Amsino Sentinel",
+  "manufacturer": "Amsino",
+  "modes": ["continuous"],
+  "screens": ["off", "home", "program", "running", "paused", "alarmed", "feed_complete"],
+  "screen_color_by_state": {
+    "off": "#1b2733", "home": "#5b6470", "program": "#5b6470",
+    "running": "#3DA35D", "paused": "#6B4F2F", "alarmed": "#D7382E", "feed_complete": "#3DA35D"
+  },
+  "controls": {
+    "hardkeys": ["key-onoff", "key-run", "key-stop", "key-silence", "key-up", "key-down", "key-set", "key-clear"],
+    "softkeys": [],
+    "screen_fields": ["scr-rate", "scr-volume", "scr-status", "scr-battery"]
+  },
+  "alarm_map": {
+    "occ_emp":             "occlusion_downstream",
+    "excess_flow_flofast": "excess_flow_flofast",
+    "dose_complete":       "feed_complete",
+    "low_battery":         "low_battery",
+    "depleted_battery":    "depleted_battery"
+  },
+  "silence_seconds": 120,
+  "programming": {
+    "fields": [
+      {"id": "scr-rate",   "label": "Rate (mL/hr)",      "attribute": "rate_ml_hr", "min": 1, "max": 600, "step": 5,  "per_channel": false},
+      {"id": "scr-volume", "label": "Dose limit (mL)",   "attribute": "volume_ml",  "min": 0, "max": 3000,"step": 25, "per_channel": false}
+    ],
+    "default_channel": "",
+    "advance_keys":   ["key-set"],
+    "channel_keys":   {},
+    "inc_key":        "key-up",
+    "dec_key":        "key-down",
+    "start_keys":     {"key-run": ""},
+    "input_mode":     "stepper"
+  },
+  "default_program": {"mode": "continuous", "rate_ml_hr": 100, "volume_ml": 1000, "flush_volume_ml": 0},
+  "battery": {"capacity_minutes": 480, "low_threshold_minutes": 30, "depleted_threshold_minutes": 5}
+}

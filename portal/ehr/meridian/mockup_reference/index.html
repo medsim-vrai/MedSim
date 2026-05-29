@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Meridian EHR — MEDSIM V3</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f3f0e8; --panel:#ffffff; --ink:#1f2a26; --ink-2:#39463f; --ink-3:#6b7770;
+    --line:#dad3c2; --line-2:#ece6d8;
+    --sage:#4a7556; --sage-tint:#e1ebde;
+    --cream:#faf6ec;
+    --rust:#a3543b; --rust-tint:#f3e0d6;
+    --amber:#b78b2b; --amber-tint:#fbecbd;
+    --green:#3b6e3b; --green-tint:#dfeadf;
+    --shadow:0 1px 0 rgba(31,42,38,.05), 0 1px 2px rgba(31,42,38,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,textarea,select{font:inherit;color:inherit}
+  ::selection{background:var(--sage-tint)}
+  #app{min-height:100vh;display:flex;flex-direction:column}
+  .v3-banner{position:fixed;top:0;left:0;right:0;background:#4a7556;color:#fff;font-size:11px;padding:4px 12px;text-align:center;z-index:200;font-family:'JetBrains Mono',monospace}
+  .v3-banner.locked{background:#a3543b}
+  .v3-banner code{background:rgba(255,255,255,.18);padding:0 4px;border-radius:3px}
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="v3-banner-mount"></div>
+<div id="app"></div>
+
+<script>
+  window.MEDSIM_V3 = {{ bootstrap_json | safe }};
+  window.MEDSIM_V3.EHR_ID = "meridian";
+</script>
+<script src="/static/medsim_v3_client.js"></script>
+<script type="text/babel" src="/ehr-static/meridian/data.jsx"></script>
+<script type="text/babel" src="/ehr-static/meridian/ui.jsx"></script>
+<script type="text/babel" src="/ehr-static/meridian/screens.jsx"></script>
+<script type="text/babel" src="/ehr-static/meridian/app.jsx"></script>
+</body>
+</html>

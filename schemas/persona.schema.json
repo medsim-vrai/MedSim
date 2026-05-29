@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "voice4medsim/v5/persona.schema.json",
+  "title": "Persona Library Entry",
+  "description": "Per strategy §6.1. Stable IDs once published.",
+  "type": "object",
+  "required": ["id", "name", "roleGroup", "role", "safetyClass"],
+  "properties": {
+    "id":         {"type": "string"},
+    "name":       {"type": "string"},
+    "ageRange":   {"type": "string"},
+    "sex":        {"type": "string"},
+    "language":   {"type": "array", "items": {"type": "string"}},
+
+    "roleGroup":  {"type": "string", "enum": ["Patient", "Family", "Clinician", "AlliedHealth", "Allied Health"]},
+    "role":       {"type": "string"},
+
+    "knowledgeScope": {
+      "oneOf": [
+        {"type": "string"},
+        {"type": "array", "items": {"type": "string"}}
+      ],
+      "description": "Free text in v3-shaped data, or list of module IDs in v5 schema."
+    },
+
+    "safetyClass":  {"type": "string", "enum": ["baseline", "sensitive", "high-risk"]},
+    "alteredState": {"type": "string"},
+    "voiceProfile": {
+      "oneOf": [
+        {"type": "string"},
+        {"type": "object"}
+      ]
+    },
+
+    "medicalHistory":  {"type": "object"},
+    "behavioralState": {"type": "object"},
+
+    "schemaVersion":   {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": true
+}

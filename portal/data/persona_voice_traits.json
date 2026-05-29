@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "description": "MEDSIM V4 — per-persona voice traits used to filter the ElevenLabs catalog into 5 candidate voices the instructor chooses from. sex/age_band drive the hard filter; accent + ethnicity drive the soft ranking. Traits are inferred from each persona's name, role, and ageRange in personas.json; the instructor can override the final voice pick per session. age_band ∈ child|young|middle_aged|old. accent uses ElevenLabs label vocabulary.",
+    "source": "Derived from portal/data/personas.json (Voice4MedSim_v6 Appendix A)."
+  },
+  "traits": {
+    "P-001": {"sex": "M", "age_band": "middle_aged", "accent": "american",   "ethnicity": "hispanic",          "language": "en"},
+    "P-002": {"sex": "F", "age_band": "middle_aged", "accent": "indian",     "ethnicity": "south_asian",       "language": "en"},
+    "P-003": {"sex": "F", "age_band": "middle_aged", "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-004": {"sex": "F", "age_band": "middle_aged", "accent": "american",   "ethnicity": "east_asian",        "language": "en"},
+    "P-005": {"sex": "M", "age_band": "young",       "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-006": {"sex": "M", "age_band": "middle_aged", "accent": "american",   "ethnicity": "east_asian",        "language": "en"},
+    "P-007": {"sex": "M", "age_band": "young",       "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-008": {"sex": "F", "age_band": "young",       "accent": "american",   "ethnicity": "hispanic",          "language": "en"},
+    "P-009": {"sex": "F", "age_band": "young",       "accent": "american",   "ethnicity": "eastern_european",  "language": "en"},
+    "P-010": {"sex": "M", "age_band": "middle_aged", "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-011": {"sex": "F", "age_band": "middle_aged", "accent": "american",   "ethnicity": "east_asian",        "language": "en"},
+    "P-012": {"sex": "M", "age_band": "middle_aged", "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-013": {"sex": "F", "age_band": "old",         "accent": "american",   "ethnicity": "eastern_european",  "language": "en"},
+    "P-014": {"sex": "M", "age_band": "old",         "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-015": {"sex": "F", "age_band": "child",       "accent": "american",   "ethnicity": "south_asian",       "language": "en"},
+    "P-016": {"sex": "M", "age_band": "middle_aged", "accent": "irish",      "ethnicity": "irish",             "language": "en"},
+    "P-017": {"sex": "F", "age_band": "young",       "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-018": {"sex": "F", "age_band": "young",       "accent": "american",   "ethnicity": "east_asian",        "language": "en"},
+    "P-019": {"sex": "M", "age_band": "middle_aged", "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-020": {"sex": "F", "age_band": "middle_aged", "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-021": {"sex": "F", "age_band": "middle_aged", "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-022": {"sex": "M", "age_band": "young",       "accent": "american",   "ethnicity": "anglo_american",    "language": "en"},
+    "P-023": {"sex": "F", "age_band": "middle_aged", "accent": "spanish",    "ethnicity": "hispanic",          "language": "es"},
+    "P-024": {"sex": "U", "age_band": "young",       "accent": "american",   "ethnicity": "anglo_american",    "language": "en"}
+  },
+  "ethnicity_to_accents": {
+    "_comment": "Soft-match expansion: when ranking candidate voices, a persona's ethnicity boosts voices carrying any of these accents.",
+    "hispanic":         ["spanish", "latin american", "american", "mexican"],
+    "south_asian":      ["indian", "british", "american"],
+    "east_asian":       ["american", "chinese", "british"],
+    "eastern_european": ["american", "british", "polish", "russian"],
+    "irish":            ["irish", "british", "american"],
+    "anglo_american":   ["american", "transatlantic", "british"]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "medsim-v7",
+      "runtimeExecutable": "../medsim_v6/.venv/bin/python",
+      "runtimeArgs": ["run_portal.py"],
+      "port": 8768,
+      "env": {"MEDSIM_PORT": "8768", "MEDSIM_NO_BROWSER": "1"}
+    },
+    {
+      "name": "vrai-core",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "export PATH=\"$HOME/.local/node/current/bin:$PATH\"; cd '/Users/petermarotta/Documents/Claude/Projects/Scenario structure to support character engagement/medsim_v8/vrai-faces/packages/core'; exec pnpm dev"
+      ],
+      "port": 5173
+    }
+  ]
+}

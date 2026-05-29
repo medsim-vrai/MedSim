@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Scenario",
+  "description": "Scenario pack consumed by B1 — Scenario Loader.",
+  "type": "object",
+  "required": ["id", "name", "patient", "curriculum", "characters"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "patient": {
+      "type": "object",
+      "description": "Patient chart and baseline state",
+      "required": ["age", "sex", "history", "baseline_vitals"],
+      "properties": {
+        "age": { "type": "integer" },
+        "sex": { "type": "string" },
+        "history": { "type": "string" },
+        "baseline_vitals": { "type": "object" }
+      }
+    },
+    "vitals_timeline": {
+      "type": "array",
+      "description": "Scheduled vitals progression for the scenario",
+      "items": {
+        "type": "object",
+        "required": ["t_minutes", "vitals"],
+        "properties": {
+          "t_minutes": { "type": "number" },
+          "vitals": { "type": "object" }
+        }
+      }
+    },
+    "curriculum": {
+      "type": "object",
+      "required": ["touchpoints"],
+      "properties": {
+        "touchpoints": { "type": "array", "items": { "type": "string" } },
+        "unlocked": { "type": "array", "items": { "type": "string" } },
+        "deterioration_threshold": { "type": "object" }
+      }
+    },
+    "characters": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Character IDs participating in this scenario"
+    },
+    "allowed_tools": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "kb_scope": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Restrict KB retrieval to these tags"
+    }
+  }
+}

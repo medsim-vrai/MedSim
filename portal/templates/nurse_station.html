@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nursing Station · {{ room.label or room.room_code }} · Training Bridge VRAI- MedSim</title>
+  <link rel="stylesheet" href="{{ static_v('nurse_station.css') }}">
+</head>
+<body>
+  <main class="ns-page">
+    <header class="ns-header">
+      <div>
+        <h1>Nursing Station <span class="muted small">— in-sim supervisor view</span></h1>
+        <p class="muted small">
+          Room <code class="mono">{{ room.room_code }}</code>
+          {% if room.label %}· {{ room.label }}{% endif %}
+          · Signed in as <strong>{{ student.display_name }}</strong>
+        </p>
+      </div>
+      <div>
+        {# M62 — Supervisor admin portal launch. Prompts for the
+           nurse-supervisor's 2 initials, then opens the Medical
+           Records workstation in a new window with admin powers
+           (add lab / add note). #}
+        <button type="button" id="ns-supervisor-btn"
+                class="ns-supervisor-btn"
+                title="Open the Medical Records administrative portal in a new window (enter your 2 initials).">
+          🩺 Open Supervisor Records
+        </button>
+        <span id="ns-status" class="muted small">connecting…</span>
+      </div>
+    </header>
+
+    <script>
+      (function () {
+        const btn = document.getElementById("ns-supervisor-btn");
+        if (!btn) return;
+        const STORAGE = "medsim_supervisor_initials";
+        btn.addEventListener("click", () => {
+          let saved = "";
+          try { saved = sessionStorage.getItem(STORAGE) || ""; }
+          catch (e) { /* ignore */ }
+          const initials = (window.prompt(
+            "Enter your 2 initials to open the Medical Records " +
+            "administrative portal (e.g. BJ):",
+            saved) || "").toUpperCase().trim();
+          if (!initials) return;
+          if (initials.length < 2 || initials.length > 3) {
+            window.alert("Initials must be 2 (or 3) letters.");
+            return;
+          }
+          try { sessionStorage.setItem(STORAGE, initials); }
+          catch (e) { /* ignore */ }
+          const roomCode = {{ (room.room_code or '') | tojson }};
+          const url = "/students/medical_records?code=" +
+            encodeURIComponent(roomCode) +
+            "&role=supervisor&initials=" +
+            encodeURIComponent(initials);
+          window.open(url, "_blank", "noopener");
+        });
+      })();
+    </script>
+
+    <!-- Alarm board (highest severity first). -->
+    <section class="ns-alarms" id="ns-alarms">
+      <h2>Alarms</h2>
+      <ul class="alarm-list" id="alarm-list">
+        <li class="muted small">loading…</li>
+      </ul>
+    </section>
+
+    {# M48 — Alarm threshold settings card. Lets the supervisor set
+       low/high bounds for HR, SpO2, RR and pick which ECG rhythms
+       count as "dangerous waveforms". Every encounter's telemetry
+       snapshot is compared against these on the next alarm-bus tick
+       — threshold breaches show up in the alarm board above. #}
+    {# M54 — Header is a button so the panel collapses on click.
+       Default state is collapsed so the alarm board has top-of-page
+       priority; operator opens it only when tuning thresholds. #}
+    <section class="ns-thresholds ns-collapsed" id="ns-thresholds">
+      <h2 class="ns-thresholds-toggle" id="ns-thresholds-toggle"
+          role="button" tabindex="0"
+          aria-expanded="false" aria-controls="ns-thresholds-form"
+          title="Click to expand/collapse the alarm-threshold settings">
+        <span class="ns-thresholds-caret" aria-hidden="true">▸</span>
+        Alarm thresholds
+        <span class="muted small">— low/high per metric (click to expand)</span>
+      </h2>
+      <form id="ns-thresholds-form" class="ns-thresholds-form">
+        <div class="threshold-row">
+          <label class="threshold-label">Heart rate (bpm)</label>
+          <label class="small muted">low <input type="number" id="th-hr-low"  min="0" max="300" step="1"></label>
+          <label class="small muted">high <input type="number" id="th-hr-high" min="0" max="300" step="1"></label>
+        </div>
+        <div class="threshold-row">
+          <label class="threshold-label">SpO₂ (%)</label>
+          <label class="small muted">low <input type="number" id="th-spo2-low"  min="0" max="100" step="1"></label>
+          <label class="small muted">high <input type="number" id="th-spo2-high" min="0" max="100" step="1"></label>
+        </div>
+        <div class="threshold-row">
+          <label class="threshold-label">Respirations (/min)</label>
+          <label class="small muted">low <input type="number" id="th-rr-low"  min="0" max="80" step="1"></label>
+          <label class="small muted">high <input type="number" id="th-rr-high" min="0" max="80" step="1"></label>
+        </div>
+        {# M50 — Blood pressure thresholds (systolic + diastolic). #}
+        <div class="threshold-row">
+          <label class="threshold-label">BP systolic (mmHg)</label>
+          <label class="small muted">low <input type="number" id="th-sbp-low"  min="0" max="300" step="1"></label>
+          <label class="small muted">high <input type="number" id="th-sbp-high" min="0" max="300" step="1"></label>
+        </div>
+        <div class="threshold-row">
+          <label class="threshold-label">BP diastolic (mmHg)</label>
+          <label class="small muted">low <input type="number" id="th-dbp-low"  min="0" max="200" step="1"></label>
+          <label class="small muted">high <input type="number" id="th-dbp-high" min="0" max="200" step="1"></label>
+        </div>
+        <div class="threshold-row">
+          <label class="threshold-label">Dangerous waveforms</label>
+          <label class="small muted"><input type="checkbox" data-danger="vfib"> v-fib</label>
+          <label class="small muted"><input type="checkbox" data-danger="vtach"> v-tach</label>
+          <label class="small muted"><input type="checkbox" data-danger="asystole"> asystole</label>
+          <label class="small muted"><input type="checkbox" data-danger="afib_rvr"> a-fib RVR</label>
+          <label class="small muted"><input type="checkbox" data-danger="3rd_degree_block"> 3° block</label>
+        </div>
+        <div class="threshold-actions">
+          <button type="submit" class="ns-btn-primary">Save thresholds</button>
+          <span id="ns-thresholds-status" class="muted small"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- Per-bed cards — one per encounter in the room. -->
+    <section class="ns-grid" id="ns-grid">
+      <p class="muted small">loading bed cards…</p>
+    </section>
+  </main>
+
+  <script>
+    window.NURSE_STATION = {
+      studentId: {{ student.student_id | tojson }},
+      roomCode:  {{ room.room_code | tojson }},
+    };
+  </script>
+  <script src="{{ static_v('ecg_strip.js') }}"></script>
+  <script src="{{ static_v('nurse_station.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "@vrai/tablet-ios",
+  "version": "0.1.0-a0",
+  "private": true,
+  "scripts": {
+    "sync": "cap sync ios",
+    "open": "cap open ios",
+    "build:web": "pnpm -F @vrai/core build && cap copy ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/ios": "^6.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0"
+  }
+}

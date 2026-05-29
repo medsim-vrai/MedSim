@@ -1,0 +1,589 @@
+/* MEDSIM V7 — charge-nurse dashboard (M5).
+   A grid of Encounter cards under one ControlRoom. Designed for an
+   instructor laptop or 13" tablet held landscape; the grid is responsive
+   down to ~480 px (single column) for emergency portrait use. */
+
+/* ── Top bar ─────────────────────────────────────────────────────── */
+.room-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 2px solid #143b8a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+}
+.room-topbar-left,
+.room-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.room-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #143b8a;
+}
+.room-code {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 14px;
+  font-weight: 600;
+  background: #eef2fb;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: .08em;
+}
+
+.badge {
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  background: #eee;
+  color: #444;
+}
+.badge.active  { background: #d6f5dd; color: #1f7a3a; }
+.badge.frozen  { background: #fce6c5; color: #905a08; }
+.badge.ended   { background: #ecdada; color: #962d22; }
+
+/* ── Empty state ─────────────────────────────────────────────────── */
+.room-empty {
+  margin: 40px auto;
+  max-width: 540px;
+  text-align: center;
+  padding: 24px;
+  background: #f7f8fb;
+  border: 1px dashed #c1c8d6;
+  border-radius: 8px;
+}
+.room-empty h2   { margin-top: 0; color: #5a6273; font-weight: 600; }
+.room-empty .link {
+  background: none;
+  border: 0;
+  color: #143b8a;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+/* ── Meta strip ──────────────────────────────────────────────────── */
+.room-grid-wrap { padding: 14px 16px; }
+.room-meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Encounter grid ──────────────────────────────────────────────── */
+.encounter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.encounter-card {
+  background: #fff;
+  border: 1px solid #d0d6e2;
+  border-left: 4px solid #143b8a;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: box-shadow .15s ease, transform .05s ease;
+  cursor: pointer;
+}
+.encounter-card:hover {
+  box-shadow: 0 4px 12px rgba(20, 59, 138, .12);
+  transform: translateY(-1px);
+}
+.encounter-card.is-paused  { border-left-color: #E6A032; }
+.encounter-card.is-ended   { border-left-color: #962d22; opacity: .65; }
+.encounter-card.is-running { border-left-color: #1f7a3a; }
+
+.encounter-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.encounter-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a2a4a;
+  margin: 0;
+}
+.encounter-join {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  background: #eef2fb;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: .06em;
+}
+.encounter-meta {
+  font-size: 11px;
+  color: #707688;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.encounter-meta-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #44495a;
+  border-top: 1px dashed #e4e7ee;
+  padding-top: 6px;
+}
+.alert-pill {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.alert-pill.danger  { background: #962d22; color: #fff; }
+.alert-pill.warning { background: #E6A032; color: #fff; }
+.alert-pill.info    { background: #143b8a; color: #fff; }
+
+/* M30 — per-card pop-out button */
+.encounter-card-actions {
+  display: flex; justify-content: flex-end;
+  margin-top: 4px; padding-top: 6px;
+  border-top: 1px dashed #e4e7ee;
+}
+.encounter-card .card-popout {
+  background: transparent; border: 1px solid #c1c8d6; color: #143b8a;
+  padding: 3px 10px; border-radius: 4px;
+  font: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.encounter-card .card-popout:hover { background: #eef2fb; }
+
+.muted { color: #707688; }
+.small { font-size: 11px; }
+
+/* ── Scene-injector dialog ───────────────────────────────────────── */
+.scene-dialog {
+  border: none;
+  border-radius: 10px;
+  padding: 0;
+  width: min(520px, 92vw);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+}
+.scene-dialog::backdrop {
+  background: rgba(20, 30, 60, .35);
+}
+.scene-form {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.scene-form h3 { margin: 0; color: #143b8a; }
+.scene-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #44495a;
+}
+.scene-form select,
+.scene-form textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #c1c8d6;
+  border-radius: 4px;
+}
+.scene-form textarea { font-family: "SF Mono", "Menlo", "Consolas", monospace; font-size: 12px; }
+.scene-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Buttons (reuse v6 palette but local override for room top bar) ── */
+.room-topbar button.primary-action,
+.scene-form button.primary-action {
+  background: #1f7a3a; color: #fff; border: 0;
+  padding: 8px 14px; border-radius: 6px; font-weight: 700; cursor: pointer;
+}
+.room-topbar button.secondary,
+.scene-form button.secondary {
+  background: #eef2fb; color: #143b8a; border: 0;
+  padding: 8px 14px; border-radius: 6px; font-weight: 700; cursor: pointer;
+}
+.room-topbar button.danger {
+  background: #962d22; color: #fff; border: 0;
+  padding: 8px 14px; border-radius: 6px; font-weight: 700; cursor: pointer;
+}
+.room-topbar button[disabled],
+.scene-form button[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* M36 — Nursing Station launch panel (between top bar and room grid). */
+.nurse-station-launch {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-left: 4px solid #1f7a3a;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 16px 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+.nurse-station-launch h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: #143b8a;
+}
+.nurse-station-launch-text p { margin: 4px 0 10px; }
+.nurse-station-launch-btn {
+  display: inline-block;
+  background: #1f7a3a; color: #fff;
+  padding: 8px 14px; border-radius: 6px;
+  font-weight: 700; text-decoration: none;
+}
+.nurse-station-launch-btn:hover { background: #186730; }
+.nurse-station-launch-qr {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: #f7f8fb; border: 1px solid #dde2ee; border-radius: 6px;
+  padding: 10px 12px; min-width: 160px;
+}
+.nurse-station-qr-img {
+  width: 130px; height: auto;
+  background: #fff; padding: 4px;
+  border: 1px solid #dde2ee; border-radius: 4px;
+}
+.nurse-station-qr-url {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 9px; color: #5a6273; word-break: break-all;
+  text-align: center;
+}
+@media (max-width: 700px) {
+  .nurse-station-launch {
+    grid-template-columns: 1fr;
+  }
+  .nurse-station-launch-qr { max-width: 220px; }
+}
+
+/* M41 — Print QR codes anchor in the room top bar (styled like .secondary buttons). */
+.room-topbar a#btn-qr-print {
+  background: #eef2fb;
+  color: #143b8a;
+  border: 0;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  display: inline-block;
+  cursor: pointer;
+}
+.room-topbar a#btn-qr-print:hover { background: #dde7fb; }
+
+/* M47 — Room-level med carts panel. */
+.med-carts-panel {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-left: 4px solid #186730;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 16px 0;
+}
+.med-carts-header h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: #186730;
+}
+.med-carts-header p { margin: 4px 0 10px; }
+.med-cart-create-form {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.med-cart-create-form input[type="text"] {
+  flex: 1; min-width: 200px;
+  padding: 7px 10px; border: 1px solid #c1c8d6; border-radius: 4px;
+  font: inherit;
+}
+.med-cart-create-form .primary-action {
+  background: #186730; color: #fff; border: 0;
+  padding: 7px 14px; border-radius: 4px; font: inherit; font-weight: 700;
+  cursor: pointer;
+}
+.med-carts-list {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.med-cart-card {
+  background: #f1f8f3;
+  border: 1px solid #c7e5d1;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.med-cart-card-header {
+  display: flex; justify-content: space-between;
+  margin-bottom: 6px;
+}
+.med-cart-card-encs {
+  display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
+  margin: 4px 0;
+}
+.med-cart-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #fff; border: 1px solid #c7e5d1; border-radius: 99px;
+  padding: 2px 8px; font-size: 12px;
+}
+.med-cart-chip-x {
+  background: transparent; border: 0; color: #962d22;
+  cursor: pointer; font-weight: 700; padding: 0 0 0 2px;
+}
+.med-cart-chip-x:hover { color: #6b1f17; }
+.med-cart-link-row {
+  display: flex; gap: 6px; margin-top: 6px;
+}
+.med-cart-link-select {
+  flex: 1; padding: 5px 8px;
+  border: 1px solid #c1c8d6; border-radius: 4px; font: inherit; font-size: 12px;
+}
+.med-cart-link-btn {
+  background: #186730; color: #fff; border: 0;
+  padding: 5px 10px; border-radius: 4px; font-weight: 700; cursor: pointer;
+}
+.med-cart-card-qr {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px dashed #c7e5d1;
+}
+.med-cart-card-qr-img {
+  width: 64px; height: 64px;
+  background: #fff; padding: 3px;
+  border: 1px solid #c7e5d1; border-radius: 4px;
+}
+.med-cart-card-qr-url {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 9px; color: #5a6273; word-break: break-all;
+}
+
+/* ── M53 — Lead assignments panel ─────────────────────────────────
+   Per-encounter free-text label input + bulk multi-encounter apply.
+   Visually matches the M47 .med-carts-panel and .nurse-station-launch
+   blocks (rounded white card with a colored left accent) so the
+   three panels read as a coherent toolbar above the encounter grid.
+   Distinctive color = purple/indigo to separate it from
+   green (med carts) and green (nursing station). */
+.lead-assign-panel {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-left: 4px solid #5a4ec3;     /* indigo accent */
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin: 12px 16px 0;
+}
+.lead-assign-header h3 { margin: 0 0 4px; font-size: 15px; color: #143b8a; }
+.lead-assign-header p  { margin: 4px 0 12px; }
+
+.lead-assign-rows {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 12px;
+}
+.lead-assign-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr auto auto auto;
+  gap: 8px; align-items: center;
+  padding: 6px 8px;
+  background: #f7f8fb;
+  border: 1px solid #e2e6ef;
+  border-radius: 6px;
+}
+.lead-assign-check {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: #2c3a55; cursor: pointer;
+  user-select: none;
+}
+.lead-assign-enc-label { font-weight: 600; }
+.lead-assign-input {
+  font: inherit; font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid #c1c8d6; border-radius: 4px;
+  width: 100%;
+}
+.lead-assign-input:focus {
+  outline: none;
+  border-color: #5a4ec3;
+  box-shadow: 0 0 0 2px rgba(90, 78, 195, 0.18);
+}
+.lead-assign-apply, .lead-assign-clear {
+  font-size: 12px; padding: 5px 10px;
+}
+.lead-assign-status { font-size: 11px; min-width: 60px; }
+.lead-assign-status.ok { color: #1f7a3a; }
+.lead-assign-status.err { color: #a02437; }
+
+.lead-assign-bulk {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e6ef;
+}
+.lead-assign-bulk strong { color: #2c3a55; font-size: 13px; }
+.lead-assign-bulk input[type="text"] {
+  flex: 1; min-width: 220px; max-width: 360px;
+  font: inherit; font-size: 13px; padding: 5px 8px;
+  border: 1px solid #c1c8d6; border-radius: 4px;
+}
+.lead-assign-bulk input[type="text"]:focus {
+  outline: none; border-color: #5a4ec3;
+  box-shadow: 0 0 0 2px rgba(90, 78, 195, 0.18);
+}
+
+/* ── M56 — Med-cart create form encounter checklist + post-create
+   add-encounters checklist ────────────────────────────────────────
+   Two new compact checkbox grids. Same visual language as the
+   M53 lead-assignments rows (indigo accent + light background).
+   Top form: pick beds at creation time.
+   Per-cart card: pick beds to ADD after creation. */
+.med-cart-create-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.med-cart-encs-fieldset {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed #c1c8d6;
+  border-radius: 6px;
+  background: #fafbfd;
+}
+.med-cart-encs-fieldset legend {
+  padding: 0 6px;
+  color: #5a6273;
+  font-weight: 600;
+}
+.med-cart-encs-checklist,
+.med-cart-add-checklist {
+  display: flex; flex-wrap: wrap; gap: 6px 12px;
+  margin-top: 4px;
+}
+.med-cart-enc-check,
+.med-cart-add-check {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #2c3a55;
+  cursor: pointer;
+  user-select: none;
+}
+.med-cart-enc-check:hover,
+.med-cart-add-check:hover {
+  border-color: #5a4ec3;
+  background: #f0eefb;
+}
+
+.med-cart-add-encs {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e6ef;
+}
+.med-cart-add-btn {
+  margin-top: 6px;
+}
+
+/* ── M56-bugfix — live tick counter ────────────────────────────────
+   Shows "Will link N of M encounters" next to the submit button so
+   the operator sees what they're about to link BEFORE they click.
+   Turns red (`-zero`) when no boxes are ticked but the room has
+   encounters — that's the "stale UI" case where the original bug
+   surfaced. */
+.med-cart-tick-count {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #eef2ff;
+  color: #3d2f8a;
+  border: 1px solid #c1c8d6;
+  border-radius: 12px;
+}
+.med-cart-tick-count.med-cart-tick-count-zero {
+  background: #fff0f0;
+  color: #a02437;
+  border-color: #f7a8b3;
+}
+
+/* ── M59 — Per-cart launch button ────────────────────────────────
+   Green pill that opens the cart's tablet UI in a new window
+   (skips the /device/join QR landing). Matches the Nursing
+   Station's "Open here" button visual language. */
+.med-cart-launch-btn {
+  display: inline-block;
+  margin-left: auto;
+  padding: 4px 10px;
+  background: #1f7a3a;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.med-cart-launch-btn:hover {
+  background: #186730;
+  color: #fff;
+}
+.med-cart-card-header {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+/* ── M59-bugfix — All/None quick toggles + linked-count badge ────
+   The quick toggles let the operator tick every encounter in one
+   click (most common case for a single room cart). The count badge
+   makes the "linked to N beds" reality of each cart impossible to
+   miss — small chip wasn't loud enough. */
+.med-cart-encs-quick {
+  display: flex; gap: 8px; margin: 4px 0 6px;
+}
+.med-cart-encs-quick .dev-btn-sm {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: #fff;
+  border: 1px solid #c1c8d6;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.med-cart-encs-quick .dev-btn-sm:hover {
+  border-color: #5a4ec3;
+  background: #f0eefb;
+}
+.med-cart-count-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #e8f1fc;
+  color: #143b8a;
+  border: 1px solid #c1d3ed;
+  border-radius: 10px;
+}
+.med-cart-count-badge.med-cart-count-multi {
+  background: #d4f4dc;
+  color: #1f7a3a;
+  border-color: #93d6a6;
+}

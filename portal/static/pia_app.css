@@ -1,0 +1,142 @@
+/* MEDSIM V7 M51 — Patient Integrated Alarm (PIA) device-side UI.
+   A bedside tablet showing 4 large buttons + a room-wide cascade
+   banner. Background flashes with alternating colors when an alarm
+   or intercom is active.
+
+   Color palette ties to the M48 nurse-station dark theme so the
+   PIA + Nursing Station read as one product. */
+
+* { box-sizing: border-box; }
+body.pia-body {
+  margin: 0; padding: 0;
+  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  background: #0a0f1f;
+  color: #d4dcf2;
+  min-height: 100vh;
+  -webkit-user-select: none; user-select: none;
+}
+
+.pia-frame {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  background: #11192f;
+  transition: background-color 0.2s ease;
+}
+
+.pia-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px;
+  background: #1a2540;
+  border-bottom: 1px solid #2a3656;
+}
+.pia-header h1 {
+  margin: 0; font-size: 18px; color: #d4dcf2; letter-spacing: 0.02em;
+}
+.pia-header .muted { color: #6e7a96; }
+.pia-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; color: #b9c8e8;
+}
+.pia-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #1f7a3a; box-shadow: 0 0 6px rgba(31, 122, 58, 0.8);
+}
+
+.pia-cascade-banner {
+  margin: 10px 18px 0;
+  padding: 12px 16px;
+  background: #4a1818;
+  border: 2px solid #ff3737;
+  border-radius: 8px;
+  display: flex; align-items: center; gap: 12px;
+  color: #ffdada;
+  animation: cascade-pulse 1s ease-in-out infinite;
+}
+.pia-cascade-icon { font-size: 28px; }
+.pia-cascade-text {
+  font-size: 18px; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+@keyframes cascade-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 55, 55, 0.6); }
+  50%      { box-shadow: 0 0 0 10px rgba(255, 55, 55, 0); }
+}
+
+.pia-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 18px;
+}
+
+.pia-btn {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 6px;
+  background: #1a2540;
+  color: #d4dcf2;
+  border: 2px solid #2a3656;
+  border-radius: 14px;
+  padding: 18px 14px;
+  cursor: pointer;
+  font: inherit;
+  min-height: 130px;
+  transition: transform 0.05s ease, background-color 0.15s ease;
+}
+.pia-btn:active { transform: scale(0.98); }
+.pia-btn:disabled { opacity: 0.55; cursor: wait; }
+.pia-btn-icon { font-size: 38px; line-height: 1; }
+.pia-btn-label {
+  font-size: 18px; font-weight: 800; letter-spacing: 0.05em;
+}
+.pia-btn-sub {
+  font-size: 11px; color: #9bb5e6;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+.pia-btn-call-bell  { border-color: #2c6e8c; }
+.pia-btn-bed-alarm  { border-color: #8c6a2c; }
+.pia-btn-code-blue  {
+  background: #2c1818; border-color: #ff3737; color: #ffdada;
+}
+.pia-btn-code-blue .pia-btn-sub { color: #ff9b9b; }
+.pia-btn-intercom   { border-color: #2c8c46; }
+
+.pia-footer {
+  padding: 10px 18px;
+  background: #0d1326;
+  border-top: 1px solid #2a3656;
+  font-size: 12px;
+}
+
+/* M51 — Visual alarm flash keyframes per kind. */
+@keyframes flash-call-bell {
+  0%, 100% { background-color: #11192f; }
+  50%      { background-color: #1a4a6e; }
+}
+@keyframes flash-bed-alarm {
+  0%, 100% { background-color: #11192f; }
+  50%      { background-color: #6e4a1a; }
+}
+@keyframes flash-code-blue {
+  0%, 100% { background-color: #11192f; }
+  50%      { background-color: #6e1a1a; }
+}
+@keyframes flash-intercom {
+  0%, 100% { background-color: #11192f; }
+  50%      { background-color: #1a6e3a; }
+}
+
+.pia-frame.pia-flash-call-bell { animation: flash-call-bell 0.7s ease-in-out infinite; }
+.pia-frame.pia-flash-bed-alarm { animation: flash-bed-alarm 0.7s ease-in-out infinite; }
+.pia-frame.pia-flash-code-blue { animation: flash-code-blue 0.5s ease-in-out infinite; }
+.pia-frame.pia-flash-intercom  { animation: flash-intercom 0.8s ease-in-out infinite; }
+
+/* When a code blue is active room-wide (cascade) the frame stays
+   in the flashing state until the alarm clears. */
+.pia-frame.pia-cascade-active {
+  animation: flash-code-blue 0.5s ease-in-out infinite;
+}
+
+.muted { color: #6e7a96; }
+.small { font-size: 11px; }

@@ -1,0 +1,170 @@
+/* MEDSIM V7 — student join page (M9). Public landing, no operator
+   chrome. Mobile-first: each step is full-width, big tap targets. */
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica,
+        Arial, sans-serif;
+  background: #f5f6fa;
+  color: #1a2a4a;
+}
+
+.join-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 18px 14px 60px;
+}
+
+.join-header h1 {
+  margin: 0;
+  color: #143b8a;
+  font-size: 22px;
+}
+.join-header .room-code {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  background: #eef2fb;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: #143b8a;
+}
+
+.muted   { color: #5a6273; }
+.small   { font-size: 12px; }
+
+.join-error {
+  margin-top: 24px;
+  padding: 18px;
+  border: 1px dashed #c2c8d6;
+  border-radius: 8px;
+  background: #fff;
+  text-align: center;
+}
+.join-error h2 { margin-top: 0; color: #962d22; font-size: 18px; }
+.lookup-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.lookup-form input {
+  flex: 1 1 200px;
+  padding: 10px 12px;
+  border: 1px solid #c1c8d6;
+  border-radius: 6px;
+  font: inherit;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.join-step {
+  margin-top: 22px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-radius: 10px;
+}
+.join-step h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #143b8a;
+}
+
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.roster-card {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-radius: 8px;
+  padding: 12px;
+  font: inherit;
+  font-weight: 600;
+  color: #1a2a4a;
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+  transition: border-color .12s ease, transform .05s ease;
+}
+.roster-card:hover  { border-color: #143b8a; }
+.roster-card.active { border-color: #143b8a; background: #eef2fb; }
+.roster-card .badge {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  background: #fce6c5;
+  color: #905a08;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: 700;
+}
+
+.name-input {
+  display: block;
+  margin-top: 12px;
+}
+.name-input span {
+  display: block;
+  font-size: 12px;
+  color: #5a6273;
+  margin-bottom: 4px;
+}
+.name-input input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #c1c8d6;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.encounter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.encounter-card {
+  background: #fff;
+  border: 1px solid #dde2ee;
+  border-left: 4px solid #143b8a;
+  border-radius: 8px;
+  padding: 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: box-shadow .15s ease, transform .05s ease;
+}
+.encounter-card:hover { box-shadow: 0 4px 12px rgba(20, 59, 138, .12); }
+.encounter-card strong { color: #1a2a4a; font-size: 15px; }
+.encounter-card[disabled] { opacity: .55; cursor: not-allowed; }
+.encounter-meta { color: #5a6273; }
+
+.join-status {
+  margin: 16px 0 0;
+  padding: 12px;
+  border-radius: 6px;
+  background: #eef2fb;
+  color: #143b8a;
+  text-align: center;
+  font-weight: 600;
+}
+.join-status.err { background: #f7e0dc; color: #962d22; }
+
+.primary-action {
+  background: #1f7a3a; color: #fff; border: 0;
+  padding: 12px 18px; border-radius: 6px;
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.primary-action:disabled { opacity: .5; cursor: not-allowed; }

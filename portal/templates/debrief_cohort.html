@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Cohort debrief · {{ cohort.room_label or cohort.room_code }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_v('debrief_cohort.css') }}">
+
+<header class="cohort-header">
+  <div>
+    <h1>Cohort debrief</h1>
+    <p class="muted">
+      <strong>{{ cohort.room_label or "(unlabeled room)" }}</strong> ·
+      Room <code class="mono">{{ cohort.room_code }}</code> ·
+      {{ cohort.pearls.summary.encounters_count }} encounter{{ "" if cohort.pearls.summary.encounters_count == 1 else "s" }} ·
+      {{ cohort.pearls.summary.students_count }} student{{ "" if cohort.pearls.summary.students_count == 1 else "s" }}
+    </p>
+  </div>
+  <div class="cohort-actions">
+    <button type="button" id="btn-print" class="secondary" title="Print or save as PDF via your browser">🖨 Print / Save as PDF</button>
+    <a href="/portal/cohort-debriefs" class="secondary button-link">← All cohorts</a>
+  </div>
+</header>
+
+<nav class="pearls-tabs" id="pearls-tabs">
+  <button type="button" class="pearls-tab active" data-phase="reactions">Reactions</button>
+  <button type="button" class="pearls-tab"        data-phase="description">Description</button>
+  <button type="button" class="pearls-tab"        data-phase="analysis">Analysis</button>
+  <button type="button" class="pearls-tab"        data-phase="application">Application</button>
+  <button type="button" class="pearls-tab"        data-phase="encounters">Per-encounter</button>
+  <button type="button" class="pearls-tab"        data-phase="summary">Summary</button>
+</nav>
+
+<!-- 1 · Reactions ───────────────────────────────────────────────── -->
+<section class="pearls-panel active" data-panel="reactions">
+  <h2>1 · Reactions</h2>
+  <p class="muted">{{ cohort.pearls.reactions.prompt }}</p>
+  <label>
+    <span class="muted small">Instructor notes (saved when you click "Save notes")</span>
+    <textarea id="reactions-notes" rows="6"
+              placeholder="What did each student say first?">{{ cohort.pearls.reactions.notes or "" }}</textarea>
+  </label>
+  <div class="actions">
+    <button type="button" id="save-notes" class="primary-action">💾 Save notes</button>
+    <span id="notes-status" class="muted small"></span>
+  </div>
+</section>
+
+<!-- 2 · Description ─────────────────────────────────────────────── -->
+<section class="pearls-panel" data-panel="description">
+  <h2>2 · Description</h2>
+  <p class="muted">{{ cohort.pearls.description.prompt }}</p>
+  <ul class="facts-list">
+    {% for fact in cohort.pearls.description.facts %}
+      <li>{{ fact }}</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<!-- 3 · Analysis ────────────────────────────────────────────────── -->
+<section class="pearls-panel" data-panel="analysis">
+  <h2>3 · Analysis</h2>
+  <p class="muted">{{ cohort.pearls.analysis.prompt }}</p>
+
+  <h3>Performance frames per encounter</h3>
+  <table class="performance-frames">
+    <thead><tr>
+      <th>Encounter</th><th>Duration</th><th>Turns</th><th>NCJMM coverage</th>
+    </tr></thead>
+    <tbody>
+      {% for frame in cohort.pearls.analysis.performance_frames %}
+        <tr>
+          <td>{{ frame.scenario_name }}</td>
+          <td>{{ frame.duration_seconds }}s</td>
+          <td>{{ frame.turns }}</td>
+          <td>
+            {% if frame.ncjmm_coverage %}
+              {% for step, count in frame.ncjmm_coverage.items() %}
+                <span class="pill">{{ step }}: {{ count }}</span>
+              {% endfor %}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if cohort.pearls.analysis.persona_engagement_ranked %}
+    <h3>Persona engagement (cohort-wide)</h3>
+    <ul class="ranked-list">
+      {% for row in cohort.pearls.analysis.persona_engagement_ranked %}
+        <li><strong>{{ row.persona_id }}</strong>: {{ row.turn_count }} turn{{ "" if row.turn_count == 1 else "s" }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+
+<!-- 4 · Application ─────────────────────────────────────────────── -->
+<section class="pearls-panel" data-panel="application">
+  <h2>4 · Application</h2>
+  <p class="muted">{{ cohort.pearls.application.prompt }}</p>
+  <ul id="commitments-list" class="commitments">
+    {% for c in cohort.pearls.application.commitments %}
+      <li><span class="commitment-text">{{ c }}</span> <button type="button" class="commitment-remove" data-idx="{{ loop.index0 }}">✕</button></li>
+    {% endfor %}
+  </ul>
+  <div class="commitment-input-row">
+    <input type="text" id="commitment-input" placeholder="What will you do differently next shift?">
+    <button type="button" id="commitment-add" class="primary-action">+ Add</button>
+  </div>
+</section>
+
+<!-- 5 · Per-encounter ──────────────────────────────────────────── -->
+<section class="pearls-panel" data-panel="encounters">
+  <h2>Per-encounter facets</h2>
+  <p class="muted">One panel per encounter. Click a header to expand.</p>
+  {% for enc in cohort.encounters %}
+    <details class="encounter-facet">
+      <summary>
+        <strong>{{ enc.encounter_label or enc.scenario_name }}</strong>
+        {% if enc.lead_student_name %}
+          <span class="pill" title="Lead student for this encounter">🎓 {{ enc.lead_student_name }}</span>
+        {% endif %}
+        <span class="muted small">
+          · {{ enc.duration_seconds | default(0) }}s
+          · {{ (enc.summary.total_turns if enc.summary else 0) | default(0) }} turn(s)
+          {% if enc.get("_error") %}<span class="pill err">build error</span>{% endif %}
+        </span>
+      </summary>
+      <div class="facet-body">
+        {% if enc.get("_error") %}
+          <p class="muted">⚠ Per-encounter debrief build failed for this session: <code>{{ enc._error }}</code></p>
+        {% else %}
+          <dl class="facet-grid">
+            <dt>Session</dt><dd><code>{{ enc.session_id }}</code> (join <code>{{ enc.join_code }}</code>)</dd>
+            <dt>Stations</dt><dd>{{ enc.stations | length }}</dd>
+            <dt>EHR</dt><dd>{{ enc.ehr_id or "(none)" }}</dd>
+            <dt>Modules</dt><dd>{{ enc.selected_modules | join(", ") or "(none)" }}</dd>
+          </dl>
+          {% if enc.transcript %}
+            <h4>Transcript ({{ enc.transcript | length }} entries)</h4>
+            <ol class="transcript">
+              {% for t in enc.transcript[:50] %}
+                <li>
+                  <span class="muted small">{{ t.direction | upper }}</span>
+                  <span class="muted small">{{ t.persona_name or t.persona_id or "" }}</span>
+                  — {{ t.text }}
+                </li>
+              {% endfor %}
+              {% if enc.transcript | length > 50 %}
+                <li class="muted">… {{ (enc.transcript | length) - 50 }} more entries (truncated for readability)</li>
+              {% endif %}
+            </ol>
+          {% endif %}
+        {% endif %}
+      </div>
+    </details>
+  {% endfor %}
+</section>
+
+<!-- 6 · Summary ─────────────────────────────────────────────────── -->
+<section class="pearls-panel" data-panel="summary">
+  <h2>Summary</h2>
+  <dl class="summary-grid">
+    <dt>Encounters</dt><dd>{{ cohort.pearls.summary.encounters_count }}</dd>
+    <dt>Students</dt><dd>{{ cohort.pearls.summary.students_count }}</dd>
+    <dt>Total chat turns</dt><dd>{{ cohort.pearls.summary.total_chat_turns }}</dd>
+    <dt>Total chart events</dt><dd>{{ cohort.pearls.summary.total_chart_events }}</dd>
+    <dt>Total duration (s)</dt><dd>{{ cohort.pearls.summary.total_duration_seconds }}</dd>
+    <dt>Avg duration / encounter</dt><dd>{{ "%.1f"|format(cohort.pearls.summary.avg_duration_per_encounter_seconds) }}s</dd>
+    <dt>Avg turns / encounter</dt><dd>{{ "%.1f"|format(cohort.pearls.summary.avg_turns_per_encounter) }}</dd>
+  </dl>
+</section>
+
+<script>
+  window.COHORT_DEBRIEF = {
+    roomId: {{ room_id | tojson }},
+    initialCommitments: {{ cohort.pearls.application.commitments | tojson }}
+  };
+</script>
+<script src="{{ static_v('debrief_cohort.js') }}"></script>
+{% endblock %}

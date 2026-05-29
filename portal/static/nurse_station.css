@@ -1,0 +1,225 @@
+/* MEDSIM V7 Phase 7 M27 — Nursing Station in-sim student page. */
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica,
+        Arial, sans-serif;
+  background: #0c1326;
+  color: #d3deef;
+}
+
+.ns-page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 14px;
+}
+
+.ns-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1f2c47;
+  margin-bottom: 10px;
+}
+.ns-header h1 { margin: 0; color: #9bb5e6; font-size: 18px; }
+.ns-header .muted { color: #6e7a96; }
+.mono { font-family: "SF Mono", "Menlo", "Consolas", monospace;
+        background: #1a2540; padding: 2px 8px; border-radius: 4px;
+        color: #b9c8e8; letter-spacing: .08em; }
+
+.ns-alarms { margin-bottom: 14px; }
+.ns-alarms h2 { margin: 0 0 6px; color: #ff9b9b; font-size: 13px; }
+
+.alarm-list { list-style: none; padding: 0; margin: 0;
+              display: flex; flex-direction: column; gap: 4px; }
+.alarm-list li {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #1a2540; padding: 6px 10px; border-radius: 6px;
+  border-left: 4px solid #6e7a96;
+}
+.alarm-list li.severity-critical { border-left-color: #ff5a5a;
+                                     background: #4a1818; color: #ffe0e0; }
+.alarm-list li.severity-warning  { border-left-color: #ffae5a;
+                                     background: #3a2a14; color: #ffe8c8; }
+.alarm-list li.severity-info     { border-left-color: #5a8aff; }
+.alarm-list li button {
+  background: transparent; border: 1px solid currentColor; color: inherit;
+  font: inherit; cursor: pointer; padding: 2px 8px; border-radius: 4px;
+  font-size: 12px;
+}
+
+.ns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 12px;
+}
+
+.bed-card {
+  background: #131d36; border: 1px solid #1f2c47; border-radius: 8px;
+  padding: 12px;
+}
+.bed-card h3 {
+  margin: 0 0 4px; color: #b9c8e8; font-size: 14px;
+  display: flex; justify-content: space-between;
+}
+.bed-card .bed-join {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  background: #1a2540; padding: 1px 6px; border-radius: 3px;
+  font-size: 11px;
+}
+.bed-card .telemetry {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin: 8px 0;
+}
+.bed-card .telemetry .cell {
+  background: #1a2540; border-radius: 4px; padding: 4px 2px;
+  text-align: center;
+}
+.bed-card .telemetry .label {
+  display: block; font-size: 9px; color: #6e7a96; letter-spacing: .08em;
+}
+.bed-card .telemetry .value {
+  display: block; font-size: 16px; font-weight: 700; color: #b9c8e8;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+}
+.bed-card .telemetry .value.override { color: #ff7878; }
+.bed-card .ecg-mini { min-height: 70px; background: #06120c;
+                       border-radius: 4px; padding: 4px; }
+.bed-card .ecg-mini.disabled { background: #1a2540; }
+.bed-card .pills { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.bed-card .pill {
+  background: #1a2540; padding: 2px 8px; border-radius: 99px; font-size: 10px;
+  color: #9bb5e6;
+}
+.bed-card .pill.alarm { background: #4a1818; color: #ffe0e0; }
+
+.muted { color: #6e7a96; }
+.small { font-size: 11px; }
+
+/* M48 — Alarm threshold settings card on the Nursing Station. */
+.ns-thresholds {
+  background: #1a2540;
+  border: 1px solid #2a3656;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-top: 14px;
+}
+.ns-thresholds h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: #d4dcf2;
+}
+/* M54 — Header as a click target. Cursor + hover hint at the toggle. */
+.ns-thresholds-toggle {
+  cursor: pointer;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+  margin: 0; padding: 0;
+}
+.ns-thresholds-toggle:hover { color: #fff; }
+.ns-thresholds-toggle:focus { outline: 2px solid #5a89ff; outline-offset: 2px; }
+.ns-thresholds-caret {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: #9bb5e6;
+}
+.ns-thresholds:not(.ns-collapsed) .ns-thresholds-caret {
+  transform: rotate(90deg);
+}
+/* M54 — Collapsed state: hide the form. We keep the section padding so
+   the header doesn't visually jump when toggled. */
+.ns-thresholds.ns-collapsed .ns-thresholds-form { display: none; }
+.ns-thresholds.ns-collapsed .ns-thresholds-toggle { margin-bottom: 0; }
+.ns-thresholds-form { display: flex; flex-direction: column; gap: 8px; }
+.threshold-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 6px 8px;
+  background: #11192f;
+  border: 1px solid #2a3656;
+  border-radius: 6px;
+}
+.threshold-label {
+  font-weight: 700; color: #d4dcf2; min-width: 170px;
+}
+.threshold-row input[type="number"] {
+  width: 80px; padding: 4px 6px;
+  background: #0b1326; color: #d4dcf2;
+  border: 1px solid #2a3656; border-radius: 4px;
+  font: inherit;
+}
+.threshold-row label.small {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.threshold-actions {
+  display: flex; align-items: center; gap: 12px;
+  padding-top: 4px;
+}
+.ns-btn-primary {
+  background: #2c5a8c; color: #fff; border: 0;
+  padding: 7px 14px; border-radius: 4px;
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.ns-btn-primary:hover { background: #3a72ad; }
+
+/* M50 — Silence + Clear action buttons in the alarm row. */
+.alarm-list li {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px;
+}
+.alarm-actions {
+  display: flex; gap: 4px;
+}
+.alarm-list li button {
+  background: #2c5a8c; color: #fff; border: 0;
+  padding: 4px 10px; border-radius: 4px;
+  font: inherit; font-size: 12px; font-weight: 700;
+  cursor: pointer;
+}
+.alarm-list li button:hover  { background: #3a72ad; }
+.alarm-list li button:disabled { opacity: .55; cursor: wait; }
+
+/* Silenced alarm: greyed out, badge visible. */
+.alarm-list li.silenced {
+  opacity: 0.55;
+  background: #11192f;
+  border-left: 3px solid #6e7a96;
+}
+.silenced-badge {
+  background: #11192f; color: #b9c8e8;
+  padding: 1px 6px; border-radius: 3px;
+  font-size: 10px; font-weight: 700; letter-spacing: .05em;
+  border: 1px solid #2a3656;
+  margin-left: 6px;
+}
+
+/* M50 — Danger severity (dangerous-waveform alarms) sorts to the
+   top of the alarm board with the most alarming visual cue: deep
+   red background + pulsing border. */
+.alarm-list li.severity-danger {
+  background: #4a1818;
+  border-left: 5px solid #ff3737;
+  animation: danger-pulse 1.5s ease-in-out infinite;
+}
+.alarm-list li.severity-danger strong { color: #ffdada; }
+.alarm-list li.severity-critical { border-left: 5px solid #ff7878; }
+.alarm-list li.severity-warning  { border-left: 5px solid #E6A032; }
+@keyframes danger-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 55, 55, 0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(255, 55, 55, 0); }
+}
+
+/* M50 — Per-bed Code Blue button. */
+.bed-card-actions {
+  margin-top: 8px; display: flex; justify-content: flex-end;
+}
+.ns-code-blue-btn {
+  background: #962d22; color: #fff; border: 0;
+  padding: 6px 14px; border-radius: 4px;
+  font: inherit; font-size: 12px; font-weight: 700;
+  cursor: pointer; letter-spacing: .05em;
+}
+.ns-code-blue-btn:hover { background: #b8392c; }
+.ns-code-blue-btn:disabled { opacity: .55; cursor: wait; }

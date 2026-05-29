@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Voice session — {{ session.scenario.name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="/static/session_voice.css">
+
+<header class="voice-header">
+  <div>
+    <h1>{{ session.scenario.name }}</h1>
+    {% if patient_summary %}<p class="muted">{{ patient_summary }}</p>{% endif %}
+    <p class="muted small">
+      Voice mode (v2) — push-to-talk or speaker-on; each character speaks
+      with their own voice. Works on iPhone/iPad Safari and Android Chrome.
+    </p>
+  </div>
+  <form method="post" action="/portal/session/{{ session.id }}/end"
+        data-confirm="End this voice session?" class="end-form">
+    <button type="submit" class="danger">End session</button>
+  </form>
+</header>
+
+<div id="ptt-banner" class="banner warn" hidden>
+  <strong>Voice recognition not available in this browser.</strong>
+  Use Chrome, Edge, or Safari (iOS 14.5+). You can still read responses; TTS works.
+</div>
+<div id="mic-banner" class="banner warn" hidden>
+  <strong>Microphone access denied.</strong>
+  Grant microphone permission in your browser/OS settings and reload.
+</div>
+
+<section class="character-row">
+  {% for c in characters_for_js %}
+    <button class="character-tile{% if loop.first %} active{% endif %}"
+            data-char-id="{{ c.id }}"
+            data-voice-profile='{{ c.voice_profile | tojson }}'
+            data-voice-id=""
+            type="button">
+      <strong>{{ c.name }}</strong>
+      <span class="muted">{{ c.role or '—' }}</span>
+    </button>
+  {% endfor %}
+</section>
+
+<style>
+  .voice-assign {margin:8px 0 4px;border:1px solid #dde2ee;border-radius:8px;padding:8px 12px;}
+  .voice-assign summary {cursor:pointer;font-weight:600;color:#0a234f;}
+  .voice-assign-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;margin-top:10px;}
+  .voice-assign-row {display:flex;align-items:center;gap:8px;border:1px solid #eaedf5;border-radius:6px;padding:6px 8px;}
+  .voice-assign-row strong {flex:0 0 96px;font-size:12px;}
+  .voice-assign-row select {flex:1;padding:4px 6px;border:1px solid #dde2ee;border-radius:5px;font-size:12px;}
+  .voice-assign-row button {padding:3px 9px;font-size:12px;}
+  #el-health {font-weight:400;font-size:12px;margin-left:8px;}
+</style>
+
+<details class="voice-assign" {% if elevenlabs_available %}open{% endif %}>
+  <summary>Character voices <span class="muted small">(V4 · ElevenLabs)</span><span id="el-health" class="muted">checking…</span></summary>
+  <div class="voice-assign-grid">
+    {% for c in characters_for_js %}
+      <div class="voice-assign-row" data-char-id="{{ c.id }}"
+           data-sex="{{ c.sex }}" data-age="{{ c.age_band }}">
+        <strong>{{ c.name }}</strong>
+        <select class="vc-select" data-char-id="{{ c.id }}">
+          <option value="browser">Loading voices…</option>
+        </select>
+        <button type="button" class="secondary vc-preview" data-char-id="{{ c.id }}">▶</button>
+      </div>
+    {% endfor %}
+  </div>
+</details>
+
+<div class="chat-log" id="chat-log">
+  <div class="chat-empty">
+    <p>Pick the character you want to address (tap a tile above),
+       then tap and hold <strong>"Hold to talk"</strong> and speak.</p>
+    <p class="muted small">
+      Their reply will be spoken back in their voice. Tap during a reply to
+      barge in.
+    </p>
+  </div>
+</div>
+
+<div class="voice-controls">
+  <div class="mode-toggle">
+    <label>
+      <input type="radio" name="mode" value="ptt" checked>
+      <span>Push to talk</span>
+    </label>
+    <label>
+      <input type="radio" name="mode" value="continuous">
+      <span>Speaker on (continuous)</span>
+    </label>
+    <span class="latency-pill" id="latency-pill" title="Time from end-of-speech to first audible character byte">—</span>
+  </div>
+
+  <button id="talk-btn" class="talk-btn" type="button">
+    <span class="talk-label">Hold to talk</span>
+    <span class="talk-status" id="talk-status">Idle</span>
+  </button>
+
+  <div id="interim-text" class="interim-text" aria-live="polite"></div>
+</div>
+
+<script>
+window.MEDSIM_SESSION = {
+  id: {{ session.id | tojson }},
+  elevenlabs_available: {{ elevenlabs_available | tojson }}
+};
+</script>
+<script src="{{ static_v('tts_client.js') }}"></script>
+<script src="{{ static_v('session_voice.js') }}"></script>
+{% endblock %}

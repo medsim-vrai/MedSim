@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1180" width="900" height="1180">
+<!-- TRAINING SIMULATION overlay - Omnicell XT Series automated dispensing cabinet. Phase 2. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .dev{font-size:19px;font-weight:bold;fill:#28303a}
+ .badge{font-size:11px;fill:#7c8893}
+ .ui{font-size:11px;fill:#1b2733}
+ .uih{font-size:13px;font-weight:bold;fill:#15324f}
+ .sub{font-size:9px;fill:#5b6470}
+ .btn{font-size:8.5px;font-weight:bold}
+</style>
+<defs>
+ <linearGradient id="chassis" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#f4f5f6"/><stop offset="1" stop-color="#d9dde0"/>
+ </linearGradient>
+ <linearGradient id="drawer" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#eceef0"/><stop offset="1" stop-color="#d2d7da"/>
+ </linearGradient>
+ <linearGradient id="litdrawer" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#dff0fb"/><stop offset="1" stop-color="#c4e4f8"/>
+ </linearGradient>
+ <linearGradient id="ledglow" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#7fc7f4"/><stop offset="1" stop-color="#2f8fd6"/>
+ </linearGradient>
+ <radialGradient id="lampglow" cx="0.5" cy="0.5" r="0.5">
+  <stop offset="0" stop-color="#ffffff"/><stop offset="0.55" stop-color="#bfe2fb"/><stop offset="1" stop-color="#bfe2fb" stop-opacity="0"/>
+ </radialGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="900" height="1180" fill="#e7ecf0"/></g>
+
+<g id="cabinet">
+ <rect x="140" y="50" width="620" height="1085" rx="20" fill="url(#chassis)" stroke="#aeb6bd" stroke-width="2.5"/>
+ <text class="dev" x="175" y="84">Omnicell XT  -  Automated Dispensing Cabinet</text>
+ <!-- drawer stack -->
+ <rect x="178" y="586" width="544" height="92" rx="6" fill="url(#drawer)" stroke="#aeb6bd" stroke-width="1.5"/>
+ <rect x="320" y="620" width="260" height="13" rx="6.5" fill="#b3bbc2"/>
+ <text class="sub" x="192" y="606">Drawer 1  -  Open matrix bins</text>
+ <!-- drawer 2 : lit / Guiding Lights -->
+ <g id="drawer-lit-glow">
+  <ellipse cx="450" cy="730" rx="320" ry="78" fill="url(#lampglow)" opacity="0.7"/>
+ </g>
+ <rect id="drawer-lit" x="178" y="684" width="544" height="92" rx="6" fill="url(#litdrawer)" stroke="#2f8fd6" stroke-width="3.5"/>
+ <!-- bright Guiding Light strip down the left edge -->
+ <rect x="183" y="688" width="13" height="84" rx="5" fill="url(#ledglow)" stroke="#2f8fd6" stroke-width="1"/>
+ <rect x="186" y="691" width="4" height="78" rx="2" fill="#ffffff"/>
+ <!-- lit pocket -->
+ <rect x="318" y="704" width="264" height="48" rx="5" fill="#eaf6fe" stroke="#2f8fd6" stroke-width="2.5"/>
+ <rect x="324" y="710" width="252" height="13" rx="6.5" fill="#7fc7f4"/>
+ <!-- bright LED beacon on the lit pocket -->
+ <circle cx="690" cy="730" r="14" fill="url(#lampglow)"/>
+ <circle cx="690" cy="730" r="9" fill="#56b6ef" stroke="#1f5fa8" stroke-width="1.4"/>
+ <circle cx="686" cy="726" r="3.4" fill="#ffffff"/>
+ <text class="sub" x="212" y="704" fill="#1f5fa8" font-weight="bold">Drawer 2  -  Locking-lid bin 14  -  GUIDING LIGHTS ACTIVE</text>
+ <rect x="178" y="782" width="544" height="92" rx="6" fill="url(#drawer)" stroke="#aeb6bd" stroke-width="1.5"/>
+ <rect x="320" y="816" width="260" height="13" rx="6.5" fill="#b3bbc2"/>
+ <text class="sub" x="192" y="802">Drawer 3  -  Locking-lid bins</text>
+ <rect x="178" y="878" width="544" height="92" rx="6" fill="url(#drawer)" stroke="#aeb6bd" stroke-width="1.5"/>
+ <rect x="320" y="912" width="260" height="13" rx="6.5" fill="#b3bbc2"/>
+ <text class="sub" x="192" y="898">Drawer 4  -  Controlled-substance pop-out drawer</text>
+ <rect x="178" y="974" width="544" height="118" rx="6" fill="url(#drawer)" stroke="#aeb6bd" stroke-width="1.5"/>
+ <rect x="320" y="1026" width="260" height="13" rx="6.5" fill="#b3bbc2"/>
+ <text class="sub" x="192" y="994">Drawer 5  -  Bulk / return bin</text>
+</g>
+
+<g id="screen">
+ <!-- large smartphone-like capacitive display: dark glass bezel, slim border -->
+ <rect x="171" y="90" width="558" height="478" rx="20" fill="#15191d"/>
+ <rect id="screen-bg" x="183" y="102" width="534" height="454" rx="6" fill="#eef2f4"/>
+</g>
+
+<g id="ui">
+ <!-- banner : deep Omnicell blue -->
+ <rect id="banner" x="183" y="102" width="534" height="46" fill="#1f5fa8"/>
+ <path id="btn-home" data-control="touch-button" data-action="HOME"
+   d="M195 135 v-14 l12 -9 l12 9 v14 z" fill="none" stroke="#ffffff" stroke-width="1.8"/>
+ <text id="banner-station" x="222" y="130" font-size="12" font-weight="bold" fill="#ffffff">Omnicell XT  -  Station 4East-B</text>
+ <text id="banner-user" x="430" y="130" font-size="11" fill="#cfe2f6">M. OKAFOR, RN</text>
+ <circle id="banner-discrepancy" data-control="led" cx="586" cy="125" r="10" fill="#E6A032"/>
+ <text x="586" y="129" font-size="12" font-weight="bold" fill="#ffffff" text-anchor="middle">!</text>
+ <circle id="led-online" data-control="led" cx="615" cy="125" r="6" fill="#3DA35D" stroke="#ffffff" stroke-width="1"/>
+ <text id="scr-clock" class="mono" x="639" y="129" font-size="12" fill="#ffffff">08:47</text>
+ <!-- patient context strip -->
+ <rect x="191" y="156" width="518" height="38" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
+ <text x="203" y="173" class="sub">PATIENT</text>
+ <text id="scr-patient" x="203" y="186" class="ui" font-weight="bold">DELACROIX, ANDRE</text>
+ <text id="scr-loc" x="372" y="180" class="ui">MRN 5520934      Room 418-2</text>
+ <!-- list header -->
+ <text class="uih" x="191" y="220">Remove  -  select a medication</text>
+ <!-- medication list -->
+ <g id="list-meds">
+  <rect id="row-1" data-control="display" x="191" y="228" width="518" height="42" rx="4" fill="#dce9f6" stroke="#1f5fa8" stroke-width="1.7"/>
+  <text id="scr-med" x="204" y="245" class="ui" font-weight="bold">Hydromorphone 1 mg / 1 mL injection</text>
+  <text x="204" y="260" class="sub">Drawer 2  -  Locking-lid bin 14  -  guided light on</text>
+  <text x="694" y="254" font-size="15" fill="#1f5fa8" text-anchor="end">&#10003;</text>
+  <rect id="row-2" data-control="display" x="191" y="276" width="518" height="42" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
+  <text x="204" y="293" class="ui">Metoprolol tartrate 25 mg tablet</text>
+  <text x="204" y="308" class="sub">Drawer 1  -  Bin 31</text>
+  <text x="694" y="302" font-size="14" fill="#9aa3ad" text-anchor="end">&#8250;</text>
+  <rect id="row-3" data-control="display" x="191" y="324" width="518" height="42" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
+  <text x="204" y="341" class="ui">Heparin 5,000 units / 0.5 mL injection</text>
+  <text x="204" y="356" class="sub">Drawer 3  -  Locking-lid bin 08</text>
+  <text x="694" y="350" font-size="14" fill="#9aa3ad" text-anchor="end">&#8250;</text>
+ </g>
+ <!-- barcode scan panel -->
+ <rect id="scan-panel" x="191" y="376" width="518" height="74" rx="6" fill="#e8f1fa" stroke="#1f5fa8" stroke-width="1.5"/>
+ <g id="barcode">
+  <rect x="206" y="394" width="3" height="40" fill="#1b2733"/>
+  <rect x="212" y="394" width="6" height="40" fill="#1b2733"/>
+  <rect x="222" y="394" width="2" height="40" fill="#1b2733"/>
+  <rect x="227" y="394" width="5" height="40" fill="#1b2733"/>
+  <rect x="236" y="394" width="3" height="40" fill="#1b2733"/>
+  <rect x="243" y="394" width="6" height="40" fill="#1b2733"/>
+  <rect x="253" y="394" width="2" height="40" fill="#1b2733"/>
+  <rect x="258" y="394" width="4" height="40" fill="#1b2733"/>
+ </g>
+ <text class="uih" x="281" y="400" font-size="12">SCAN MEDICATION BARCODE TO VERIFY</text>
+ <rect id="scan-field" data-control="scan-field" x="281" y="410" width="304" height="28" rx="4" fill="#ffffff" stroke="#9aa3ad" stroke-width="1"/>
+ <text x="292" y="428" class="sub" font-size="10">Awaiting barcode...</text>
+ <circle cx="606" cy="424" r="6" fill="#3DA35D"/>
+ <text id="scan-status" x="620" y="428" class="sub" font-size="10" fill="#207a43">Ready</text>
+ <!-- action bar -->
+ <g id="actionbar">
+  <rect id="btn-remove" data-control="touch-button" data-action="REMOVE" x="191" y="460" width="80" height="58" rx="6" fill="#1f5fa8"/>
+  <text class="btn" x="231" y="493" fill="#ffffff" text-anchor="middle">REMOVE</text>
+  <rect id="btn-return" data-control="touch-button" data-action="RETURN" x="278" y="460" width="80" height="58" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.3"/>
+  <text class="btn" x="318" y="493" fill="#28303a" text-anchor="middle">RETURN</text>
+  <rect id="btn-waste" data-control="touch-button" data-action="WASTE" x="365" y="460" width="80" height="58" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.3"/>
+  <text class="btn" x="405" y="493" fill="#28303a" text-anchor="middle">WASTE</text>
+  <rect id="btn-count" data-control="touch-button" data-action="COUNT" x="452" y="460" width="80" height="58" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.3"/>
+  <text class="btn" x="492" y="493" fill="#28303a" text-anchor="middle">COUNT</text>
+  <rect id="btn-discrepancies" data-control="touch-button" data-action="DISCREPANCIES" x="539" y="460" width="80" height="58" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.3"/>
+  <text class="btn" x="579" y="486" fill="#28303a" text-anchor="middle" font-size="7.6">DISCREP-</text>
+  <text class="btn" x="579" y="497" fill="#28303a" text-anchor="middle" font-size="7.6">ANCIES</text>
+  <rect id="btn-override" data-control="touch-button" data-action="OVERRIDE" x="626" y="460" width="80" height="58" rx="6" fill="#fdeceb" stroke="#e0a9a4" stroke-width="1.3"/>
+  <text class="btn" x="666" y="493" fill="#a8322a" text-anchor="middle">OVERRIDE</text>
+ </g>
+</g>
+
+<g id="labels">
+ <text class="badge" x="450" y="1150" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="450" y="1168" text-anchor="middle">Simulated interface - Omnicell XT Series automated dispensing cabinet</text>
+</g>
+</svg>

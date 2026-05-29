@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Training Bridge VRAI- MedSim · {% block title %}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Training Bridge VRAI- MedSim <span class="v-pill">v7</span></div>
+    <form action="/logout" method="post" class="logout-form">
+      <button type="submit" class="link">Log out</button>
+    </form>
+  </header>
+  <div class="layout">
+    <nav class="sidebar">
+      <div class="nav-group">
+        <span class="nav-label">Setup</span>
+        <a href="/portal/home"        class="{% if active == 'home'        %}active{% endif %}">Home</a>
+        <a href="/portal/credentials" class="{% if active == 'credentials' %}active{% endif %}">Credentials</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Library</span>
+        <a href="/portal/personas"    class="{% if active == 'personas'    %}active{% endif %}">Personas (24)</a>
+        <a href="/portal/curriculum"  class="{% if active == 'curriculum'  %}active{% endif %}">Curriculum</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Operate</span>
+        <a href="/portal/control"     class="{% if active == 'control'     %}active{% endif %}">Control room</a>
+        <a href="/portal/room"        class="{% if active == 'room'        %}active{% endif %}">Multi-Patient Control</a>
+        <a href="/portal/medical_records" class="{% if active == 'medical_records' %}active{% endif %}">📋 Medical Records</a>
+        <a href="/portal/debrief"     class="{% if active == 'debrief'     %}active{% endif %}">Debriefs</a>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">Legacy (v1)</span>
+        <a href="/portal/scenarios"   class="{% if active == 'scenarios'   %}active{% endif %}">Scenarios</a>
+        <a href="/portal/characters"  class="{% if active == 'characters'  %}active{% endif %}">Characters</a>
+      </div>
+    </nav>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="/static/portal.js"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Helix Health — MEDSIM V3</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f5f8; --panel:#ffffff; --ink:#0c1733; --ink-2:#3a4a6b; --ink-3:#6b7896;
+    --line:#dde2ee; --line-2:#eaedf5;
+    --brand:#143b8a; --brand-ink:#0a234f; --brand-tint:#e6ecf8;
+    --amber:#c47a04; --amber-tint:#fdf3dc;
+    --teal:#117a72; --teal-tint:#dcefec;
+    --rose:#a02437; --rose-tint:#f7e1e4;
+    --green:#1f7a3a; --green-tint:#dcefe1;
+    --gold:#f1c948;
+    --shadow:0 1px 0 rgba(11,23,51,.04), 0 1px 2px rgba(11,23,51,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,textarea,select{font:inherit;color:inherit}
+  ::selection{background:var(--brand-tint)}
+  #app{min-height:100vh;display:flex;flex-direction:column}
+  .v3-banner{position:fixed;top:0;left:0;right:0;background:#0a234f;color:#fff;font-size:11px;padding:4px 12px;text-align:center;z-index:200;font-family:'IBM Plex Mono',monospace}
+  .v3-banner.locked{background:#a02437}
+  .v3-banner code{background:rgba(255,255,255,.15);padding:0 4px;border-radius:3px}
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="v3-banner-mount"></div>
+<div id="app"></div>
+
+<script>
+  // ── V3 bootstrap — injected by FastAPI at serve time ────────────────
+  window.MEDSIM_V3 = {{ bootstrap_json | safe }};
+  window.MEDSIM_V3.EHR_ID = "helix";
+</script>
+<script src="/static/medsim_v3_client.js"></script>
+<script type="text/babel" src="/ehr-static/helix/data.jsx"></script>
+<script type="text/babel" src="/ehr-static/helix/ui.jsx"></script>
+<script type="text/babel" src="/ehr-static/helix/screens.jsx"></script>
+<script type="text/babel" src="/ehr-static/helix/app.jsx"></script>
+</body>
+</html>

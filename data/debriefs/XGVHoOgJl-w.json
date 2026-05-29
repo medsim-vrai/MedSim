@@ -1,0 +1,409 @@
+{
+  "session_id": "XGVHoOgJl-w",
+  "join_code": "8EB8QP",
+  "scenario_name": "dvc-debrief-smoke",
+  "scenario_notes": "",
+  "scenario_text": "",
+  "program_id": null,
+  "week": null,
+  "selected_modules": [],
+  "selected_personas": [
+    "P-001"
+  ],
+  "stations": [],
+  "started_at": 1779574773.361322,
+  "ended_at": 1779574773.475713,
+  "duration_seconds": 0,
+  "summary": {
+    "total_turns": 0,
+    "round_trips": 0,
+    "student_turns": 0,
+    "character_turns": 0,
+    "station_turns": 0,
+    "operator_turns": 0,
+    "personas_engaged": 0,
+    "duration_seconds": 0,
+    "duration_pretty": "0s",
+    "latency_p50_ms": null,
+    "latency_mean_ms": null,
+    "latency_p95_ms": null,
+    "latency_max_ms": null
+  },
+  "ncjmm_coverage": {
+    "recognize-cues": 0,
+    "analyze-cues": 0,
+    "prioritize-hypotheses": 0,
+    "generate-solutions": 0,
+    "take-action": 0,
+    "evaluate-outcomes": 0
+  },
+  "role_group_distribution": {
+    "Clinician": 0,
+    "Allied Health": 0,
+    "Patient": 0,
+    "Family": 0
+  },
+  "safety_class_distribution": {
+    "baseline": 0,
+    "sensitive": 0,
+    "high-risk": 0
+  },
+  "personas_engagement": [
+    {
+      "id": "P-001",
+      "name": "Dr. Reyes",
+      "role": "ED Attending",
+      "role_group": "Clinician",
+      "safety_class": "baseline",
+      "altered_state": null,
+      "turns": 0,
+      "avg_latency_ms": null,
+      "engaged": false
+    }
+  ],
+  "objective_alignment": [],
+  "documentation_alignment": {
+    "available": false,
+    "composite": 0.0,
+    "model": null,
+    "built_at": null,
+    "rubric": {},
+    "rules": {
+      "hits": [],
+      "misses": [],
+      "speculative": [],
+      "by_module": [],
+      "totals": {}
+    },
+    "notes_meta": [],
+    "note_count": 0,
+    "signed_count": 0
+  },
+  "orders_alignment": {
+    "total_orders": 0,
+    "by_category": {},
+    "priority_dist": {
+      "routine": 0,
+      "stat": 0,
+      "now": 0
+    },
+    "rationale_quality": 0.0,
+    "trigger_latency_s": []
+  },
+  "ehr_id": null,
+  "charting_locked_at": null,
+  "transcript": [],
+  "devices": [
+    {
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "label": "Bed 3 IV",
+      "joined_at": 1779574773.362901,
+      "event_count": 7,
+      "assignment_history": [
+        {
+          "session_id": "XGVHoOgJl-w",
+          "station_id": "dev_alaris_t1",
+          "character_id": "P-001",
+          "assigned_at": 1779574773.362903,
+          "assigned_by": "instructor"
+        }
+      ]
+    },
+    {
+      "station_id": "dev_pyxis_t1",
+      "device_kind": "cabinet",
+      "device_model": "pyxis",
+      "label": "Cart A",
+      "joined_at": 1779574773.4719942,
+      "event_count": 6,
+      "assignment_history": [
+        {
+          "session_id": "XGVHoOgJl-w",
+          "station_id": "dev_pyxis_t1",
+          "character_id": "P-001",
+          "assigned_at": 1779574773.471998,
+          "assigned_by": "instructor"
+        }
+      ]
+    }
+  ],
+  "device_timeline": [
+    {
+      "ts": 1779574773.36392,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "pump.power",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "state": "on",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.364028,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "pump.program",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "channel": "A",
+        "drug_code": "heparin",
+        "drug_label": "Heparin 25k/250",
+        "rate_ml_hr": 25,
+        "vtbi_ml": 250,
+        "library_used": true,
+        "soft_override": true,
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.364112,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "pump.start",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "channel": "A",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.364185,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "alarm.injected",
+      "surface": "instructor",
+      "character_id": "P-001",
+      "payload": {
+        "tone": "occlusion_downstream",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.4193091,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "alarm.silenced",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "tone": "occlusion_downstream",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.4711292,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "alarm.cleared",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "tone": "occlusion_downstream",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.4716759,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "alarm.injected",
+      "surface": "instructor",
+      "character_id": "P-001",
+      "payload": {
+        "tone": "low_battery",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.4748669,
+      "station_id": "dev_pyxis_t1",
+      "device_kind": "cabinet",
+      "device_model": "pyxis",
+      "type": "auth.login",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "user": "J. Rivera, RN",
+        "method": "bioid",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.475049,
+      "station_id": "dev_pyxis_t1",
+      "device_kind": "cabinet",
+      "device_model": "pyxis",
+      "type": "cabinet.select_patient",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "patient_id": "P-001",
+        "patient_name": "Mr. Johnson",
+        "mrn": "12345",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.475182,
+      "station_id": "dev_pyxis_t1",
+      "device_kind": "cabinet",
+      "device_model": "pyxis",
+      "type": "cabinet.select_verb",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "verb": "remove",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.475308,
+      "station_id": "dev_pyxis_t1",
+      "device_kind": "cabinet",
+      "device_model": "pyxis",
+      "type": "cabinet.select_med",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "med_id": "med_morphine_10",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.475429,
+      "station_id": "dev_pyxis_t1",
+      "device_kind": "cabinet",
+      "device_model": "pyxis",
+      "type": "cabinet.remove",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "patient_id": "P-001",
+        "med_id": "med_morphine_10",
+        "qty": 1,
+        "witness_user": "K. Lee, RN",
+        "character_id": "P-001"
+      }
+    },
+    {
+      "ts": 1779574773.475569,
+      "station_id": "dev_pyxis_t1",
+      "device_kind": "cabinet",
+      "device_model": "pyxis",
+      "type": "cabinet.waste",
+      "surface": "device",
+      "character_id": "P-001",
+      "payload": {
+        "patient_id": "P-001",
+        "med_id": "med_lorazepam_2",
+        "amount": "0.5 mL",
+        "reason": "spilled",
+        "character_id": "P-001"
+      }
+    }
+  ],
+  "alarm_log": [
+    {
+      "tone": "occlusion_downstream",
+      "raised_at": 1779574773.364185,
+      "source": "instructor",
+      "auto": false,
+      "silenced_at": 1779574773.4193091,
+      "time_to_silence_s": 0.1,
+      "cleared_at": 1779574773.4711292,
+      "time_to_clear_s": 0.1,
+      "cleared": true,
+      "station_id": "dev_alaris_t1",
+      "device_model": "alaris",
+      "character_id": "P-001"
+    },
+    {
+      "tone": "low_battery",
+      "raised_at": 1779574773.4716759,
+      "source": "instructor",
+      "auto": false,
+      "cleared": false,
+      "station_id": "dev_alaris_t1",
+      "device_model": "alaris"
+    }
+  ],
+  "medication_dispense_log": [
+    {
+      "ts": 1779574773.475429,
+      "station_id": "dev_pyxis_t1",
+      "device_model": "pyxis",
+      "verb": "remove",
+      "med_id": "med_morphine_10",
+      "qty": 1,
+      "amount": null,
+      "patient": "P-001",
+      "witness_user": "K. Lee, RN",
+      "reason": null
+    },
+    {
+      "ts": 1779574773.475569,
+      "station_id": "dev_pyxis_t1",
+      "device_model": "pyxis",
+      "verb": "waste",
+      "med_id": "med_lorazepam_2",
+      "qty": null,
+      "amount": "0.5 mL",
+      "patient": "P-001",
+      "witness_user": null,
+      "reason": "spilled"
+    }
+  ],
+  "pump_program_log": [
+    {
+      "ts": 1779574773.364028,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "pump.program",
+      "channel": "A",
+      "drug_code": "heparin",
+      "drug_label": "Heparin 25k/250",
+      "rate_ml_hr": 25,
+      "vtbi_ml": 250,
+      "dose": null,
+      "dose_unit": null,
+      "library_used": true,
+      "soft_override": true,
+      "character_id": "P-001"
+    },
+    {
+      "ts": 1779574773.364112,
+      "station_id": "dev_alaris_t1",
+      "device_kind": "pump_iv",
+      "device_model": "alaris",
+      "type": "pump.start",
+      "channel": "A",
+      "drug_code": null,
+      "drug_label": null,
+      "rate_ml_hr": null,
+      "vtbi_ml": null,
+      "dose": null,
+      "dose_unit": null,
+      "library_used": null,
+      "soft_override": null,
+      "character_id": "P-001"
+    }
+  ],
+  "_meta": {
+    "generated_at": 1779574773.475713,
+    "generator": "medsim6.debrief v1"
+  }
+}

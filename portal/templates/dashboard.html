@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Live dashboard{% endblock %}
+{% block content %}
+<h1>Live dashboard</h1>
+<div class="placeholder">
+  <p><strong>No active scenario.</strong></p>
+  <p class="muted">When B5 (Session Orchestrator) and B12 (Telemetry) are
+     wired, this view will show, per character: state
+     (Idle / Listening / Drafting / Researching / Speaking / Reflecting /
+     Buffering — §6A), the last three utterances, current latency, last
+     retrieval, and any safety vetoes — with controls to pause, inject a
+     directive, or take over a character (§7.3).</p>
+</div>
+{% endblock %}

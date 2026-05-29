@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Join EHR — Training Bridge VRAI- MedSim</title>
+  <link rel="stylesheet" href="/static/portal.css">
+  <link rel="stylesheet" href="/static/station.css">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a234f">
+  <style>
+    .ehr-card {max-width:480px;margin:36px auto;padding:24px;background:#fff;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+    .ehr-card h1 {margin:0 0 4px;color:#0a234f}
+    .ehr-card .lead {color:#6b7896;margin:0 0 20px;font-size:14px}
+    .ehr-card label {display:block;margin:14px 0 4px;font-weight:600;color:#3a4a6b;font-size:13px}
+    .ehr-card input {width:100%;padding:10px 12px;font-size:16px;border:1px solid #dde2ee;border-radius:6px;box-sizing:border-box}
+    .ehr-card .errbox {background:#f7e1e4;color:#a02437;padding:10px 12px;border-radius:6px;margin-bottom:16px;font-size:13px}
+    .ehr-card .okbox  {background:#dcefe1;color:#1f7a3a;padding:10px 12px;border-radius:6px;margin-bottom:16px;font-size:13px}
+    .ehr-card button.primary {background:#143b8a;color:#fff;border:0;padding:12px 20px;border-radius:6px;font-weight:600;font-size:15px;cursor:pointer;width:100%;margin-top:16px}
+    .ehr-card button.primary:disabled {opacity:.4;cursor:not-allowed}
+    .ehr-meta {margin-top:18px;padding-top:16px;border-top:1px solid #eaedf5;font-size:12px;color:#6b7896;line-height:1.7}
+    .ehr-meta strong {color:#3a4a6b}
+    .ehr-meta code {background:#f4f5f8;padding:2px 6px;border-radius:3px}
+  </style>
+</head>
+<body class="station-body">
+  <main class="ehr-card">
+    <h1>Join the EHR</h1>
+    <p class="lead">Document into the patient chart from this device. Open in Chrome on a phone, tablet, or laptop. The chat station (verbal encounter) is a separate device.</p>
+
+    {% if error == 'notfound' %}
+      <div class="errbox">That join code didn't match an active session. Check with the instructor.</div>
+    {% elif error == 'noehr' %}
+      <div class="errbox">This session doesn't have an EHR enabled. Ask the instructor to start a new session with one of the three EHR options.</div>
+    {% elif error == 'locked' %}
+      <div class="errbox">Charting is already locked for this session. You can still view but not edit.</div>
+    {% endif %}
+
+    <form method="post" action="/ehr/join" id="ehr-join-form">
+      <label>Join code
+        <input type="text" name="code" id="code" maxlength="6" required pattern="[A-Za-z0-9]{4,6}" autocapitalize="characters" value="{{ code or '' }}" placeholder="ABC123">
+      </label>
+      <label>Your name / device label
+        <input type="text" name="device_label" id="device_label" maxlength="40" placeholder="e.g. Front desk iPad — J. Singh" required>
+      </label>
+      <button type="submit" class="primary">Open chart →</button>
+    </form>
+
+    <div class="ehr-meta">
+      <strong>What you'll see:</strong> a patient pre-populated with allergies, problem list, meds, vitals, and recent labs. You're expected to chart notes, vitals you assess, and any orders you place — the system logs every save and compares it to the conversation transcript at debrief time.
+    </div>
+  </main>
+</body>
+</html>

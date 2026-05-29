@@ -1,0 +1,5351 @@
+"""MEDSIM 3 portal — operator HTTP service.
+
+V2 + V3 routes share one FastAPI app. V2 (chat stations, control wizard,
+debrief, persona library) is unchanged. V3 adds the integrated EHR layer:
+EHR station onboarding, append-only chart event log, hybrid comparison
+engine, Charting-complete lock-in. See CLAUDE.md and Blueprint §9 for
+the full route inventory.
+"""
+from __future__ import annotations
+
+import json
+import secrets
+import socket
+import time
+from pathlib import Path
+from typing import Annotated, Any
+
+from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
+from . import (
+    activities, alarms as alarms_mod, auth, control_room, control_session,
+    credentials, debrief as debrief_mod, ecg as ecg_mod,
+    future_devices as future_devices_mod,
+    intercom as intercom_mod, library, qrgen, runtime, scenarios, scenes,
+    telemetry as telemetry_mod,
+    ehr as ehr_registry, ehr_db, ehr_seed,
+    voices, ws_room,
+)
+from fastapi import WebSocket
+
+PORTAL_DIR = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=str(PORTAL_DIR / "templates"))
+
+# V6 — cache-busting helper for static assets. Templates call
+# {{ static_v('control_ops.js') }} and get back e.g. "/static/control_ops.js?v=1779581234"
+# (mtime). Any edit to a JS or CSS file auto-busts every browser's cache —
+# avoids the silent "old client running new server" failure mode we hit
+# while iterating on the audio fix.
+def _static_versioned(rel_path: str) -> str:
+    rel_path = rel_path.lstrip("/")
+    file_path = PORTAL_DIR / "static" / rel_path
+    try:
+        ver = int(file_path.stat().st_mtime)
+    except OSError:
+        ver = 0
+    return f"/static/{rel_path}?v={ver}"
+
+templates.env.globals["static_v"] = _static_versioned
+
+CREDENTIAL_FIELDS: list[tuple[str, str, str]] = [
+    ("ANTHROPIC_API_KEY", "Anthropic API key",
+     "Required. Used by B6 router, B9 generator, B10 validators."),
+    ("ELEVENLABS_API_KEY", "ElevenLabs API key",
+     "Optional (V4). Enables neural character voices (Flash v2.5). "
+     "Without it the system uses browser SpeechSynthesis."),
+    ("VOYAGE_API_KEY", "Voyage embedding key",
+     "Free tier — use this for B3 KB vector index."),
+    ("OPENAI_API_KEY", "OpenAI embedding key",
+     "Alternative embedding provider for B3."),
+    ("DATABASE_URL", "Telemetry database URL",
+     "Optional. Defaults to local SQLite under data/."),
+]
+
+app = FastAPI(title="medsim portal", docs_url=None, redoc_url=None)
+app.mount("/static", StaticFiles(directory=str(PORTAL_DIR / "static")), name="static")
+# V3 — serves the EHR bundle subresources (data.jsx, ui.jsx, screens.jsx,
+# app.jsx, catalog.json) directly. The index.html for each EHR is served
+# by the route handler below so V3 can inject the bootstrap globals.
+app.mount("/ehr-static", StaticFiles(directory=str(PORTAL_DIR / "ehr")), name="ehr_static")
+
+# V6 — device subsystem. Routes + WebSocket live in portal/devices/ and
+# are attached here so the new feature is self-contained.
+from .devices import routes as _device_routes   # noqa: E402
+_device_routes.attach(app, templates)
+
+
+# V7 — Activity catalog seed. Idempotent — only inserts rows missing
+# from the DB. Runs on every server boot; safe.
+@app.on_event("startup")
+async def _seed_activity_catalog() -> None:
+    try:
+        activities.seed_builtins()
+    except Exception as exc:  # noqa: BLE001 — never fatal at boot
+        import sys
+        print(f"  [warn] activities.seed_builtins failed: {exc}",
+              file=sys.stderr, flush=True)
+
+
+@app.exception_handler(HTTPException)
+async def auth_redirect_handler(request: Request, exc: HTTPException):
+    if exc.status_code == 401 and "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse("/login?error=expired", status_code=303)
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+async def root(medsim_session: Annotated[str | None, Cookie()] = None):
+    if auth.verify_session(medsim_session):
+        return RedirectResponse("/portal/home", status_code=303)
+    return RedirectResponse("/login", status_code=303)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, error: str | None = None):
+    return templates.TemplateResponse(
+        request, "login.html",
+        {"initialized": credentials.is_initialized(), "error": error},
+    )
+
+
+@app.post("/login")
+async def login_submit(password: Annotated[str, Form()],
+                        role: Annotated[str, Form()] = "instructor"):
+    """M18 — `role` form field defaults to 'instructor'; pass
+    'observer' for the read-only TA / preceptor seat. The observer
+    can view every dashboard / debrief page but their cookie is
+    rejected by every mutating route."""
+    if not credentials.is_initialized():
+        return RedirectResponse("/login?error=not-initialized", status_code=303)
+    try:
+        vault = credentials.unlock(password)
+    except (ValueError, FileNotFoundError):
+        return RedirectResponse("/login?error=invalid", status_code=303)
+    response = RedirectResponse("/portal/home", status_code=303)
+    response.set_cookie(
+        auth.COOKIE_NAME,
+        auth.issue_session_token(vault, role=role),
+        max_age=auth.SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/initialize")
+async def initialize_submit(
+    password: Annotated[str, Form()],
+    confirm: Annotated[str, Form()],
+):
+    if password != confirm:
+        return RedirectResponse("/login?error=mismatch", status_code=303)
+    if len(password) < 8:
+        return RedirectResponse("/login?error=length", status_code=303)
+    if credentials.is_initialized():
+        return RedirectResponse("/login?error=exists", status_code=303)
+    credentials.initialize(password)
+    vault = credentials.unlock(password)
+    response = RedirectResponse("/portal/home", status_code=303)
+    response.set_cookie(
+        auth.COOKIE_NAME,
+        auth.issue_session_token(vault),
+        max_age=auth.SESSION_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@app.post("/logout")
+async def logout(medsim_session: Annotated[str | None, Cookie()] = None):
+    auth.clear_session(medsim_session)
+    response = RedirectResponse("/login", status_code=303)
+    response.delete_cookie(auth.COOKIE_NAME)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Home / status
+# ---------------------------------------------------------------------------
+
+@app.get("/portal", response_class=HTMLResponse)
+async def portal_root(medsim_session: Annotated[str | None, Cookie()] = None):
+    if auth.verify_session(medsim_session):
+        return RedirectResponse("/portal/home", status_code=303)
+    return RedirectResponse("/login", status_code=303)
+
+
+@app.get("/portal/home", response_class=HTMLResponse)
+async def home_page(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    stored = vault.credentials
+    voyage = bool(stored.get("VOYAGE_API_KEY"))
+    openai_set = bool(stored.get("OPENAI_API_KEY"))
+    scen_list = scenarios.list_scenarios()
+    char_list = scenarios.list_characters()
+    ready = {
+        "anthropic": bool(stored.get("ANTHROPIC_API_KEY")),
+        "embedding": voyage or openai_set,
+        "embedding_provider": "Voyage" if voyage else ("OpenAI" if openai_set else None),
+        "scenarios": bool(scen_list),
+        "characters": bool(char_list),
+    }
+    counts = {"scenarios": len(scen_list), "characters": len(char_list)}
+    return templates.TemplateResponse(
+        request, "home.html",
+        {"active": "home", "ready": ready, "counts": counts},
+    )
+
+
+@app.post("/portal/examples/load")
+async def load_examples(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    created = scenarios.load_examples()
+    parts = []
+    if created["characters"]:
+        parts.append(f"Created {len(created['characters'])} character(s): {', '.join(created['characters'])}.")
+    if created["scenarios"]:
+        parts.append(f"Created {len(created['scenarios'])} scenario(s): {', '.join(created['scenarios'])}.")
+    if not parts:
+        parts.append("Nothing to create — example files already exist.")
+    return JSONResponse({"ok": True, "message": " ".join(parts)})
+
+
+# ---------------------------------------------------------------------------
+# Credentials
+# ---------------------------------------------------------------------------
+
+@app.get("/portal/credentials", response_class=HTMLResponse)
+async def credentials_page(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    stored = vault.credentials
+    rows = []
+    for key, label, hint in CREDENTIAL_FIELDS:
+        value = stored.get(key, "")
+        rows.append({
+            "key": key, "label": label, "hint": hint,
+            "set": bool(value), "preview": _mask(value),
+        })
+    return templates.TemplateResponse(
+        request, "credentials.html",
+        {"active": "credentials", "fields": rows},
+    )
+
+
+@app.post("/portal/credentials")
+async def credentials_save(
+    key: Annotated[str, Form()],
+    value: Annotated[str, Form()],
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    known = {k for k, _, _ in CREDENTIAL_FIELDS}
+    if key not in known:
+        raise HTTPException(400, f"Unknown credential key: {key}")
+    if value.strip():
+        vault.set(key, value.strip())
+    else:
+        vault.delete(key)
+    # M38 — refresh the process-wide cache so station-turn routes pick
+    # up the new Anthropic key without restarting the room.
+    if key == "ANTHROPIC_API_KEY":
+        _capture_anthropic_key(value.strip() if value.strip() else "")
+    return RedirectResponse("/portal/credentials", status_code=303)
+
+
+@app.post("/portal/credentials/test")
+async def credentials_test(
+    key: Annotated[str, Form()],
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    value = vault.get(key)
+    if not value:
+        return JSONResponse({"ok": False, "message": "Not set."})
+    if key == "ANTHROPIC_API_KEY":
+        try:
+            from anthropic import Anthropic
+            client = Anthropic(api_key=value)
+            client.messages.create(
+                model="claude-haiku-4-5",
+                max_tokens=1,
+                messages=[{"role": "user", "content": "ok"}],
+            )
+            return JSONResponse({"ok": True, "message": "Anthropic API key accepted."})
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"ok": False, "message": f"{type(exc).__name__}: {exc}"})
+    if key == "ELEVENLABS_API_KEY":
+        h = voices.health(value)
+        if h["available"]:
+            return JSONResponse({"ok": True,
+                "message": f"ElevenLabs OK — {h['voice_count']} voices, model {h['model']}."})
+        return JSONResponse({"ok": False, "message": f"ElevenLabs unreachable: {h['detail']}"})
+    return JSONResponse({"ok": True, "message": "Stored. No live test handler for this key yet."})
+
+
+# ---------------------------------------------------------------------------
+# Scenarios — CRUD
+# ---------------------------------------------------------------------------
+
+@app.get("/portal/scenarios", response_class=HTMLResponse)
+async def scenarios_list(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return templates.TemplateResponse(
+        request, "scenarios.html",
+        {"active": "scenarios", "scenarios": scenarios.list_scenarios()},
+    )
+
+
+@app.get("/portal/scenarios/new", response_class=HTMLResponse)
+async def scenario_new(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return templates.TemplateResponse(
+        request, "scenario_form.html",
+        {
+            "active": "scenarios",
+            "scenario": _normalize_scenario(None),
+            "all_characters": scenarios.list_characters(),
+            "action": "/portal/scenarios",
+            "is_edit": False,
+        },
+    )
+
+
+@app.get("/portal/scenarios/{scenario_id}/edit", response_class=HTMLResponse)
+async def scenario_edit(
+    scenario_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    data = scenarios.get_scenario(scenario_id)
+    if data is None:
+        return RedirectResponse("/portal/scenarios", status_code=303)
+    return templates.TemplateResponse(
+        request, "scenario_form.html",
+        {
+            "active": "scenarios",
+            "scenario": _normalize_scenario(data),
+            "all_characters": scenarios.list_characters(),
+            "action": f"/portal/scenarios?old_id={scenario_id}",
+            "is_edit": True,
+        },
+    )
+
+
+@app.post("/portal/scenarios")
+async def scenario_save(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    old_id: str | None = None,
+):
+    form = await request.form()
+    data = _build_scenario_from_form(form)
+    scenarios.save_scenario(data, old_id=old_id)
+    return RedirectResponse("/portal/scenarios", status_code=303)
+
+
+@app.post("/portal/scenarios/{scenario_id}/delete")
+async def scenario_delete(
+    scenario_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    scenarios.delete_scenario(scenario_id)
+    return RedirectResponse("/portal/scenarios", status_code=303)
+
+
+@app.post("/portal/scenarios/{scenario_id}/duplicate")
+async def scenario_duplicate(
+    scenario_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    scenarios.duplicate_scenario(scenario_id)
+    return RedirectResponse("/portal/scenarios", status_code=303)
+
+
+@app.post("/portal/scenarios/{scenario_id}/launch")
+async def scenario_launch(
+    scenario_id: str,
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Start a real working chat session with the scenario's characters.
+
+    This is a v0 of the runtime — replace with the proper B5 orchestrator
+    when that block lands.
+    """
+    api_key = vault.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return JSONResponse({
+            "ok": False,
+            "message": "Anthropic API key required. Add it on the Credentials tab.",
+        })
+    scen = scenarios.get_scenario(scenario_id)
+    if scen is None:
+        return JSONResponse({
+            "ok": False,
+            "message": f"Scenario '{scenario_id}' not found.",
+        })
+    if not (scen.get("characters") or []):
+        return JSONResponse({
+            "ok": False,
+            "message": "This scenario has no characters assigned. Edit it and add characters first.",
+        })
+    sess = runtime.create_session(scenario_id, api_key)
+    if sess is None:
+        return JSONResponse({
+            "ok": False,
+            "message": (
+                "Could not start session. The scenario references character "
+                "IDs that don't exist — open the scenario, check the "
+                "Characters section, and save."
+            ),
+        })
+    return JSONResponse({
+        "ok": True,
+        "session_id": sess.id,
+        "redirect_url": f"/portal/session/{sess.id}",
+    })
+
+
+# ---------------------------------------------------------------------------
+# Session — the working chat runtime (v0 of B5+B6+B9)
+# ---------------------------------------------------------------------------
+
+@app.get("/portal/session/{session_id}", response_class=HTMLResponse)
+async def session_page(
+    session_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    sess = runtime.get_session(session_id)
+    if sess is None:
+        return RedirectResponse("/portal/scenarios", status_code=303)
+    return templates.TemplateResponse(
+        request, "session.html",
+        {
+            "active": "scenarios",
+            "session": sess,
+            "patient_summary": _patient_one_line(sess.scenario.get("patient", {}) or {}),
+        },
+    )
+
+
+@app.post("/portal/session/{session_id}/turn")
+async def session_turn(
+    session_id: str,
+    addressee: Annotated[str, Form()],
+    message: Annotated[str, Form()],
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    result = runtime.take_turn(session_id, addressee, message)
+    return JSONResponse(result)
+
+
+@app.post("/portal/session/{session_id}/end")
+async def session_end(
+    session_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    runtime.end_session(session_id)
+    return RedirectResponse("/portal/scenarios", status_code=303)
+
+
+@app.get("/portal/session/{session_id}/voice", response_class=HTMLResponse)
+async def session_voice_page(
+    session_id: str,
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """v2/v4 — voice-enabled chat: STT in, TTS out, per-character voices.
+
+    V4: each character can be given an ElevenLabs neural voice; the
+    legacy browser SpeechSynthesis path remains the fallback.
+    """
+    sess = runtime.get_session(session_id)
+    if sess is None:
+        return RedirectResponse("/portal/scenarios", status_code=303)
+    # Resolve the ElevenLabs key — this also primes voices._runtime_key so
+    # the (unauthenticated) /api/tts route can synthesize for this page.
+    el_key = voices.get_api_key(vault)
+    _gender_to_sex = {"male": "M", "female": "F"}
+    chars_for_js: list[dict[str, Any]] = []
+    for cid, char in sess.characters.items():
+        vp = char.get("voice_profile") or {}
+        chars_for_js.append({
+            "id": cid,
+            "name": char.get("name", cid),
+            "role": char.get("role", ""),
+            "voice_profile": vp,
+            # Inferred traits for the V4 voice picker. V1 characters have
+            # no age — default to middle_aged.
+            "sex": _gender_to_sex.get((vp.get("gender") or "").lower(), "U"),
+            "age_band": "middle_aged",
+        })
+    return templates.TemplateResponse(
+        request, "session_voice.html",
+        {
+            "active": "scenarios",
+            "session": sess,
+            "patient_summary": _patient_one_line(sess.scenario.get("patient", {}) or {}),
+            "characters_for_js": chars_for_js,
+            "elevenlabs_available": bool(el_key),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Characters — CRUD
+# ---------------------------------------------------------------------------
+
+@app.get("/portal/characters", response_class=HTMLResponse)
+async def characters_list(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return templates.TemplateResponse(
+        request, "characters.html",
+        {"active": "characters", "characters": scenarios.list_characters()},
+    )
+
+
+@app.get("/portal/characters/new", response_class=HTMLResponse)
+async def character_new(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return templates.TemplateResponse(
+        request, "character_form.html",
+        {
+            "active": "characters",
+            "character": _normalize_character(None),
+            "action": "/portal/characters",
+            "is_edit": False,
+        },
+    )
+
+
+@app.get("/portal/characters/{character_id}/edit", response_class=HTMLResponse)
+async def character_edit(
+    character_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    data = scenarios.get_character(character_id)
+    if data is None:
+        return RedirectResponse("/portal/characters", status_code=303)
+    return templates.TemplateResponse(
+        request, "character_form.html",
+        {
+            "active": "characters",
+            "character": _normalize_character(data),
+            "action": f"/portal/characters?old_id={character_id}",
+            "is_edit": True,
+        },
+    )
+
+
+@app.post("/portal/characters")
+async def character_save(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    old_id: str | None = None,
+):
+    form = await request.form()
+    data = _build_character_from_form(form)
+    scenarios.save_character(data, old_id=old_id)
+    return RedirectResponse("/portal/characters", status_code=303)
+
+
+@app.post("/portal/characters/{character_id}/delete")
+async def character_delete(
+    character_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    scenarios.delete_character(character_id)
+    return RedirectResponse("/portal/characters", status_code=303)
+
+
+@app.post("/portal/characters/{character_id}/duplicate")
+async def character_duplicate(
+    character_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    scenarios.duplicate_character(character_id)
+    return RedirectResponse("/portal/characters", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Live dashboard / debriefs — placeholders until B5/B12 land
+# ---------------------------------------------------------------------------
+
+@app.get("/portal/dashboard", response_class=HTMLResponse)
+async def dashboard_page(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return templates.TemplateResponse(
+        request, "dashboard.html", {"active": "dashboard"}
+    )
+
+
+@app.get("/portal/debrief", response_class=HTMLResponse)
+async def debrief_list(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """List view — all saved debriefs plus a 'current session' card if a
+    live session has any transcript."""
+    active = control_session.get_active()
+    has_live = bool(active and active.transcript)
+    return templates.TemplateResponse(
+        request, "debrief.html",
+        {
+            "active": "debrief",
+            "debriefs": debrief_mod.list_saved(),
+            "has_live": has_live,
+            "live_session_id": active.id if has_live else None,
+            "live_scenario_name": active.scenario_name if has_live else None,
+            "live_turn_count": len(active.transcript) if has_live else 0,
+        },
+    )
+
+
+@app.get("/portal/debrief/current", response_class=HTMLResponse)
+async def debrief_current(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Render the debrief for the currently-active session (computed live,
+    not saved). Useful for previewing before the operator ends the session."""
+    sess = control_session.get_active()
+    if sess is None or not sess.transcript:
+        return RedirectResponse("/portal/debrief", status_code=303)
+    db = debrief_mod.build(sess)
+    return templates.TemplateResponse(
+        request, "debrief_detail.html",
+        {"active": "debrief", "debrief": db, "is_live": True},
+    )
+
+
+@app.get("/portal/debrief/{session_id}", response_class=HTMLResponse)
+async def debrief_detail(
+    session_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    db = debrief_mod.load(session_id)
+    if db is None:
+        return RedirectResponse("/portal/debrief", status_code=303)
+    return templates.TemplateResponse(
+        request, "debrief_detail.html",
+        {"active": "debrief", "debrief": db, "is_live": False},
+    )
+
+
+@app.get("/api/debrief/{session_id}")
+async def api_debrief_json(
+    session_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    db = debrief_mod.load(session_id)
+    if db is None:
+        raise HTTPException(404, "Debrief not found")
+    return JSONResponse(db)
+
+
+@app.get("/health")
+async def health():
+    return {"ok": True, "vault_initialized": credentials.is_initialized()}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _mask(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "•" * len(value)
+    return value[:4] + "•" * 8 + value[-4:]
+
+
+def _patient_one_line(patient: dict[str, Any]) -> str:
+    parts = []
+    if patient.get("age") not in (None, ""):
+        parts.append(f"{patient['age']}y")
+    if patient.get("sex"):
+        parts.append(str(patient["sex"]))
+    if patient.get("history"):
+        h = str(patient["history"])
+        parts.append(h[:90] + ("…" if len(h) > 90 else ""))
+    return " · ".join(parts)
+
+
+def _lines_to_list(text: str | None) -> list[str]:
+    if not text:
+        return []
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def _lines_to_dict(text: str | None) -> dict[str, str]:
+    if not text:
+        return {}
+    out: dict[str, str] = {}
+    for line in text.splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            k = k.strip()
+            v = v.strip()
+            if k:
+                out[k] = v
+    return out
+
+
+def _normalize_scenario(data: dict[str, Any] | None) -> dict[str, Any]:
+    data = data or {}
+    patient = data.get("patient") or {}
+    curriculum = data.get("curriculum") or {}
+    return {
+        "id": data.get("id", "") or "",
+        "name": data.get("name", "") or "",
+        "patient": {
+            "age": patient.get("age", "") if patient.get("age") is not None else "",
+            "sex": patient.get("sex", "") or "",
+            "history": patient.get("history", "") or "",
+            "baseline_vitals": patient.get("baseline_vitals", {}) or {},
+        },
+        "characters": data.get("characters", []) or [],
+        "curriculum": {
+            "touchpoints": curriculum.get("touchpoints", []) or [],
+            "unlocked": curriculum.get("unlocked", []) or [],
+        },
+        "allowed_tools": data.get("allowed_tools", []) or [],
+        "kb_scope": data.get("kb_scope", []) or [],
+    }
+
+
+def _normalize_character(data: dict[str, Any] | None) -> dict[str, Any]:
+    data = data or {}
+    identity = data.get("identity") or {}
+    voice = data.get("voice") or {}
+    return {
+        "id": data.get("id", "") or "",
+        "name": data.get("name", "") or "",
+        "role": data.get("role", "") or "",
+        "identity": {
+            "years_experience": identity.get("years_experience", "") if identity.get("years_experience") is not None else "",
+            "training_site": identity.get("training_site", "") or "",
+            "shift": identity.get("shift", "") or "",
+            "mood_today": identity.get("mood_today", "") or "",
+        },
+        "voice": {
+            "register": voice.get("register", "") or "",
+            "sentence_length": voice.get("sentence_length", "short") or "short",
+            "examples": voice.get("examples", []) or [],
+            "never_says": voice.get("never_says", []) or [],
+        },
+        "knowledge_boundary": data.get("knowledge_boundary", "") or "",
+        "teaching_stance": data.get("teaching_stance", "") or "",
+        "scope_of_action": data.get("scope_of_action", []) or [],
+        "scene_contract": data.get("scene_contract", []) or [],
+    }
+
+
+def _build_scenario_from_form(form) -> dict[str, Any]:
+    name = (form.get("name") or "").strip()
+    sid = (form.get("id") or "").strip() or scenarios.slugify(name)
+    characters = form.getlist("characters") if hasattr(form, "getlist") else []
+    age_str = (form.get("patient_age") or "").strip()
+    return {
+        "id": sid,
+        "name": name,
+        "patient": {
+            "age": int(age_str) if age_str.isdigit() else (age_str or None),
+            "sex": (form.get("patient_sex") or "").strip(),
+            "history": (form.get("patient_history") or "").strip(),
+            "baseline_vitals": _lines_to_dict(form.get("patient_vitals")),
+        },
+        "characters": [c for c in characters if c],
+        "curriculum": {
+            "touchpoints": _lines_to_list(form.get("touchpoints")),
+            "unlocked": _lines_to_list(form.get("unlocked")),
+        },
+        "allowed_tools": _lines_to_list(form.get("allowed_tools")),
+        "kb_scope": _lines_to_list(form.get("kb_scope")),
+    }
+
+
+def _build_character_from_form(form) -> dict[str, Any]:
+    name = (form.get("name") or "").strip()
+    cid = (form.get("id") or "").strip() or scenarios.slugify(name)
+    years_str = (form.get("years_experience") or "").strip()
+    return {
+        "id": cid,
+        "name": name,
+        "role": (form.get("role") or "").strip(),
+        "identity": {
+            "years_experience": int(years_str) if years_str.isdigit() else None,
+            "training_site": (form.get("training_site") or "").strip(),
+            "shift": (form.get("shift") or "").strip(),
+            "mood_today": (form.get("mood_today") or "").strip(),
+        },
+        "voice": {
+            "register": (form.get("voice_register") or "").strip(),
+            "sentence_length": (form.get("voice_sentence_length") or "short").strip(),
+            "examples": _lines_to_list(form.get("voice_examples")),
+            "never_says": _lines_to_list(form.get("voice_never_says")),
+        },
+        "knowledge_boundary": (form.get("knowledge_boundary") or "").strip(),
+        "teaching_stance": (form.get("teaching_stance") or "").strip(),
+        "scope_of_action": _lines_to_list(form.get("scope_of_action")),
+        "scene_contract": _lines_to_list(form.get("scene_contract")),
+    }
+
+
+# ===========================================================================
+# MEDSIM 2 ADDITIONS — Control room, QR onboarding, persona library, stations
+# ===========================================================================
+
+def _lan_ip() -> str:
+    """Best-effort LAN IP — matches run_portal._lan_ip."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        ip = sock.getsockname()[0]
+    except OSError:
+        ip = "127.0.0.1"
+    finally:
+        sock.close()
+    return ip
+
+
+def _base_url_for_qr(request: Request) -> str:
+    """Build a URL that mobile devices on the same LAN can reach.
+
+    Prefers the request's host header (which may be LAN IP if the operator
+    is already on iPad mode); falls back to detecting the LAN IP.
+    """
+    host = request.url.hostname or ""
+    port = request.url.port
+    if host in ("127.0.0.1", "localhost", ""):
+        host = _lan_ip()
+    if port:
+        return f"http://{host}:{port}"
+    return f"http://{host}"
+
+
+# ----- Personas library viewer --------------------------------------------
+
+@app.get("/portal/personas", response_class=HTMLResponse)
+async def personas_page(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return templates.TemplateResponse(
+        request, "personas.html",
+        {
+            "active": "personas",
+            "personas": library.list_personas(),
+            "behavioral_dimensions": library.behavioral_dimensions(),
+        },
+    )
+
+
+# ----- Curriculum modules viewer ------------------------------------------
+
+@app.get("/portal/curriculum", response_class=HTMLResponse)
+async def curriculum_page(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return templates.TemplateResponse(
+        request, "curriculum.html",
+        {
+            "active": "curriculum",
+            "modules": library.list_modules(),
+            "programs": library.list_programs(),
+        },
+    )
+
+
+@app.get("/api/modules")
+async def api_modules(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return JSONResponse({"modules": library.list_modules()})
+
+
+@app.get("/api/programs")
+async def api_programs(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return JSONResponse({"programs": library.list_programs()})
+
+
+@app.get("/api/personas")
+async def api_personas(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return JSONResponse({
+        "personas": library.list_personas(),
+        "behavioral_dimensions": library.behavioral_dimensions(),
+    })
+
+
+# ----- QR code endpoint ---------------------------------------------------
+
+@app.get("/api/qr.svg")
+async def api_qr_svg(data: str, scale: int = 6):
+    """Returns an SVG QR code encoding `data`. Open to all (no auth) so the
+    control-room wizard's <img> tags can fetch without cookies, and the
+    join URL can be reached from the mobile device too."""
+    svg = qrgen.make_qr_svg(data, scale=scale)
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+# ----- Control room wizard -----------------------------------------------
+
+@app.get("/portal/control", response_class=HTMLResponse)
+async def control_wizard(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    # V7 — control_session.get_active() raises when a multi-encounter
+    # room is active (M2/M3 safety: v6 callers must not silently grab
+    # the first encounter). The wizard's "active_session" hint is only
+    # meaningful for the single-patient path; in room-mode the
+    # dashboard is the right surface. Treat the raise as "no
+    # single-patient session active" and let the wizard render.
+    try:
+        active = control_session.get_active()
+    except RuntimeError:
+        active = None
+    # v1 scenarios — name + summary only; their character refs don't map to
+    # v2 personas so we only auto-fill name + a derived notes string.
+    v1_scens = []
+    for s in scenarios.list_scenarios():
+        if s.get("error"):
+            continue
+        v1_scens.append({
+            "id": s["id"],
+            "name": s["name"],
+            "patient_summary": s.get("patient_summary", ""),
+        })
+    return templates.TemplateResponse(
+        request, "control.html",
+        {
+            "active": "control",
+            "personas": library.list_personas(),
+            "programs": library.list_programs(),
+            "modules": library.list_modules(),
+            "samples": library.list_sample_scenarios(),
+            "v1_scenarios": v1_scens,
+            "has_api_key": bool(vault.get("ANTHROPIC_API_KEY")),
+            "active_session": active,
+            "base_url": _base_url_for_qr(request),
+            "lan_ip": _lan_ip(),
+            "ehrs": ehr_registry.REGISTRY,         # V3 — wizard step 2b
+            "default_ehr": ehr_registry.default_id(),
+            # V7 M12 — Activity catalog for the room-mode Step 4r picker.
+            # Each row in the room-mode editor can pre-fill from one
+            # of these activities; the JS sends activity_id along with
+            # the row in the /api/room/start payload.
+            "activities_for_room": ehr_db.list_activities(),
+        },
+    )
+
+
+@app.post("/portal/control/start")
+async def control_start(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    api_key = vault.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return JSONResponse({"ok": False, "message": "Anthropic API key required."})
+    # M38 — Seed the process-wide cache so station-turn routes prefer
+    # the *current* vault key over the encounter's snapshot.
+    _capture_anthropic_key(api_key)
+    form = await request.form()
+    scenario_name = (form.get("scenario_name") or "").strip()
+    if not scenario_name:
+        return JSONResponse({"ok": False, "message": "Scenario name required."})
+    program_id = (form.get("program_id") or "").strip() or None
+    week_raw = (form.get("week") or "").strip()
+    week = int(week_raw) if week_raw.isdigit() else None
+    selected_modules = [m for m in form.getlist("modules") if m]
+    selected_personas = [p for p in form.getlist("personas") if p]
+    if not selected_personas:
+        return JSONResponse({"ok": False, "message": "At least one persona must be selected."})
+    ehr_id = (form.get("ehr_id") or ehr_registry.default_id()).strip()
+    if ehr_registry.get(ehr_id) is None:
+        ehr_id = ehr_registry.default_id()
+    # V4 — capture the ElevenLabs key (vault → env → keyfile) so station
+    # routes, which have no operator cookie, can still synthesize voices.
+    el_key = voices.get_api_key(vault)
+    sess = control_session.create_session(
+        scenario_name=scenario_name,
+        api_key=api_key,
+        scenario_notes=(form.get("scenario_notes") or "").strip(),
+        program_id=program_id,
+        week=week,
+        selected_modules=selected_modules,
+        scenario_text=(form.get("scenario_text") or "").strip(),
+        selected_personas=selected_personas,
+        ehr_id=ehr_id,
+        elevenlabs_api_key=el_key,
+    )
+    # Build + persist the ChartSeed eagerly so the EHR bundle bootstraps fast.
+    _ensure_ehr_session_registered(sess)
+    return JSONResponse({
+        "ok": True,
+        "session_id": sess.id,
+        "join_code": sess.join_code,
+        "redirect_url": "/portal/control/ops",
+    })
+
+
+@app.post("/portal/control/end")
+async def control_end(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """End the active session — auto-save a debrief JSON before clearing
+    so the instructor can review it afterward."""
+    sess = control_session.get_active()
+    saved_id = None
+    if sess is not None:
+        try:
+            db = debrief_mod.build(sess)
+            path = debrief_mod.save(db)
+            saved_id = sess.id
+        except Exception:  # noqa: BLE001 — debrief save must not block ending
+            saved_id = None
+    # V6 — broadcast 'ended' to every device before tearing down the
+    # active session, so each one freezes its UI and stops audio loops.
+    from .devices.ws import manager as _device_ws_manager
+    await _device_ws_manager.broadcast_state("ended")
+    control_session.end_active()
+    if saved_id:
+        return RedirectResponse(f"/portal/debrief/{saved_id}", status_code=303)
+    return RedirectResponse("/portal/debrief", status_code=303)
+
+
+@app.get("/portal/control/ops", response_class=HTMLResponse)
+async def control_ops(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    join: str | None = None,
+    patient_persona_id: str | None = None,
+    embed: int | None = None,
+):
+    """M42 — Multi-patient-aware ops view.
+
+    Query params:
+      - `join` — when set, looks up the session/encounter by join code
+        instead of relying on `control_session.get_active()`. The
+        v6-compat singleton path returns None in v7 multi-encounter
+        rooms; this param makes the device manager usable in room mode.
+      - `patient_persona_id` — when set, the device-add modal will
+        default the patient assignment to this persona (instead of
+        "— unassigned —"). The encounter console passes this so a
+        device added from a bed's manager auto-assigns to that bed's
+        primary patient.
+      - `embed=1` — when set, the ops-view top header is hidden
+        (so when embedded in the encounter console's modal, the
+        operator doesn't see two stacked headers).
+    """
+    sess: control_session.ControlSession | None = None
+    if join:
+        sess = control_session.get_by_join_code(join)
+    if sess is None:
+        sess = control_session.get_active()
+    if sess is None:
+        return RedirectResponse("/portal/control", status_code=303)
+    # Hydrate personas with their resolved voice profile so the operator's
+    # PTT panel can speak the response in the right voice without a second fetch.
+    personas_in_use = []
+    for pid in sess.selected_personas:
+        p = library.get_persona(pid)
+        if p:
+            personas_in_use.append({**p, "voice_profile": library.voice_profile_for(p)})
+    modules_in_use = []
+    for mid in sess.selected_modules:
+        m = library.get_module(mid)
+        if m:
+            modules_in_use.append(m)
+    # M42 — Pre-fill the add-device patient dropdown via a bootstrap-
+    # JSON field the client reads. Falls back to the session's primary
+    # patient persona when the caller didn't pass one explicitly.
+    default_device_patient = (
+        patient_persona_id
+        or sess.patient_persona_id
+        or (sess.selected_personas[0] if sess.selected_personas else "")
+    )
+    return templates.TemplateResponse(
+        request, "control_ops.html",
+        {
+            "active": "control",
+            "session": sess,
+            "personas_in_use": personas_in_use,
+            "modules_in_use": modules_in_use,
+            "base_url": _base_url_for_qr(request),
+            "lan_ip": _lan_ip(),
+            "default_device_patient_id": default_device_patient,
+            "embed_mode": bool(embed),
+        },
+    )
+
+
+@app.get("/api/control/state")
+async def api_control_state(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"active": False})
+    stations_payload = []
+    for s in sess.stations.values():
+        persona = library.get_persona(s.persona_id) if s.persona_id else None
+        ua = s.user_agent.lower()
+        platform = (
+            "iPhone" if "iphone" in ua else
+            "iPad" if "ipad" in ua else
+            "Android" if "android" in ua else
+            "Mac" if "macintosh" in ua else
+            "Windows" if "windows" in ua else
+            "Other"
+        )
+        stations_payload.append({
+            "station_id": s.station_id,
+            "persona_id": s.persona_id,
+            "persona_name": (persona or {}).get("name", "—") if persona else None,
+            "persona_role": (persona or {}).get("role", "") if persona else "",
+            "altered_state": (persona or {}).get("alteredState") if persona else None,
+            "safety_class": (persona or {}).get("safetyClass", "baseline") if persona else "baseline",
+            "platform": platform,
+            "online": s.online,
+            "turns": len(s.history),
+            "seconds_since_seen": int(time.time() - s.last_seen),
+        })
+    return JSONResponse({
+        "active": True,
+        "scenario_name": sess.scenario_name,
+        "join_code": sess.join_code,
+        "state": sess.state,
+        "stations": stations_payload,
+    })
+
+
+@app.get("/api/control/seed_report")
+async def api_control_seed_report(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """V6 — return the active session's chart seed_report so the operator
+    UI can show validator warnings (allergy collisions, biographic drift,
+    catalog misses) and auto-corrections inline."""
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"active": False})
+    seed = ehr_db.seed(sess.id) or {}
+    return JSONResponse({
+        "active":    True,
+        "condition": seed.get("condition"),
+        "report":    seed.get("seed_report") or {},
+    })
+
+
+@app.get("/api/control/seed/medications")
+async def api_control_seed_meds(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """V6.1 — list every med the seeder put on the MAR, with each row's
+    `included` flag (defaults to true if missing). Operator UI uses this
+    to render the per-med check-list before students join."""
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"active": False, "medications": []})
+    seed = ehr_db.seed(sess.id) or {}
+    meds = []
+    for m in (seed.get("medications") or []):
+        if not isinstance(m, dict):
+            continue
+        meds.append({
+            "med_id":     m.get("med_id") or m.get("name"),
+            "name":       m.get("name"),
+            "dose":       m.get("dose"),
+            "route":      m.get("route"),
+            "frequency":  m.get("frequency"),
+            "drug_class": m.get("drug_class"),
+            "high_alert": bool(m.get("high_alert")),
+            "rationale":  m.get("rationale"),
+            "current_status": m.get("current_status"),
+            "included":   m.get("included", True),
+        })
+    return JSONResponse({"active": True, "medications": meds})
+
+
+@app.post("/api/control/seed/medications/toggle")
+async def api_control_seed_meds_toggle(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """V6.1 — toggle a med's `included` flag in the seed. POST body:
+    {"med_id": "...", "included": bool}. Persists back to ehr_db so the
+    next EHR bootstrap (and the chart fold) sees the new shape. Students
+    who already loaded the EHR will see the change on their next chart
+    poll (5s)."""
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"ok": False, "error": "No active session"}, status_code=409)
+    body = await request.json()
+    med_id   = (body.get("med_id") or "").strip()
+    included = bool(body.get("included"))
+    if not med_id:
+        raise HTTPException(400, "Missing 'med_id'.")
+    seed = ehr_db.seed(sess.id) or {}
+    meds = seed.get("medications") or []
+    found = False
+    for m in meds:
+        if isinstance(m, dict) and (m.get("med_id") == med_id or m.get("name") == med_id):
+            m["included"] = included
+            found = True
+            break
+    if not found:
+        raise HTTPException(404, f"med_id {med_id!r} not on this MAR")
+    seed["medications"] = meds
+    ehr_db.update_seed(sess.id, seed)
+    return JSONResponse({"ok": True, "med_id": med_id, "included": included})
+
+
+@app.post("/api/control/state")
+async def api_control_set_state(
+    state: Annotated[str, Form()],
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    if state not in {"configured", "running", "paused", "ended"}:
+        raise HTTPException(400, "Invalid state")
+    control_session.set_state(state)
+    # V6 — broadcast the state flip to every connected device. Pause halts
+    # looping alarm audio + disables student input on the device; resume
+    # re-folds and re-enables. End triggers the same client behaviour as
+    # pause but with a terminal banner.
+    from .devices.ws import manager as _device_ws_manager
+    await _device_ws_manager.broadcast_state(state)
+    return JSONResponse({"ok": True, "state": state})
+
+
+@app.get("/api/control/transcript")
+async def api_control_transcript(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    since: int = 0,
+    since_ts: float = 0.0,
+):
+    """Return transcript entries from index `since` onward. The ops view
+    polls this every 2s and renders new entries — cheap because we only
+    send the delta.
+
+    V6: also returns the device event delta (programming, alarms,
+    silence, clear) since `since_ts` so the operator's transcript card
+    can interleave them chronologically with chat turns. Device-event
+    indices use timestamps (not list positions) because the device
+    event log can be appended-to from many WebSocket connections in
+    parallel — timestamps are the natural cursor.
+    """
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"active": False, "entries": [], "total": 0,
+                              "device_events": [], "device_since_ts": 0.0})
+    entries = sess.transcript[since:]
+    # V6 — pull device events from SQLite, filter to those after since_ts.
+    # V6.1 — skip internal engine ticks (pump.tick / feed.tick) — they
+    # fire constantly and aren't operator-readable; the human-meaningful
+    # action (device.time_advanced) is logged separately.
+    device_rows: list[dict[str, Any]] = []
+    max_ts = float(since_ts or 0)
+    _NOISE_EVENT_TYPES = {"pump.tick", "feed.tick"}
+    try:
+        for ev in ehr_db.device_events(session_id=sess.id):
+            if ev["ts"] <= since_ts:
+                continue
+            if ev["type"] in _NOISE_EVENT_TYPES:
+                # Still advance the cursor so the next poll skips them.
+                if ev["ts"] > max_ts:
+                    max_ts = ev["ts"]
+                continue
+            station = sess.device_stations.get(ev["station_id"]) if sess.device_stations else None
+            payload = ev.get("payload") or {}
+            device_rows.append({
+                "ts":           ev["ts"],
+                "id":           ev.get("id"),
+                "station_id":   ev["station_id"],
+                "station_label":(station.label if station else "") or ev["station_id"],
+                "device_model": (station.device_model if station else ""),
+                "type":         ev["type"],
+                "surface":      ev.get("surface"),
+                "payload":      payload,
+                "summary":      _summarize_device_event(ev["type"], payload),
+            })
+            if ev["ts"] > max_ts:
+                max_ts = ev["ts"]
+    except Exception:
+        pass
+    return JSONResponse({
+        "active": True,
+        "total": len(sess.transcript),
+        "entries": [
+            {
+                "ts": e.ts,
+                "source": e.source,
+                "source_label": e.source_label,
+                "persona_id": e.persona_id,
+                "persona_name": e.persona_name,
+                "direction": e.direction,
+                "text": e.text,
+                "latency_ms": e.latency_ms,
+            }
+            for e in entries
+        ],
+        "device_events":  device_rows,
+        "device_since_ts": max_ts,
+    })
+
+
+def _summarize_device_event(type_: str, payload: dict) -> str:
+    """One-line operator-readable summary of a device event."""
+    p = payload or {}
+    if type_ == "pump.program":
+        ch    = p.get("channel") or ""
+        rate  = p.get("rate_ml_hr")
+        vtbi  = p.get("vtbi_ml")
+        drug  = p.get("drug_label") or p.get("drug_code") or "—"
+        over  = " (soft-override)" if p.get("soft_override") else ""
+        return (f"Programmed{' Ch ' + ch if ch else ''}: {drug} · "
+                f"rate {rate} mL/hr · VTBI {vtbi} mL{over}")
+    if type_ == "feed.program":
+        return (f"Programmed: {p.get('mode') or '—'} · rate {p.get('rate_ml_hr')} mL/hr · "
+                f"vol {p.get('volume_ml')} mL")
+    if type_ == "pump.start":
+        return f"Started{' Ch ' + (p.get('channel') or '')}"
+    if type_ == "pump.pause":
+        return f"Paused{' Ch ' + (p.get('channel') or '')}"
+    if type_ == "pump.stop":
+        return f"Stopped{' Ch ' + (p.get('channel') or '')}"
+    if type_ == "pump.rate_change":
+        return (f"Rate change{' Ch ' + (p.get('channel') or '')}: {p.get('rate_ml_hr')} mL/hr"
+                + (" (soft-override)" if p.get("soft_override") else ""))
+    if type_ == "feed.start":  return "Feed started"
+    if type_ == "feed.pause":  return "Feed paused"
+    if type_ == "feed.stop":   return "Feed stopped"
+    if type_ == "pump.power":  return f"Power {p.get('state', '—').upper()}"
+    if type_ == "feed.power":  return f"Power {p.get('state', '—').upper()}"
+    if type_ == "alarm.injected":
+        auto = " (auto)" if p.get("auto") else ""
+        return f"ALARM: {p.get('tone', '—')}{auto}"
+    if type_ == "alarm.silenced":
+        return f"silenced: {p.get('tone', '—')}"
+    if type_ == "alarm.cleared":
+        return f"cleared: {p.get('tone', '—')}"
+    if type_ == "device.assigned":
+        return f"reassigned to {p.get('character_id') or '— unassigned —'}"
+    if type_ == "device.time_advanced":
+        mins = p.get("minutes", 0)
+        try:
+            mins = float(mins)
+        except (TypeError, ValueError):
+            mins = 0
+        if mins >= 60 and mins == int(mins):
+            return f"⏩ Time advanced +{int(mins // 60)} hr" + (f" {int(mins % 60)} min" if mins % 60 else "")
+        return f"⏩ Time advanced +{mins:g} min"
+    if type_ == "cabinet.administer":
+        # V6.1.6 — the quick-checkoff path on med carts. Operators want
+        # to see "RN administered <med> <dose> <route> to <Patient>" in
+        # the live transcript, not just an opaque event type.
+        who   = p.get("character_name") or p.get("character_id") or "?"
+        med   = p.get("med_name") or "med"
+        dose  = p.get("dose") or ""
+        route = p.get("route") or ""
+        scan  = " (scanned)" if p.get("scan_used") else " (no scan)"
+        by    = p.get("administered_by") or "RN"
+        return f"💊 {by} administered {med}{' ' + dose if dose else ''}{' ' + route if route else ''} to {who}{scan}"
+    if type_.startswith("cabinet."):
+        verb = type_.split(".", 1)[-1]
+        return f"Cabinet {verb}: {p.get('med_id') or p.get('verb') or ''}".strip()
+    return type_
+
+
+@app.post("/api/control/operator/turn")
+async def api_control_operator_turn(
+    persona_id: Annotated[str, Form()],
+    message: Annotated[str, Form()],
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Operator-side PTT — the instructor engages a character directly from
+    the control room. One persona per turn. Routed through the same runtime
+    as a station turn; transcript records source='operator'."""
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"ok": False, "error": "No active session."}, status_code=400)
+    if persona_id not in sess.selected_personas:
+        return JSONResponse({"ok": False, "error": f"Persona {persona_id} is not in this session."}, status_code=400)
+    if not message.strip():
+        return JSONResponse({"ok": False, "error": "Empty message."}, status_code=400)
+    persona = library.get_persona(persona_id)
+    if persona is None:
+        return JSONResponse({"ok": False, "error": f"Unknown persona {persona_id}."}, status_code=400)
+    char = library.persona_as_character(persona)
+    scenario = {
+        "id": sess.id,
+        "name": sess.scenario_name,
+        "patient": {"history": sess.scenario_text} if sess.scenario_text else {},
+    }
+    import time as _time
+    # V6 — prefer the *current* vault key, falling back to the session-
+    # cached key only if the vault doesn't have one. This lets the operator
+    # update an invalid / rotated Anthropic key at /portal/credentials and
+    # have the change take effect immediately on the next PTT — no need to
+    # end and relaunch the scenario.
+    live_key = vault.get("ANTHROPIC_API_KEY") or sess.api_key
+    sess.api_key = live_key   # keep the session in sync so other routes benefit
+    sim_sess = runtime.create_session_from_data(
+        scenario=scenario,
+        characters={persona_id: char},
+        api_key=live_key,
+    )
+    turn_start = _time.time()
+    result = runtime.take_turn(sim_sess.id, persona_id, message)
+    latency_ms = int((_time.time() - turn_start) * 1000)
+    runtime.end_session(sim_sess.id)
+    if result.get("ok"):
+        sess.log_turn(
+            source="operator",
+            source_label="Operator (control room)",
+            persona_id=persona_id,
+            persona_name=persona.get("name", persona_id),
+            student_text=message,
+            character_text=result["reply"],
+            latency_ms=latency_ms,
+        )
+        result["latency_ms"] = latency_ms
+    return JSONResponse(result)
+
+
+# ----- Station (mobile) flow ---------------------------------------------
+
+@app.get("/join", response_class=HTMLResponse)
+async def join_landing(request: Request, code: str | None = None):
+    """Public landing page. Mobile scans QR → lands here. No auth — the
+    join_code itself is the access token for stations."""
+    return templates.TemplateResponse(
+        request, "join.html",
+        {"code": (code or "").upper()},
+    )
+
+
+@app.post("/join")
+async def join_submit(
+    request: Request,
+    code: Annotated[str, Form()],
+    persona_id: Annotated[str, Form()],
+):
+    sess = control_session.get_by_join_code(code)
+    if sess is None:
+        return RedirectResponse(f"/join?code={code}&error=notfound", status_code=303)
+    if persona_id not in sess.selected_personas:
+        return RedirectResponse(f"/join?code={code}&error=persona", status_code=303)
+    user_agent = request.headers.get("user-agent", "")[:200]
+    import secrets as _secrets
+    station_id = _secrets.token_urlsafe(8)
+    st = sess.add_station(station_id, user_agent=user_agent)
+    st.persona_id = persona_id
+    return RedirectResponse(f"/station/{sess.join_code}/{station_id}", status_code=303)
+
+
+@app.get("/station/{join_code}/{station_id}", response_class=HTMLResponse)
+async def station_page(
+    join_code: str,
+    station_id: str,
+    request: Request,
+):
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None or station_id not in sess.stations:
+        return RedirectResponse(f"/join?code={join_code}&error=notfound", status_code=303)
+    station = sess.stations[station_id]
+    persona = library.get_persona(station.persona_id) if station.persona_id else None
+    if persona is None:
+        return RedirectResponse(f"/join?code={join_code}", status_code=303)
+    voice_profile = library.voice_profile_for(persona)
+    return templates.TemplateResponse(
+        request, "station.html",
+        {
+            "session": sess,
+            "station": station,
+            "persona": persona,
+            "voice_profile": voice_profile,
+            # V4 — the instructor's ElevenLabs voice assignment for this
+            # persona ("" → station uses the browser voice).
+            "voice_id": sess.voice_assignments.get(persona["id"], ""),
+            "history": station.history,
+        },
+    )
+
+
+@app.post("/api/station/{join_code}/{station_id}/turn")
+async def api_station_turn(
+    join_code: str,
+    station_id: str,
+    message: Annotated[str, Form()],
+):
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None or station_id not in sess.stations:
+        return JSONResponse({"ok": False, "error": "Station not found."}, status_code=404)
+    station = sess.stations[station_id]
+    station.touch()
+    persona = library.get_persona(station.persona_id) if station.persona_id else None
+    if persona is None:
+        return JSONResponse({"ok": False, "error": "No persona assigned."}, status_code=400)
+    # Build an ad-hoc runtime session per station turn (lightweight; uses
+    # station.history as the rolling context).
+    char = library.persona_as_character(persona)
+    scenario = {
+        "id": sess.id,
+        "name": sess.scenario_name,
+        "patient": {"history": sess.scenario_text} if sess.scenario_text else {},
+        "curriculum": {"touchpoints": []},
+    }
+    # M38 — Prefer the process-wide Anthropic-key cache over the
+    # snapshot stamped on the encounter at room start. The cache is
+    # refreshed every time an operator route reads the vault, so a
+    # /portal/credentials update propagates without restarting the
+    # room. Also keep sess.api_key in sync so other paths benefit.
+    live_key = _resolve_anthropic_key(sess)
+    if live_key and live_key != sess.api_key:
+        sess.api_key = live_key
+    if not live_key:
+        return JSONResponse(
+            {"ok": False,
+             "error": "No Anthropic API key configured. Open "
+                      "/portal/credentials to add it, then try again — "
+                      "the change applies immediately, no restart needed."},
+            status_code=200,
+        )
+    # Reuse runtime by creating a transient session per turn — simpler than
+    # caching a SimSession alongside ControlSession.
+    sim_sess = runtime.create_session_from_data(
+        scenario=scenario,
+        characters={persona["id"]: char},
+        api_key=live_key,
+    )
+    # Replay station history into the sim session so context is preserved
+    import time as _time
+    for h in station.history[-runtime.HISTORY_WINDOW:]:
+        sim_sess.history.append(runtime.TurnRecord(
+            addressee=persona["id"],
+            student_utterance=h.get("user", ""),
+            character_response=h.get("character", ""),
+            timestamp=h.get("ts", _time.time()),
+        ))
+    turn_start = _time.time()
+    # M38 — Translate Anthropic 401 (invalid x-api-key) into a friendly
+    # chat message that tells the operator exactly where to fix it,
+    # instead of dumping a raw repr into the chat bubble.
+    try:
+        result = runtime.take_turn(sim_sess.id, persona["id"], message)
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc)
+        runtime.end_session(sim_sess.id)
+        if "401" in msg or "invalid x-api-key" in msg.lower() \
+                or "authentication" in msg.lower():
+            return JSONResponse(
+                {"ok": False,
+                 "error": "Anthropic rejected the API key (401). Update "
+                          "ANTHROPIC_API_KEY at /portal/credentials and "
+                          "try again — the new key applies immediately."},
+                status_code=200,
+            )
+        return JSONResponse({"ok": False,
+                              "error": f"Turn failed: {msg}"},
+                             status_code=200)
+    latency_ms = int((_time.time() - turn_start) * 1000)
+    # Clean up the transient sim session
+    runtime.end_session(sim_sess.id)
+    # M38 — runtime.take_turn returns {"ok": False, "error": …} on
+    # caught failures. Also translate those.
+    if not result.get("ok"):
+        err = (result.get("error") or "").lower()
+        if "401" in err or "invalid x-api-key" in err or "authentication" in err:
+            result = {
+                "ok": False,
+                "error": "Anthropic rejected the API key (401). Update "
+                         "ANTHROPIC_API_KEY at /portal/credentials and "
+                         "try again — the new key applies immediately.",
+            }
+    if result.get("ok"):
+        station.history.append({
+            "user": message,
+            "character": result["reply"],
+            "character_name": result["character_name"],
+            "ts": _time.time(),
+        })
+        sess.log_turn(
+            source=f"station:{station_id}",
+            source_label=f"{persona.get('name','—')} station",
+            persona_id=persona["id"],
+            persona_name=persona.get("name", persona["id"]),
+            student_text=message,
+            character_text=result["reply"],
+            latency_ms=latency_ms,
+        )
+    return JSONResponse(result)
+
+
+@app.post("/api/station/{join_code}/{station_id}/heartbeat")
+async def api_station_heartbeat(join_code: str, station_id: str):
+    sess = control_session.get_by_join_code(join_code)
+    if sess and station_id in sess.stations:
+        sess.stations[station_id].touch()
+        return JSONResponse({"ok": True})
+    return JSONResponse({"ok": False}, status_code=404)
+
+
+# ===========================================================================
+# MEDSIM 3 ADDITIONS — Integrated EHR layer (Blueprint §§7-13)
+# ===========================================================================
+
+# ---- 7. EHR Station Onboarding (QR + URL) --------------------------------
+
+@app.get("/ehr/join", response_class=HTMLResponse)
+async def ehr_join_landing(request: Request, code: str | None = None,
+                            error: str | None = None):
+    """Public EHR landing. No auth — join_code is the access token."""
+    return templates.TemplateResponse(
+        request, "ehr_join.html",
+        {"code": (code or "").upper(), "error": error},
+    )
+
+
+@app.post("/ehr/join")
+async def ehr_join_submit(
+    request: Request,
+    code: Annotated[str, Form()],
+    device_label: Annotated[str, Form()] = "",
+):
+    sess = control_session.get_by_join_code(code)
+    if sess is None:
+        return RedirectResponse(f"/ehr/join?code={code}&error=notfound", status_code=303)
+    if not sess.ehr_id:
+        return RedirectResponse(f"/ehr/join?code={code}&error=noehr", status_code=303)
+    user_agent = request.headers.get("user-agent", "")[:200]
+    ehr_station_id = "ES-" + secrets.token_urlsafe(6)
+    sess.add_ehr_station(ehr_station_id, device_label=device_label.strip(), user_agent=user_agent)
+    # Persist the station + (if not yet registered) the session+seed.
+    _ensure_ehr_session_registered(sess)
+    ehr_db.register_station(sess.id, ehr_station_id,
+                            device_label=device_label.strip(), user_agent=user_agent)
+    return RedirectResponse(f"/ehr/{sess.join_code}/{ehr_station_id}", status_code=303)
+
+
+def _ensure_ehr_session_registered(sess: control_session.ControlSession) -> None:
+    """Lazy-build the ChartSeed + register the ehr_session row on first need."""
+    if not sess.ehr_id:
+        return
+    existing = ehr_db.seed(sess.id)
+    if existing:
+        return
+    seed = ehr_seed.seed_from_session(sess, ehr_id=sess.ehr_id) or {}
+    primary = sess.selected_personas[0] if sess.selected_personas else None
+    ehr_db.register_session(sess.id, sess.join_code, sess.ehr_id, primary, seed)
+
+
+# ---- Launch the EHR locally (instructor convenience — no QR/2nd device) --
+
+_CONTROL_ROOM_EHR_LABEL = "Control room (instructor)"
+
+
+def _launch_ehr_station(sess: control_session.ControlSession) -> tuple[str, bool]:
+    """Register — or reuse — the control-room EHR station for this session.
+
+    Returns (ehr_station_id, reused). A repeat launch reuses the still-
+    online control-room station instead of piling up new ones.
+    """
+    _ensure_ehr_session_registered(sess)
+    reused = next((s for s in sess.ehr_stations.values()
+                   if s.device_label == _CONTROL_ROOM_EHR_LABEL and s.online), None)
+    if reused is not None:
+        reused.touch()
+        return reused.ehr_station_id, True
+    station_id = "ES-" + secrets.token_urlsafe(6)
+    sess.add_ehr_station(station_id, device_label=_CONTROL_ROOM_EHR_LABEL,
+                         user_agent="control-room-launch")
+    ehr_db.register_station(sess.id, station_id,
+                            device_label=_CONTROL_ROOM_EHR_LABEL,
+                            user_agent="control-room-launch")
+    return station_id, False
+
+
+@app.get("/portal/control/launch_ehr")
+async def control_launch_ehr_get(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Register a control-room EHR station and redirect straight into the
+    full Medical Records interface — chart, notes, vitals, and order entry
+    (labs/imaging/meds).
+
+    Backs the ops-view 'Launch EHR on this device' link. Implemented as a
+    plain GET redirect (not a JS popup) so it is an ordinary same-origin
+    navigation — no popup-blocker friction and no blank-window base-URL
+    pitfalls. Built for testing and small training installs.
+    """
+    sess = control_session.get_active()
+    if sess is None or not sess.ehr_id:
+        # Nothing to launch — send the instructor back to the control room.
+        return RedirectResponse("/portal/control", status_code=303)
+    station_id, _reused = _launch_ehr_station(sess)
+    return RedirectResponse(f"/ehr/{sess.join_code}/{station_id}", status_code=303)
+
+
+@app.post("/portal/control/launch_ehr")
+async def control_launch_ehr(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """JSON form of the launch action — registers (or reuses) the control-
+    room EHR station and returns its URL. Kept for programmatic callers."""
+    sess = control_session.get_active()
+    if sess is None:
+        raise HTTPException(409, "No active session.")
+    if not sess.ehr_id:
+        raise HTTPException(
+            409, "This session has no EHR configured. Start a session and "
+                 "choose a records system in wizard step 2b.")
+    station_id, reused = _launch_ehr_station(sess)
+    return JSONResponse({
+        "ok": True,
+        "url": f"/ehr/{sess.join_code}/{station_id}",
+        "ehr_id": sess.ehr_id,
+        "station_id": station_id,
+        "reused": reused,
+    })
+
+
+# ---- M34 — Per-encounter instructor EHR launch (room mode) ----------
+#
+# `/portal/control/launch_ehr` above is the v6-singleton flavor — it
+# calls `control_session.get_active()`, which returns None in a v7
+# multi-encounter room (M2 contract). In room mode every bed has its
+# own EHR config; the instructor needs to be able to open the chart
+# for a specific bed from that bed's Per-Patient Console, in a new
+# window.
+#
+# This is the v7-aware twin: takes an encounter_id, resolves the
+# Encounter (which IS a ControlSession dataclass — same dataclass,
+# just renamed), and reuses `_launch_ehr_station` verbatim.
+
+@app.get("/portal/room/encounter/{encounter_id}/launch_ehr")
+async def room_encounter_launch_ehr_get(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Instructor-only same-origin redirect into the EHR chart for this
+    bed. Backs the encounter console's '📋 Open EHR (new window)'
+    button — open in a new tab with `target="_blank"` for a side-by-
+    side workflow (console on one monitor, EHR on another)."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    if not enc.ehr_id:
+        # No EHR configured for this bed — send the instructor back to
+        # the console with a hint in the query string. The console can
+        # surface a "no EHR configured" toast if/when we plumb one.
+        return RedirectResponse(
+            f"/portal/room/encounter/{encounter_id}?ehr=unconfigured",
+            status_code=303,
+        )
+    station_id, _reused = _launch_ehr_station(enc)
+    return RedirectResponse(
+        f"/ehr/{enc.join_code}/{station_id}", status_code=303,
+    )
+
+
+@app.post("/portal/room/encounter/{encounter_id}/launch_ehr")
+async def room_encounter_launch_ehr_post(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """JSON form of the per-encounter EHR launch — returns the URL
+    instead of redirecting. Kept symmetric with the singleton route's
+    POST flavor for programmatic callers (e.g. WebDriver flows)."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    if not enc.ehr_id:
+        raise HTTPException(
+            409, "This encounter has no EHR configured. Pick one in the "
+                 "wizard's per-row Scenario drawer.")
+    station_id, reused = _launch_ehr_station(enc)
+    return JSONResponse({
+        "ok": True,
+        "url":         f"/ehr/{enc.join_code}/{station_id}",
+        "ehr_id":      enc.ehr_id,
+        "station_id":  station_id,
+        "encounter_id": enc.id,
+        "reused":      reused,
+    })
+
+
+# ---- Serve the EHR bundle (with Jinja-rendered bootstrap) ----------------
+
+# NOTE — route order matters: the demo route MUST be registered BEFORE
+# the generic /ehr/{join_code}/{station_id} or FastAPI's first-match-wins
+# resolver will hand `/ehr/demo/helix` to the bundle route with
+# join_code="demo", station_id="helix" and trigger a notfound redirect.
+@app.get("/ehr/demo/{ehr_id}", response_class=HTMLResponse)
+async def ehr_bundle_demo(ehr_id: str, request: Request,
+                           _: Annotated[credentials.Vault, Depends(auth.require_vault)]):
+    """Operator-only preview of an EHR bundle without an active session.
+
+    Useful for the wizard 'Preview' button so the instructor can see each
+    EHR's look before committing. Demo mode: no event POSTs, no heartbeat,
+    no chart_event persistence — the React app uses its built-in mockup data.
+    """
+    if ehr_registry.get(ehr_id) is None:
+        raise HTTPException(404, f"Unknown EHR id: {ehr_id}")
+    return _render_ehr_bundle(ehr_id, request, mode="demo",
+                              join_code="DEMO00", station_id="demo", session=None)
+
+
+@app.get("/ehr/{join_code}/{station_id}", response_class=HTMLResponse)
+async def ehr_bundle(join_code: str, station_id: str, request: Request):
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None:
+        return RedirectResponse(f"/ehr/join?code={join_code}&error=notfound", status_code=303)
+    if not sess.ehr_id:
+        return RedirectResponse(f"/ehr/join?code={join_code}&error=noehr", status_code=303)
+    if station_id not in sess.ehr_stations:
+        return RedirectResponse(f"/ehr/join?code={join_code}", status_code=303)
+    return _render_ehr_bundle(sess.ehr_id, request, mode="live",
+                              join_code=sess.join_code, station_id=station_id,
+                              session=sess)
+
+
+def _render_ehr_bundle(ehr_id: str, request: Request, *, mode: str,
+                       join_code: str, station_id: str,
+                       session: control_session.ControlSession | None) -> HTMLResponse:
+    # V5 — one functional EHR engine themes itself per ehr_id. The bundle
+    # is served from portal/ehr/_core/; the ehr_id only needs to be valid.
+    if ehr_registry.get(ehr_id) is None:
+        raise HTTPException(404, f"Unknown EHR id: {ehr_id}")
+    bundle_dir = PORTAL_DIR / "ehr" / "_core"
+    if not (bundle_dir / "index.html").exists():
+        raise HTTPException(500, "EHR core bundle is missing.")
+
+    bootstrap = _build_bootstrap(ehr_id, mode=mode, join_code=join_code,
+                                 station_id=station_id, session=session,
+                                 request=request)
+
+    # Render index.html with a single-purpose Jinja env. The template only
+    # uses `{{ bootstrap_json | safe }}`; the engine reads EHR_ID out of
+    # the bootstrap and picks its theme from themes.js.
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+    env = Environment(
+        loader=FileSystemLoader(str(bundle_dir)),
+        autoescape=select_autoescape(["html"]),
+    )
+    tmpl = env.get_template("index.html")
+    html = tmpl.render(bootstrap_json=json.dumps(bootstrap))
+    return HTMLResponse(html)
+
+
+def _build_bootstrap(ehr_id: str, *, mode: str, join_code: str, station_id: str,
+                      session: control_session.ControlSession | None,
+                      request: Request) -> dict[str, Any]:
+    base = _base_url_for_qr(request)
+    out: dict[str, Any] = {
+        "MODE":      mode,
+        "EHR_ID":    ehr_id,
+        "JOIN":      join_code,
+        "STATION":   station_id,
+        "STATION_LABEL": "",
+        "BASE_URL":  base,
+        "PATIENTS":  [],
+        "SEED":      {},
+        "LOCKED":    False,
+        "NOW":       int(time.time() * 1000),
+    }
+    if session is not None and session.ehr_id == ehr_id:
+        out["LOCKED"] = session.charting_locked_at is not None
+        st = session.ehr_stations.get(station_id)
+        if st is not None:
+            out["STATION_LABEL"] = st.device_label or ""
+        seed = ehr_db.seed(session.id) or {}
+        if seed:
+            out["SEED"] = seed
+            adapter = _adapter_for(ehr_id)
+            if adapter is not None:
+                try:
+                    out["PATIENTS"] = adapter.install(seed).get("patients", []) or []
+                except Exception:  # noqa: BLE001 — never break bundle render
+                    out["PATIENTS"] = []
+    return out
+
+
+def _adapter_for(ehr_id: str):
+    """Lazy-import the EHR's adapter module (helix.adapter, etc.)."""
+    try:
+        import importlib
+        return importlib.import_module(f"portal.ehr.{ehr_id}.adapter")
+    except ImportError:
+        return None
+
+
+# ---- 9. API surface for the EHR bundle (event log, heartbeat, chart) -----
+
+@app.get("/api/ehr/{join_code}/{station_id}/bootstrap")
+async def api_ehr_bootstrap(join_code: str, station_id: str, request: Request):
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None or not sess.ehr_id or station_id not in sess.ehr_stations:
+        raise HTTPException(404, "Session or station not found.")
+    return JSONResponse(_build_bootstrap(
+        sess.ehr_id, mode="live", join_code=sess.join_code,
+        station_id=station_id, session=sess, request=request,
+    ))
+
+
+@app.post("/api/ehr/{join_code}/{station_id}/event")
+async def api_ehr_event(join_code: str, station_id: str, request: Request):
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None or station_id not in sess.ehr_stations:
+        raise HTTPException(404, "Station not found.")
+    if sess.charting_locked_at is not None:
+        return JSONResponse({"ok": False, "locked": True}, status_code=423)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    ev_type = (body.get("type") or "").strip()
+    surface = (body.get("surface") or "").strip()
+    if not ev_type or not surface:
+        raise HTTPException(400, "Missing 'type' or 'surface'.")
+    payload = body.get("payload") or {}
+    if "patient_id" in body and "patient_id" not in payload:
+        payload["patient_id"] = body.get("patient_id")
+    _ensure_ehr_session_registered(sess)
+    ev_id = ehr_db.append_event(sess.id, station_id,
+                                 type=ev_type, surface=surface, payload=payload)
+    sess.ehr_stations[station_id].touch()
+    sess.ehr_stations[station_id].event_count += 1
+    return JSONResponse({"ok": True, "id": ev_id})
+
+
+@app.post("/api/ehr/{join_code}/{station_id}/heartbeat")
+async def api_ehr_heartbeat(join_code: str, station_id: str):
+    sess = control_session.get_by_join_code(join_code)
+    if sess and station_id in sess.ehr_stations:
+        sess.ehr_stations[station_id].touch()
+        ehr_db.touch_station(station_id)
+        return JSONResponse({"ok": True})
+    return JSONResponse({"ok": False}, status_code=404)
+
+
+@app.get("/api/ehr/{join_code}/chart/{patient_id}")
+async def api_ehr_chart(join_code: str, patient_id: str):
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None:
+        raise HTTPException(404, "Session not found.")
+    projection = ehr_db.fold(sess.id)
+    projection["patient_id"] = patient_id
+    projection["seed"] = ehr_db.seed(sess.id)
+    # V5 — surface lock state so an EHR station that is only polling (not
+    # writing) still flips read-only when the operator fires lock-in.
+    projection["locked"] = sess.charting_locked_at is not None
+    return JSONResponse(projection)
+
+
+def _merged_catalog(ehr_id: str) -> list[dict[str, Any]]:
+    """Base per-EHR catalog.json + the persistent master-catalog additions
+    (shared across all three records systems)."""
+    base = ehr_registry.catalog(ehr_id)
+    have = {(i.get("category", ""), str(i.get("code", "")).lower()) for i in base}
+    merged = list(base)
+    for add in ehr_db.catalog_additions(ehr_id):
+        key = (add["category"], add["code"].lower())
+        if key not in have:
+            merged.append({"code": add["code"], "category": add["category"],
+                           "label": add["label"], "common": False,
+                           "added": True, "added_by": add.get("added_by", "")})
+            have.add(key)
+    return merged
+
+
+@app.get("/api/ehr/{join_code}/orders/catalog")
+async def api_ehr_orders_catalog(join_code: str):
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None or not sess.ehr_id:
+        raise HTTPException(404, "Session not found.")
+    return JSONResponse({"ehr_id": sess.ehr_id, "items": _merged_catalog(sess.ehr_id)})
+
+
+@app.post("/api/ehr/{join_code}/orders/catalog")
+async def api_ehr_orders_catalog_add(join_code: str, request: Request):
+    """Add a custom supply / service / medication to the persistent master
+    catalog so it can be ordered from now on, in every EHR."""
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None or not sess.ehr_id:
+        raise HTTPException(404, "Session not found.")
+    body = await request.json()
+    station_id = (body.get("ehr_station_id") or "").strip()
+    added_by = ""
+    st = sess.ehr_stations.get(station_id)
+    if st is not None:
+        added_by = st.device_label or station_id
+    item = ehr_db.add_catalog_item(
+        body.get("category", ""), body.get("code", ""), body.get("label", ""),
+        added_by=added_by or "EHR station")
+    if item is None:
+        raise HTTPException(400, "category and code are required.")
+    return JSONResponse({"ok": True, "item": item,
+                         "items": _merged_catalog(sess.ehr_id)})
+
+
+@app.post("/api/ehr/{join_code}/orders")
+async def api_ehr_orders_place(join_code: str, request: Request):
+    sess = control_session.get_by_join_code(join_code)
+    if sess is None or not sess.ehr_id:
+        raise HTTPException(404, "Session not found.")
+    if sess.charting_locked_at is not None:
+        return JSONResponse({"ok": False, "locked": True}, status_code=423)
+    body = await request.json()
+    patient_id = body.get("patient_id") or ""
+    station_id = body.get("ehr_station_id") or ""
+    order = body.get("order") or {}
+    if not order:
+        raise HTTPException(400, "Missing order body.")
+    _ensure_ehr_session_registered(sess)
+    ev_id = ehr_db.append_order(sess.id, station_id, patient_id=patient_id, order=order)
+    # Auto-promote: an order placed for a code not already in the catalog
+    # joins the master list so it "continues forward" as an orderable item.
+    code = str(order.get("code", "")).strip()
+    category = str(order.get("category", "")).strip().lower()
+    if code and category:
+        known = {(i.get("category", ""), str(i.get("code", "")).lower())
+                 for i in _merged_catalog(sess.ehr_id)}
+        if (category, code.lower()) not in known:
+            st = sess.ehr_stations.get(station_id)
+            ehr_db.add_catalog_item(category, code, order.get("label", code),
+                                    added_by=(st.device_label if st else "order"))
+    if station_id in sess.ehr_stations:
+        sess.ehr_stations[station_id].event_count += 1
+        sess.ehr_stations[station_id].touch()
+    return JSONResponse({"ok": True, "id": ev_id})
+
+
+# ---- EHR QR convenience --------------------------------------------------
+
+@app.get("/api/ehr/qr.svg")
+async def api_ehr_qr(code: str, request: Request, scale: int = 6):
+    """Returns an SVG QR encoding the EHR join URL for a given code."""
+    base = _base_url_for_qr(request)
+    url = f"{base}/ehr/join?code={code.upper()}"
+    svg = qrgen.make_qr_svg(url, scale=scale)
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+# ---- 12. Comparison engine + lock-in (Phase 5 — full impl in compare/) --
+
+@app.post("/portal/control/charting_complete")
+async def control_charting_complete(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Fire the lock-in: run rules + rubric, persist comparison_report,
+    flip the chart to read-only. Synchronous (3-6s typical)."""
+    sess = control_session.get_active()
+    if sess is None or not sess.ehr_id:
+        raise HTTPException(409, "No active EHR session.")
+    if sess.charting_locked_at is not None:
+        raise HTTPException(409, "Charting is already locked.")
+    _ensure_ehr_session_registered(sess)
+
+    # Lazy import — keeps `compare` optional at startup.
+    try:
+        from .compare import rules as compare_rules, rubric as compare_rubric, score as compare_score
+    except ImportError:
+        # Phase 2/3 fallback — record an empty report so the UI flow works
+        ehr_db.save_comparison(sess.id, {}, {}, score=0.0, model="stub")
+        sess.charting_locked_at = time.time()
+        return JSONResponse({"ok": True, "composite": 0.0, "stub": True})
+
+    chart = ehr_db.fold(sess.id)
+    orders = ehr_db.orders(sess.id)
+    seed = ehr_db.seed(sess.id)
+
+    rules_r = compare_rules.evaluate(sess, chart, orders, seed)
+    try:
+        rubric_r = await compare_rubric.evaluate(sess, chart, orders, api_key=sess.api_key)
+    except Exception as exc:  # noqa: BLE001 — never fail lock-in on a network blip
+        rubric_r = {"completeness": 1, "accuracy": 1, "sbar_quality": 1,
+                    "prioritization": 1, "safety": 1,
+                    "narrative_feedback": f"Rubric unavailable ({type(exc).__name__})."}
+    composite = compare_score.composite(rules_r, rubric_r)
+    ehr_db.save_comparison(sess.id, rules_r, rubric_r, composite,
+                           model="claude-haiku-4-5")
+    sess.charting_locked_at = time.time()
+    return JSONResponse({"ok": True, "composite": composite})
+
+
+@app.get("/api/comparison/{session_id}")
+async def api_comparison(
+    session_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    report = ehr_db.get_comparison(session_id)
+    if not report:
+        raise HTTPException(404, "No comparison_report for that session.")
+    return JSONResponse(report)
+
+
+# ---- EHR ops view helpers (ops view polls these for the station roster) --
+
+@app.get("/api/ehr/state")
+async def api_ehr_state(_: Annotated[credentials.Vault, Depends(auth.require_vault)]):
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"active": False})
+    stations_payload = []
+    for st in sess.ehr_stations.values():
+        stations_payload.append({
+            "ehr_station_id": st.ehr_station_id,
+            "device_label":   st.device_label or "—",
+            "online":         st.online,
+            "joined_at":      st.joined_at,
+            "event_count":    st.event_count,
+            "seconds_since_seen": int(time.time() - st.last_seen),
+        })
+    return JSONResponse({
+        "active":  True,
+        "ehr_id":  sess.ehr_id,
+        "locked":  sess.charting_locked_at is not None,
+        "locked_at": sess.charting_locked_at,
+        "stations": stations_payload,
+        "event_count": sum(s.event_count for s in sess.ehr_stations.values()),
+    })
+
+
+# ---- 18. Operator-only EHR admin (seed inspector + purge) ----------------
+
+@app.get("/portal/ehr_admin", response_class=HTMLResponse)
+async def ehr_admin(request: Request,
+                     _: Annotated[credentials.Vault, Depends(auth.require_vault)]):
+    sess = control_session.get_active()
+    seed = ehr_db.seed(sess.id) if sess else {}
+    events = ehr_db.events(sess.id) if sess else []
+    return templates.TemplateResponse(
+        request, "ehr_admin.html",
+        {
+            "active":  "control",
+            "session": sess,
+            "ehrs":    ehr_registry.REGISTRY,
+            "seed":    seed,
+            "events":  events[-50:],  # last 50 only
+            "event_total": len(events),
+            "storage": ehr_db.storage_status(),   # V5 — persistence health
+            "master_catalog": ehr_db.catalog_additions(None),  # V5 Phase 6
+        },
+    )
+
+
+@app.post("/portal/ehr_admin/purge")
+async def ehr_admin_purge(_: Annotated[credentials.Vault, Depends(auth.require_vault)]):
+    sess = control_session.get_active()
+    if sess is None:
+        return RedirectResponse("/portal/ehr_admin", status_code=303)
+    ehr_db.purge_session(sess.id)
+    sess.ehr_stations.clear()
+    sess.charting_locked_at = None
+    return RedirectResponse("/portal/ehr_admin", status_code=303)
+
+
+@app.post("/portal/ehr_admin/catalog_remove")
+async def ehr_admin_catalog_remove(
+    item_id: Annotated[int, Form()],
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Instructor prune of a master-catalog addition."""
+    ehr_db.remove_catalog_item(item_id)
+    return RedirectResponse("/portal/ehr_admin", status_code=303)
+
+
+# ===========================================================================
+# MEDSIM 4 ADDITIONS — ElevenLabs neural character voices
+# ===========================================================================
+
+def _session_el_key() -> str:
+    """The ElevenLabs key the station-facing /api/tts route should use.
+
+    Stations carry no operator cookie, so they can't reach the vault.
+    Prefer the key captured onto the active ControlSession at start;
+    fall back to env/keyfile resolution.
+    """
+    sess = control_session.get_active()
+    if sess and sess.elevenlabs_api_key:
+        return sess.elevenlabs_api_key
+    return voices.get_api_key(None)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M38 — Process-wide Anthropic key runtime cache.
+#
+# Mirrors voices.py's `_runtime_key` pattern for ElevenLabs.  Stations
+# (which carry no operator cookie) cannot read the vault directly.
+# When a station-turn route needs to call Claude, it has two options:
+#
+#   1. Use the key snapshotted onto the encounter at /api/room/start
+#      (`enc.api_key`) — stale if the operator has updated the key
+#      since the room launched.
+#   2. Use a process-wide cache that any vault-authed route refreshes
+#      whenever it reads the latest ANTHROPIC_API_KEY value — so a
+#      key update in /portal/credentials propagates to all live
+#      encounters without a restart.
+#
+# We prefer option 2.  The cache is populated every time an operator-
+# authenticated route resolves the key (`_capture_anthropic_key` is
+# called from /api/room/start, /portal/credentials, etc.).  Empty
+# strings never overwrite a previously-cached non-empty value — that
+# protects against accidental clears.
+# ─────────────────────────────────────────────────────────────────────
+
+_anthropic_runtime_key: str = ""
+
+
+def _capture_anthropic_key(key: str | None) -> str:
+    """Update the process-wide cache with a freshly-resolved Anthropic
+    key (typically from `vault.get("ANTHROPIC_API_KEY")`).  Returns the
+    (possibly cached) value — empty when never set."""
+    global _anthropic_runtime_key
+    if key:
+        cleaned = key.strip()
+        if cleaned:
+            _anthropic_runtime_key = cleaned
+    return _anthropic_runtime_key
+
+
+def _resolve_anthropic_key(
+    sess: control_session.ControlSession | None,
+) -> str:
+    """Best-known Anthropic key for a station-turn callsite.
+
+    Order:
+      1. Process-wide cache (updated whenever an operator route reads
+         the vault — reflects the *current* /portal/credentials value).
+      2. Key snapshotted onto the encounter at room start.
+
+    Either may be empty; the caller must handle that and surface a
+    friendly error to the chat.
+    """
+    if _anthropic_runtime_key:
+        return _anthropic_runtime_key
+    return (sess.api_key if sess else "") or ""
+
+
+@app.get("/api/voices")
+async def api_voices(
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Full voice catalog — live ElevenLabs catalog or static fallback."""
+    cat = voices.list_voices(voices.get_api_key(vault))
+    return JSONResponse(cat)
+
+
+@app.get("/api/voices/health")
+async def api_voices_health(
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return JSONResponse(voices.health(voices.get_api_key(vault)))
+
+
+@app.get("/api/voices/candidates")
+async def api_voice_candidates_by_traits(
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    sex: str = "U",
+    age_band: str = "middle_aged",
+    accent: str = "american",
+    ethnicity: str = "anglo_american",
+):
+    """Up to 5 candidate voices for an arbitrary character (no persona id).
+
+    Used by the legacy V1 voice session, whose characters carry only a
+    voice profile. The browser passes the character's traits as query
+    params; everything else mirrors the persona-keyed route below.
+    """
+    traits = {"sex": sex, "age_band": age_band, "accent": accent,
+              "ethnicity": ethnicity}
+    return JSONResponse(voices.candidates_by_traits(traits, voices.get_api_key(vault)))
+
+
+@app.get("/api/voices/candidates/{persona_id}")
+async def api_voice_candidates(
+    persona_id: str,
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Up to 5 candidate voices for a persona, ranked by sex/age/ethnicity."""
+    return JSONResponse(voices.candidates_for(persona_id, voices.get_api_key(vault)))
+
+
+@app.post("/api/control/voice")
+async def api_control_voice(
+    persona_id: Annotated[str, Form()],
+    voice_id: Annotated[str, Form()],
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Persist a persona → ElevenLabs voice assignment on the active session.
+
+    voice_id == "" or "browser" stores nothing/empty → browser TTS fallback.
+    """
+    sess = control_session.get_active()
+    if sess is None:
+        raise HTTPException(409, "No active session.")
+    vid = voice_id.strip()
+    if vid in ("", "browser"):
+        sess.voice_assignments.pop(persona_id, None)
+    else:
+        sess.voice_assignments[persona_id] = vid
+    return JSONResponse({"ok": True, "persona_id": persona_id,
+                         "voice_id": sess.voice_assignments.get(persona_id, "")})
+
+
+async def _tts_response(text: str, voice_id: str, language: str | None):
+    """Shared TTS handler for the GET and POST /api/tts variants.
+
+    On any failure (no key, no voice, ElevenLabs error) returns a 503 with
+    {"fallback": true} so the caller degrades to browser SpeechSynthesis.
+    On success streams audio/mpeg progressively from Flash v2.5 — the
+    GET form lets an <audio> element start playback before the synth
+    finishes, which is what keeps perceived latency near 200 ms.
+    """
+    from fastapi.responses import StreamingResponse
+
+    text = (text or "").strip()
+    voice_id = (voice_id or "").strip()
+    api_key = _session_el_key()
+
+    if not text or not voice_id or not api_key:
+        return JSONResponse(
+            {"fallback": True,
+             "reason": ("no text" if not text else
+                        "no voice_id" if not voice_id else
+                        "ElevenLabs not configured")},
+            status_code=503,
+        )
+
+    # Probe the first chunk so a hard failure (bad key, 4xx) becomes a
+    # clean 503+fallback rather than a half-streamed broken response.
+    agen = voices.synthesize_stream(text, voice_id, api_key, language=language or None)
+    try:
+        first = await agen.__anext__()
+    except StopAsyncIteration:
+        return JSONResponse({"fallback": True, "reason": "empty audio"}, status_code=503)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"fallback": True, "reason": type(exc).__name__},
+                            status_code=503)
+
+    async def _body():
+        yield first
+        try:
+            async for chunk in agen:
+                yield chunk
+        except Exception:  # noqa: BLE001 — stream cut mid-flight; client already has audio
+            return
+
+    return StreamingResponse(_body(), media_type="audio/mpeg",
+                             headers={"Cache-Control": "no-store",
+                                      "X-MedSim-Voice": voice_id})
+
+
+@app.get("/api/tts")
+async def api_tts_get(text: str, voice_id: str, language: str | None = None):
+    """Streaming TTS — station-facing, no auth. Designed for <audio src=…>
+    so the browser plays progressively as bytes arrive."""
+    return await _tts_response(text, voice_id, language)
+
+
+@app.post("/api/tts")
+async def api_tts_post(request: Request):
+    """POST form of /api/tts — body JSON {text, voice_id, language?}.
+    Same behavior as the GET form; kept for longer text payloads."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    return await _tts_response(body.get("text", ""), body.get("voice_id", ""),
+                               body.get("language"))
+
+
+# =====================================================================
+# V7 — ControlRoom HTTP API (M4)
+#
+# Eight new routes for the multi-patient layer. None of these have a
+# UI yet — the charge-nurse dashboard (M5), the wizard's room-mode
+# branch (M6), and the student join flow (M9) consume them. The
+# scenes engine palette (M7) replaces the minimal "instructor.trigger"
+# event writer below with a richer template-driven palette.
+#
+# Encounter-level mutations write through ehr_db.append_event so they
+# are durable across server restarts (M16 will switch the *delivery*
+# from HTTP-poll to WebSocket push, but the persistence path is the
+# same).
+# =====================================================================
+
+
+def _encounter_summary(enc: control_room.Encounter) -> dict[str, Any]:
+    """Per-encounter row used by GET /api/room/state. Cheap to compute
+    on every 2 s poll: counts + last-event timestamp + state, no fold."""
+    chart_event_count = len(ehr_db.events(enc.id))
+    last_ts = 0.0
+    if enc.transcript:
+        last_ts = max(last_ts, enc.transcript[-1].ts)
+    # M30 — surface lead-student name when set so the dashboard can
+    # show a pill without a second round-trip.
+    lead_name = None
+    room = control_room.get_active_room()
+    if room and enc.lead_student_id and enc.lead_student_id in room.students:
+        lead_name = room.students[enc.lead_student_id].display_name
+    # M53 — free-text lead_label takes priority over the roster-picked
+    # name for display purposes (operator most-recently set it). When
+    # blank, fall back to the M30 lead_student_name.
+    lead_label = (getattr(enc, "lead_label", "") or "").strip()
+    effective_lead_display = lead_label or lead_name or ""
+    return {
+        "encounter_id":   enc.id,
+        "join_code":      enc.join_code,
+        "label":          enc.encounter_label or enc.scenario_name,
+        "scenario_name":  enc.scenario_name,
+        "patient_persona_id": enc.patient_persona_id,
+        "state":          enc.state,
+        "chart_mode":     enc.chart_mode,
+        "ehr_id":         enc.ehr_id,
+        "chat_stations":  len(enc.stations),
+        "ehr_stations":   len(enc.ehr_stations),
+        "device_stations": len(enc.device_stations),
+        "chart_event_count": chart_event_count,
+        "assigned_student_ids": list(enc.assigned_student_ids),
+        "lead_student_id":   enc.lead_student_id,
+        "lead_student_name": lead_name,
+        "lead_label":        lead_label,
+        "effective_lead_display": effective_lead_display,
+        "last_event_ts":  last_ts,
+        # M30 — convenience URLs for the dashboard's pop-out button
+        # and the per-encounter chat station entry. The client opens
+        # console_url in a popup window for multi-monitor monitoring.
+        "console_url":   f"/portal/room/encounter/{enc.id}",
+        "station_join_url": f"/join?code={enc.join_code}",
+    }
+
+
+def _room_summary(room: control_room.ControlRoom) -> dict[str, Any]:
+    """Aggregate poll body for the charge-nurse dashboard."""
+    student_stations = control_room._count_student_stations(room)
+    return {
+        "room_id":     room.room_id,
+        "room_code":   room.room_code,
+        "label":       room.label,
+        "status":      room.status,
+        "created_at":  room.created_at,
+        "ended_at":    room.ended_at,
+        "haiku_rate_cap":  room.haiku_rate_cap,
+        "voice_char_cap":  room.voice_char_cap,
+        "encounters":  [_encounter_summary(e) for e in room.encounters.values()],
+        "students":    [
+            {
+                "student_id":             s.student_id,
+                "display_name":           s.display_name,
+                "assigned_encounter_id":  s.assigned_encounter_id,
+                "registered_at":          s.registered_at,
+                "last_seen":              s.last_seen,
+            }
+            for s in room.students.values()
+        ],
+        # M19 — capacity bar for the dashboard banner.
+        "capacity": {
+            "encounters_used":         len(room.encounters),
+            "encounters_max":          control_room.MAX_ENCOUNTERS_PER_ROOM,
+            "student_stations_used":   student_stations,
+            "student_stations_max":    control_room.MAX_STUDENT_STATIONS_PER_ROOM,
+        },
+    }
+
+
+def _require_active_room() -> control_room.ControlRoom:
+    """Helper for room-aggregate routes. 404 when no room is active."""
+    room = control_room.get_active_room()
+    if room is None:
+        raise HTTPException(404, "No active room. Start one via /api/room/start.")
+    return room
+
+
+def _require_encounter(encounter_id: str) -> control_room.Encounter:
+    """Helper for /api/encounter/{id}/... routes."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    return enc
+
+
+def _apply_scene(enc: control_room.Encounter, scene: dict[str, Any],
+                  *, by: str) -> dict[str, Any]:
+    """Thin wrapper around the M7 scenes engine. Delegates to
+    ``portal.scenes.apply`` which dispatches on scene['kind'] to one of
+    the 8 built-in handlers (vitals.drop, vitals.rise, lab.result,
+    order.new, family.arrives, pump.alarm, code.blue, note.instructor)
+    or to the forward-compatibility fallback (one instructor.trigger
+    event) for unknown kinds."""
+    return scenes.apply(enc, scene, by=by)
+
+
+@app.post("/api/room/start")
+async def api_room_start(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Wizard finalize for multi-encounter mode.
+
+    Body JSON:
+      {
+        "label": "Morning Shift",
+        "encounters": [
+          {"scenario_name": "Bed 1 — Diaz",   "persona_id": "P-001", ...},
+          {"scenario_name": "Bed 2 — Kowalski", "persona_id": "P-013", ...},
+          ...
+        ],
+        "haiku_rate_cap": null,
+        "voice_char_cap": null
+      }
+
+    Per-encounter fields mirror the wizard's single-patient
+    `/portal/control/start` body: scenario_name, scenario_notes,
+    program_id, week, modules, persona_id, ehr_id, scenario_text.
+    Each entry becomes one Encounter and gets its own join code.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+
+    label = (body.get("label") or "").strip()
+    entries = body.get("encounters") or []
+    if not isinstance(entries, list) or not entries:
+        raise HTTPException(400, "encounters[] must be a non-empty list.")
+
+    # If a room was already active, end it cleanly. Operator demoed,
+    # closes the old room, starts a new one.
+    if control_room.get_active_room() is not None:
+        control_room.end_active_room()
+    room = control_room.create_room(label=label)
+    room.haiku_rate_cap = body.get("haiku_rate_cap")
+    room.voice_char_cap = body.get("voice_char_cap")
+
+    anthropic_key = (vault.get("ANTHROPIC_API_KEY") or "").strip()
+    elevenlabs_key = (vault.get("ELEVENLABS_API_KEY") or "").strip()
+    # M38 — Fail fast when no Anthropic key is configured. Without one,
+    # every station turn would hit a 401 from Claude with a confusing
+    # raw error in the chat. Also seed the process-wide cache so
+    # station-turn routes resolve the same key without re-reading vault.
+    if not anthropic_key:
+        raise HTTPException(
+            400,
+            "No ANTHROPIC_API_KEY configured. Set it at /portal/credentials "
+            "before starting a room — character turns require it.",
+        )
+    _capture_anthropic_key(anthropic_key)
+
+    created: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise HTTPException(400, "Each encounter entry must be an object.")
+        scenario_name = (entry.get("scenario_name") or "").strip()
+        if not scenario_name:
+            raise HTTPException(400, "Each encounter needs a scenario_name.")
+        # M19 — capacity check before constructing the encounter to
+        # avoid building an orphan ControlSession object on overflow.
+        if len(room.encounters) >= control_room.MAX_ENCOUNTERS_PER_ROOM:
+            raise HTTPException(
+                409,
+                f"Room capacity reached "
+                f"({control_room.MAX_ENCOUNTERS_PER_ROOM} encounters max). "
+                f"Reduce the encounter count in your wizard finalize."
+            )
+        enc = control_session.ControlSession(
+            id=secrets.token_urlsafe(8),
+            join_code=control_session._new_join_code(),
+            scenario_name=scenario_name,
+            scenario_notes=(entry.get("scenario_notes") or "").strip(),
+            program_id=entry.get("program_id"),
+            week=entry.get("week"),
+            selected_modules=list(entry.get("modules") or []),
+            scenario_text=(entry.get("scenario_text") or "").strip(),
+            selected_personas=list(entry.get("personas") or []),
+            api_key=anthropic_key,
+            ehr_id=entry.get("ehr_id"),
+            elevenlabs_api_key=elevenlabs_key,
+            encounter_label=(entry.get("label") or "").strip(),
+            chart_mode=entry.get("chart_mode") or "shared",
+            patient_persona_id=entry.get("patient_persona_id")
+                                or entry.get("persona_id"),
+            activity_id=entry.get("activity_id"),
+        )
+        room.add_encounter(enc)
+        created.append({
+            "encounter_id": enc.id,
+            "join_code":    enc.join_code,
+            "scenario_name": enc.scenario_name,
+        })
+
+    return JSONResponse({
+        "ok": True,
+        "room_id":   room.room_id,
+        "room_code": room.room_code,
+        "encounters": created,
+    })
+
+
+@app.get("/api/room/state")
+async def api_room_state(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Aggregate room poll — the charge-nurse dashboard hits this every
+    2 s. Returns the room aggregate + a per-encounter summary row."""
+    room = _require_active_room()
+    return JSONResponse(_room_summary(room))
+
+
+@app.post("/api/room/freeze_all")
+async def api_room_freeze_all(
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Pause every encounter in the active room.
+
+    M16 — also broadcasts a `freeze_all` event over the room WS so
+    subscribed stations react in real time (≤500 ms typical).
+    Subscribers that miss the push (offline, just (re)loading) catch
+    up on the next /api/room/state poll.
+    """
+    room = _require_active_room()
+    room.freeze_all()
+    await ws_room.emit_freeze_all(room.room_code,
+                                    encounter_count=len(room.encounters))
+    return JSONResponse({"ok": True, "status": room.status,
+                          "encounter_count": len(room.encounters)})
+
+
+@app.post("/api/room/resume_all")
+async def api_room_resume_all(
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Inverse of /api/room/freeze_all. M16 — WS push."""
+    room = _require_active_room()
+    room.resume_all()
+    await ws_room.emit_resume_all(room.room_code,
+                                    encounter_count=len(room.encounters))
+    return JSONResponse({"ok": True, "status": room.status,
+                          "encounter_count": len(room.encounters)})
+
+
+@app.post("/api/room/end")
+async def api_room_end(
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """End every encounter in the active room and clear the singleton.
+
+    M15 — Before clearing the singleton, build and save the cohort
+    debrief (M14) so it's available at
+    `/portal/debrief/cohort/{room_id}` after end. The
+    in-memory ControlRoom state is the source of truth for the
+    debrief; once the singleton is cleared, that state is gone.
+    """
+    room = _require_active_room()
+    room_id = room.room_id
+    encounter_count = len(room.encounters)
+
+    # M15 — build + persist cohort debrief BEFORE end_active_room
+    # nukes the singleton. Failures are non-fatal: log and continue
+    # so the operator can still end the room cleanly.
+    cohort_saved = False
+    try:
+        cohort = debrief_mod.build_cohort_debrief(room)
+        debrief_mod.save_cohort(cohort)
+        cohort_saved = True
+    except Exception as exc:  # noqa: BLE001
+        import sys
+        print(f"  [warn] cohort debrief save failed for room "
+              f"{room_id}: {exc}", file=sys.stderr, flush=True)
+
+    room_code_for_emit = room.room_code  # capture before singleton dies
+    control_room.end_active_room()
+    # M16 — last broadcast on the way out so stations can show "ended"
+    # banners before they reload.
+    try:
+        await ws_room.emit_room_end(room_code_for_emit,
+                                      encounter_count=encounter_count)
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({
+        "ok": True, "room_id": room_id,
+        "encounter_count": encounter_count,
+        "cohort_debrief_saved": cohort_saved,
+        "cohort_debrief_url": f"/portal/debrief/cohort/{room_id}",
+    })
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M35 — Start / Pause / End controls at both room and encounter level,
+# plus instructor "engage" auto-stations.
+#
+# State machine:
+#   configured ──Start──▶ running ◀──Pause──▶ paused
+#                            │                  │
+#                            └───────End ───────┘
+#                                  ▼
+#                                ended
+#
+# Master Start (room-wide) is *the* trigger for the entire room: it
+# transitions every encounter to running AND auto-registers an
+# instructor chat station (id = `INST-{persona_id}`) for every persona
+# in every encounter. That station is what the Per-Patient Console's
+# Engage button deep-links to — no /join handshake, no name typed.
+#
+# Per-encounter Start has the same auto-register behavior but scoped
+# to one bed. Per-encounter End marks one bed as ended WITHOUT firing
+# a cohort debrief — the cohort debrief is only saved when the master
+# /api/room/end fires (preserves M15's "save before clear" contract).
+# ─────────────────────────────────────────────────────────────────────
+
+_INSTRUCTOR_STATION_PREFIX = "INST-"
+_INSTRUCTOR_USER_AGENT = "instructor-engage"
+
+
+def _instructor_station_id_for(persona_id: str) -> str:
+    """Deterministic station id for a given (encounter, persona). Lets
+    the engage flow lookup the station by id without scanning."""
+    return f"{_INSTRUCTOR_STATION_PREFIX}{persona_id}"
+
+
+def _ensure_instructor_stations(enc: control_session.ControlSession) -> int:
+    """For each persona on this encounter, ensure an instructor chat
+    station exists with id `INST-{persona_id}`. Idempotent — repeat
+    calls don't create duplicates. Returns the number of stations
+    newly created on this call (so callers can log)."""
+    created = 0
+    for pid in enc.selected_personas:
+        sid = _instructor_station_id_for(pid)
+        if sid in enc.stations:
+            continue
+        st = enc.add_station(sid, user_agent=_INSTRUCTOR_USER_AGENT)
+        st.persona_id = pid
+        created += 1
+    return created
+
+
+def _set_encounter_running_with_instructor_stations(
+    enc: control_session.ControlSession,
+) -> int:
+    """Transition one encounter to 'running' and ensure instructor
+    stations exist. Used by both master Start and per-encounter Start.
+    No-op for encounters already in 'ended' state."""
+    if enc.state == "ended":
+        return 0
+    enc.state = "running"
+    return _ensure_instructor_stations(enc)
+
+
+@app.post("/api/room/start_all")
+async def api_room_start_all(
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Master Start — transition every encounter in the active room to
+    'running' and auto-register instructor chat stations for every
+    persona in every encounter. Idempotent; safe to click twice.
+
+    This is the launchpad for the Engage flow: once Start has fired,
+    every persona has an `INST-<pid>` station the instructor can drop
+    into directly via `/portal/engage/{encounter_id}/{persona_id}`.
+    """
+    room = _require_active_room()
+    total_created = 0
+    for enc in room.encounters.values():
+        total_created += _set_encounter_running_with_instructor_stations(enc)
+    room.status = "active"
+    try:
+        await ws_room.emit_start_all(
+            room.room_code, encounter_count=len(room.encounters))
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({
+        "ok": True,
+        "status": room.status,
+        "encounter_count": len(room.encounters),
+        "instructor_stations_created": total_created,
+    })
+
+
+@app.post("/api/encounter/{encounter_id}/start")
+async def api_encounter_start(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Per-encounter Start — same behavior as /api/room/start_all but
+    scoped to one bed. Also creates instructor stations for that bed's
+    personas so the Engage button on this console works immediately."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    created = _set_encounter_running_with_instructor_stations(enc)
+    try:
+        await ws_room.emit_encounter_state(
+            room.room_code, encounter_id=enc.id, state=enc.state)
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({
+        "ok": True,
+        "state": enc.state,
+        "encounter_id": enc.id,
+        "instructor_stations_created": created,
+    })
+
+
+@app.post("/api/encounter/{encounter_id}/pause")
+async def api_encounter_pause(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Per-encounter Pause — set this encounter's state to 'paused'.
+    The room-level status is NOT recomputed (room may still be 'active'
+    while one bed is paused). No WS room-wide effect, only an
+    encounter-scoped state push."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    if enc.state == "ended":
+        return JSONResponse({"ok": True, "state": enc.state,
+                              "encounter_id": enc.id, "noop": True})
+    enc.state = "paused"
+    try:
+        await ws_room.emit_encounter_state(
+            room.room_code, encounter_id=enc.id, state=enc.state)
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({
+        "ok": True, "state": enc.state, "encounter_id": enc.id,
+    })
+
+
+@app.post("/api/encounter/{encounter_id}/end")
+async def api_encounter_end(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Per-encounter End — set this encounter's state to 'ended'.
+
+    Crucially does NOT fire a cohort debrief; the cohort debrief is
+    only built when the master /api/room/end fires. Operator semantics:
+    you can "wrap up" beds individually as students finish, then call
+    the master End once to save the combined PEARLS debrief at the
+    point all beds are done.
+    """
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    enc.state = "ended"
+    try:
+        await ws_room.emit_encounter_state(
+            room.room_code, encounter_id=enc.id, state=enc.state)
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({
+        "ok": True, "state": enc.state, "encounter_id": enc.id,
+        "cohort_debrief_saved": False,
+        "note": "Per-encounter End does not fire a cohort debrief. "
+                "Call POST /api/room/end when the whole room is done.",
+    })
+
+
+@app.get("/portal/engage/{encounter_id}/{persona_id}")
+async def portal_engage(
+    encounter_id: str,
+    persona_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Deep-link the instructor into a chat station already bound to
+    `persona_id` on this encounter — no /join handshake.
+
+    Auto-creates the instructor station on demand (so Engage works
+    even before master Start has fired). Redirects to the standard
+    `/station/{join_code}/{station_id}` chat UI, in the same tab
+    (the encounter console opens the link with target=_blank).
+    """
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    if persona_id not in enc.selected_personas:
+        raise HTTPException(
+            404,
+            f"Persona {persona_id!r} is not assigned to encounter "
+            f"{encounter_id!r}.",
+        )
+    sid = _instructor_station_id_for(persona_id)
+    if sid not in enc.stations:
+        # Lazy-register so the Engage button works even when the
+        # instructor clicks it before pressing master Start. Master
+        # Start does the bulk registration up-front; this path is the
+        # safety net.
+        st = enc.add_station(sid, user_agent=_INSTRUCTOR_USER_AGENT)
+        st.persona_id = persona_id
+    return RedirectResponse(
+        f"/station/{enc.join_code}/{sid}", status_code=303,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────
+
+
+@app.post("/api/room/scene_broadcast")
+async def api_room_scene_broadcast(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Inject a scene into many encounters at once.
+
+    Body: {"scene": {...}, "targets": "all" | [encounter_id, ...]}
+    Writes one instructor.trigger chart_event per target. M7's scenes
+    engine will expand 'scene' to a templated payload; M4 emits the
+    raw scene dict so the wire format is forward-compatible.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+
+    room = _require_active_room()
+    scene = body.get("scene") or {}
+    if not isinstance(scene, dict):
+        raise HTTPException(400, "scene must be an object.")
+    targets = body.get("targets", "all")
+    if targets == "all":
+        target_encs = list(room.encounters.values())
+    elif isinstance(targets, list):
+        target_encs = []
+        for eid in targets:
+            enc = room.encounters.get(eid)
+            if enc is None:
+                raise HTTPException(404, f"Unknown encounter {eid!r}.")
+            target_encs.append(enc)
+    else:
+        raise HTTPException(400, "targets must be 'all' or a list of encounter_ids.")
+
+    results = [_apply_scene(enc, scene, by="room_broadcast")
+                for enc in target_encs]
+    # M16 — push a scene event for every target encounter.
+    for enc, result in zip(target_encs, results):
+        try:
+            await ws_room.emit_scene(room.room_code,
+                                      encounter_id=enc.id,
+                                      scene=scene, result=result)
+        except Exception:  # noqa: BLE001
+            pass
+    return JSONResponse({"ok": True, "fired": len(results), "results": results})
+
+
+@app.post("/api/encounter/{encounter_id}/scene")
+async def api_encounter_scene(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Inject a scene into a single encounter."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    scene = body.get("scene") or {}
+    if not isinstance(scene, dict):
+        raise HTTPException(400, "scene must be an object.")
+    enc = _require_encounter(encounter_id)
+    result = _apply_scene(enc, scene, by="encounter_inject")
+    # M16 — single-encounter scene push.
+    try:
+        room = control_room.get_active_room()
+        if room is not None:
+            await ws_room.emit_scene(room.room_code,
+                                      encounter_id=enc.id,
+                                      scene=scene, result=result)
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse(result)
+
+
+@app.post("/api/encounter/{encounter_id}/assign_students")
+async def api_encounter_assign_students(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Re-roster students to an encounter.
+
+    Body: {"student_ids": ["...", "..."]}
+    The list replaces the current `assigned_student_ids` on the
+    encounter and updates each Student.assigned_encounter_id. Unknown
+    student_ids 404.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    student_ids = body.get("student_ids") or []
+    if not isinstance(student_ids, list):
+        raise HTTPException(400, "student_ids must be a list.")
+
+    room = _require_active_room()
+    enc = _require_encounter(encounter_id)
+    # Validate all IDs first.
+    for sid in student_ids:
+        if sid not in room.students:
+            raise HTTPException(404, f"Unknown student {sid!r}.")
+    # Apply: clear old roster on this encounter, set new.
+    enc.assigned_student_ids = list(student_ids)
+    for sid in student_ids:
+        room.students[sid].assigned_encounter_id = enc.id
+    # Sweep: students no longer assigned to this encounter that still
+    # point here, unassign them.
+    for s in room.students.values():
+        if s.assigned_encounter_id == enc.id and s.student_id not in student_ids:
+            s.assigned_encounter_id = None
+    return JSONResponse({
+        "ok": True,
+        "encounter_id": enc.id,
+        "assigned_student_ids": list(enc.assigned_student_ids),
+    })
+
+
+# =====================================================================
+# V7 — Charge-nurse dashboard (M5)
+#
+# The instructor's primary surface in multi-patient mode. A grid of
+# Encounter cards under one ControlRoom, polling /api/room/state every
+# 2 s, with a top bar of synchronized-control buttons (Freeze All /
+# Resume All / Inject Scene / End Room).
+#
+# This route only serves the HTML scaffold. The Encounter cards are
+# rendered client-side by /static/control_room.js from the JSON the
+# /api/room/state route returns.
+# =====================================================================
+
+@app.get("/portal/room", response_class=HTMLResponse)
+async def portal_room(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Charge-nurse dashboard scaffold. Encounter grid is rendered by
+    /static/control_room.js from /api/room/state. Empty-state CTA fires
+    a quickstart room via /api/room/start when there is no active room.
+
+    M36 — also passes the active room + base_url so the template can
+    render a Nursing Station QR + 🩺 Open button (room-wide, not per-
+    encounter). Both are `None` when no room is active; template
+    blocks below `{% if room %}` keep them hidden in that case.
+    """
+    room = control_room.get_active_room()
+    room_ctx = None
+    if room is not None:
+        # M53 — surface the encounter list so the template can pre-
+        # render the "👤 Lead assignments" panel server-side (one row
+        # per encounter). The dashboard's regular state poll still
+        # owns the live encounter cards further down; the lead panel
+        # is operator-typed text so it doesn't need live refresh.
+        encounters_view = [
+            {
+                "id":               enc.id,
+                "encounter_label":  enc.encounter_label or "",
+                "scenario_name":    enc.scenario_name,
+                "lead_label":       getattr(enc, "lead_label", "") or "",
+            }
+            for enc in room.encounters.values()
+        ]
+        room_ctx = {
+            "room_code":   room.room_code,
+            "room_id":     room.room_id,
+            "label":       room.label or "",
+            "encounters":  encounters_view,
+        }
+    resp = templates.TemplateResponse(
+        request,
+        "control_room.html",
+        {
+            "active":   "room",
+            "room":     room_ctx,
+            "base_url": _base_url_for_qr(request),
+        },
+    )
+    # M56-bugfix — never let the dashboard HTML stick in browser
+    # cache. Operator-reported bug: a pre-M56 cached page (no
+    # encounter checkboxes on the med-cart form) lingered after a
+    # JS update, so the submit handler found zero
+    # `.med-cart-create-enc-cb:checked` and the server defaulted to
+    # linking just the first encounter. The static-asset versioning
+    # (?v=mtime) busts JS/CSS but not the HTML that references them,
+    # so we add no-store here.
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M61 — Medical Records entry page.
+#
+# Operator: "Medical records entry page to select from patient
+# characters and give status of pending actions – meds, labs etc.
+# The MAR ... three shift time structure ... BID, TID, QD ...
+# Tube feed and IV the total volume rate, fluid type and any
+# associated medication to infused with rate and time and total
+# dose. Do both for single patient and multi-patient systems."
+#
+# /portal/medical_records — picker listing every patient in the
+#   active session (single or multi). Shows pending-actions counters.
+# /portal/medical_records/{persona_id} — full record: shift-MAR
+#   (Day / Evening / Night columns), continuous-infusion details
+#   (IV drips), tube-feed details (volume + rate + formula + route).
+# ─────────────────────────────────────────────────────────────────────
+
+@app.get("/portal/medical_records", response_class=HTMLResponse)
+async def portal_medical_records(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Picker view — one row per patient across single + multi modes."""
+    from portal import medical_records as _mr
+    patients = _mr.patients_for_picker(
+        control_room_mod=control_room,
+        control_session_mod=control_session,
+    )
+    return templates.TemplateResponse(
+        request, "medical_records.html",
+        {"active": "medical_records", "patients": patients},
+    )
+
+
+@app.get("/portal/medical_records/{persona_id}",
+        response_class=HTMLResponse)
+async def portal_medical_records_chart(
+    persona_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Full medical-record view for one patient persona."""
+    from portal import ehr_seed as _ehr_seed, medical_records as _mr
+    # Find the encounter that owns this persona — works in both
+    # single-patient and multi-patient modes.
+    encounters: list[Any] = []
+    room = control_room.get_active_room()
+    if room is not None and room.encounters:
+        encounters = list(room.encounters.values())
+    else:
+        sess = control_session.get_active()
+        if sess is not None:
+            encounters = [sess]
+    target_enc = None
+    target_persona = None
+    for enc in encounters:
+        per_enc = _ehr_seed.seeds_for_patient_only(
+            enc, ehr_id=getattr(enc, "ehr_id", None)) or []
+        for p in per_enc:
+            if p.get("character_id") == persona_id:
+                target_enc = enc
+                target_persona = p
+                break
+        if target_persona:
+            break
+    if not target_persona:
+        raise HTTPException(404, f"Unknown patient persona {persona_id!r}.")
+    # Build the FULL chart seed so we get labs / vitals / orders, not
+    # just the trimmed patient-only seed. `seed_from_session` reuses
+    # the same generator the EHR SPA uses.
+    full_seed = None
+    try:
+        full_seed = _ehr_seed.seed_from_session(
+            target_enc, ehr_id=getattr(target_enc, "ehr_id", "")) or None
+    except Exception:  # noqa: BLE001
+        full_seed = None
+    # Build per-med view models for the shift-MAR table + the
+    # continuous-infusion + PRN sections.
+    meds_raw = target_persona.get("medications") or []
+    scheduled_meds: list[dict[str, Any]] = []
+    continuous_meds: list[dict[str, Any]] = []
+    prn_meds: list[dict[str, Any]] = []
+    for med in meds_raw:
+        vm = _mr.med_view_model(med)
+        if vm["is_continuous"]:
+            continuous_meds.append({**vm, **_mr.infusion_summary(med)})
+        elif vm["is_prn"]:
+            prn_meds.append(vm)
+        else:
+            scheduled_meds.append(vm)
+    tube_feeds = [_mr.tube_feed_summary(tf)
+                  for tf in ((full_seed or {}).get("tube_feeds") or [])]
+    # Pending-status counters for the header.
+    status = _mr.patient_status(
+        meds_raw, labs=(full_seed or {}).get("labs") or [])
+    return templates.TemplateResponse(
+        request, "medical_records_chart.html",
+        {
+            "active":          "medical_records",
+            "encounter_id":    getattr(target_enc, "id", ""),
+            "encounter_label": (
+                getattr(target_enc, "encounter_label", None)
+                or getattr(target_enc, "scenario_name", "")
+                or ""
+            ),
+            "persona":         target_persona,
+            "status":          status,
+            "shifts":          _mr.SHIFTS,
+            "scheduled_meds":  scheduled_meds,
+            "continuous_meds": continuous_meds,
+            "prn_meds":        prn_meds,
+            "tube_feeds":      tube_feeds,
+            "labs":            (full_seed or {}).get("labs_recent") or (full_seed or {}).get("labs") or [],
+            # M63 — Full chart sections from the seed. None of these
+            # were surfaced pre-M63; the student saw only the MAR.
+            "seed":            full_seed or {},
+            "chief_complaint": (full_seed or {}).get("chief_complaint", ""),
+            "code_status":     (full_seed or {}).get("code_status", ""),
+            "allergies":       (full_seed or {}).get("allergies") or [],
+            "problem_list":    (full_seed or {}).get("problem_list") or [],
+            "vitals_baseline": (full_seed or {}).get("vitals_baseline") or [],
+            "immunizations":   (full_seed or {}).get("immunizations") or [],
+            "social_history":  (full_seed or {}).get("social_history") or {},
+            "family_history":  (full_seed or {}).get("family_history") or [],
+            "surgical_history": (full_seed or {}).get("surgical_history") or [],
+            "care_team":       (full_seed or {}).get("care_team") or [],
+            "encounter_meta":  (full_seed or {}).get("encounter") or {},
+            "notes_recent":    (full_seed or {}).get("notes_recent") or [],
+            "iv_fluids":       (full_seed or {}).get("iv_fluids") or [],
+            # M62 — operator view: chart_inserts from the encounter
+            # (instructor + supervisor + student notes / labs) +
+            # the can_edit flag that unlocks the add-lab / add-note
+            # forms below the chart.
+            "chart_inserts":   [
+                ci for ci in getattr(target_enc, "chart_inserts", []) or []
+                if ci.get("persona_id") == persona_id
+            ],
+            "can_edit":        True,
+            "edit_author_role": "instructor",
+            "edit_author_initials_default": "",
+            "workstation_url": "",
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M62 — Medical Records WORKSTATION + admin entry.
+#
+# Operator: "there needs to be a path to open the system in from the
+# multi-patient control screen with both a QR code and button to open
+# from the control screen. the entry screen should list the active
+# patients characters so that the student or instructor must select
+# the patient then enter the medical records system. This will support
+# setting up an independent work station that multiple students will
+# access to enter patient data ... The instructor should also have a
+# special access to all them to insert updates and information likes
+# labs that have been generated, or doctors notes ... a designated
+# nursing supervisor student should be able access through the nursing
+# station a 'administrative portal' to enter labs and make notes ...
+# A button on the nursing station that allows the Student Nursing
+# supervisor to enter their 2 initials to enter the administrative
+# entry to have the medical records open up in new window."
+#
+# Routes:
+#   GET  /students/medical_records?code=<room>           — public workstation
+#   GET  /students/medical_records/{persona_id}?...      — public chart
+#   POST /api/medical_records/{persona_id}/insert        — add lab/note
+#
+# All three are room-code-authenticated (no vault cookie required) so
+# students can scan a QR from a shared workstation tablet. The
+# "?role=supervisor&initials=XX" querystring flag unlocks the
+# add-lab/add-note forms for the Nursing Station supervisor.
+# ─────────────────────────────────────────────────────────────────────
+
+@app.get("/students/medical_records", response_class=HTMLResponse)
+async def students_medical_records_entry(
+    request: Request,
+    code: str = "",
+    role: str = "",
+    initials: str = "",
+):
+    """Public workstation entry — no vault auth. Lists every patient
+    so the student / supervisor can pick one before drilling in."""
+    from portal import medical_records as _mr
+    room = control_room.get_active_room()
+    # Validate room code if provided; if room exists, accept either
+    # the active room's code OR a missing code (single-patient v6).
+    if code and room is not None and (code or "") != (room.room_code or ""):
+        # Wrong code → empty state.
+        room = None
+    patients = []
+    if room is not None or control_session.get_active() is not None:
+        patients = _mr.patients_for_picker(
+            control_room_mod=control_room,
+            control_session_mod=control_session,
+        )
+    return templates.TemplateResponse(
+        request, "medical_records_workstation.html",
+        {
+            "room_code":     code or (room.room_code if room else ""),
+            "patients":      patients,
+            "role":          (role or "").lower().strip() or "student",
+            "initials":      (initials or "").upper().strip()[:3],
+        },
+    )
+
+
+@app.get("/students/medical_records/{persona_id}",
+        response_class=HTMLResponse)
+async def students_medical_records_chart(
+    persona_id: str,
+    request: Request,
+    code: str = "",
+    user: str = "",
+    initials: str = "",
+    role: str = "student",
+):
+    """Public chart view for a single patient. Same shift-MAR / IV /
+    tube-feed / labs UI as the operator chart, plus inline add-note
+    / add-lab forms gated by `role in ('instructor', 'supervisor')`.
+    """
+    from portal import ehr_seed as _ehr_seed, medical_records as _mr
+    # Resolve room + encounter — same logic as the operator chart.
+    encounters: list[Any] = []
+    room = control_room.get_active_room()
+    if room is not None and room.encounters:
+        encounters = list(room.encounters.values())
+    else:
+        sess = control_session.get_active()
+        if sess is not None:
+            encounters = [sess]
+    target_enc = None
+    target_persona = None
+    for enc in encounters:
+        per_enc = _ehr_seed.seeds_for_patient_only(
+            enc, ehr_id=getattr(enc, "ehr_id", None)) or []
+        for p in per_enc:
+            if p.get("character_id") == persona_id:
+                target_enc = enc
+                target_persona = p
+                break
+        if target_persona:
+            break
+    if not target_persona:
+        raise HTTPException(404, f"Unknown patient persona {persona_id!r}.")
+    full_seed = None
+    try:
+        full_seed = _ehr_seed.seed_from_session(
+            target_enc, ehr_id=getattr(target_enc, "ehr_id", "")) or None
+    except Exception:  # noqa: BLE001
+        full_seed = None
+    meds_raw = target_persona.get("medications") or []
+    scheduled_meds: list[dict[str, Any]] = []
+    continuous_meds: list[dict[str, Any]] = []
+    prn_meds: list[dict[str, Any]] = []
+    for med in meds_raw:
+        vm = _mr.med_view_model(med)
+        if vm["is_continuous"]:
+            continuous_meds.append({**vm, **_mr.infusion_summary(med)})
+        elif vm["is_prn"]:
+            prn_meds.append(vm)
+        else:
+            scheduled_meds.append(vm)
+    tube_feeds = [_mr.tube_feed_summary(tf)
+                  for tf in ((full_seed or {}).get("tube_feeds") or [])]
+    status = _mr.patient_status(
+        meds_raw, labs=(full_seed or {}).get("labs") or [])
+    role_norm = (role or "student").lower().strip()
+    can_edit = role_norm in ("instructor", "supervisor", "admin")
+    chart_inserts = [
+        ci for ci in getattr(target_enc, "chart_inserts", []) or []
+        if ci.get("persona_id") == persona_id
+    ]
+    return templates.TemplateResponse(
+        request, "medical_records_workstation_chart.html",
+        {
+            "room_code":     code or "",
+            "encounter_id":  getattr(target_enc, "id", ""),
+            "encounter_label": (
+                getattr(target_enc, "encounter_label", None)
+                or getattr(target_enc, "scenario_name", "")
+                or ""
+            ),
+            "persona":       target_persona,
+            "status":        status,
+            "shifts":        _mr.SHIFTS,
+            "scheduled_meds":  scheduled_meds,
+            "continuous_meds": continuous_meds,
+            "prn_meds":        prn_meds,
+            "tube_feeds":      tube_feeds,
+            "labs":            (full_seed or {}).get("labs_recent") or (full_seed or {}).get("labs") or [],
+            # M63 — Full chart sections from the seed (see operator
+            # route comment).
+            "seed":            full_seed or {},
+            "chief_complaint": (full_seed or {}).get("chief_complaint", ""),
+            "code_status":     (full_seed or {}).get("code_status", ""),
+            "allergies":       (full_seed or {}).get("allergies") or [],
+            "problem_list":    (full_seed or {}).get("problem_list") or [],
+            "vitals_baseline": (full_seed or {}).get("vitals_baseline") or [],
+            "immunizations":   (full_seed or {}).get("immunizations") or [],
+            "social_history":  (full_seed or {}).get("social_history") or {},
+            "family_history":  (full_seed or {}).get("family_history") or [],
+            "surgical_history": (full_seed or {}).get("surgical_history") or [],
+            "care_team":       (full_seed or {}).get("care_team") or [],
+            "encounter_meta":  (full_seed or {}).get("encounter") or {},
+            "notes_recent":    (full_seed or {}).get("notes_recent") or [],
+            "iv_fluids":       (full_seed or {}).get("iv_fluids") or [],
+            "chart_inserts":   chart_inserts,
+            "can_edit":        can_edit,
+            "user":            (user or "").strip(),
+            "initials":        (initials or "").upper().strip()[:3],
+            "role":            role_norm,
+        },
+    )
+
+
+@app.post("/api/medical_records/{persona_id}/insert")
+async def api_medical_records_insert(
+    persona_id: str,
+    request: Request,
+):
+    """Append a chart insert (lab result, doctor's note, free-text
+    update) to the encounter that owns this persona. Body:
+        {kind: "note"|"lab"|"doctor_note",
+         title: str, body: str,
+         author_name: str, author_initials: str,
+         author_role: "instructor"|"supervisor"|"student"}
+
+    No vault auth — workstation flow uses room_code + author
+    identity in the body. The instructor flow (from
+    /portal/medical_records/{persona_id}) hits the same endpoint
+    with author_role=instructor; that's gated client-side because
+    the operator already proved identity by logging into the vault."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    kind = (body.get("kind") or "note").lower().strip()
+    if kind not in {"note", "lab", "doctor_note"}:
+        raise HTTPException(400, f"Unknown insert kind {kind!r}.")
+    title = (body.get("title") or "").strip()[:200]
+    body_text = (body.get("body") or "").strip()
+    if not body_text and kind != "lab":
+        raise HTTPException(400, "Body required for notes.")
+    if kind == "lab" and not title:
+        raise HTTPException(400, "Lab name (title) required.")
+    author_name = (body.get("author_name") or "").strip()[:80]
+    author_initials = (body.get("author_initials") or ""
+                        ).upper().strip()[:3]
+    author_role = (body.get("author_role") or "student"
+                    ).lower().strip()
+    # Find the encounter that owns persona_id.
+    from portal import ehr_seed as _ehr_seed
+    encounters: list[Any] = []
+    room = control_room.get_active_room()
+    if room is not None and room.encounters:
+        encounters = list(room.encounters.values())
+    else:
+        sess = control_session.get_active()
+        if sess is not None:
+            encounters = [sess]
+    target_enc = None
+    for enc in encounters:
+        per_enc = _ehr_seed.seeds_for_patient_only(
+            enc, ehr_id=getattr(enc, "ehr_id", None)) or []
+        if any(p.get("character_id") == persona_id for p in per_enc):
+            target_enc = enc
+            break
+    if target_enc is None:
+        raise HTTPException(404, f"Unknown patient persona {persona_id!r}.")
+    if not hasattr(target_enc, "chart_inserts") or target_enc.chart_inserts is None:
+        target_enc.chart_inserts = []
+    import time as _time
+    insert = {
+        "ts":              _time.time(),
+        "kind":            kind,
+        "persona_id":      persona_id,
+        "title":           title or kind.capitalize(),
+        "body":            body_text,
+        "author_name":     author_name,
+        "author_initials": author_initials,
+        "author_role":     author_role,
+    }
+    target_enc.chart_inserts.append(insert)
+    return JSONResponse({"ok": True, "insert": insert,
+                          "total": len(target_enc.chart_inserts)})
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M41 — Printable QR sheet for the instructor.
+#
+# Optional ?encounter_id=<id> scopes the sheet to one bed; without it,
+# every encounter in the active room gets its own page. The template
+# renders one section per encounter with Chat / EHR / Device / Nursing
+# Station QR codes, page-break-after between sections, and a header
+# carrying the patient character + "Training Bridge MedSim-VRAI"
+# title. Browser print (Cmd/Ctrl+P) sends to paper or PDF.
+# ─────────────────────────────────────────────────────────────────────
+
+@app.get("/portal/control/qr_print", response_class=HTMLResponse)
+async def portal_control_qr_print(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    encounter_id: str | None = None,
+):
+    """Print-friendly QR sheet. Scoped to one encounter via the
+    `encounter_id` query param; without it, prints every encounter
+    in the active room."""
+    room = control_room.get_active_room()
+    if room is None:
+        return templates.TemplateResponse(
+            request, "qr_print.html",
+            {"room_code": "—", "encounters": [],
+             "base_url": _base_url_for_qr(request),
+             "scope_label": "no active room"},
+        )
+    # Hydrate the encounter list — one or all, depending on scope.
+    if encounter_id:
+        enc = room.encounters.get(encounter_id)
+        if enc is None:
+            raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+        target_encs = [enc]
+        scope_label = "single encounter"
+    else:
+        # Skip clone encounters (private_clone mode spawns per-student
+        # clones from a template; the template is what the operator
+        # cares about for QR distribution).
+        target_encs = [
+            e for e in room.encounters.values()
+            if not (e.chart_mode == "private_clone" and e.cloned_from_id)
+        ]
+        scope_label = f"all {len(target_encs)} encounters"
+    # Each template row needs the patient character display name +
+    # role hydrated. The encounter only carries patient_persona_id.
+    # M46 — also include the encounter's bound device stations so the
+    # print sheet can show each device's QR (operators can stick the
+    # QR on the actual hardware or hand the sheet to the bedside).
+    enc_views: list[dict[str, Any]] = []
+    for enc in target_encs:
+        p = library.get_persona(enc.patient_persona_id) if enc.patient_persona_id else None
+        devices_view: list[dict[str, str]] = []
+        for sid, ds in enc.device_stations.items():
+            devices_view.append({
+                "station_id":   sid,
+                "device_kind":  ds.device_kind,
+                "device_model": ds.device_model,
+                "label":        ds.label or ds.device_model,
+            })
+        enc_views.append({
+            "id":                  enc.id,
+            "join_code":           enc.join_code,
+            "scenario_name":       enc.scenario_name,
+            "label":               enc.encounter_label,
+            "ehr_id":              enc.ehr_id,
+            "patient_persona_id":  enc.patient_persona_id,
+            "patient_name":        p.get("name") if p else "",
+            "patient_role":        p.get("role") if p else "",
+            "devices":             devices_view,
+        })
+    return templates.TemplateResponse(
+        request, "qr_print.html",
+        {
+            "room_code":    room.room_code,
+            "encounters":   enc_views,
+            "base_url":     _base_url_for_qr(request),
+            "scope_label":  scope_label,
+        },
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M36 — Instructor convenience: open the Nursing Station in a new
+# window without going through the public /portal/students/join role
+# picker. Auto-creates (or reuses) a nurse-station student named
+# "Instructor (Nursing Station)" and 303s into the supervisor view.
+# ─────────────────────────────────────────────────────────────────────
+
+_INSTRUCTOR_NURSE_STATION_NAME = "Instructor (Nursing Station)"
+
+
+@app.get("/portal/control/launch_nurse_station")
+async def portal_control_launch_nurse_station(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Instructor-only convenience: redirect into the Nursing Station
+    supervisor view as if the instructor had registered themselves
+    through /portal/students/register_nurse.
+
+    Re-used across repeat clicks: searches for an existing nurse-
+    station student whose `display_name == "Instructor (Nursing
+    Station)"`; if found, redirects to its `sid` URL; otherwise
+    creates one. Same pattern as M34's `_launch_ehr_station` (which
+    looks up by `device_label == "Control room (instructor)"`).
+    """
+    room = control_room.get_active_room()
+    if room is None:
+        # No active room — bounce back to the dashboard so the
+        # instructor can start one. Mirrors /portal/control/launch_ehr
+        # behavior on the same edge case.
+        return RedirectResponse("/portal/room", status_code=303)
+    # Look for a previously-created instructor nurse-station student.
+    student = None
+    for s in room.students.values():
+        if (s.role == "nurse_station"
+                and s.display_name == _INSTRUCTOR_NURSE_STATION_NAME):
+            student = s
+            break
+    if student is None:
+        # M19 station-cap check.
+        if (control_room._count_student_stations(room)
+                >= control_room.MAX_STUDENT_STATIONS_PER_ROOM):
+            raise HTTPException(
+                409,
+                f"Room is full "
+                f"({control_room.MAX_STUDENT_STATIONS_PER_ROOM} student "
+                f"stations max). Ask your instructor.")
+        student = room.add_student(
+            _INSTRUCTOR_NURSE_STATION_NAME, role="nurse_station",
+        )
+    return RedirectResponse(
+        f"/portal/students/nurse_station?sid={student.student_id}",
+        status_code=303,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M48 — Room-level alarm thresholds (settable on the Nursing Station).
+#
+# The Nursing Station's settings card POSTs operator-chosen low/high
+# bounds for HR / SpO2 / RR plus a "dangerous rhythms" list to the
+# room-level `alarm_thresholds` dict. The alarm bus (`alarms.py`)
+# checks every encounter's telemetry snapshot against these on each
+# /api/room/alarms read, raising threshold-breach alarms that flow
+# through the same M26 dashboard pipeline.
+# ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/room/alarm_thresholds")
+async def api_room_alarm_thresholds_get(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    room = _require_active_room()
+    return JSONResponse({"thresholds": room.alarm_thresholds})
+
+
+@app.post("/api/room/alarm_thresholds")
+async def api_room_alarm_thresholds_set(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Operator updates the room's alarm thresholds. The body is the
+    full thresholds dict (or a partial update — keys not present are
+    left untouched). Per-metric bounds: {"low": int|null, "high": int|null}
+    where null means "no bound on that side"."""
+    room = _require_active_room()
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Body must be a JSON object.")
+    # Sanity-check the per-metric bounds. M50 adds bp_systolic +
+    # bp_diastolic to the validated set.
+    for metric in ("hr", "spo2", "rr", "bp_systolic", "bp_diastolic"):
+        if metric not in body:
+            continue
+        bounds = body.get(metric) or {}
+        if not isinstance(bounds, dict):
+            raise HTTPException(400, f"{metric} must be a {{low, high}} object.")
+        for side in ("low", "high"):
+            v = bounds.get(side)
+            if v is not None:
+                try:
+                    bounds[side] = float(v)
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        400, f"{metric}.{side} must be a number or null.",
+                    ) from None
+        room.alarm_thresholds[metric] = bounds
+    if "dangerous_rhythms" in body:
+        rhythms = body.get("dangerous_rhythms") or []
+        if not isinstance(rhythms, list):
+            raise HTTPException(400, "dangerous_rhythms must be a list.")
+        room.alarm_thresholds["dangerous_rhythms"] = [
+            str(r) for r in rhythms
+        ]
+    return JSONResponse({"ok": True, "thresholds": room.alarm_thresholds})
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M47 — Room-level med carts.
+#
+# A single cabinet (device_kind="cabinet", device_model="pyxis") can
+# serve MULTIPLE encounters in the same room. The cart's DB row uses
+# ONE encounter as its `session_id` (the primary — needed for v6-style
+# per-station device routes), but `room.cart_links[cart_sid]` carries
+# the full list of linked encounters. The cabinet bootstrap reads
+# that list to render a grouped-per-patient MAR. Dispense events
+# write a transcript entry to the linked encounter that owns the
+# selected patient persona.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _find_room_cart(room: control_room.ControlRoom, cart_sid: str) -> str | None:
+    """Sanity helper: returns cart_sid if it's a known room-level cart,
+    None otherwise. Use in routes that look up by cart id."""
+    if cart_sid in room.cart_links:
+        return cart_sid
+    return None
+
+
+@app.post("/api/room/med_cart/register")
+async def api_room_med_cart_register(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Operator creates a room-level med cart on Multi-Patient Control.
+
+    Body: {"label": "Cart A", "encounter_ids": ["E-..", ...]}
+    `encounter_ids` may be empty (link later); the first listed
+    encounter becomes the cart's primary `session_id` in the DB.
+    """
+    room = _require_active_room()
+    body = await request.json()
+    label = (body.get("label") or "").strip() or "Med cart"
+    requested_eids: list[str] = list(body.get("encounter_ids") or [])
+    # Validate every requested encounter exists in this room.
+    for eid in requested_eids:
+        if eid not in room.encounters:
+            raise HTTPException(
+                400,
+                f"Encounter {eid!r} is not part of this room.",
+            )
+    # Need at least one encounter to anchor the device_station's
+    # session_id — if none requested, default to the first encounter
+    # so the DB row is satisfiable. The cart_links list stays whatever
+    # the operator asked for (may be empty until they link below).
+    if room.encounters:
+        primary_eid = requested_eids[0] if requested_eids else next(iter(room.encounters))
+    else:
+        raise HTTPException(
+            409,
+            "Room has no encounters yet. Add an encounter via the wizard before "
+            "creating a med cart.",
+        )
+    primary_enc = room.encounters[primary_eid]
+    # Mint the device station against the primary encounter so v6
+    # per-station routes (inject/clear/assign) keep working without
+    # any new code path. M43's _session_for_station() already finds
+    # the right session via station.session_id.
+    station_id = "cart_" + secrets.token_hex(6)
+    ehr_db.register_device_station(
+        primary_enc.id, station_id,
+        device_kind="cabinet", device_model="pyxis",
+        label=label, user_agent="instructor-create",
+    )
+    primary_enc.add_device_station(
+        station_id,
+        device_kind="cabinet", device_model="pyxis",
+        label=label, user_agent="instructor-create",
+    )
+    # Record the room-level link list (everything requested, plus the
+    # primary if it wasn't already in the list).
+    link_list = list(requested_eids)
+    if primary_eid not in link_list:
+        link_list.insert(0, primary_eid)
+    room.cart_links[station_id] = link_list
+    room.cart_labels[station_id] = label
+    # Build a QR for the cart's device-join URL — same shape as the
+    # M46 per-encounter device QR. The cart uses the PRIMARY encounter's
+    # join code (one cart's QR can't carry many join codes; the cart
+    # is unlocked by the primary encounter's scope and the cabinet
+    # bootstrap pulls all linked encounters' MARs).
+    base = _base_url_for_qr(request).rstrip("/")
+    join_url = (
+        f"{base}/device/join?code={primary_enc.join_code}"
+        f"&station={station_id}"
+    )
+    # M59 — direct device URL bypasses the /device/join landing page
+    # so the instructor's "🛒 Open cart" launch button drops straight
+    # into the cabinet tablet UI in a new window. Same path the QR
+    # would land on after the operator confirms on the landing page.
+    device_url = (
+        f"{base}/device/{primary_enc.join_code}/{station_id}"
+    )
+    qr_svg = qrgen.make_qr_svg(join_url)
+    return JSONResponse({
+        "ok":            True,
+        "station_id":    station_id,
+        "label":         label,
+        "primary_encounter_id": primary_eid,
+        "linked_encounter_ids": list(link_list),
+        "join_url":      join_url,
+        "device_url":    device_url,
+        "qr_svg":        qr_svg,
+    })
+
+
+@app.post("/api/room/med_cart/{cart_sid}/link_encounter")
+async def api_room_med_cart_link(
+    cart_sid: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Add an encounter to a cart's link list. Idempotent — adding
+    an already-linked encounter is a no-op."""
+    room = _require_active_room()
+    if _find_room_cart(room, cart_sid) is None:
+        raise HTTPException(404, f"Unknown cart {cart_sid!r}.")
+    body = await request.json()
+    eid = (body.get("encounter_id") or "").strip()
+    if eid not in room.encounters:
+        raise HTTPException(400,
+                             f"Encounter {eid!r} is not part of this room.")
+    links = room.cart_links[cart_sid]
+    if eid not in links:
+        links.append(eid)
+    return JSONResponse({
+        "ok": True, "station_id": cart_sid,
+        "linked_encounter_ids": list(links),
+    })
+
+
+@app.delete("/api/room/med_cart/{cart_sid}/link_encounter/{eid}")
+async def api_room_med_cart_unlink(
+    cart_sid: str,
+    eid: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Remove an encounter from a cart's link list. The cart's
+    primary encounter (its DB session_id) cannot be unlinked — operator
+    must delete the cart instead. Returns the updated link list."""
+    room = _require_active_room()
+    if _find_room_cart(room, cart_sid) is None:
+        raise HTTPException(404, f"Unknown cart {cart_sid!r}.")
+    station = ehr_db.get_device_station(cart_sid)
+    if station and station.get("session_id") == eid:
+        raise HTTPException(
+            409,
+            "Cannot unlink the cart's primary encounter. Delete the "
+            "cart instead — it'll be recreated against a different bed.",
+        )
+    links = room.cart_links[cart_sid]
+    if eid in links:
+        links.remove(eid)
+    return JSONResponse({
+        "ok": True, "station_id": cart_sid,
+        "linked_encounter_ids": list(links),
+    })
+
+
+@app.get("/api/room/med_carts")
+async def api_room_med_carts(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """List every room-level cart with its linked encounters + QR URL.
+    Used by the Multi-Patient Control dashboard panel + each encounter
+    console's "Linked med carts" read-only block."""
+    room = _require_active_room()
+    base = _base_url_for_qr(request).rstrip("/")
+    out: list[dict[str, Any]] = []
+    for cart_sid, link_list in room.cart_links.items():
+        station = ehr_db.get_device_station(cart_sid) or {}
+        primary_eid = station.get("session_id") or (link_list[0] if link_list else "")
+        primary_enc = room.encounters.get(primary_eid)
+        join_url = (
+            f"{base}/device/join?code={primary_enc.join_code}&station={cart_sid}"
+            if primary_enc else ""
+        )
+        # M59 — direct cart tablet URL, bypasses /device/join landing.
+        # Used by the dashboard's "🛒 Open cart" launch button.
+        device_url = (
+            f"{base}/device/{primary_enc.join_code}/{cart_sid}"
+            if primary_enc else ""
+        )
+        out.append({
+            "station_id":           cart_sid,
+            "label":                room.cart_labels.get(cart_sid) or station.get("label") or "Med cart",
+            "primary_encounter_id": primary_eid,
+            "linked_encounter_ids": list(link_list),
+            "join_url":             join_url,
+            "device_url":           device_url,
+        })
+    return JSONResponse({"carts": out})
+
+
+# =====================================================================
+# V7 — Scenes palette (M7)
+#
+# Client-facing endpoint that lists the built-in scene templates. The
+# charge-nurse dashboard's scene-injector dialog currently hard-codes
+# the same list in JS; a follow-up makes it fetch this endpoint so the
+# palette is server-authoritative (then operators can author Activity-
+# scoped scenes via M11/M12 without re-deploying the client).
+# =====================================================================
+
+@app.get("/api/scenes/palette")
+async def api_scenes_palette(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    return JSONResponse({"palette": scenes.palette()})
+
+
+# =====================================================================
+# V7 — Student join flow (M9)
+#
+# Students scan the room QR (or are handed the URL) and arrive at
+# /portal/students/join?code=ROOM_CODE — a PUBLIC page (no operator
+# vault required). They see the room's encounter list and either
+# pick a preloaded name from the roster or type a free-form display
+# name, then pick an encounter. The POST handler:
+#   1. Registers/locates the Student in the M1 student table.
+#   2. Assigns them to the chosen encounter.
+#   3. Creates a chat Station on that encounter (the encounter's
+#      patient persona becomes the conversational partner).
+#   4. Returns a redirect_url that lands the student on the existing
+#      v6 chat-station UI (/station/{join_code}/{station_id}).
+# =====================================================================
+
+def _room_by_code(room_code: str) -> control_room.ControlRoom | None:
+    """Resolve a room by its operator-displayed room_code. Returns
+    None when the code does not match the active room. Single-instructor
+    model: at most one active room at a time."""
+    room = control_room.get_active_room()
+    if room is None:
+        return None
+    if (room_code or "").strip().upper() != (room.room_code or "").upper():
+        return None
+    return room
+
+
+@app.get("/portal/students/join", response_class=HTMLResponse)
+async def portal_students_join(request: Request, code: str | None = None):
+    """Student-facing join landing. Public — no operator auth.
+
+    Query string ``?code=ROOM_CODE`` carries the room code from the QR
+    (the instructor's dashboard displays this code). If the code is
+    missing or unknown, the page renders an error state with a prompt
+    to re-scan; we never redirect, so a wrong code in the QR is
+    debuggable by the student.
+    """
+    raw = (code or "").strip().upper()
+    room = _room_by_code(raw) if raw else None
+    if room is None:
+        return templates.TemplateResponse(
+            request, "student_join.html",
+            {"room_code": raw, "room": None, "encounters": [],
+              "roster": [], "error": "Room not found." if raw else None},
+        )
+    return templates.TemplateResponse(
+        request, "student_join.html",
+        {
+            "room_code":  room.room_code,
+            "room": {
+                "room_id":   room.room_id,
+                "room_code": room.room_code,
+                "label":     room.label or "",
+                "status":    room.status,
+            },
+            "encounters": [
+                {
+                    "encounter_id": enc.id,
+                    "join_code":    enc.join_code,
+                    "label":        enc.encounter_label or enc.scenario_name,
+                    "scenario":     enc.scenario_name,
+                    "persona_id":   enc.patient_persona_id,
+                    "ehr_id":       enc.ehr_id,
+                    "students":     len(enc.assigned_student_ids),
+                    "state":        enc.state,
+                    "chart_mode":   enc.chart_mode,
+                }
+                # M13 — private-clone templates show in the picker;
+                # individual clones do not (each clone belongs to one
+                # student already).
+                for enc in room.encounters_for_join_picker()
+            ],
+            # Pre-loaded roster names (any students already registered to
+            # this room by the operator). Each entry carries student_id
+            # so the join can reattach to an existing row rather than
+            # create a duplicate.
+            "roster": [
+                {"student_id": s.student_id,
+                 "display_name": s.display_name,
+                 "assigned_encounter_id": s.assigned_encounter_id}
+                for s in room.students.values()
+            ],
+            "error": None,
+        },
+    )
+
+
+@app.post("/portal/students/register")
+async def portal_students_register(request: Request):
+    """Register-or-reattach a student, assign them to an encounter,
+    create a chat Station on that encounter, return a redirect URL.
+
+    Form body:
+      ``room_code``       — required.
+      ``encounter_id``    — required.
+      ``display_name``    — required if ``existing_student_id`` is empty.
+      ``existing_student_id`` — optional; reattach to an existing row.
+
+    Public — no operator auth. The room_code itself is the access
+    token, matching the v6 ``/join`` flow's contract.
+    """
+    form = await request.form()
+    room_code         = (form.get("room_code") or "").strip().upper()
+    encounter_id      = (form.get("encounter_id") or "").strip()
+    display_name      = (form.get("display_name") or "").strip()
+    existing_sid      = (form.get("existing_student_id") or "").strip()
+
+    room = _room_by_code(room_code)
+    if room is None:
+        raise HTTPException(404, "Unknown room code.")
+    if encounter_id not in room.encounters:
+        raise HTTPException(404, "Unknown encounter for this room.")
+    # M19 — station capacity gate. Counts chat stations across every
+    # encounter in the room (clones included). Pre-checks before the
+    # private-clone branch below, since cloning + station-add together
+    # would consume two seats if we left the check too late.
+    if (control_room._count_student_stations(room)
+            >= control_room.MAX_STUDENT_STATIONS_PER_ROOM):
+        raise HTTPException(
+            409,
+            f"Room is full ("
+            f"{control_room.MAX_STUDENT_STATIONS_PER_ROOM} student "
+            f"stations max). Ask your instructor for guidance."
+        )
+
+    # Resolve the Student — either reattach to an existing row or
+    # register a new one. Free-form names are allowed (matches the
+    # v6 mobile-station UX — no class-list pre-load required).
+    if existing_sid:
+        student = room.students.get(existing_sid)
+        if student is None:
+            raise HTTPException(404, "Unknown student id.")
+        # Honor an updated display name if provided.
+        if display_name and display_name != student.display_name:
+            student.display_name = display_name
+    else:
+        if not display_name:
+            raise HTTPException(400, "display_name required for a new student.")
+        student = room.add_student(display_name)
+
+    # M13 — private-clone branch. When the picked encounter is a
+    # private_clone template (chart_mode='private_clone' AND
+    # cloned_from_id=None), spawn a fresh clone per student. The
+    # student joins the clone, not the template; subsequent students
+    # who pick the same template each get their own clone.
+    target_enc = room.encounters[encounter_id]
+    if (target_enc.chart_mode == "private_clone"
+            and target_enc.cloned_from_id is None):
+        target_enc = room.clone_encounter(
+            encounter_id, label_suffix=student.display_name,
+        )
+        # Make sure the clone has its own EHR seed registered before
+        # the student lands on its chart station; otherwise the EHR
+        # bundle would 404 on first hit. _ensure_ehr_session_registered
+        # uses the encounter's own id so each clone gets independent
+        # chart_event rows.
+        _ensure_ehr_session_registered(target_enc)
+
+    room.assign_student(student.student_id, target_enc.id)
+
+    # Create the chat Station on the chosen encounter. The encounter's
+    # patient persona is the conversational partner — the student does
+    # NOT pick a persona (room-mode encounters have exactly one).
+    persona_id = target_enc.patient_persona_id or (
+        target_enc.selected_personas[0] if target_enc.selected_personas else None
+    )
+    if not persona_id:
+        raise HTTPException(409, "Encounter has no patient persona configured.")
+    station_id = secrets.token_urlsafe(8)
+    station = target_enc.add_station(
+        station_id,
+        user_agent=request.headers.get("user-agent", "")[:200],
+    )
+    station.persona_id = persona_id
+
+    return JSONResponse({
+        "ok":            True,
+        "student_id":    student.student_id,
+        "display_name":  student.display_name,
+        "encounter_id":  target_enc.id,
+        "station_id":    station_id,
+        "redirect_url":  f"/station/{target_enc.join_code}/{station_id}",
+        # M13 — true when the student joined a private clone (the
+        # picker showed them the template, the server cloned it,
+        # and the redirect points at the clone).
+        "is_clone":      target_enc.cloned_from_id is not None,
+        "cloned_from_id": target_enc.cloned_from_id,
+    })
+
+
+# =====================================================================
+# V7 — Activity catalog HTTP API (M12)
+#
+# CRUD on the M11 activity catalog. The wizard's room-mode Step 4r
+# fetches GET /api/activities to populate the per-row Activity
+# picker; PATCH/POST/DELETE land Author / Edit / Delete features
+# (the dashboard UI is M5 follow-up — until then operators can
+# curl-edit).
+# =====================================================================
+
+@app.get("/api/activities")
+async def api_activities_list(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    builtin_only: bool = False,
+):
+    """List every activity in the catalog. Default ordering: built-ins
+    first (alphabetical), then custom (alphabetical)."""
+    return JSONResponse({
+        "activities": ehr_db.list_activities(builtin_only=builtin_only),
+    })
+
+
+@app.get("/api/activities/{activity_id}")
+async def api_activities_get(
+    activity_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    row = ehr_db.get_activity(activity_id)
+    if row is None:
+        raise HTTPException(404, f"Unknown activity {activity_id!r}.")
+    return JSONResponse(row)
+
+
+@app.post("/api/activities")
+async def api_activities_create(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Create a custom activity (always `is_builtin=False`). Body JSON
+    mirrors the dataclass: label (required), seed_persona_id,
+    seed_modules[], scenario_text, default_chart_mode, answer_key."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    label = (body.get("label") or "").strip()
+    if not label:
+        raise HTTPException(400, "label is required.")
+    chart_mode = body.get("default_chart_mode", "shared")
+    if chart_mode not in ("shared", "private_clone"):
+        raise HTTPException(400, "default_chart_mode must be "
+                                  "'shared' or 'private_clone'.")
+    row = ehr_db.create_activity(
+        label=label,
+        seed_persona_id=body.get("seed_persona_id") or None,
+        seed_modules=list(body.get("seed_modules") or []),
+        scenario_text=(body.get("scenario_text") or "").strip(),
+        default_chart_mode=chart_mode,
+        answer_key=body.get("answer_key"),
+        is_builtin=False,  # public-route creates are never builtin
+    )
+    return JSONResponse(row)
+
+
+@app.patch("/api/activities/{activity_id}")
+async def api_activities_patch(
+    activity_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Patch a subset of fields. Unknown fields silently ignored
+    (forward-compat). Returns the updated row or 404."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    updated = ehr_db.update_activity(activity_id, **body)
+    if updated is None:
+        raise HTTPException(404, f"Unknown activity {activity_id!r}.")
+    return JSONResponse(updated)
+
+
+@app.delete("/api/activities/{activity_id}")
+async def api_activities_delete(
+    activity_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Delete a custom activity. Returns 409 if the activity is a
+    built-in (protected). Idempotent on missing rows (returns 200)."""
+    existing = ehr_db.get_activity(activity_id)
+    if existing is not None and existing["is_builtin"]:
+        raise HTTPException(409, "Built-in activities cannot be deleted. "
+                                  "PATCH it to edit its fields instead.")
+    ehr_db.delete_activity(activity_id)
+    return JSONResponse({"ok": True, "activity_id": activity_id})
+
+
+@app.get("/api/activities/{activity_id}/encounter_entry")
+async def api_activities_to_encounter_entry(
+    activity_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Translate an activity into the encounter-row dict the wizard
+    needs for `/api/room/start`. Convenience for the wizard JS — it
+    can also assemble this client-side, but the round-trip keeps the
+    mapping authoritative server-side."""
+    entry = activities.to_encounter_entry(activity_id)
+    if entry is None:
+        raise HTTPException(404, f"Unknown activity {activity_id!r}.")
+    return JSONResponse(entry)
+
+
+# =====================================================================
+# V7 — Cohort debrief UI (M15)
+# =====================================================================
+
+@app.get("/portal/debrief/cohort/{room_id}", response_class=HTMLResponse)
+async def portal_cohort_debrief(
+    room_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Render a saved cohort debrief (M14 JSON) as the PEARLS-tabbed
+    web view. 404 when no saved debrief exists for that room_id
+    (the operator either never ended the room or the save failed)."""
+    data = debrief_mod.load_cohort(room_id)
+    if data is None:
+        raise HTTPException(404, f"No cohort debrief saved for room {room_id!r}.")
+    return templates.TemplateResponse(
+        request, "debrief_cohort.html",
+        {"active": "debrief", "cohort": data, "room_id": room_id},
+    )
+
+
+@app.get("/api/debrief/cohort/{room_id}")
+async def api_cohort_debrief(
+    room_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """JSON read of a saved cohort debrief."""
+    data = debrief_mod.load_cohort(room_id)
+    if data is None:
+        raise HTTPException(404, f"No cohort debrief saved for room {room_id!r}.")
+    return JSONResponse(data)
+
+
+@app.post("/api/debrief/cohort/{room_id}/notes")
+async def api_cohort_debrief_save_notes(
+    room_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Persist instructor notes added during the live debrief —
+    Reactions.notes and Application.commitments. Body:
+        {"reactions_notes": "...", "commitments": ["...", ...]}
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    data = debrief_mod.load_cohort(room_id)
+    if data is None:
+        raise HTTPException(404, f"No cohort debrief saved for room {room_id!r}.")
+    pearls = data.setdefault("pearls", {})
+    if "reactions_notes" in body:
+        pearls.setdefault("reactions", {})["notes"] = str(body["reactions_notes"])
+    if "commitments" in body and isinstance(body["commitments"], list):
+        pearls.setdefault("application", {})["commitments"] = [
+            str(x) for x in body["commitments"]
+        ]
+    debrief_mod.save_cohort(data)
+    return JSONResponse({"ok": True})
+
+
+# =====================================================================
+# V7 Phase 7 — Per-Patient Console (M22 scaffold + M25 rich features)
+# =====================================================================
+
+@app.get("/portal/room/encounter/{encounter_id}",
+        response_class=HTMLResponse)
+async def portal_room_encounter_console(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Instructor drill-in for one encounter. Per-patient telemetry
+    preview (M23), ECG strip (M24), device list (M1.5 + M25),
+    telemetry overrides + scene injector (M25). M22 ships the
+    scaffold; subsequent modules light up each card."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    return templates.TemplateResponse(
+        request, "encounter_console.html",
+        {
+            "active": "room",
+            "encounter": enc,
+            "room": {"room_code": room.room_code,
+                      "label":     room.label or "",
+                      "room_id":   room.room_id},
+            # M31 — base_url is used by the QR-codes card so each
+            # station's join URL is LAN-reachable (matches v6 ops
+            # view's QR rendering).
+            "base_url": _base_url_for_qr(request),
+        },
+    )
+
+
+# =====================================================================
+# V7 Phase 7 — Future-device stubs (M29)
+# =====================================================================
+
+@app.get("/api/future_devices/kinds")
+async def api_future_devices_kinds(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Public list of the 4 M29 future-device kinds with labels."""
+    return JSONResponse({
+        "kinds": [{"id": k, "label": v}
+                   for k, v in future_devices_mod.KINDS.items()],
+    })
+
+
+@app.post("/api/encounter/{encounter_id}/future_device/{kind}/press")
+async def api_future_device_press(
+    encounter_id: str,
+    kind: str,
+    request: Request,
+):
+    """Public — a bedside future-device button-press emits an
+    alarm.injected device_event that the M26 alarm bus surfaces to
+    the Nursing Station and the operator dashboard. The body's
+    `by` field (default 'bedside') is recorded for audit."""
+    try:
+        body = await request.json() if (
+            request.headers.get("content-type", "")
+            .startswith("application/json")) else {}
+    except Exception:
+        body = {}
+    by = (body.get("by") or "bedside").strip()
+    room = control_room.get_active_room()
+    if room is None:
+        raise HTTPException(404, "No active room.")
+    try:
+        result = future_devices_mod.press(room, encounter_id, kind, by=by)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from None
+    # Push WS so the nurse station sees the alarm immediately.
+    try:
+        await ws_room.manager.broadcast(room.room_code, {
+            "type":         "future_device_press",
+            "encounter_id": encounter_id,
+            "payload":      {"kind": kind, "by": by,
+                              "event_id": result.get("id")},
+        })
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({"ok": True, "kind": kind,
+                          "encounter_id": encounter_id,
+                          "event_id": result.get("id")})
+
+
+# =====================================================================
+# V7 Phase 7 — Intercom (M28)
+# =====================================================================
+
+@app.post("/api/intercom/{encounter_id}/page")
+async def api_intercom_page(
+    encounter_id: str,
+    request: Request,
+):
+    """Public — the Nursing Station student posts a message that
+    plays at the bedside chat station. Body:
+        {"text": "...", "from_student_id": "stu_xxx", "voice_id": "..."}
+
+    Authentication is by the from_student_id existing on the active
+    room as a nurse_station-role student. The room_code itself is
+    not required because we already have a per-student token from
+    M27's register_nurse flow."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "text required.")
+    room = control_room.get_active_room()
+    if room is None:
+        raise HTTPException(404, "No active room.")
+    if encounter_id not in room.encounters:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    from_sid = (body.get("from_student_id") or "").strip()
+    if from_sid:
+        student = room.students.get(from_sid)
+        if student is None or student.role != "nurse_station":
+            raise HTTPException(
+                403, "from_student_id must reference an active "
+                      "nurse-station student in this room.")
+    try:
+        result = intercom_mod.page_encounter(
+            room, encounter_id,
+            text=text,
+            from_student_id=from_sid or None,
+            voice_id=body.get("voice_id"),
+        )
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(400, str(exc)) from None
+    # M16 WS push so the bedside chat station knows to play it.
+    try:
+        await ws_room.manager.broadcast(room.room_code, {
+            "type":         "intercom",
+            "encounter_id": encounter_id,
+            "payload":      {"event_id": result.get("event_id"),
+                              "text":     text,
+                              "voice_id": result.get("voice_id"),
+                              "persona_id": result.get("persona_id")},
+        })
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse(result)
+
+
+# =====================================================================
+# V7 Phase 7 — Nursing Station student role (M27)
+# =====================================================================
+
+@app.post("/portal/students/register_nurse")
+async def portal_students_register_nurse(request: Request):
+    """Register a student in the in-sim Nursing Station role.
+
+    Body fields:
+      room_code     — required
+      display_name  — required for new; may be omitted with existing_student_id
+      existing_student_id — optional
+
+    Differs from /portal/students/register (M9) in two ways:
+      1. The student is NOT assigned to an encounter. The Nursing
+         Station role is room-scoped — they monitor every bed.
+      2. No chat station is created. The student lands directly on
+         /portal/students/nurse_station?sid=… and polls the room.
+
+    Public (no operator auth). The room_code is the access token.
+    """
+    form = await request.form()
+    room_code    = (form.get("room_code") or "").strip().upper()
+    display_name = (form.get("display_name") or "").strip()
+    existing_sid = (form.get("existing_student_id") or "").strip()
+    room = _room_by_code(room_code)
+    if room is None:
+        raise HTTPException(404, "Unknown room code.")
+
+    if existing_sid:
+        student = room.students.get(existing_sid)
+        if student is None:
+            raise HTTPException(404, "Unknown student id.")
+        if display_name and display_name != student.display_name:
+            student.display_name = display_name
+        student.role = "nurse_station"
+    else:
+        if not display_name:
+            raise HTTPException(400, "display_name required for a new nurse-station student.")
+        # M19 station-cap check — nurse station counts toward the
+        # room's 24-station cap.
+        if (control_room._count_student_stations(room)
+                >= control_room.MAX_STUDENT_STATIONS_PER_ROOM):
+            raise HTTPException(
+                409,
+                f"Room is full "
+                f"({control_room.MAX_STUDENT_STATIONS_PER_ROOM} student "
+                f"stations max). Ask your instructor.")
+        student = room.add_student(display_name, role="nurse_station")
+
+    return JSONResponse({
+        "ok":           True,
+        "student_id":   student.student_id,
+        "display_name": student.display_name,
+        "role":         "nurse_station",
+        "redirect_url": f"/portal/students/nurse_station?sid={student.student_id}",
+    })
+
+
+@app.get("/portal/students/nurse_station", response_class=HTMLResponse)
+async def portal_students_nurse_station(
+    request: Request,
+    sid: str | None = None,
+):
+    """Public nurse-station landing. Requires the student_id (sid)
+    query param so the page can identify which student is at this
+    seat. No operator auth — the sid acts as the seat token."""
+    if not sid:
+        raise HTTPException(400, "sid query param required.")
+    room = control_room.get_active_room()
+    if room is None:
+        raise HTTPException(404, "No active room.")
+    student = room.students.get(sid)
+    if student is None or student.role != "nurse_station":
+        raise HTTPException(404, "Unknown nurse-station student.")
+    return templates.TemplateResponse(
+        request, "nurse_station.html",
+        {
+            "student": student,
+            "room":    {"room_code": room.room_code,
+                         "room_id":   room.room_id,
+                         "label":     room.label or ""},
+        },
+    )
+
+
+# =====================================================================
+# V7 Phase 7 — Alarm bus (M26)
+# =====================================================================
+
+@app.get("/api/room/alarms")
+async def api_room_alarms(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Active alarms across every encounter in the room. Polled by
+    M27 Nursing Station every 2 s. Read-only — observer accessible."""
+    room = _require_active_room()
+    return JSONResponse({"alarms": alarms_mod.active_alarms(room)})
+
+
+@app.post("/api/alarm/{alarm_id}/clear")
+async def api_alarm_clear(
+    alarm_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Clear one alarm. Writes a synthetic alarm.cleared event so
+    the next /api/room/alarms read filters it out. 404 on unknown
+    alarm_id or after the active room ends.
+
+    M50 — Threshold alarms (which have no event log to write into)
+    are now also supported: they're added to `room.silenced_alarms`
+    with `cleared=True` so they're filtered out of the active feed.
+    """
+    room = _require_active_room()
+    result = alarms_mod.clear_alarm(room, alarm_id)
+    if result is None:
+        raise HTTPException(404, f"Unknown alarm id {alarm_id!r}.")
+    return JSONResponse(result)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M50 — Silence an alarm (audio mute without removing from board).
+# Works on any source (device, scene, threshold). Default duration
+# is 45 s (M52 — was 120 s before; operator: "silence of an alarm
+# last 45 seconds then it goes active if the condition is not
+# resolved or cleared"). Operator can still pass ?seconds=N to
+# override for an individual press.
+# ─────────────────────────────────────────────────────────────────────
+
+@app.post("/api/alarm/{alarm_id}/silence")
+async def api_alarm_silence(
+    alarm_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+    seconds: int = 45,
+):
+    room = _require_active_room()
+    result = alarms_mod.silence_alarm(
+        room, alarm_id, duration_s=seconds,
+    )
+    if result is None:
+        raise HTTPException(404, f"Unknown alarm id {alarm_id!r}.")
+    return JSONResponse(result)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# M50 — Nurse Station can fire a Code Blue at a specific encounter.
+#
+# Auth shape:
+#   - Operator (instructor cookie): always allowed.
+#   - Nurse-station student: pass `nurse_sid` in the JSON body; the
+#     route validates the sid against the active room's nurse_station-
+#     role students. This is the only scene a non-instructor can
+#     trigger.
+# ─────────────────────────────────────────────────────────────────────
+
+@app.post("/api/room/encounter/{eid}/nurse_code_blue")
+async def api_room_nurse_code_blue(
+    eid: str,
+    request: Request,
+    medsim_session: Annotated[str | None, Cookie()] = None,
+):
+    room = _require_active_room()
+    enc = room.encounters.get(eid)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {eid!r}.")
+    # Auth: operator cookie wins. Otherwise look for nurse_sid in body.
+    is_operator = auth.verify_session(medsim_session)
+    by_label = "instructor"
+    if not is_operator:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        nurse_sid = (body.get("nurse_sid") or "").strip()
+        if not nurse_sid:
+            raise HTTPException(
+                401,
+                "Must be authenticated as instructor OR pass nurse_sid "
+                "in the body (Nursing Station flow).",
+            )
+        student = room.students.get(nurse_sid)
+        if student is None or student.role != "nurse_station":
+            raise HTTPException(
+                403,
+                "nurse_sid is not a registered Nursing Station student "
+                "for this room.",
+            )
+        by_label = f"nurse_station:{nurse_sid}"
+    # Fire the code.blue scene at the named encounter — same scene
+    # the instructor would inject via /api/encounter/{id}/scene.
+    from portal import scenes as _scenes
+    result = _scenes.apply(
+        enc, {"kind": "code.blue", "params": {}}, by=by_label,
+    )
+    return JSONResponse({
+        "ok": True, "encounter_id": eid, "scene": "code.blue",
+        "by": by_label, "result": result,
+    })
+
+
+# =====================================================================
+# V7 Phase 7 — ECG waveform library (M24)
+# =====================================================================
+
+@app.get("/api/ecg/catalog")
+async def api_ecg_catalog(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Public catalog of 11 cardiac rhythms. The Per-Patient Console
+    (M25) and Nursing Station (M27) both fetch this to populate their
+    rhythm pickers + render the SVG strip."""
+    return JSONResponse({"catalog": ecg_mod.catalog()})
+
+
+@app.get("/api/encounter/{encounter_id}/ecg")
+async def api_encounter_ecg_get(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Per-encounter ECG state: enabled flag + currently selected
+    rhythm id. Read by the Per-Patient Console + Nursing Station."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    return JSONResponse({
+        "enabled":     enc.ecg_enabled,
+        "rhythm_id":   enc.ecg_rhythm_id,
+        "rhythm":      ecg_mod.get(enc.ecg_rhythm_id),
+    })
+
+
+@app.post("/api/encounter/{encounter_id}/ecg")
+async def api_encounter_ecg_set(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Instructor sets the encounter's rhythm + ECG-on/off toggle.
+    Body: `{"rhythm_id": "afib", "enabled": true}` — either field
+    optional. Unknown rhythm_id 400s."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    if "rhythm_id" in body:
+        rid = str(body["rhythm_id"])
+        if not ecg_mod.is_valid_id(rid):
+            raise HTTPException(400, f"Unknown rhythm_id {rid!r}.")
+        enc.ecg_rhythm_id = rid
+    if "enabled" in body:
+        enc.ecg_enabled = bool(body["enabled"])
+    return JSONResponse({
+        "enabled":     enc.ecg_enabled,
+        "rhythm_id":   enc.ecg_rhythm_id,
+        "rhythm":      ecg_mod.get(enc.ecg_rhythm_id),
+    })
+
+
+# =====================================================================
+# V7 M30 — Per-encounter parity (transcript / voice / lead student)
+# =====================================================================
+
+@app.get("/api/encounter/{encounter_id}/transcript")
+async def api_encounter_transcript(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    limit: int = 50,
+):
+    """Latest N transcript entries for one encounter (newest last,
+    matching the v6 chat-station log convention). Polled by the
+    Per-Patient Console's transcript card."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    n = max(1, min(limit, 500))
+    rows = enc.transcript[-n:]
+    return JSONResponse({
+        "encounter_id": enc.id,
+        "transcript": [
+            {
+                "ts":            t.ts,
+                "source":        t.source,
+                "source_label":  t.source_label,
+                "persona_id":    t.persona_id,
+                "persona_name":  t.persona_name,
+                "direction":     t.direction,
+                "text":          t.text,
+                "latency_ms":    t.latency_ms,
+            }
+            for t in rows
+        ],
+        "total_entries": len(enc.transcript),
+    })
+
+
+@app.get("/api/encounter/{encounter_id}/voices")
+async def api_encounter_voices_get(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Per-encounter voice assignments — persona_id → voice_id.
+    Empty when no voices configured (browser TTS fallback).
+
+    M33 — Also returns a `personas` array carrying each persona's
+    display `name` + `role` so the Per-Patient Console voice picker
+    can label rows by character name instead of raw persona ID, and
+    a `join_code` so the per-row "Engage" buttons can deep-link to
+    the chat join page. `selected_personas` is preserved for
+    backward-compat callers.
+    """
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    # M33 — Hydrate persona id → {id, name, role}. If a persona id is
+    # in selected_personas but missing from the library (shouldn't
+    # happen in practice, but defensive), echo back the id as both
+    # id and name so the UI still has something to render.
+    personas_full: list[dict[str, str]] = []
+    for pid in enc.selected_personas:
+        p = library.get_persona(pid)
+        if p is None:
+            personas_full.append({"id": pid, "name": pid, "role": ""})
+        else:
+            personas_full.append({
+                "id":   p.get("id", pid),
+                "name": p.get("name", pid),
+                "role": p.get("role", ""),
+            })
+    return JSONResponse({
+        "encounter_id":       enc.id,
+        "selected_personas":  list(enc.selected_personas),
+        "patient_persona_id": enc.patient_persona_id,
+        "voice_assignments":  dict(enc.voice_assignments),
+        "personas":           personas_full,
+        "join_code":          enc.join_code,
+    })
+
+
+@app.post("/api/encounter/{encounter_id}/voices")
+async def api_encounter_voices_set(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Operator sets/clears one or more persona voice assignments.
+    Body: `{"P-001": "voice_id_xxx", "P-013": null}` — null clears
+    the entry (browser-TTS fallback for that persona)."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    if not isinstance(body, dict):
+        raise HTTPException(400, "Body must be {persona_id: voice_id|null}.")
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    for persona_id, voice_id in body.items():
+        if voice_id is None or voice_id == "":
+            enc.voice_assignments.pop(persona_id, None)
+        else:
+            enc.voice_assignments[persona_id] = str(voice_id)
+    return JSONResponse({
+        "ok": True,
+        "voice_assignments": dict(enc.voice_assignments),
+    })
+
+
+@app.get("/api/encounter/{encounter_id}/lead_student")
+async def api_encounter_lead_student_get(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Read the encounter's lead student id (or null) + a roster
+    list the picker uses."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    lead_name = None
+    if enc.lead_student_id and enc.lead_student_id in room.students:
+        lead_name = room.students[enc.lead_student_id].display_name
+    return JSONResponse({
+        "encounter_id":      enc.id,
+        "lead_student_id":   enc.lead_student_id,
+        "lead_student_name": lead_name,
+        "roster": [
+            {"student_id":   s.student_id,
+             "display_name": s.display_name,
+             "role":         s.role,
+             "assigned_to_this": s.assigned_encounter_id == enc.id}
+            for s in room.students.values()
+            if s.role == "bedside"   # nurse_station students never lead a bed
+        ],
+    })
+
+
+@app.post("/api/encounter/{encounter_id}/lead_student")
+async def api_encounter_lead_student_set(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Set or clear the encounter's lead student. Body:
+        {"lead_student_id": "stu_xxx" | null}
+    Setting to null clears the lead. The student_id must exist on
+    the room's roster (unless null)."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    sid = body.get("lead_student_id")
+    if sid in (None, "", "null"):
+        enc.lead_student_id = None
+    else:
+        sid = str(sid)
+        if sid not in room.students:
+            raise HTTPException(404,
+                f"Unknown student {sid!r} for this room.")
+        enc.lead_student_id = sid
+    lead_name = None
+    if enc.lead_student_id:
+        lead_name = room.students[enc.lead_student_id].display_name
+    return JSONResponse({
+        "ok": True,
+        "encounter_id":      enc.id,
+        "lead_student_id":   enc.lead_student_id,
+        "lead_student_name": lead_name,
+    })
+
+
+# =====================================================================
+# V7 M53 — Lead-label assignments (free-text name / group / list).
+#
+# A parallel API to the M30 roster-picked lead. Lets the instructor
+# type any string ("Team Alpha", "Alice, Bob, Charlie", "Alice Pham")
+# and apply it to one OR many encounters at once from the Multi-
+# Patient Control dashboard.
+#
+# Distinct from /api/encounter/{eid}/lead_student because the M30 API
+# requires the lead to be a student already on the roster. M53 lets
+# the operator label leads who haven't joined yet, or use a group
+# name when no single student "owns" the bed at debrief time.
+#
+# Stored as a plain string field on the Encounter dataclass. Empty
+# string == no label set (the GET response surfaces lead_label="").
+# =====================================================================
+
+@app.get("/api/room/lead_assignments")
+async def api_room_lead_assignments_get(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Read every encounter's current lead label + roster fallback.
+    Powers the Multi-Patient Control "👤 Lead assignments" panel."""
+    room = _require_active_room()
+    rows = []
+    for enc in room.encounters.values():
+        label = (getattr(enc, "lead_label", "") or "").strip()
+        fallback_name = None
+        if enc.lead_student_id and enc.lead_student_id in room.students:
+            fallback_name = room.students[enc.lead_student_id].display_name
+        rows.append({
+            "encounter_id":     enc.id,
+            "encounter_label":  enc.encounter_label or enc.scenario_name,
+            "lead_label":       label,
+            "lead_student_id":  enc.lead_student_id,
+            "lead_student_name": fallback_name,
+            "effective_lead_display": label or fallback_name or "",
+        })
+    return JSONResponse({"encounters": rows})
+
+
+@app.post("/api/encounter/{encounter_id}/lead_label")
+async def api_encounter_lead_label_set(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Set or clear ONE encounter's free-text lead label. Body:
+        {"lead_label": "Team Alpha"}
+    or
+        {"lead_label": ""}   # clears
+    Whitespace is trimmed. There is no length cap or character
+    restriction — the instructor's words are the source of truth."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    label = str(body.get("lead_label") or "").strip()
+    enc.lead_label = label
+    return JSONResponse({
+        "ok": True,
+        "encounter_id": enc.id,
+        "lead_label":   enc.lead_label,
+    })
+
+
+@app.post("/api/room/lead_assignments")
+async def api_room_lead_assignments_bulk(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Apply one or more lead-label assignments in a single call.
+
+    Body:
+        {"assignments": [
+            {"encounter_ids": ["enc_1","enc_2"], "lead_label": "Team Alpha"},
+            {"encounter_ids": ["enc_3"],        "lead_label": "Alice"},
+            ...
+        ]}
+
+    Each assignment writes the same `lead_label` to every listed
+    encounter. Unknown encounter ids are skipped (returned in the
+    response's `unknown` list so the UI can warn the operator).
+
+    Passing `lead_label: ""` clears the label for the listed beds —
+    same as POSTing the single-encounter endpoint with empty text."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    room = _require_active_room()
+    assignments = body.get("assignments") or []
+    if not isinstance(assignments, list):
+        raise HTTPException(400, "assignments must be a list.")
+    applied: list[dict[str, Any]] = []
+    unknown: list[str] = []
+    for entry in assignments:
+        if not isinstance(entry, dict):
+            continue
+        label = str(entry.get("lead_label") or "").strip()
+        eids = entry.get("encounter_ids") or []
+        if not isinstance(eids, list):
+            continue
+        for eid in eids:
+            sid = str(eid)
+            enc = room.encounters.get(sid)
+            if enc is None:
+                unknown.append(sid)
+                continue
+            enc.lead_label = label
+            applied.append({"encounter_id": enc.id, "lead_label": label})
+    return JSONResponse({
+        "ok": True,
+        "applied": applied,
+        "unknown": unknown,
+    })
+
+
+# =====================================================================
+# V7 M55 — Per-encounter medications card + active-at-start toggles.
+#
+# Each encounter's personas have a seed-derived MAR (built by
+# ehr_seed.seeds_for_all_personas). The instructor can mark a subset
+# of those meds "active at start" from the Per-Patient Console's
+# 💊 Medications card; the med cart (M47) then filters its display
+# to only the active meds per patient.
+#
+# Default semantics: when an encounter has NO active list for a
+# persona, the cart shows every med (back-compat with pre-M55 carts).
+# Once the operator interacts (POSTs a list, even an empty one), the
+# explicit list wins.
+# =====================================================================
+
+@app.get("/api/encounter/{encounter_id}/medications")
+async def api_encounter_medications_get(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Return every persona's seed-derived MAR + which meds the
+    instructor has flagged active at start.
+
+    Response shape:
+        {"encounter_id": "...",
+         "personas": [
+           {"character_id": "P-014", "name": "Jane Doe",
+            "explicit_active_list": true|false,
+            "medications": [
+              {"name": "Furosemide", "dose": "40 mg",
+               "route": "IV", "frequency": "q6h",
+               "high_alert": false, "med_id": "med_furosemide_001",
+               "active": true},
+              ...
+            ]}, ...]}
+
+    `explicit_active_list` is False when the operator hasn't
+    interacted yet — every `active` field is True (default-all). Once
+    the operator POSTs a list, becomes True; only listed meds carry
+    `active=True`.
+    """
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    from portal import ehr_seed as _ehr_seed
+    # M58 — Operator: "Med list should only populate with Patient
+    # character medications no other character." Family / clinician
+    # personas in selected_personas have no MAR; iterating over them
+    # was producing empty (or noisy stub) med rows. Filter to the
+    # patient persona only.
+    per_persona = _ehr_seed.seeds_for_patient_only(
+        enc, ehr_id=enc.ehr_id) or []
+    out: list[dict[str, Any]] = []
+    active_map = getattr(enc, "active_medications", {}) or {}
+    for p in per_persona:
+        pid = p.get("character_id") or ""
+        explicit = pid in active_map
+        active_names_lower = {
+            (n or "").strip().lower()
+            for n in (active_map.get(pid) or [])
+        }
+        meds_out: list[dict[str, Any]] = []
+        for m in (p.get("medications") or []):
+            name = (m.get("name") or "").strip()
+            if explicit:
+                is_active = name.lower() in active_names_lower
+            else:
+                is_active = True   # default-all
+            meds_out.append({
+                "med_id":      m.get("med_id") or "",
+                "name":        name,
+                "dose":        m.get("dose") or "",
+                "route":       m.get("route") or "",
+                "frequency":   m.get("frequency") or "",
+                "high_alert":  bool(m.get("high_alert")),
+                "rationale":   m.get("rationale") or "",
+                "active":      is_active,
+            })
+        out.append({
+            "character_id":          pid,
+            "name":                  p.get("name") or pid,
+            "explicit_active_list":  explicit,
+            "medications":           meds_out,
+        })
+    return JSONResponse({"encounter_id": enc.id, "personas": out})
+
+
+@app.post("/api/encounter/{encounter_id}/medications/active")
+async def api_encounter_medications_active_set(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Replace one persona's active-meds list. Body:
+        {"persona_id": "P-014",
+         "active_med_names": ["Furosemide", "Lisinopril"]}
+
+    Passing an empty list explicitly sets "no meds active for this
+    patient at start". To restore the default (show every med),
+    omit the persona_id from active_medications via DELETE below.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    pid = (body.get("persona_id") or "").strip()
+    if not pid:
+        raise HTTPException(400, "persona_id required.")
+    names = body.get("active_med_names") or []
+    if not isinstance(names, list):
+        raise HTTPException(400, "active_med_names must be a list.")
+    if not hasattr(enc, "active_medications") or enc.active_medications is None:
+        enc.active_medications = {}
+    enc.active_medications[pid] = [
+        str(n).strip().lower() for n in names if str(n).strip()
+    ]
+    return JSONResponse({
+        "ok":            True,
+        "encounter_id":  enc.id,
+        "persona_id":    pid,
+        "active_count":  len(enc.active_medications[pid]),
+    })
+
+
+@app.delete("/api/encounter/{encounter_id}/medications/active/{persona_id}")
+async def api_encounter_medications_active_clear(
+    encounter_id: str,
+    persona_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Reset one persona to default behaviour (every med shows on the
+    cart). The DELETE just removes the entry; the GET response then
+    reports `explicit_active_list=False` again."""
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    if hasattr(enc, "active_medications") and enc.active_medications:
+        enc.active_medications.pop(persona_id, None)
+    return JSONResponse({
+        "ok":            True,
+        "encounter_id":  enc.id,
+        "persona_id":    persona_id,
+    })
+
+
+# =====================================================================
+# V7 Phase 7 — Telemetry simulation (M23)
+# =====================================================================
+
+@app.get("/api/encounter/{encounter_id}/telemetry")
+async def api_encounter_telemetry(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    jitter: bool = True,
+):
+    """Snapshot the encounter's live telemetry. M23 derives from the
+    latest vitals.record (or default values) + optional small jitter.
+    Polled by M25 Per-Patient Console (1s cadence) and M27 Nursing
+    Station mini-strips (2s cadence)."""
+    room = _require_active_room()
+    if encounter_id not in room.encounters:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    return JSONResponse(telemetry_mod.snapshot(encounter_id, jitter=jitter))
+
+
+@app.post("/api/encounter/{encounter_id}/telemetry/override")
+async def api_encounter_telemetry_override(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Instructor force-set one or more telemetry metrics. Body:
+        {"hr": 132, "sbp": 70}                 — set
+        {"clear": "hr"}                         — clear one
+        {"clear_all": true}                     — clear every override
+    Returns the post-update override dict."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    room = _require_active_room()
+    if encounter_id not in room.encounters:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    if body.get("clear_all"):
+        telemetry_mod.clear_all_overrides(encounter_id)
+        return JSONResponse({"ok": True, "overrides": {}})
+    if "clear" in body:
+        key = str(body["clear"])
+        try:
+            updated = telemetry_mod.clear_override(encounter_id, key)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from None
+        return JSONResponse({"ok": True, "overrides": updated})
+    updated = telemetry_mod._load_overrides(encounter_id)
+    for key, value in body.items():
+        if key in telemetry_mod._VALID_METRICS:
+            try:
+                updated = telemetry_mod.set_override(encounter_id, key, value)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from None
+    return JSONResponse({"ok": True, "overrides": updated})
+
+
+# =====================================================================
+# V7 — Per-encounter cost caps (M17)
+# =====================================================================
+
+@app.get("/api/room/budget")
+async def api_room_budget(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Operator-facing snapshot of the active room's cost-cap usage."""
+    room = _require_active_room()
+    return JSONResponse(room.budget.usage())
+
+
+@app.post("/api/room/budget")
+async def api_room_budget_set(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Update the active room's caps. Body JSON (any subset):
+        {"haiku_rate_cap": <int|null>,  "voice_char_cap": <int|null>}
+    Pass null to clear a cap. Returns the new usage snapshot."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    room = _require_active_room()
+    if "haiku_rate_cap" in body:
+        v = body["haiku_rate_cap"]
+        room.haiku_rate_cap = int(v) if v is not None else None
+    if "voice_char_cap" in body:
+        v = body["voice_char_cap"]
+        room.voice_char_cap = int(v) if v is not None else None
+    # Touch the property so the tracker picks up the new values.
+    return JSONResponse(room.budget.usage())
+
+
+@app.websocket("/ws/room/{room_code}")
+async def ws_room_channel(ws: WebSocket, room_code: str) -> None:
+    """M16 — Per-room broadcast channel. Stations subscribe on page
+    load and react to freeze / resume / scene / end events in real
+    time. No auth on the WS upgrade — the room_code itself is the
+    access token (matches the v6 chat-station / device-station
+    pattern). Closed sockets are pruned on the next broadcast."""
+    await ws_room.handle_room_ws(ws, room_code)
+
+
+@app.get("/portal/cohort-debriefs", response_class=HTMLResponse)
+async def portal_cohort_debrief_index(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Index page listing every saved cohort debrief, newest first.
+
+    Path is `/portal/cohort-debriefs` (plural, top-level) to avoid
+    conflicting with the v6 `/portal/debrief/{session_id}` route
+    (which would have caught `/portal/debrief/cohort` as a session
+    id lookup).
+    """
+    return templates.TemplateResponse(
+        request, "debrief_cohort_index.html",
+        {"active": "debrief", "cohorts": debrief_mod.list_saved_cohorts()},
+    )
+
+
+# ----- VRAI Faces tablet launcher (v8) -----------------------------------
+# Memory_management.MD §6 — the QR encodes the LAN URL of the vrai-faces
+# dev/preview server; the tablet camera scans it and the avatar boots
+# full-screen, bound to <character_id>.
+
+import os as _os  # local, only this section uses it
+
+
+def _vrai_faces_url(
+    request: Request,
+    character_id: str,
+    *,
+    scenario_id: str,
+    opacity: float,
+) -> str:
+    """Build the LAN-reachable URL to the vrai-faces shell for this tablet.
+
+    Dev: VRAI_FACES_BASE_URL=http://<host>:5173  (vite dev)
+    Preview: VRAI_FACES_BASE_URL=http://<host>:4173  (vite preview)
+    Prod: VRAI_FACES_BASE_URL=<absolute prefix where dist/ is served>
+
+    If the env var is unset, the URL is derived from the portal's own
+    request hostname plus port 5173.
+    """
+    base = _os.environ.get("VRAI_FACES_BASE_URL")
+    if not base:
+        host = request.url.hostname or "localhost"
+        port = int(_os.environ.get("VRAI_FACES_VITE_PORT", "5173"))
+        base = f"http://{host}:{port}"
+    safe_char = character_id.strip()
+    safe_scen = scenario_id.strip() or "default"
+    op = max(0.0, min(1.0, opacity))
+    return f"{base.rstrip('/')}/face/{safe_char}?scenario={safe_scen}&opacity={op:.2f}"
+
+
+@app.get("/qr/face/{character_id}.svg")
+async def vrai_face_qr(
+    request: Request,
+    character_id: str,
+    scenario: str = "default",
+    opacity: float = 0.66,
+    scale: int = 8,
+):
+    """SVG QR code that, when scanned on a tablet, opens the full-screen
+    VRAI Faces avatar bound to <character_id>. No auth — facilitators
+    print/show these on the control room screen."""
+    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
+    svg = qrgen.make_qr_svg(url, scale=scale)
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+@app.get("/portal/face/launch/{character_id}", response_class=HTMLResponse)
+async def vrai_face_launcher(
+    request: Request,
+    character_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    scenario: str = "default",
+    opacity: float = 0.66,
+):
+    """Facilitator-facing page that displays the QR + the destination URL
+    so a tablet can be paired into a scenario with one camera scan."""
+    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
+    qr_svg = qrgen.make_qr_svg(url, scale=10)
+    html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>VRAI Faces launcher — {character_id}</title>
+<style>
+  body {{ font-family: -apple-system, system-ui, sans-serif;
+          background: #0b0f1a; color: #e9edf5; margin: 0; padding: 32px;
+          display: flex; flex-direction: column; align-items: center; }}
+  h1 {{ font-size: 20px; font-weight: 500; }}
+  .qr {{ background: #fff; padding: 16px; border-radius: 12px; }}
+  code {{ background: #1c2333; padding: 4px 8px; border-radius: 4px;
+          font-size: 14px; word-break: break-all; }}
+  .meta {{ margin-top: 16px; font-size: 14px; color: #b5bccd; }}
+</style></head><body>
+  <h1>Scan to open avatar — {character_id}</h1>
+  <div class="qr">{qr_svg}</div>
+  <div class="meta">scenario: <code>{scenario}</code> &nbsp; opacity: <code>{opacity:.2f}</code></div>
+  <div class="meta">URL: <code>{url}</code></div>
+  <div class="meta">Schema: VRAISpeechFrame v1 (Memory_management.MD §6.2)</div>
+</body></html>"""
+    return HTMLResponse(html)

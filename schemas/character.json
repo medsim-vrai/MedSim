@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Character",
+  "description": "Character card consumed by B2 — Character Registry.",
+  "type": "object",
+  "required": ["id", "name", "role", "voice", "knowledge_boundary", "scene_contract"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+    "role": { "type": "string" },
+    "identity": {
+      "type": "object",
+      "properties": {
+        "years_experience": { "type": "integer" },
+        "training_site": { "type": "string" },
+        "shift": { "type": "string" },
+        "mood_today": { "type": "string" }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "required": ["register", "examples"],
+      "properties": {
+        "register": { "type": "string" },
+        "sentence_length": { "type": "string", "enum": ["short", "medium", "long"] },
+        "examples": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "type": "string" }
+        },
+        "never_says": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "knowledge_boundary": {
+      "type": "string",
+      "description": "What this role plausibly knows; out-of-scope facts are masked by B7."
+    },
+    "teaching_stance": {
+      "type": "string",
+      "description": "How much this character volunteers vs. asks."
+    },
+    "scope_of_action": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tools/functions this character can call (e.g. place_order, read_chart)."
+    },
+    "scene_contract": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Hard rules enforced by B10 — Safety & Pedagogy Guard."
+    },
+    "voice_profile": {
+      "type": "object",
+      "description": "Voice characteristics for v2 voice-mode TTS playback.",
+      "properties": {
+        "gender": { "type": "string", "enum": ["female", "male", "neutral"] },
+        "language": { "type": "string", "default": "en-US" },
+        "pitch": { "type": "number", "minimum": 0, "maximum": 2, "default": 1.0 },
+        "rate": { "type": "number", "minimum": 0.5, "maximum": 2.0, "default": 1.0 },
+        "voice_hints": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Preferred browser voice names (e.g. Samantha, Daniel, Karen, Google US English Female). Tried in order."
+        }
+      }
+    }
+  }
+}

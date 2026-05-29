@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Training Bridge VRAI- MedSim · sign in</title>
+  <link rel="stylesheet" href="/static/portal.css">
+</head>
+<body class="login">
+  <main class="login-card">
+    <h1>Training Bridge VRAI- MedSim</h1>
+    {% if not initialized %}
+      <p class="muted">First run — set a master password. It encrypts your API
+        keys at rest in <code>~/.medsim/vault.enc</code>. There is no recovery
+        if you lose it.</p>
+      <form action="/initialize" method="post">
+        <label>Master password
+          <input type="password" name="password" required minlength="8" autocomplete="new-password" autofocus>
+        </label>
+        <label>Confirm
+          <input type="password" name="confirm" required minlength="8" autocomplete="new-password">
+        </label>
+        <button type="submit" class="primary">Initialize vault</button>
+      </form>
+    {% else %}
+      <p class="muted">Enter your master password to unlock the credential vault.</p>
+      <form action="/login" method="post">
+        <label>Master password
+          <input type="password" name="password" required autocomplete="current-password" autofocus>
+        </label>
+        <button type="submit" class="primary">Unlock</button>
+      </form>
+    {% endif %}
+    {% if error %}
+      <p class="error">
+        {% if error == 'invalid' %}Invalid master password.
+        {% elif error == 'mismatch' %}Passwords did not match.
+        {% elif error == 'length' %}Password must be at least 8 characters.
+        {% elif error == 'expired' %}Session expired — please sign in again.
+        {% elif error == 'exists' %}Vault already initialized — sign in instead.
+        {% elif error == 'not-initialized' %}Vault not initialized.
+        {% else %}{{ error }}
+        {% endif %}
+      </p>
+    {% endif %}
+  </main>
+</body>
+</html>

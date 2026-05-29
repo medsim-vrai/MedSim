@@ -1,0 +1,108 @@
+{
+  "_meta": {
+    "version": 1,
+    "description": "Standard-of-care treatment timelines per condition. Each entry orders a med at offset_h relative to admit_time, with the engine generating scheduled clock times + a realistic past-administration history from order time to now. Negative offsets work for pre-arrival meds (surgical prophylaxis, EMS thrombolytics). Drug names must resolve through drug_doses.json.",
+    "field_shape": "drug (resolved), order_offset_h (relative to admit_time), interval_h (null for continuous/once), rationale (one-line, shown as MAR tooltip), prn_reasons (list, only for PRN drugs)"
+  },
+
+  "sepsis": [
+    {"drug": "Piperacillin/Tazobactam", "order_offset_h":  0.5, "interval_h":  6,   "rationale": "Hour-1 sepsis bundle: broad-spectrum"},
+    {"drug": "Vancomycin",              "order_offset_h":  0.5, "interval_h": 12,   "rationale": "Hour-1 bundle: Gram-positive coverage"},
+    {"drug": "Norepinephrine gtt",      "order_offset_h":  1.0, "interval_h": null, "rationale": "MAP < 65 after 30 mL/kg crystalloid"},
+    {"drug": "Pantoprazole",            "order_offset_h":  2.0, "interval_h": 24,   "rationale": "Stress-ulcer prophylaxis"},
+    {"drug": "Oxygen 4 L NC",           "order_offset_h":  0.0, "interval_h": null, "rationale": "Maintain SpO2 ≥ 92%"},
+    {"drug": "Acetaminophen",           "order_offset_h":  1.5, "interval_h":  6,   "rationale": "PRN for fever", "prn_reasons": ["T 38.6", "T 38.9", "fever / chills"]}
+  ],
+
+  "septic_shock": [
+    {"drug": "Piperacillin/Tazobactam", "order_offset_h":  0.25,"interval_h":  6,   "rationale": "Hour-1 antibiotic"},
+    {"drug": "Vancomycin",              "order_offset_h":  0.5, "interval_h": 12,   "rationale": "Hour-1 antibiotic"},
+    {"drug": "Norepinephrine gtt",      "order_offset_h":  0.5, "interval_h": null, "rationale": "First-line vasopressor"},
+    {"drug": "Vasopressin gtt",         "order_offset_h":  1.5, "interval_h": null, "rationale": "Add when norepi > 0.25 mcg/kg/min"},
+    {"drug": "Hydrocortisone",          "order_offset_h":  2.0, "interval_h":  8,   "rationale": "Refractory shock on ≥ 2 pressors"},
+    {"drug": "Oxygen NRB",              "order_offset_h":  0.0, "interval_h": null, "rationale": "Maximize FiO2 pre-intubation"}
+  ],
+
+  "chf_exacerbation": [
+    {"drug": "Furosemide",              "order_offset_h":  0.5, "interval_h": 12,   "rationale": "Diuresis for volume overload"},
+    {"drug": "Nitroglycerin gtt",       "order_offset_h":  1.0, "interval_h": null, "rationale": "Preload reduction"},
+    {"drug": "Lisinopril",              "order_offset_h":  4.0, "interval_h": 24,   "rationale": "Afterload reduction (hold if SBP < 100)"},
+    {"drug": "Metoprolol succinate",    "order_offset_h":  8.0, "interval_h": 24,   "rationale": "Resume HFrEF beta-blocker once stable"},
+    {"drug": "Oxygen 2 L NC",           "order_offset_h":  0.0, "interval_h": null, "rationale": "Titrate SpO2 ≥ 92%"}
+  ],
+
+  "mi_stemi": [
+    {"drug": "Aspirin (load)",          "order_offset_h":  0.0, "interval_h": null, "rationale": "Door-to-aspirin ≤ 30 min"},
+    {"drug": "Aspirin",                 "order_offset_h":  6.0, "interval_h": 24,   "rationale": "Maintenance"},
+    {"drug": "Clopidogrel",             "order_offset_h":  0.25,"interval_h": 24,   "rationale": "P2Y12 inhibitor"},
+    {"drug": "Atorvastatin",            "order_offset_h":  2.0, "interval_h": 24,   "rationale": "High-intensity statin"},
+    {"drug": "Heparin gtt",             "order_offset_h":  0.5, "interval_h": null, "rationale": "Anticoag pre-PCI"},
+    {"drug": "Metoprolol tartrate",     "order_offset_h":  6.0, "interval_h": 12,   "rationale": "If HR > 60 and SBP > 100"},
+    {"drug": "Morphine",                "order_offset_h":  0.5, "interval_h":  4,   "rationale": "PRN for chest pain", "prn_reasons": ["chest pain 7/10", "chest pain 8/10"]}
+  ],
+
+  "stroke_ischemic": [
+    {"drug": "tPA (alteplase)",         "order_offset_h":  0.75,"interval_h": null, "rationale": "Within 4.5 h of onset, BP < 185/110"},
+    {"drug": "Nicardipine gtt",         "order_offset_h":  0.5, "interval_h": null, "rationale": "BP control for tPA eligibility"},
+    {"drug": "Aspirin",                 "order_offset_h": 24.0, "interval_h": 24,   "rationale": "Start 24 h post-tPA"},
+    {"drug": "Atorvastatin",            "order_offset_h": 24.0, "interval_h": 24,   "rationale": "Secondary prevention"}
+  ],
+
+  "gi_bleed_upper": [
+    {"drug": "Pantoprazole",            "order_offset_h":  0.5, "interval_h": null, "rationale": "PPI gtt for bleeding ulcer"},
+    {"drug": "Octreotide gtt",          "order_offset_h":  1.0, "interval_h": null, "rationale": "Variceal bleed coverage"},
+    {"drug": "Ceftriaxone",             "order_offset_h":  1.0, "interval_h": 24,   "rationale": "SBP prophylaxis if cirrhotic"}
+  ],
+
+  "pneumonia": [
+    {"drug": "Ceftriaxone",             "order_offset_h":  0.5, "interval_h": 24,   "rationale": "CAP coverage"},
+    {"drug": "Azithromycin",            "order_offset_h":  0.75,"interval_h": 24,   "rationale": "Atypical coverage"},
+    {"drug": "Acetaminophen",           "order_offset_h":  1.0, "interval_h":  6,   "rationale": "PRN fever", "prn_reasons": ["T 39.0", "T 38.7"]},
+    {"drug": "Oxygen 4 L NC",           "order_offset_h":  0.0, "interval_h": null, "rationale": "Hypoxia"}
+  ],
+
+  "copd_exacerbation": [
+    {"drug": "Methylprednisolone",      "order_offset_h":  0.5, "interval_h":  6,   "rationale": "Systemic steroid burst"},
+    {"drug": "Albuterol",               "order_offset_h":  0.25,"interval_h":  4,   "rationale": "Bronchodilator", "prn_reasons": ["wheezing", "dyspnea"]},
+    {"drug": "Ipratropium",             "order_offset_h":  0.25,"interval_h":  6,   "rationale": "Anticholinergic bronchodilator"},
+    {"drug": "Azithromycin",            "order_offset_h":  1.0, "interval_h": 24,   "rationale": "Antibiotic for purulent exacerbation"},
+    {"drug": "Oxygen 2 L NC",           "order_offset_h":  0.0, "interval_h": null, "rationale": "Conservative O2 (avoid CO2 retention)"}
+  ],
+
+  "dka": [
+    {"drug": "Insulin regular gtt",     "order_offset_h":  1.0, "interval_h": null, "rationale": "Bridge after fluids + K ≥ 3.3"},
+    {"drug": "Potassium chloride",      "order_offset_h":  0.5, "interval_h": null, "rationale": "Replete before insulin"},
+    {"drug": "Pantoprazole",            "order_offset_h":  2.0, "interval_h": 24,   "rationale": "Stress-ulcer prophylaxis"}
+  ],
+
+  "alcohol_withdrawal": [
+    {"drug": "Lorazepam",               "order_offset_h":  0.5, "interval_h":  2,   "rationale": "Symptom-triggered per CIWA q4h", "prn_reasons": ["CIWA 12", "CIWA 18", "tremor"]},
+    {"drug": "Thiamine",                "order_offset_h":  0.5, "interval_h": 24,   "rationale": "Wernicke prophylaxis"},
+    {"drug": "Folate",                  "order_offset_h":  0.5, "interval_h": 24,   "rationale": "B-vitamin supplementation"},
+    {"drug": "Multivitamin",            "order_offset_h":  0.5, "interval_h": 24,   "rationale": "Banana bag standard"}
+  ],
+
+  "post_op_stable": [
+    {"drug": "Cefoxitin",               "order_offset_h": -1.0, "interval_h":  6,   "rationale": "Surgical prophylaxis (pre-incision)"},
+    {"drug": "Enoxaparin",              "order_offset_h":  6.0, "interval_h": 24,   "rationale": "DVT prophylaxis"},
+    {"drug": "Famotidine",              "order_offset_h":  2.0, "interval_h": 12,   "rationale": "Stress-ulcer prophylaxis"},
+    {"drug": "Acetaminophen IV",        "order_offset_h":  0.5, "interval_h":  6,   "rationale": "Multimodal analgesia"},
+    {"drug": "Morphine",                "order_offset_h":  0.5, "interval_h":  4,   "rationale": "Breakthrough pain", "prn_reasons": ["pain 7/10", "pain 8/10", "pain 6/10"]},
+    {"drug": "Ondansetron",             "order_offset_h":  0.5, "interval_h":  6,   "rationale": "PRN nausea", "prn_reasons": ["nausea", "vomiting"]},
+    {"drug": "Docusate",                "order_offset_h":  4.0, "interval_h": 12,   "rationale": "Opioid-induced constipation prevention"}
+  ],
+
+  "anaphylaxis": [
+    {"drug": "Epinephrine IM",          "order_offset_h":  0.0, "interval_h": null, "rationale": "First-line"},
+    {"drug": "Diphenhydramine",         "order_offset_h":  0.25,"interval_h":  6,   "rationale": "H1 blockade"},
+    {"drug": "Famotidine",              "order_offset_h":  0.25,"interval_h": 12,   "rationale": "H2 blockade"},
+    {"drug": "Methylprednisolone",      "order_offset_h":  0.5, "interval_h":  6,   "rationale": "Prevent biphasic reaction"},
+    {"drug": "Oxygen NRB",              "order_offset_h":  0.0, "interval_h": null, "rationale": "Maximize FiO2"}
+  ],
+
+  "stable_baseline": [
+    {"drug": "Lisinopril",              "order_offset_h":  0.5, "interval_h": 24,   "rationale": "Home med continued"},
+    {"drug": "Atorvastatin",            "order_offset_h":  0.5, "interval_h": 24,   "rationale": "Home med continued"},
+    {"drug": "Acetaminophen",           "order_offset_h":  0.5, "interval_h":  6,   "rationale": "PRN pain", "prn_reasons": ["pain 3/10", "pain 4/10"]}
+  ]
+}

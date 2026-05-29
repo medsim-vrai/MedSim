@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}EHR admin{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/control.css">
+
+<header class="page-header">
+  <div>
+    <h1>EHR admin</h1>
+    <p class="muted">Seed inspector, recent chart events, session controls.</p>
+  </div>
+</header>
+
+{# V5 — storage health: is simulation content actually persisting? #}
+{% if storage %}
+  {% if storage.durable %}
+    <div class="banner ok small">
+      <strong>Persistence: durable.</strong> Chart content is stored in SQLite at
+      <code>{{ storage.db_path }}</code> (schema v{{ storage.schema_version }}) and
+      survives server restarts.
+    </div>
+  {% else %}
+    <div class="banner warn small">
+      <strong>Persistence: DEGRADED — in-memory only.</strong>
+      {{ storage.degraded_reason or 'SQLite is unavailable.' }}
+      Chart content will be lost on server restart.
+    </div>
+  {% endif %}
+{% endif %}
+
+{% if not session %}
+  <div class="banner warn">No active session. Start one from the <a href="/portal/control">control room</a>.</div>
+{% else %}
+  <div class="ops-grid" style="grid-template-columns: 1fr 1fr;">
+    <section class="check-card">
+      <h2>Session</h2>
+      <p><strong>Scenario:</strong> {{ session.scenario_name }}</p>
+      <p><strong>Join code:</strong> <code>{{ session.join_code }}</code></p>
+      <p><strong>EHR:</strong> {{ session.ehr_id or '— none configured —' }}</p>
+      <p><strong>Charting locked:</strong>
+        {% if session.charting_locked_at %}<span class="badge danger">yes ({{ session.charting_locked_at | int }})</span>{% else %}<span class="badge ok">no</span>{% endif %}
+      </p>
+      <p><strong>Events captured:</strong> {{ event_total }}</p>
+      <p><strong>EHR stations:</strong> {{ session.ehr_stations | length }}</p>
+      <form method="post" action="/portal/ehr_admin/purge" data-confirm="Purge all EHR data for this session? This deletes chart events, seed, and comparison report.">
+        <button type="submit" class="danger">Purge EHR data for this session</button>
+      </form>
+    </section>
+
+    <section class="check-card">
+      <h2>EHR registry</h2>
+      <p class="muted small">All three look-alikes are always available. The wizard chooses one per session.</p>
+      <ul class="small">
+        {% for e in ehrs %}
+          <li>
+            <strong>{{ e.name }}</strong> <code>{{ e.id }}</code> — {{ e.subtitle }}<br>
+            <span class="muted small">{{ e.blurb }}</span><br>
+            <a href="/ehr/demo/{{ e.id }}" target="_blank" class="button-link small">Preview demo →</a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="check-card" style="grid-column: 1 / -1;">
+      <h2>Master order catalog <span class="muted small">(custom supplies / services / medications — persists across all sessions)</span></h2>
+      {% if master_catalog %}
+        <table class="small" style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th align="left">category</th><th align="left">code</th>
+            <th align="left">label</th><th align="left">added by</th><th></th>
+          </tr></thead>
+          <tbody>
+          {% for it in master_catalog %}
+            <tr>
+              <td><span class="badge ok">{{ it.category }}</span></td>
+              <td><code>{{ it.code }}</code></td>
+              <td>{{ it.label }}</td>
+              <td class="muted small">{{ it.added_by or '—' }}</td>
+              <td>
+                <form method="post" action="/portal/ehr_admin/catalog_remove" style="margin:0;">
+                  <input type="hidden" name="item_id" value="{{ it.id }}">
+                  <button type="submit" class="secondary small">remove</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="muted">No custom catalog items yet. Students and instructors add supplies, services, or medications from the EHR's Orders tab; entries land here and stay orderable in every records system.</p>
+      {% endif %}
+    </section>
+
+    <section class="check-card" style="grid-column: 1 / -1;">
+      <h2>ChartSeed (frozen at session start)</h2>
+      {% if seed %}
+        <pre class="small" style="background:#f4f5f8;padding:12px;border-radius:6px;max-height:300px;overflow:auto;">{{ seed | tojson(indent=2) }}</pre>
+      {% else %}
+        <p class="muted">No seed yet. It is built when the first EHR station joins.</p>
+      {% endif %}
+    </section>
+
+    <section class="check-card" style="grid-column: 1 / -1;">
+      <h2>Recent chart events ({{ events | length }} of {{ event_total }})</h2>
+      {% if events %}
+        <table class="small" style="width:100%;border-collapse:collapse;">
+          <thead><tr><th align="left">ts</th><th align="left">station</th><th align="left">type</th><th align="left">surface</th><th align="left">payload</th></tr></thead>
+          <tbody>
+          {% for ev in events %}
+            <tr>
+              <td><code>{{ ev.ts | int }}</code></td>
+              <td><code>{{ ev.ehr_station_id[:10] }}</code></td>
+              <td><strong>{{ ev.type }}</strong></td>
+              <td>{{ ev.surface }}</td>
+              <td class="muted small">{{ ev.payload | tojson | string | truncate(80) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="muted">No events yet.</p>
+      {% endif %}
+    </section>
+  </div>
+{% endif %}
+{% endblock %}

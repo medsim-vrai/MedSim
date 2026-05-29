@@ -1,0 +1,155 @@
+import { describe, it, expect } from 'vitest';
+import { meshBuilder } from '../index';
+import {
+  ARKIT_52,
+  buildFaceGeometry,
+  parseTopology,
+  type FaceTopology,
+  type Landmark3,
+} from '../impl/face_topology';
+import { computeMorphBasis, SUPPORTED_MORPHS } from '../impl/morph_basis';
+
+describe('mesh_builder barrel', () => {
+  it('exposes the expected surface', () => {
+    expect(typeof meshBuilder.boot).toBe('function');
+    expect(typeof meshBuilder.dispose).toBe('function');
+    expect(typeof meshBuilder.build).toBe('function');
+  });
+});
+
+// A minimal real topology: a unit quad as two triangles over 4 vertices. Enough
+// to exercise the geometry builder without the (unbundled) 468-vert asset.
+const QUAD: FaceTopology = {
+  vertexCount: 4,
+  indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
+};
+const QUAD_LANDMARKS: Landmark3[] = [
+  { x: 0.5, y: 0.5, z: 0.0 },   // → pos (0, 0, 0),     uv (0.5, 0.5)
+  { x: 1.0, y: 0.5, z: 0.1 },   // → pos (0.5, 0, -0.1), uv (1.0, 0.5)
+  { x: 1.0, y: 1.0, z: 0.0 },   // → pos (0.5, -0.5, 0), uv (1.0, 1.0)
+  { x: 0.5, y: 1.0, z: 0.0 },   // → pos (0, -0.5, 0),   uv (0.5, 1.0)
+];
+
+describe('buildFaceGeometry (landmark → morph-ready geometry)', () => {
+  it('maps normalized landmarks into recentered, Y-flipped positions', () => {
+    const geo = buildFaceGeometry(QUAD_LANDMARKS, QUAD);
+    const pos = geo.getAttribute('position');
+    expect(pos.count).toBe(4);
+
+    // vertex 0 (image center) lands at the origin
+    expect(pos.getX(0)).toBeCloseTo(0);
+    expect(pos.getY(0)).toBeCloseTo(0);
+    expect(pos.getZ(0)).toBeCloseTo(0);
+
+    // vertex 1: x 1.0 → +0.5, y 0.5 → 0, z 0.1 → -0.1 (depth toward camera)
+    expect(pos.getX(1)).toBeCloseTo(0.5);
+    expect(pos.getY(1)).toBeCloseTo(0);
+    expect(pos.getZ(1)).toBeCloseTo(-0.1);
+
+    // vertex 2: y 1.0 → -0.5 (Y flipped)
+    expect(pos.getY(2)).toBeCloseTo(-0.5);
+  });
+
+  it('derives UVs from the landmark image positions', () => {
+    const geo = buildFaceGeometry(QUAD_LANDMARKS, QUAD);
+    const uv = geo.getAttribute('uv');
+    expect(uv.count).toBe(4);
+    // uv === raw landmark (x, y); texture flipY=false means no flip needed
+    expect(uv.getX(1)).toBeCloseTo(1.0);
+    expect(uv.getY(1)).toBeCloseTo(0.5);
+    expect(uv.getX(0)).toBeCloseTo(0.5);
+    expect(uv.getY(2)).toBeCloseTo(1.0);
+  });
+
+  it('carries the index buffer, normals, and a 52-slot procedural morph basis', () => {
+    const geo = buildFaceGeometry(QUAD_LANDMARKS, QUAD);
+
+    expect(geo.getIndex()?.count).toBe(6);            // 2 triangles
+    expect(geo.getAttribute('normal')).toBeDefined(); // computeVertexNormals ran
+
+    const morphs = geo.morphAttributes.position;
+    expect(morphs?.length).toBe(52);
+    expect(morphs?.[0]?.count).toBe(4);               // sized to the topology
+
+    // browDownLeft (index 0) is unsupported by the procedural basis → zero…
+    expect(morphs?.[0]?.getY(2)).toBe(0);
+    // …but jawOpen IS filled: the lower verts (e.g. 2) swing down.
+    const jaw = morphs?.[ARKIT_52.indexOf('jawOpen')];
+    expect(jaw?.getY(2)).toBeLessThan(0);
+
+    const names = geo.userData['morphTargetNames'] as string[];
+    expect(names).toHaveLength(52);
+    expect(names).toEqual([...ARKIT_52]);
+  });
+
+  it('throws if there are fewer landmarks than the topology needs', () => {
+    expect(() => buildFaceGeometry([{ x: 0, y: 0, z: 0 }], QUAD)).toThrow(/landmarks/);
+  });
+});
+
+describe('parseTopology (asset validation, fail-soft)', () => {
+  it('accepts a well-formed topology and returns a typed index array', () => {
+    const t = parseTopology({ vertexCount: 4, indices: [0, 1, 2, 0, 2, 3] });
+    expect(t).not.toBeNull();
+    expect(t?.indices).toBeInstanceOf(Uint32Array);
+    expect(t?.vertexCount).toBe(4);
+    expect(Array.from(t?.indices ?? [])).toEqual([0, 1, 2, 0, 2, 3]);
+  });
+
+  it('rejects malformed inputs by returning null (never throws)', () => {
+    expect(parseTopology(null)).toBeNull();
+    expect(parseTopology(42)).toBeNull();
+    // indices not a multiple of 3
+    expect(parseTopology({ vertexCount: 4, indices: [0, 1] })).toBeNull();
+    // index out of range
+    expect(parseTopology({ vertexCount: 3, indices: [0, 1, 9] })).toBeNull();
+    // missing indices
+    expect(parseTopology({ vertexCount: 3 })).toBeNull();
+  });
+});
+
+describe('computeMorphBasis (procedural deltas, by region)', () => {
+  // Synthetic face: top-center, chin, center, lower-left, lower-right.
+  const POS = new Float32Array([
+    0, 0.5, 0,      // 0: top-center (forehead/brow)
+    0, -0.5, 0,     // 1: chin
+    0, 0, 0,        // 2: center
+    -0.3, -0.15, 0, // 3: lower-left (mouth band, left half)
+    0.3, -0.15, 0,  // 4: lower-right (mouth band, right half)
+  ]);
+  const N = 5;
+  const dy = (a: Float32Array, v: number) => a[v * 3 + 1]!;
+
+  it('returns 52 zero-initialized slots and lists its supported shapes', () => {
+    const basis = computeMorphBasis(POS, N, ARKIT_52);
+    expect(basis).toHaveLength(52);
+    expect(basis.every((a) => a.length === N * 3)).toBe(true);
+    expect(SUPPORTED_MORPHS).toContain('jawOpen');
+  });
+
+  it('jawOpen drops the lower face and leaves the upper face untouched', () => {
+    const basis = computeMorphBasis(POS, N, ARKIT_52);
+    const jaw = basis[ARKIT_52.indexOf('jawOpen')]!;
+    expect(dy(jaw, 1)).toBeLessThan(0);   // chin swings down
+    expect(dy(jaw, 0)).toBe(0);           // forehead unaffected
+  });
+
+  it('browInnerUp lifts the upper-center, mouthSmile lifts the mouth corners', () => {
+    const basis = computeMorphBasis(POS, N, ARKIT_52);
+    const brow = basis[ARKIT_52.indexOf('browInnerUp')]!;
+    const smileL = basis[ARKIT_52.indexOf('mouthSmileLeft')]!;
+    const smileR = basis[ARKIT_52.indexOf('mouthSmileRight')]!;
+
+    expect(dy(brow, 0)).toBeGreaterThan(0);   // forehead lifts
+    expect(dy(brow, 1)).toBe(0);              // chin unaffected
+    expect(dy(smileL, 3)).toBeGreaterThan(0); // left corner lifts
+    expect(dy(smileR, 4)).toBeGreaterThan(0); // right corner lifts
+    expect(dy(smileL, 4)).toBe(0);            // left shape doesn't touch the right corner
+  });
+
+  it('leaves unsupported shapes (e.g. tongueOut) at zero', () => {
+    const basis = computeMorphBasis(POS, N, ARKIT_52);
+    const tongue = basis[ARKIT_52.indexOf('tongueOut')]!;
+    expect(tongue.every((v) => v === 0)).toBe(true);
+  });
+});

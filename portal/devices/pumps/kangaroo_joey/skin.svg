@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 1010" width="780" height="1010">
+<!-- TRAINING SIMULATION overlay - Cardinal Health Kangaroo Joey Enteral Feeding Pump. Phase 2. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .kcap{font-size:11px;font-weight:bold;fill:#28303a}
+ .kcap2{font-size:9px;font-weight:bold;fill:#28303a}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .devname{font-size:20px;font-weight:bold;fill:#28303a}
+ .sub{font-size:11px;fill:#5b6470}
+ .lcd{fill:#1d3a22}
+ .lcdlbl{font-size:10px;fill:#16301c}
+ .badge{font-size:11px;fill:#7c8893}
+</style>
+<defs>
+ <linearGradient id="chassisGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#eceef0"/><stop offset="1" stop-color="#cdd2d6"/>
+ </linearGradient>
+ <linearGradient id="lcdGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#aecb8f"/><stop offset="1" stop-color="#94b873"/>
+ </linearGradient>
+ <linearGradient id="doorGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#7fb9e6"/><stop offset="1" stop-color="#4f93cc"/>
+ </linearGradient>
+ <radialGradient id="rotorGrad" cx="0.4" cy="0.35" r="0.8">
+  <stop offset="0" stop-color="#42484e"/><stop offset="1" stop-color="#15191d"/>
+ </radialGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="780" height="1010" fill="#e7ecf0"/></g>
+
+<g id="chassis">
+ <!-- handle -->
+ <rect x="305" y="34" width="170" height="38" rx="19" fill="none" stroke="#b9bfc5" stroke-width="14"/>
+ <!-- main body (soft-touch rounded casing) -->
+ <rect x="118" y="68" width="544" height="800" rx="40" fill="url(#chassisGrad)" stroke="#aeb6bd" stroke-width="2.5"/>
+ <text class="devname" x="150" y="116">Kangaroo Joey</text>
+ <text class="sub" x="151" y="133">Feed &amp; Flush Enteral Feeding Pump - Cardinal Health</text>
+ <!-- menu-button ledge (left of screen) -->
+ <rect x="148" y="160" width="118" height="334" rx="12" fill="#e3e6e9" stroke="#c2c8ce" stroke-width="1.5"/>
+ <!-- rotor / door panel -->
+ <rect x="148" y="540" width="484" height="290" rx="16" fill="#dfe3e6" stroke="#c2c8ce" stroke-width="2"/>
+</g>
+
+<g id="screen">
+ <!-- bezel -->
+ <rect x="280" y="160" width="356" height="334" rx="10" fill="#1c2024"/>
+ <!-- backlit MONOCHROME graphic LCD -->
+ <rect id="screen-bg" x="290" y="170" width="336" height="314" rx="6" fill="url(#lcdGrad)"/>
+
+ <!-- status line: RUNNING -->
+ <rect x="290" y="170" width="336" height="40" rx="6" fill="#3a5a3f"/>
+ <rect x="290" y="194" width="336" height="16" fill="#3a5a3f"/>
+ <text id="scr-status" x="306" y="197" font-size="18" font-weight="bold" fill="#cfe3c0">RUNNING</text>
+ <!-- battery status indicator -->
+ <rect x="556" y="182" width="38" height="16" rx="2" fill="none" stroke="#cfe3c0" stroke-width="1.6"/>
+ <rect x="594" y="185" width="4" height="10" fill="#cfe3c0"/>
+ <rect id="scr-battery" data-control="display-field" x="558" y="184" width="26" height="12" fill="#cfe3c0"/>
+
+ <!-- moving droplet run icon -->
+ <g id="scr-flow-indicator" data-control="display-field">
+  <line x1="324" y1="230" x2="324" y2="312" class="lcd" stroke-width="2" stroke-dasharray="3 6"/>
+  <path d="M324 252 q10 15 0 26 q-10 -11 0 -26 Z" class="lcd" stroke="#16301c" stroke-width="1"/>
+ </g>
+ <text class="lcdlbl" x="306" y="232">RUN</text>
+
+ <!-- feed rate -->
+ <text class="lcdlbl" x="360" y="248">FEED RATE</text>
+ <text id="scr-rate" class="mono lcd" x="358" y="290" font-size="40" font-weight="bold">90</text>
+ <text x="448" y="290" font-size="15" class="lcd">mL/hr</text>
+
+ <!-- amount fed -->
+ <text class="lcdlbl" x="306" y="338">FED</text>
+ <text id="scr-vi" class="mono lcd" x="306" y="368" font-size="26" font-weight="bold">420 mL</text>
+
+ <!-- remaining VTBD next to W icon -->
+ <text class="lcdlbl" x="306" y="404">VTBD</text>
+ <text id="scr-vtbi" class="mono lcd" x="306" y="436" font-size="26" font-weight="bold">580 mL</text>
+ <!-- 'W' (water/flush) icon -->
+ <circle id="icon-flush-w" cx="500" cy="424" r="22" fill="#3a5a3f" stroke="#16301c" stroke-width="2"/>
+ <text x="500" y="433" font-size="24" font-weight="bold" fill="#cfe3c0" text-anchor="middle">W</text>
+ <text class="lcdlbl" x="500" y="462" text-anchor="middle">FLUSH</text>
+</g>
+
+<g id="controls">
+ <!-- vertical column of MENU SELECTION BUTTONS to the LEFT of the screen -->
+ <g class="key"><rect id="softkey-1" data-control="softkey" data-action="HOLD" x="160" y="176" width="94" height="56" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="207" y="208" text-anchor="middle">HOLD</text></g>
+ <g class="key"><rect id="softkey-2" data-control="softkey" data-action="ADJUST" x="160" y="244" width="94" height="56" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="207" y="276" text-anchor="middle">ADJUST</text></g>
+ <g class="key"><rect id="softkey-3" data-control="softkey" data-action="KTO" x="160" y="312" width="94" height="56" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="207" y="344" text-anchor="middle">KTO</text></g>
+ <g class="key"><rect id="softkey-4" data-control="softkey" data-action="MORE" x="160" y="380" width="94" height="56" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="207" y="412" text-anchor="middle">MORE</text></g>
+ <g class="key"><rect id="softkey-5" data-control="softkey" data-action="LOCK" x="160" y="448" width="94" height="38" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <rect x="200" y="459" width="14" height="11" rx="2" fill="#28303a"/>
+  <path d="M203 459 l0 -4 q0 -4 4 -4 q4 0 4 4 l0 4" fill="none" stroke="#28303a" stroke-width="1.8"/></g>
+
+ <!-- RUN key -->
+ <g class="key"><rect id="key-run" data-control="hardkey" data-action="RUN" x="288" y="508" width="120" height="44" rx="8" fill="#e7f4ec" stroke="#a9d4ba" stroke-width="1.5"/>
+  <text class="kcap" x="348" y="535" text-anchor="middle" fill="#207a43">RUN</text></g>
+
+ <!-- + / - adjust keys -->
+ <g class="key"><rect id="key-down" data-control="hardkey" data-action="DECREMENT" x="420" y="508" width="60" height="44" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap" x="450" y="536" text-anchor="middle">&#8211;</text></g>
+ <g class="key"><rect id="key-up" data-control="hardkey" data-action="INCREMENT" x="490" y="508" width="60" height="44" rx="8" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap" x="520" y="536" text-anchor="middle">+</text></g>
+
+ <!-- Power button -->
+ <g class="key"><rect id="key-power" data-control="hardkey" data-action="POWER" x="566" y="504" width="60" height="60" rx="12" fill="#eef1f3" stroke="#c2c8ce" stroke-width="1.5"/>
+  <circle cx="596" cy="530" r="11" fill="none" stroke="#28303a" stroke-width="2.4"/>
+  <line x1="596" y1="516" x2="596" y2="530" stroke="#28303a" stroke-width="2.4"/>
+  <text class="kcap2" x="596" y="558" text-anchor="middle">POWER</text></g>
+
+ <!-- blue transparent flip-up DOOR over the rotor -->
+ <rect id="rotor-door" data-control="display-field" x="186" y="572" width="290" height="230" rx="14" fill="url(#doorGrad)" fill-opacity="0.55" stroke="#3f7faf" stroke-width="2.5"/>
+ <!-- door thumb tab -->
+ <rect x="300" y="560" width="62" height="18" rx="7" fill="#5f9fce" stroke="#3f7faf" stroke-width="1.5"/>
+ <!-- rotor visible through the transparent door -->
+ <circle id="pump-rotor" data-control="display-field" cx="296" cy="688" r="78" fill="url(#rotorGrad)" stroke="#0c0f12" stroke-width="3"/>
+ <circle cx="296" cy="688" r="52" fill="none" stroke="#3a4148" stroke-width="2"/>
+ <circle cx="296" cy="688" r="20" fill="#2a2f34" stroke="#0c0f12" stroke-width="2"/>
+ <circle cx="296" cy="630" r="11" fill="#52595f"/>
+ <circle cx="347" cy="659" r="11" fill="#52595f"/>
+ <circle cx="347" cy="717" r="11" fill="#52595f"/>
+ <circle cx="296" cy="746" r="11" fill="#52595f"/>
+ <circle cx="245" cy="717" r="11" fill="#52595f"/>
+ <circle cx="245" cy="659" r="11" fill="#52595f"/>
+ <text class="sub" x="296" y="826" text-anchor="middle">Transparent flip-up door over rotor</text>
+
+ <!-- valve slot / set-loading stub -->
+ <rect x="498" y="588" width="116" height="44" rx="6" fill="#cfd4d8" stroke="#b3b9bf" stroke-width="1.5"/>
+ <text class="kcap2" x="556" y="608" text-anchor="middle">VALVE SLOT</text>
+ <text class="kcap2" x="556" y="621" text-anchor="middle">(AFF)</text>
+ <rect x="498" y="644" width="116" height="44" rx="6" fill="#cfd4d8" stroke="#b3b9bf" stroke-width="1.5"/>
+ <text class="kcap2" x="556" y="664" text-anchor="middle">MISTIC SET-ID</text>
+ <text class="kcap2" x="556" y="677" text-anchor="middle">RETAINER</text>
+ <rect x="498" y="700" width="116" height="44" rx="6" fill="#cfd4d8" stroke="#b3b9bf" stroke-width="1.5"/>
+ <text class="kcap2" x="556" y="720" text-anchor="middle">OCCLUSION</text>
+ <text class="kcap2" x="556" y="733" text-anchor="middle">SENSORS</text>
+</g>
+
+<g id="indicators">
+ <!-- 'STOPLIGHT' green/yellow/red LED ARRAY at upper right -->
+ <rect x="566" y="56" width="76" height="96" rx="12" fill="#2b3138"/>
+ <circle id="led-run" data-control="led" cx="604" cy="82" r="12" fill="#3DA35D" stroke="#2c7d46" stroke-width="1.2"/>
+ <circle cx="600" cy="78" r="3.6" fill="#bfe8cc"/>
+ <circle id="led-caution" data-control="led" cx="604" cy="112" r="12" fill="#5b6470" stroke="#3a4148" stroke-width="1.2"/>
+ <circle id="led-alarm" data-control="led" cx="604" cy="142" r="12" fill="#5b6470" stroke="#3a4148" stroke-width="1.2"/>
+
+ <!-- AC indicator -->
+ <circle id="led-ac" data-control="led" cx="160" cy="846" r="8" fill="#3DA35D" stroke="#2c7d46" stroke-width="1"/>
+ <circle cx="157" cy="843" r="2.6" fill="#bfe8cc"/>
+ <text class="sub" x="176" y="850">AC Power</text>
+</g>
+
+<g id="labels">
+ <text class="badge" x="390" y="936" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="390" y="954" text-anchor="middle">Simulated interface - Cardinal Health Kangaroo Joey Enteral Feeding Pump</text>
+</g>
+</svg>

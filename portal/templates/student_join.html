@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join simulation room</title>
+  <link rel="stylesheet" href="{{ static_v('student_join.css') }}">
+</head>
+<body>
+  <main class="join-page">
+
+    <header class="join-header">
+      <h1>Join a simulation</h1>
+      {% if room %}
+        <p class="muted">
+          Room <code class="room-code">{{ room.room_code }}</code>
+          {% if room.label %}· {{ room.label }}{% endif %}
+        </p>
+      {% endif %}
+    </header>
+
+    {% if error or not room %}
+      <section class="join-error">
+        <h2>{{ error or "Room not found." }}</h2>
+        <p class="muted">Re-scan the QR code your instructor displayed, or type the room code below:</p>
+        <form method="get" action="/portal/students/join" class="lookup-form">
+          <input type="text" name="code" placeholder="e.g. H5PDZ9"
+                 value="{{ room_code or '' }}" autocapitalize="characters"
+                 autocomplete="off" spellcheck="false" required>
+          <button type="submit" class="primary-action">Open room</button>
+        </form>
+      </section>
+    {% else %}
+
+      <section class="join-step" id="step-name">
+        <h2>1. Your name</h2>
+        {% if roster %}
+          <p class="muted">If your instructor pre-loaded the class roster, pick yourself below. Otherwise, type the name your instructor knows you by.</p>
+          <div class="roster-grid">
+            {% for s in roster %}
+              <button type="button" class="roster-card"
+                      data-student-id="{{ s.student_id }}"
+                      data-name="{{ s.display_name }}">
+                {{ s.display_name }}
+                {% if s.assigned_encounter_id %}
+                  <span class="badge assigned">already assigned</span>
+                {% endif %}
+              </button>
+            {% endfor %}
+          </div>
+          <p class="muted small">— or —</p>
+        {% endif %}
+        <label class="name-input">
+          <span>Type your display name</span>
+          <input type="text" id="display-name" autocomplete="name"
+                 placeholder="e.g. Alice P." spellcheck="false" required>
+        </label>
+      </section>
+
+      <section class="join-step" id="step-role" hidden>
+        <h2>2. What's your role today?</h2>
+        <p class="muted">Bedside is the default — pick a bed and chat with that patient. Nursing Station is the in-sim charge-nurse / supervisor role — you see every bed's telemetry + alarms but don't have a patient of your own.</p>
+        <div class="role-grid">
+          <button type="button" class="role-card" data-role="bedside">
+            <strong>🩺 Bedside</strong>
+            <span class="small muted">Pick a patient, chat with them, document in the EHR.</span>
+          </button>
+          <button type="button" class="role-card" data-role="nurse_station">
+            <strong>👀 Nursing Station</strong>
+            <span class="small muted">Charge-nurse / supervisor view — monitor every bed remotely.</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="join-step" id="step-encounter" hidden>
+        <h2>3. Which bed are you working today?</h2>
+        <p class="muted">Tap an encounter to start. The patient at that bed will be the one you chat with.</p>
+        <div class="encounter-grid">
+          {% for enc in encounters %}
+            <button type="button" class="encounter-card"
+                    data-encounter-id="{{ enc.encounter_id }}"
+                    data-join-code="{{ enc.join_code }}">
+              <strong>{{ enc.label }}</strong>
+              <span class="small muted">{{ enc.scenario }}</span>
+              <span class="encounter-meta small">
+                {{ enc.students }} student{% if enc.students != 1 %}s{% endif %}
+                · {{ enc.ehr_id or 'no EHR' }}
+                · <em>{{ enc.state }}</em>
+              </span>
+            </button>
+          {% endfor %}
+        </div>
+      </section>
+
+      <div id="join-status" class="join-status" hidden></div>
+
+    {% endif %}
+
+  </main>
+
+  {% if room %}
+    <script>
+      window.STUDENT_JOIN = {
+        roomCode: {{ room.room_code | tojson }},
+      };
+    </script>
+    <script src="{{ static_v('student_join.js') }}"></script>
+  {% endif %}
+</body>
+</html>

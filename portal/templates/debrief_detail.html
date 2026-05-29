@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Debrief — {{ debrief.scenario_name }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/debrief.css">
+
+<header class="page-header">
+  <div>
+    <h1>{{ debrief.scenario_name }}</h1>
+    <p class="muted small">
+      Session <code>{{ debrief.session_id }}</code>
+      {% if debrief.join_code %} · Join <code>{{ debrief.join_code }}</code>{% endif %}
+      {% if debrief.program_id %} · {{ debrief.program_id }}{% if debrief.week %} wk {{ debrief.week }}{% endif %}{% endif %}
+      {% if is_live %} · <span class="badge warn">LIVE — not yet saved</span>{% endif %}
+    </p>
+  </div>
+  <div class="row" style="display:flex;gap:8px;">
+    <a href="/portal/debrief" class="button-link">← All debriefs</a>
+    <a href="/api/debrief/{{ debrief.session_id }}" class="button-link" download>Download JSON</a>
+  </div>
+</header>
+
+<!-- ===== SECTION 1 · Summary tiles ===== -->
+<section class="db-section">
+  <h2>Session summary</h2>
+  <div class="summary-grid">
+    <div class="summary-tile"><div class="v">{{ debrief.summary.round_trips }}</div><div class="k">round-trip turns</div></div>
+    <div class="summary-tile"><div class="v">{{ debrief.summary.station_turns }}</div><div class="k">station turns</div></div>
+    <div class="summary-tile"><div class="v">{{ debrief.summary.operator_turns }}</div><div class="k">operator turns</div></div>
+    <div class="summary-tile"><div class="v">{{ debrief.summary.personas_engaged }}</div><div class="k">personas engaged</div></div>
+    <div class="summary-tile"><div class="v">{{ debrief.summary.duration_pretty }}</div><div class="k">duration</div></div>
+    <div class="summary-tile"><div class="v">{{ debrief.summary.latency_p50_ms or '—' }}<span class="unit">ms</span></div><div class="k">latency p50</div></div>
+    <div class="summary-tile"><div class="v">{{ debrief.summary.latency_p95_ms or '—' }}<span class="unit">ms</span></div><div class="k">latency p95</div></div>
+    <div class="summary-tile"><div class="v">{{ debrief.summary.latency_max_ms or '—' }}<span class="unit">ms</span></div><div class="k">latency max</div></div>
+  </div>
+</section>
+
+<!-- ===== SECTION 2 · NCJMM coverage ===== -->
+<section class="db-section">
+  <h2>NCJMM cognitive-cycle coverage</h2>
+  <p class="muted small">Each character round-trip is classified into one of the six NCSBN Clinical Judgment Measurement Model steps via keyword scoring (ported from Voice4MedSim_v6 <code>ncjmm_tagger.py</code>). Empty steps highlight gaps the learner did not exercise.</p>
+  {% set ncjmm_max = (debrief.ncjmm_coverage.values() | max) or 1 %}
+  <div class="ncjmm-chart">
+    {% for step in ['recognize-cues','analyze-cues','prioritize-hypotheses','generate-solutions','take-action','evaluate-outcomes'] %}
+      {% set n = debrief.ncjmm_coverage.get(step, 0) %}
+      <div class="ncjmm-row {% if n == 0 %}empty{% endif %}">
+        <div class="label">{{ step }}</div>
+        <div class="bar-wrap"><div class="bar" style="width: {{ (100 * n / ncjmm_max) | round(1) }}%;"></div></div>
+        <div class="count">{{ n }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ===== SECTION 3 · Curriculum objective alignment ===== -->
+<section class="db-section">
+  <h2>Curriculum objective alignment</h2>
+  {% if not debrief.objective_alignment %}
+    <p class="muted">No curriculum modules were selected in the wizard, so no objective alignment was computed.</p>
+  {% else %}
+    <p class="muted small">For each module selected in the wizard's curriculum step, the transcript text was scanned for evidence of the module's clinical items. Matches indicate the learner discussed or addressed those items in dialogue.</p>
+    {% for mod in debrief.objective_alignment %}
+      <details class="obj-card" {% if loop.first %}open{% endif %}>
+        <summary>
+          <strong>{{ mod.module_id }} · {{ mod.module_title }}</strong>
+          <span class="muted small">{{ mod.nclex_domain }}</span>
+          <span class="coverage-pill {% if mod.coverage_percent >= 50 %}good{% elif mod.coverage_percent >= 20 %}warn{% else %}low{% endif %}">
+            {{ mod.total_matched }} / {{ mod.total_items }} items · {{ mod.coverage_percent }}%
+          </span>
+        </summary>
+        <p class="small">{{ mod.summary }}</p>
+        <div class="obj-cat-grid">
+          {% for cat_key, cat in mod.categories.items() %}
+            {% if cat.total > 0 %}
+              <div class="obj-cat">
+                <header>
+                  <strong>{{ cat.label }}</strong>
+                  <span class="muted small">{{ cat.matched }}/{{ cat.total }}</span>
+                </header>
+                {% if cat.matches %}
+                  <ul class="match-list good">
+                    {% for m in cat.matches %}<li title="matched">✓ {{ m }}</li>{% endfor %}
+                  </ul>
+                {% endif %}
+                {% if cat.unmatched %}
+                  <details><summary class="muted small">{{ cat.unmatched|length }} not surfaced</summary>
+                    <ul class="match-list unmatched">
+                      {% for m in cat.unmatched %}<li>○ {{ m }}</li>{% endfor %}
+                    </ul>
+                  </details>
+                {% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </details>
+    {% endfor %}
+  {% endif %}
+</section>
+
+<!-- ===== SECTION 4 · Persona engagement ===== -->
+<section class="db-section">
+  <h2>Persona engagement</h2>
+  <p class="muted small">Per-persona turn counts and latency. Altered-state and high-risk personas are flagged — these are teachable moments.</p>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Persona</th>
+        <th>Role</th>
+        <th>Group</th>
+        <th>Safety</th>
+        <th class="right">Turns</th>
+        <th class="right">Avg latency</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in debrief.personas_engagement %}
+        <tr class="{% if not p.engaged %}muted-row{% endif %}">
+          <td>
+            <strong>{{ p.name }}</strong> <code class="muted small">{{ p.id }}</code>
+            {% if p.altered_state %}<br><span class="tag altered">{{ p.altered_state }}</span>{% endif %}
+          </td>
+          <td>{{ p.role }}</td>
+          <td>{{ p.role_group }}</td>
+          <td><span class="tag safety-{{ p.safety_class }}">{{ p.safety_class }}</span></td>
+          <td class="right">{{ p.turns }}</td>
+          <td class="right">{{ p.avg_latency_ms or '—' }}{% if p.avg_latency_ms %} ms{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== SECTION 5 · Role-group + safety-class distributions ===== -->
+<section class="db-section">
+  <h2>Interaction distributions</h2>
+  <div class="dist-grid">
+    <div class="dist-card">
+      <h3>Role group</h3>
+      {% set rg_total = (debrief.role_group_distribution.values() | sum) or 1 %}
+      {% for label, n in debrief.role_group_distribution.items() %}
+        <div class="dist-row">
+          <span class="dist-label">{{ label }}</span>
+          <div class="dist-bar-wrap"><div class="dist-bar rg-{{ label | replace(' ', '-') | lower }}" style="width: {{ (100 * n / rg_total) | round(1) }}%;"></div></div>
+          <span class="dist-count">{{ n }}</span>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="dist-card">
+      <h3>Safety class</h3>
+      {% set sc_total = (debrief.safety_class_distribution.values() | sum) or 1 %}
+      {% for label, n in debrief.safety_class_distribution.items() %}
+        <div class="dist-row">
+          <span class="dist-label">{{ label }}</span>
+          <div class="dist-bar-wrap"><div class="dist-bar sc-{{ label }}" style="width: {{ (100 * n / sc_total) | round(1) }}%;"></div></div>
+          <span class="dist-count">{{ n }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- ===== V3 · Documentation alignment ===== -->
+{% if debrief.documentation_alignment %}
+{% set da = debrief.documentation_alignment %}
+<section class="db-section">
+  <h2>Documentation alignment <span class="muted small">(V3 · {{ debrief.ehr_id or '—' }})</span></h2>
+  {% if not da.available %}
+    <p class="muted">Charting was not locked in for this session, so no comparison report was built. Press <strong>Charting complete</strong> in the ops view before ending the session to populate this card.</p>
+  {% else %}
+    <div class="summary-grid" style="margin-bottom:14px;">
+      <div class="summary-tile"><div class="v">{{ (da.composite * 100) | round | int }}<span class="unit">%</span></div><div class="k">composite score</div></div>
+      <div class="summary-tile"><div class="v">{{ da.note_count }}</div><div class="k">notes captured</div></div>
+      <div class="summary-tile"><div class="v">{{ da.signed_count }}</div><div class="k">notes signed</div></div>
+      <div class="summary-tile"><div class="v">{{ da.rules.totals.hits or 0 }}/{{ (da.rules.totals.hits or 0) + (da.rules.totals.misses or 0) }}</div><div class="k">rules hit / total</div></div>
+    </div>
+
+    <h3 style="margin-bottom:6px;">Rubric (Haiku 4.5)</h3>
+    <div class="ncjmm-chart">
+      {% for dim in ['completeness','accuracy','sbar_quality','prioritization','safety'] %}
+        {% set v = da.rubric.get(dim, 0) %}
+        <div class="ncjmm-row {% if v == 0 %}empty{% endif %}">
+          <div class="label">{{ dim | replace('_',' ') }}</div>
+          <div class="bar-wrap"><div class="bar" style="width: {{ (100 * v / 4) | round(1) }}%;background:#0e4c5e;"></div></div>
+          <div class="count">{{ v }}/4</div>
+        </div>
+      {% endfor %}
+    </div>
+    {% if da.rubric.narrative_feedback %}
+      <blockquote style="margin:12px 0;padding:10px 14px;border-left:3px solid #143b8a;background:#e6ecf8;font-style:italic;color:#0a234f;">
+        {{ da.rubric.narrative_feedback }}
+      </blockquote>
+    {% endif %}
+
+    {% if da.rules.misses %}
+      <h3 style="margin:14px 0 6px;">Items that came up in conversation but weren't charted ({{ da.rules.misses | length }})</h3>
+      <ul class="match-list" style="background:#f7e1e4;border-left:3px solid #a02437;padding:8px 18px;list-style:disc;">
+        {% for miss in da.rules.misses %}
+          <li><strong>{{ miss.item }}</strong> <span class="muted small">— {{ miss.cat }} · {{ miss.module }}</span></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if da.rules.speculative %}
+      <h3 style="margin:14px 0 6px;">Speculative chart entries (charted but never surfaced in talk) ({{ da.rules.speculative | length }})</h3>
+      <ul class="match-list" style="background:#fdf3dc;border-left:3px solid #c47a04;padding:8px 18px;list-style:disc;">
+        {% for sp in da.rules.speculative %}
+          <li><strong>{{ sp.item }}</strong> <span class="muted small">— {{ sp.cat }} · {{ sp.module }} · instructor: hallucination or excellent foresight?</span></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if da.notes_meta %}
+      <h3 style="margin:14px 0 6px;">Notes timeline</h3>
+      <table class="small" style="width:100%;border-collapse:collapse;">
+        <thead><tr><th align="left">type</th><th align="left">words</th><th align="left">signed</th><th align="left">time-to-write (s)</th></tr></thead>
+        <tbody>
+        {% for n in da.notes_meta %}
+          <tr>
+            <td>{{ n.type }}</td>
+            <td>{{ n.words }}</td>
+            <td>{% if n.signed %}<span class="badge ok">signed</span>{% else %}<span class="badge warn">draft</span>{% endif %}</td>
+            <td>{{ n.ttf_first_s }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
+<!-- ===== V3 · Orders alignment ===== -->
+{% if debrief.orders_alignment %}
+{% set oa = debrief.orders_alignment %}
+<section class="db-section">
+  <h2>Orders alignment <span class="muted small">(V3)</span></h2>
+  {% if oa.total_orders == 0 %}
+    <p class="muted">No orders were placed during this session.</p>
+  {% else %}
+    <div class="summary-grid" style="margin-bottom:14px;">
+      <div class="summary-tile"><div class="v">{{ oa.total_orders }}</div><div class="k">total orders</div></div>
+      <div class="summary-tile"><div class="v">{{ (oa.rationale_quality * 100) | round | int }}<span class="unit">%</span></div><div class="k">orders w/ substantive rationale</div></div>
+      <div class="summary-tile"><div class="v">{{ oa.priority_dist.stat + oa.priority_dist.now }}</div><div class="k">stat + now orders</div></div>
+      <div class="summary-tile"><div class="v">{{ oa.trigger_latency_s | length }}</div><div class="k">red flags detected in talk</div></div>
+    </div>
+
+    <h3 style="margin:6px 0;">By category</h3>
+    <ul class="match-list" style="display:flex;gap:8px;flex-wrap:wrap;list-style:none;padding:0;">
+      {% for cat, n in oa.by_category.items() %}
+        <li><span class="badge ok">{{ cat }}</span> <strong>{{ n }}</strong></li>
+      {% endfor %}
+    </ul>
+
+    {% if oa.trigger_latency_s %}
+      <h3 style="margin:14px 0 6px;">Order latency after red-flag mention</h3>
+      <table class="small" style="width:100%;border-collapse:collapse;">
+        <thead><tr><th align="left">red flag (transcript)</th><th align="left">seconds to first order</th></tr></thead>
+        <tbody>
+        {% for row in oa.trigger_latency_s %}
+          <tr>
+            <td>{{ row.flag }}</td>
+            <td>{% if row.first_order_s is none %}<span class="badge warn">no order placed</span>{% else %}{{ row.first_order_s }}s{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  {% endif %}
+</section>
+{% endif %}
+
+<!-- ===== SECTION 6 · Per-turn transcript ===== -->
+<section class="db-section">
+  <h2>Per-turn transcript</h2>
+  <p class="muted small">Chronological. NCJMM step chip below each round-trip. Operator turns highlighted amber.</p>
+  <div class="debrief-transcript">
+    {% for e in debrief.transcript %}
+      {% set src_class = 'operator' if e.source == 'operator' else 'station' %}
+      <div class="turn {{ e.direction }} source-{{ src_class }}">
+        <div class="turn-head">
+          <span class="t">{{ (e.ts | int) | format_ts if false else '' }}</span>
+          <span class="who">
+            {% if e.direction == 'student' %}
+              <strong>{{ 'Operator' if e.source == 'operator' else e.source_label }}</strong>
+              <span class="muted">→ {{ e.persona_name }}</span>
+            {% else %}
+              <strong class="char-name">{{ e.persona_name }}</strong>
+              {% if e.latency_ms %}<span class="lat-pill">{{ e.latency_ms }}ms</span>{% endif %}
+            {% endif %}
+          </span>
+          {% if e.ncjmm_step and e.direction == 'character' %}
+            <span class="chip ncjmm-{{ e.ncjmm_step }}">{{ e.ncjmm_step }}</span>
+          {% endif %}
+        </div>
+        <div class="msg">{{ e.text }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% endblock %}

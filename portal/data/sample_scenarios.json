@@ -1,0 +1,78 @@
+{
+  "_meta": {
+    "description": "Sample scenario templates for the MEDSIM 2 control-room wizard. Picking one in Step 2 auto-fills every downstream wizard field (name, notes, program/week, modules, personas, scenario outline) with reasonable defaults — the operator can edit any of them.",
+    "cross_refs": "Each sample's personas[] must exist in personas.json; modules[] must exist in modules.json; program_id/week must exist in programs.json. Module IDs: M02=communication, M03=PPE, M06=pharma, M07=routes, M08=pain, M22=diabetes, M32=sepsis, M39=mental-health, M42=end-of-life."
+  },
+  "samples": [
+    {
+      "id": "ed-sepsis-delirium",
+      "name": "ED · Sepsis with hyperactive delirium",
+      "notes": "30-min sim. Pre-brief: postop POD#2 from sigmoid resection, family at bedside. Learning objectives: (1) recognize trending vitals as sepsis; (2) hour-1 bundle + appropriate consult; (3) manage hyperactive delirium without restraints when possible; (4) closed-loop communication with attending.",
+      "program_id": "ADN-RN",
+      "week": 4,
+      "modules": ["M32", "M08", "M02"],
+      "personas": ["P-001", "P-004", "P-008", "P-014", "P-020"],
+      "scenario_text": "78-year-old male POD #2 from sigmoid resection. Vitals trending — last set: T 38.7°C, HR 122, BP 84/52, RR 26, SpO2 91% on 2 L NC. Lactate 4.2 just back from the lab. Patient now hyperactive — picking at his IV, paranoid about staff entering the room. Wife at bedside crying. Charge nurse paged for assistance. Pre-existing COPD."
+    },
+    {
+      "id": "med-surg-postop-pain",
+      "name": "Med-surg · Postop pain — RN/LPN delegation",
+      "notes": "20-min sim. Focus on RN-LPN delegation around pain reassessment, PCA safety (independent double-check for high-alert opioid), and SBAR handoff to the hospitalist. Anxious spouse adds communication challenge.",
+      "program_id": "LPN",
+      "week": 5,
+      "modules": ["M08", "M06", "M02"],
+      "personas": ["P-002", "P-004", "P-006", "P-012", "P-020"],
+      "scenario_text": "58-year-old woman POD #1 from laparoscopic cholecystectomy. PMH: hypertension. Reports 8/10 abdominal pain. PCA hydromorphone running; last bolus 20 minutes ago. Spouse at bedside, anxious. RN delegated reassessment to LPN — LPN now consulting RN on whether to escalate. Pharmacist available for medication review. Hospitalist on the unit."
+    },
+    {
+      "id": "mh-passive-si",
+      "name": "Mental health · Goals-of-care + passive SI",
+      "notes": "25-min sim. Open-ended interviewing technique reveals passive suicidal ideation on a patient initially presenting for medical issues. Practice safety screening (means/methods), safety planning, and warm handoff to social work. Daughter has not been told.",
+      "program_id": "ADN-RN",
+      "week": 6,
+      "modules": ["M39", "M02"],
+      "personas": ["P-004", "P-011", "P-019", "P-021"],
+      "scenario_text": "44-year-old man brought in by his adult daughter after an unwitnessed fall at home. PMH: major depression, sertraline (he stopped taking it 6 weeks ago). Flat affect, brief answers, poor eye contact. Daughter tearful in the hallway, says 'he hasn't been himself.' During open-ended history-taking, patient discloses passive SI. Has not been told daughter is in the hallway."
+    },
+    {
+      "id": "etoh-withdrawal-ciwa",
+      "name": "Substance · Alcohol withdrawal (CIWA-Ar)",
+      "notes": "30-min sim. CIWA-Ar scoring, benzodiazepine selection and titration, escalation criteria for telemetry/ICU, de-escalation of paranoid hallucinations without restraints. High-risk persona — instructor in the loop.",
+      "program_id": "BSN-RN",
+      "week": 7,
+      "modules": ["M06", "M02", "M39"],
+      "personas": ["P-002", "P-004", "P-006", "P-016"],
+      "scenario_text": "52-year-old man admitted with acute pancreatitis. Reports last alcoholic drink 36 hours ago — daily heavy use prior. Now tremulous, diaphoretic, anxious. Reports seeing 'spiders on the wall.' Last CIWA-Ar score: 14. Lorazepam 2 mg IV q1h PRN ordered but pharmacy delayed delivery; smart pump alarming on dose-range check. Charge nurse paged, pharmacist available."
+    },
+    {
+      "id": "peds-fever",
+      "name": "Peds · Febrile child, anxious parent",
+      "notes": "20-min sim. Weight-based dosing math (mg/kg), family-centered care, distraction techniques for cooperative-but-tearful pediatric assessment, parent expecting antibiotics for likely viral illness.",
+      "program_id": "ADN-RN",
+      "week": 2,
+      "modules": ["M06", "M07", "M03", "M02"],
+      "personas": ["P-003", "P-004", "P-015", "P-020"],
+      "scenario_text": "7-year-old presenting with 24 hours of fever to 39.4°C and vomiting × 3 episodes. Weight 24 kg. PMH: well-child, no chronic conditions. Mother at bedside, demanding antibiotics ('she always gets antibiotics'). Pediatrician consulting. Child cooperative but tearful. Last dose of acetaminophen at home — mother unsure of time or amount."
+    },
+    {
+      "id": "geri-goals-of-care",
+      "name": "Geri · Goals-of-care with grieving family",
+      "notes": "25-min sim. Difficult conversation with adult child regarding code status and comfort-focused care for cognitively-impaired elder with recurrent aspiration pneumonia. Practice trauma-informed framing, ask-tell-ask, and interprofessional handoff to palliative/social work.",
+      "program_id": "BSN-RN",
+      "week": 8,
+      "modules": ["M42", "M02"],
+      "personas": ["P-002", "P-011", "P-013", "P-021"],
+      "scenario_text": "78-year-old woman with advanced dementia, third admission this quarter for aspiration pneumonia. Currently on minimal support, refusing PO intake at baseline. Adult daughter at bedside, tearful, asking 'is mom going to be OK?' Hospitalist preparing for goals-of-care conversation. Social work present. Previous advance directive on file but ambiguous about feeding tube preferences."
+    },
+    {
+      "id": "dka-management",
+      "name": "Med-surg · DKA management",
+      "notes": "30-min sim. Insulin drip titration, K+ replacement, fluid management, anion-gap closure monitoring. Patient becomes lethargic — escalation prompt.",
+      "program_id": "BSN-RN",
+      "week": 6,
+      "modules": ["M22", "M06", "M02"],
+      "personas": ["P-002", "P-005", "P-006", "P-012", "P-020"],
+      "scenario_text": "29-year-old woman with type 1 diabetes admitted for DKA. Initial labs: glucose 432, anion gap 22, bicarb 9, K+ 5.8. On regular insulin drip 0.1 U/kg/hr. NS bolus completed. Now feeling drowsy; family worried. Pharmacist available for K+ replacement protocol."
+    }
+  ]
+}

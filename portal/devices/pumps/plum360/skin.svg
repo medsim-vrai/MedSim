@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 1010" width="820" height="1010">
+<!-- TRAINING SIMULATION overlay - ICU Medical Plum 360. Phase 2. Dual-line A/B LVP, tilted monochrome LCD. -->
+<style>
+ text{font-family:Helvetica,Arial,sans-serif}
+ .kcap{font-size:11px;font-weight:bold;fill:#28303a}
+ .kcap2{font-size:9px;font-weight:bold;fill:#28303a}
+ .mono{font-family:'DejaVu Sans Mono',monospace}
+ .devname{font-size:20px;font-weight:bold;fill:#28303a}
+ .sub{font-size:11px;fill:#5b6470}
+ .lcd{fill:#2b3a23}
+ .lcdlbl{font-size:10px;fill:#3f5a2f}
+ .badge{font-size:11px;fill:#7c8893}
+</style>
+<defs>
+ <linearGradient id="chassisGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#f0f1f0"/><stop offset="1" stop-color="#d2d6d2"/>
+ </linearGradient>
+ <linearGradient id="lcdGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#cfe0a8"/><stop offset="1" stop-color="#b6cf8c"/>
+ </linearGradient>
+ <linearGradient id="doorGrad" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0" stop-color="#e4e7e3"/><stop offset="1" stop-color="#c6cbc4"/>
+ </linearGradient>
+</defs>
+
+<g id="backdrop"><rect x="0" y="0" width="820" height="1010" fill="#e7ecf0"/></g>
+
+<g id="chassis">
+ <rect x="110" y="44" width="600" height="780" rx="20" fill="url(#chassisGrad)" stroke="#a9aea8" stroke-width="2.5"/>
+ <text class="devname" x="135" y="84">ICU Medical Plum 360</text>
+ <text class="sub" x="136" y="100">Large-volume infusion pump - dual-line (A / B)</text>
+ <!-- alarm volume knob -->
+ <circle cx="660" cy="92" r="20" fill="#d8dcd6" stroke="#a9aea8" stroke-width="2"/>
+ <circle cx="660" cy="92" r="13" fill="#eef0ec" stroke="#bdc1bb" stroke-width="1.5"/>
+ <line x1="660" y1="92" x2="660" y2="80" stroke="#5b6470" stroke-width="2.5"/>
+ <text class="sub" x="660" y="130" text-anchor="middle" font-size="9">ALARM VOL</text>
+</g>
+
+<g id="screen">
+ <!-- tilted monochrome LCD: trapezoid bezel angled to reduce glare -->
+ <polygon points="150,150 670,150 700,420 120,420" fill="#1d241a" stroke="#0f140c" stroke-width="2"/>
+ <polygon id="screen-bg" points="166,166 654,166 681,404 139,404" fill="url(#lcdGrad)"/>
+ <!-- status / icon bar -->
+ <text class="lcd" x="186" y="194" font-size="11" font-weight="bold">MedNet  Adult ICU</text>
+ <!-- wireless icon -->
+ <path d="M520 184 a16 16 0 0 1 26 0" fill="none" stroke="#2b3a23" stroke-width="2"/>
+ <path d="M526 190 a8 8 0 0 1 14 0" fill="none" stroke="#2b3a23" stroke-width="2"/>
+ <circle cx="533" cy="196" r="2.5" fill="#2b3a23"/>
+ <!-- battery icon -->
+ <rect x="588" y="180" width="34" height="16" rx="2" fill="none" stroke="#2b3a23" stroke-width="1.6"/>
+ <rect x="622" y="184" width="4" height="8" fill="#2b3a23"/>
+ <rect x="591" y="183" width="20" height="10" fill="#2b3a23"/>
+ <text id="scr-battery" class="lcd" x="632" y="193" font-size="10">75%</text>
+ <line x1="158" y1="206" x2="660" y2="206" stroke="#5e7544" stroke-width="1.4"/>
+
+ <!-- LINE A panel -->
+ <text class="lcd" x="160" y="232" font-size="13" font-weight="bold">LINE A</text>
+ <text id="scr-drug" class="lcd" x="226" y="232" font-size="13" font-weight="bold">NOREPINEPHRINE</text>
+ <text id="scr-status" class="lcd" x="560" y="232" font-size="12" font-weight="bold">DELIVERING</text>
+ <text id="scr-rate" class="mono lcd" x="166" y="284" font-size="40" font-weight="bold">8.5</text>
+ <text class="lcdlbl" x="262" y="284" font-size="12">mL/hr</text>
+ <text id="scr-dose" class="lcd" x="350" y="256" font-size="12">Dose  0.10 mcg/kg/min</text>
+ <text id="scr-vtbi" class="lcd" x="350" y="276" font-size="12">VTBI  42 mL</text>
+ <text id="scr-vi" class="lcd" x="350" y="296" font-size="12">Infused  58 mL</text>
+ <text id="scr-time" class="lcd" x="350" y="316" font-size="12">4 hr 56 min left</text>
+ <line x1="156" y1="328" x2="664" y2="328" stroke="#5e7544" stroke-width="1.4"/>
+
+ <!-- LINE B panel -->
+ <text class="lcd" x="162" y="352" font-size="13" font-weight="bold">LINE B</text>
+ <text class="lcd" x="228" y="352" font-size="13" font-weight="bold">SODIUM CHLORIDE 0.9%</text>
+ <text class="lcd" x="560" y="352" font-size="12" font-weight="bold">DELIVERING</text>
+ <text class="mono lcd" x="168" y="392" font-size="30" font-weight="bold">100</text>
+ <text class="lcdlbl" x="232" y="392" font-size="12">mL/hr</text>
+ <text id="scr-volume" class="lcd" x="350" y="372" font-size="12">VTBI  250 mL</text>
+ <text class="lcd" x="350" y="392" font-size="12">Infused  130 mL   1 hr 12 min left</text>
+</g>
+
+<g id="controls">
+ <!-- triangular soft keys directly below the screen -->
+ <g class="key"><polygon id="softkey-1" data-control="softkey" points="160,448 226,448 193,494" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="193" y="468" text-anchor="middle">DELAY</text></g>
+ <g class="key"><polygon id="softkey-2" data-control="softkey" points="252,448 318,448 285,494" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="285" y="468" text-anchor="middle">MULTI</text>
+  <text class="kcap2" x="285" y="479" text-anchor="middle">STEP</text></g>
+ <g class="key"><polygon id="softkey-3" data-control="softkey" points="344,448 410,448 377,494" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="377" y="468" text-anchor="middle">LOADING</text>
+  <text class="kcap2" x="377" y="479" text-anchor="middle">DOSE</text></g>
+ <g class="key"><polygon id="softkey-4" data-control="softkey" points="436,448 502,448 469,494" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="469" y="468" text-anchor="middle">DRUG</text>
+  <text class="kcap2" x="469" y="479" text-anchor="middle">LIBRARY</text></g>
+ <g class="key"><polygon id="softkey-5" data-control="softkey" points="528,448 594,448 561,494" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="561" y="468" text-anchor="middle">PREV</text>
+  <text class="kcap2" x="561" y="479" text-anchor="middle">SCREEN</text></g>
+
+ <!-- numeric keypad (left block) -->
+ <g class="key"><rect id="key-1" data-control="hardkey" data-action="1" x="124" y="512" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="153" y="537" text-anchor="middle">1</text></g>
+ <g class="key"><rect id="key-2" data-control="hardkey" data-action="2" x="190" y="512" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="219" y="537" text-anchor="middle">2</text></g>
+ <g class="key"><rect id="key-3" data-control="hardkey" data-action="3" x="256" y="512" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="285" y="537" text-anchor="middle">3</text></g>
+ <g class="key"><rect id="key-4" data-control="hardkey" data-action="4" x="124" y="558" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="153" y="583" text-anchor="middle">4</text></g>
+ <g class="key"><rect id="key-5" data-control="hardkey" data-action="5" x="190" y="558" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="219" y="583" text-anchor="middle">5</text></g>
+ <g class="key"><rect id="key-6" data-control="hardkey" data-action="6" x="256" y="558" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="285" y="583" text-anchor="middle">6</text></g>
+ <g class="key"><rect id="key-7" data-control="hardkey" data-action="7" x="124" y="604" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="153" y="629" text-anchor="middle">7</text></g>
+ <g class="key"><rect id="key-8" data-control="hardkey" data-action="8" x="190" y="604" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="219" y="629" text-anchor="middle">8</text></g>
+ <g class="key"><rect id="key-9" data-control="hardkey" data-action="9" x="256" y="604" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="285" y="629" text-anchor="middle">9</text></g>
+ <g class="key"><rect id="key-decimal" data-control="hardkey" data-action="." x="124" y="650" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="153" y="675" text-anchor="middle">.</text></g>
+ <g class="key"><rect id="key-0" data-control="hardkey" data-action="0" x="190" y="650" width="58" height="40" rx="6" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="219" y="675" text-anchor="middle">0</text></g>
+ <g class="key"><rect id="key-clear" data-control="hardkey" data-action="CLEAR" x="256" y="650" width="58" height="40" rx="6" fill="#eef1f3" stroke="#c2c8ce" stroke-width="1.5"/><text class="kcap" x="285" y="675" text-anchor="middle">C</text></g>
+
+ <!-- SELECT cursor cluster (centre) -->
+ <g class="key"><rect id="key-select" data-control="hardkey" data-action="SELECT" x="344" y="512" width="130" height="58" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap" x="409" y="538" text-anchor="middle">SELECT</text>
+  <polygon points="372,552 384,552 378,545" fill="#28303a"/>
+  <polygon points="436,545 448,545 442,552" fill="#28303a"/>
+  <polygon points="372,558 384,558 378,565" fill="#28303a"/>
+  <polygon points="436,565 448,565 442,558" fill="#28303a"/></g>
+ <!-- START / STOP -->
+ <g class="key"><rect id="key-start" data-control="hardkey" data-action="START" x="344" y="578" width="130" height="58" rx="7" fill="#e7f4ec" stroke="#a9d4ba" stroke-width="1.5"/>
+  <text class="kcap" x="409" y="612" text-anchor="middle" fill="#207a43">START</text></g>
+ <g class="key"><rect id="key-stop" data-control="hardkey" data-action="STOP" x="344" y="644" width="130" height="58" rx="7" fill="#fdeceb" stroke="#e0a9a4" stroke-width="1.5"/>
+  <text class="kcap" x="409" y="678" text-anchor="middle" fill="#a8322a">STOP</text></g>
+
+ <!-- right column: AUDIO PAUSED / LOCK KEYPAD / ON-OFF -->
+ <g class="key"><rect id="key-pause" data-control="hardkey" data-action="AUDIO_PAUSE" x="504" y="512" width="186" height="56" rx="7" fill="#fdf4e3" stroke="#e6cf9c" stroke-width="1.5"/>
+  <text class="kcap2" x="597" y="535" text-anchor="middle" fill="#8a6312">AUDIO</text>
+  <text class="kcap2" x="597" y="548" text-anchor="middle" fill="#8a6312">PAUSED</text></g>
+ <g class="key"><rect id="key-lock" data-control="hardkey" data-action="LOCK_KEYPAD" x="504" y="576" width="186" height="56" rx="7" fill="#f3f4f6" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="597" y="599" text-anchor="middle">LOCK</text>
+  <text class="kcap2" x="597" y="612" text-anchor="middle">KEYPAD</text></g>
+ <g class="key"><rect id="key-onoff" data-control="hardkey" data-action="ONOFF" x="504" y="640" width="186" height="50" rx="7" fill="#eef1f3" stroke="#c2c8ce" stroke-width="1.5"/>
+  <text class="kcap2" x="597" y="669" text-anchor="middle">ON / OFF</text></g>
+
+ <!-- front cassette-loading door -->
+ <rect x="124" y="710" width="566" height="96" rx="10" fill="url(#doorGrad)" stroke="#a9aea8" stroke-width="2"/>
+ <rect x="142" y="726" width="120" height="64" rx="6" fill="#cdd2cc" stroke="#aeb3ac" stroke-width="1.5"/>
+ <text class="sub" x="202" y="763" text-anchor="middle" font-size="9">CASSETTE</text>
+ <!-- door latch -->
+ <rect x="610" y="738" width="58" height="40" rx="6" fill="#dde0db" stroke="#a9aea8" stroke-width="1.5"/>
+ <line x1="639" y1="744" x2="639" y2="772" stroke="#7c8378" stroke-width="3"/>
+ <text class="sub" x="400" y="763" text-anchor="middle">Cassette-loading door (Line A / Line B fluid path)</text>
+</g>
+
+<g id="indicators">
+ <!-- two green flow-indicator LEDs ABOVE the display -->
+ <circle id="led-ch-a" data-control="led" cx="232" cy="124" r="10" fill="#3DA35D" stroke="#2c7d46" stroke-width="1.4"/>
+ <circle cx="228" cy="120" r="3.4" fill="#bfe8cc"/>
+ <text class="sub" x="250" y="129" font-weight="bold">Line A</text>
+ <circle id="led-ch-b" data-control="led" cx="500" cy="124" r="10" fill="#3DA35D" stroke="#2c7d46" stroke-width="1.4"/>
+ <circle cx="496" cy="120" r="3.4" fill="#bfe8cc"/>
+ <text class="sub" x="518" y="129" font-weight="bold">Line B</text>
+ <!-- AC power LED -->
+ <circle id="led-ac" data-control="led" cx="380" cy="124" r="9" fill="#3DA35D" stroke="#2c7d46" stroke-width="1.4"/>
+ <circle cx="377" cy="121" r="3" fill="#bfe8cc"/>
+ <text class="sub" x="396" y="129">AC</text>
+
+ <!-- alarm-priority legend (the literal !!! / !! / ! symbols) -->
+ <rect x="124" y="828" width="566" height="34" rx="6" fill="#eef1f3" stroke="#c8cdd2" stroke-width="1"/>
+ <text class="mono" x="138" y="850" font-size="14" font-weight="bold" fill="#D7382E">!!!</text>
+ <text class="sub" x="166" y="850">High</text>
+ <text class="mono" x="280" y="850" font-size="14" font-weight="bold" fill="#E6A032">!!</text>
+ <text class="sub" x="304" y="850">Medium</text>
+ <text class="mono" x="430" y="850" font-size="14" font-weight="bold" fill="#3E7CB1">!</text>
+ <text class="sub" x="446" y="850">Low</text>
+ <text class="sub" x="556" y="850" font-style="italic">Alarm-priority symbols</text>
+</g>
+
+<g id="labels">
+ <text class="badge" x="410" y="942" text-anchor="middle" font-weight="bold">TRAINING SIMULATION - NOT A MEDICAL DEVICE</text>
+ <text class="badge" x="410" y="962" text-anchor="middle">Simulated interface - ICU Medical Plum 360</text>
+</g>
+</svg>

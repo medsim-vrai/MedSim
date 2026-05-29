@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Medical Records{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_v('medical_records.css') }}">
+
+<header class="page-header">
+  <h1>📋 Medical Records</h1>
+  <p class="muted">
+    Pick a patient character to open their medical record. Each row shows
+    pending actions for the current shift — meds due, continuous infusions,
+    PRN meds, and pending labs. Works in both single-patient (one row) and
+    multi-patient (one row per bed) modes.
+  </p>
+</header>
+
+{% if not patients %}
+  <section class="mr-empty">
+    <h2>No active session</h2>
+    <p class="muted">
+      Start a single-patient session from the
+      <a href="/portal/control">Control room</a> wizard, or open a
+      multi-patient room from <a href="/portal/room">Multi-Patient Control</a>.
+    </p>
+  </section>
+{% else %}
+  <section class="mr-picker">
+    <p class="muted small">
+      {{ patients | length }} patient{% if patients | length != 1 %}s{% endif %}
+      · current shift:
+      <strong>{{ patients[0].status.current_shift }}</strong>
+    </p>
+    <div class="mr-patient-grid">
+      {% for p in patients %}
+        <a class="mr-patient-card"
+           href="/portal/medical_records/{{ p.character_id }}">
+          <header class="mr-patient-card-header">
+            <strong class="mr-patient-name">{{ p.name }}</strong>
+            <span class="muted small">{{ p.character_id }}</span>
+          </header>
+          <p class="muted small mr-patient-loc">
+            {{ p.location_label }}
+            {% if p.encounter_label %} · {{ p.encounter_label }}{% endif %}
+            {% if p.mrn %} · MRN {{ p.mrn }}{% endif %}
+          </p>
+          <div class="mr-status-grid">
+            <div class="mr-status-cell"
+                 title="Total medications on this patient's MAR">
+              <span class="mr-status-num">{{ p.status.med_count }}</span>
+              <span class="mr-status-label">total meds</span>
+            </div>
+            <div class="mr-status-cell mr-status-due"
+                 title="Scheduled med administrations during the current shift">
+              <span class="mr-status-num">{{ p.status.due_in_current_shift }}</span>
+              <span class="mr-status-label">due this shift</span>
+            </div>
+            <div class="mr-status-cell"
+                 title="IV drips + tube feeds running continuously">
+              <span class="mr-status-num">{{ p.status.continuous_count }}</span>
+              <span class="mr-status-label">infusions</span>
+            </div>
+            <div class="mr-status-cell"
+                 title="PRN / as-needed meds (no scheduled time)">
+              <span class="mr-status-num">{{ p.status.prn_count }}</span>
+              <span class="mr-status-label">PRN</span>
+            </div>
+            <div class="mr-status-cell"
+                 title="Lab orders that haven't resulted yet">
+              <span class="mr-status-num">{{ p.status.labs_pending }}</span>
+              <span class="mr-status-label">labs pending</span>
+            </div>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+{% endblock %}
