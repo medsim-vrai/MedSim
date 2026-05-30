@@ -5487,14 +5487,30 @@ def _vrai_base(request: Request) -> str:
     return base.rstrip("/")
 
 
+def _vrai_base_for_qr(request: Request) -> str:
+    """Like _vrai_base, but LAN-reachable for a *scanned* QR: a request-derived
+    localhost / 127.0.0.1 host is swapped for the detected LAN IP so the page
+    opens on another device. A configured VRAI_FACES_BASE_URL is returned as-is
+    (the operator's explicit choice)."""
+    base = _os.environ.get("VRAI_FACES_BASE_URL")
+    if base:
+        return base.rstrip("/")
+    host = request.url.hostname or "localhost"
+    if host in ("127.0.0.1", "localhost", "::1", ""):
+        host = _lan_ip()
+    port = int(_os.environ.get("VRAI_FACES_VITE_PORT", "5173"))
+    return f"http://{host}:{port}"
+
+
 def _vrai_faces_url(
     request: Request,
     character_id: str,
     *,
     scenario_id: str,
     opacity: float,
+    lan: bool = False,
 ) -> str:
-    """Build the LAN-reachable URL to the vrai-faces shell for this tablet.
+    """Build the URL to the vrai-faces shell for this tablet.
 
     Dev: VRAI_FACES_BASE_URL=http://<host>:5173  (vite dev)
     Preview: VRAI_FACES_BASE_URL=http://<host>:4173  (vite preview)
@@ -5502,14 +5518,26 @@ def _vrai_faces_url(
 
     If the env var is unset, the URL is derived from the portal's own
     request hostname plus port 5173.
+
+    `lan=True` (QR / tablet-pairing): the app host AND the embedded `api`
+    portal origin are made LAN-reachable — a request-derived 127.0.0.1 /
+    localhost is swapped for the detected LAN IP. Without this, a QR scanned
+    on a *different* device points the bind fetch and the speech WebSocket at
+    that device's own localhost (ws://127.0.0.1/…) → connection refused.
+    `lan=False` (develop, on the operator's own box) keeps localhost so the
+    autostart path can manage the local dev server.
     """
     safe_char = character_id.strip()
     safe_scen = scenario_id.strip() or "default"
     op = max(0.0, min(1.0, opacity))
     # Carry the portal origin so the avatar can call back for its bind payload
     # (portrait + speech WS URL) — GET {api}/api/face/{char}/binding (Phase 4.3).
-    api = _quote(str(request.base_url).rstrip("/"), safe="")
-    return (f"{_vrai_base(request)}/face/{safe_char}"
+    # The speech WS URL is derived (server-side) from whatever host the app used
+    # here, so making `api` LAN-reachable also makes the WebSocket LAN-reachable.
+    portal_origin = _base_url_for_qr(request) if lan else str(request.base_url).rstrip("/")
+    app_base = _vrai_base_for_qr(request) if lan else _vrai_base(request)
+    api = _quote(portal_origin, safe="")
+    return (f"{app_base}/face/{safe_char}"
             f"?scenario={safe_scen}&opacity={op:.2f}&api={api}")
 
 
@@ -5524,7 +5552,10 @@ async def vrai_face_qr(
     """SVG QR code that, when scanned on a tablet, opens the full-screen
     VRAI Faces avatar bound to <character_id>. No auth — facilitators
     print/show these on the control room screen."""
-    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
+    # lan=True: a scanned QR opens on a *different* device, so the app host +
+    # the embedded portal `api` (→ bind fetch + speech WebSocket) must be the
+    # LAN IP, never 127.0.0.1 (which would resolve to the tablet itself).
+    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity, lan=True)
     svg = qrgen.make_qr_svg(url, scale=scale)
     return Response(content=svg, media_type="image/svg+xml")
 
@@ -5743,7 +5774,10 @@ async def vrai_face_launcher(
     NOT from the Develop button (that opens the live app). Works for both
     character cards and persona ids (P-0xx) via vrai_faces.resolve_card()."""
     info = vrai_faces.launch_info(character_id)
-    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
+    # lan=True: this is the tablet-pairing page — both the QR and the URL it
+    # prints must be LAN-reachable (see _vrai_faces_url), so the scanned tablet
+    # can reach the portal's bind + speech WebSocket rather than its own host.
+    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity, lan=True)
     qr_svg = qrgen.make_qr_svg(url, scale=10)
     name = info["name"]
     role = info["role"]
