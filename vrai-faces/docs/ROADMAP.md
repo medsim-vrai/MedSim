@@ -85,3 +85,35 @@ All gated ADRs + §9 product calls resolved:
 **Biggest single unblock:** the **blendshape-delta rig** (Phase 1.2) — it's what turns
 the avatar from "right shape" into "actually emotes/speaks," and it unblocks
 `avatar_exporter` morph baking. Everything else is engine-swaps with seams already in place.
+
+---
+
+## 4. Research-driven enhancements (gated work)
+
+Some enhancements would raise performance/fidelity but depend on **gated sources or
+more complex systems not currently authorized** — paid/licensed assets, heavier
+pipelines (e.g. deformation transfer), or external services that conflict with
+local-first/PHI. These are NOT dropped and NOT built inline. Instead:
+
+1. **Capture a research brief** in `research/` (`RB-NNN_<slug>.html` → `.pdf`) defining
+   the objective, why it's gated, research questions, evaluation criteria, deliverables,
+   and how the result re-enters the build — self-contained enough to hand to **Claude
+   Cowork** (deep research) cold.
+2. **Park it** against the phase it would enhance (the brief names its gate).
+3. **When desired**, run the brief in Cowork → ranked options + a go/no-go.
+4. **Decide** → record an ADR in `Memory_management.MD §7` → drop-in implementation
+   (seams are kept ready so the swap is small).
+
+This keeps the main build moving on authorized, local-first work while preserving a
+fast path to each enhancement the moment it's wanted — no rework, no premature
+dependency. See `research/README.md` for the index + lifecycle.
+
+**Open briefs**
+
+| Brief | Enhancement | Gates | Status |
+|---|---|---|---|
+| RB-001 | Real ARKit-52 blendshape rig (vs. the procedural basis) | Phase 1.2 | Open |
+
+As gated items surface in later phases (a cloud emotion model beyond ADR-0019,
+premium-voice procurement, photoreal sculpt per ADR-0002, …), add a brief here rather
+than expanding scope inline.

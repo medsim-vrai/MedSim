@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>VRAI Faces — Research Brief RB-001</title>
+<style>
+  :root { --ink:#1a1f26; --muted:#5b6675; --line:#d7dde5; --accent:#2b5fb3; --chip:#eef3fb; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font: 11.5pt/1.5 -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink); margin: 0;
+  }
+  h1 { font-size: 20pt; line-height: 1.2; margin: 0 0 2pt; }
+  h1 .sub { display:block; font-size: 13pt; color: var(--muted); font-weight: 600; margin-top: 4pt; }
+  h2 { font-size: 12.5pt; color: var(--accent); margin: 20pt 0 6pt; padding-bottom: 3pt; border-bottom: 1.5px solid var(--line); }
+  p, li { margin: 4pt 0; }
+  ol, ul { margin: 4pt 0 4pt 18pt; padding: 0; }
+  code { background: var(--chip); padding: 0 3px; border-radius: 3px; font-size: 10pt; }
+  .meta { background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 8pt 12pt; margin: 12pt 0 4pt; font-size: 10pt; }
+  .meta b { color: var(--ink); } .meta span { color: var(--muted); margin-right: 14pt; display: inline-block; }
+  .lead { color: var(--muted); font-size: 11pt; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 10pt; }
+  th, td { border: 1px solid var(--line); padding: 5pt 7pt; text-align: left; vertical-align: top; }
+  th { background: var(--chip); color: var(--ink); font-weight: 700; }
+  .mustpass { color:#9a2a2a; font-weight:700; }
+  .foot { margin-top: 22pt; padding-top: 8pt; border-top: 1px solid var(--line); color: var(--muted); font-size: 9pt; }
+  .tag { display:inline-block; background: var(--accent); color:#fff; font-size:8.5pt; font-weight:700; padding:1px 7px; border-radius: 10px; letter-spacing:.3px; }
+</style>
+</head>
+<body>
+
+<p><span class="tag">RESEARCH BRIEF · FOR CLAUDE COWORK</span></p>
+<h1>VRAI Faces — Research Brief RB-001
+  <span class="sub">Real ARKit-52 Blendshape Rig for the MediaPipe 468-Vertex Topology</span>
+</h1>
+
+<div class="meta">
+  <span><b>ID:</b> RB-001</span>
+  <span><b>Created:</b> 2026-05-29</span>
+  <span><b>Status:</b> Open — not started</span>
+  <span><b>Gates:</b> ROADMAP Phase 1.2</span><br/>
+  <span><b>Module:</b> mesh_builder (morph_basis)</span>
+  <span><b>Relates to:</b> ADR-0019/0020, ADR-0001, ADR-0005, ADR-0014</span>
+  <span><b>Run in:</b> Claude Cowork (deep research)</span>
+</div>
+
+<p class="lead">A self-contained brief defining the parameters for a deferred, gated
+enhancement. It is intended to be executed later in Claude Cowork; its output feeds
+an ADR and a drop-in implementation. Nothing here is required to ship the current
+build — the avatar already renders and exports with a procedural approximation.</p>
+
+<h2>1. Objective</h2>
+<p>Determine the best way to obtain a real, production-quality <b>ARKit-52 blendshape
+deformation basis</b> mapped onto MediaPipe's canonical <b>468-vertex</b> face topology,
+to replace the current procedural approximation (4 of 52 shapes) in
+<code>mesh_builder/impl/morph_basis.ts</code>. "Best" = highest expression fidelity that
+stays within the project's local-first, deterministic, PHI-safe, clinical constraints.</p>
+
+<h2>2. Why this is gated (not done inline)</h2>
+<ul>
+  <li>No clean off-the-shelf ARKit-52 → MediaPipe-468 deformation basis is known to exist.</li>
+  <li>Candidate sources involve <b>licensing review</b> and/or a heavier modeling pipeline
+      (e.g. deformation transfer); some may be paid or otherwise gated.</li>
+  <li>It must not compromise local-first delivery (ADR-0001), deterministic/auditable
+      output (ADR-0005), the PHI posture (ADR-0014), or clinical fidelity (pain, drowsiness).</li>
+</ul>
+
+<h2>3. Current state (context for the researcher)</h2>
+<ul>
+  <li><b>mesh_builder</b> builds the real 468-vertex mesh from MediaPipe FaceLandmarker
+      landmarks; the live path is browser-verified.</li>
+  <li><b>Morph deltas today</b> are a procedural, geometry-driven approximation:
+      <code>jawOpen</code>, <code>mouthSmileLeft/Right</code>, <code>browInnerUp</code> — the
+      other 48 ARKit shapes are zero.</li>
+  <li><b>avatar_exporter</b> already bakes whatever deltas exist into glTF
+      <code>targets[]</code> by name. So a real rig is a <b>drop-in</b>: replace the basis
+      and the export + animation paths already consume it — no contract changes.</li>
+</ul>
+
+<h2>4. Research questions</h2>
+<ol>
+  <li>Which ARKit-52 rigs / parametric face models exist (e.g. ICT-FaceKit, FLAME, Basel
+      BFM, MetaHuman, Ready Player Me, ARKit reference), and what are their <b>licenses</b>
+      for clinical/commercial use <i>and redistribution in a bundled app</i>?</li>
+  <li>Which expose ARKit-52 (or cleanly mappable) blendshapes, and how do they map onto the
+      MediaPipe 468 topology (vertex correspondence / deformation transfer)?</li>
+  <li>What is the effort + toolchain for the mapping — a one-time offline bake vs. runtime?</li>
+  <li>Clinical fidelity: do candidates cover <b>pain, drowsiness</b>, and other clinically
+      salient affects, or only the standard 52?</li>
+  <li>Bundle-size / local-first impact (delta-data size on disk)?</li>
+  <li>Which options are gated/paid, and on what terms?</li>
+</ol>
+
+<h2>5. Evaluation criteria</h2>
+<table>
+  <thead><tr><th>Criterion</th><th>Weight</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>License — clinical use + redistributable</td><td class="mustpass">MUST-PASS</td><td>Bundled, on-device, possibly commercial. Disqualifies non-redistributable assets.</td></tr>
+    <tr><td>Topology fit / mapping effort</td><td>High</td><td>Correspondence to MediaPipe 468; one-time bake preferred.</td></tr>
+    <tr><td>Expression fidelity (incl. clinical affects)</td><td>High</td><td>Pain / drowsiness coverage is a differentiator for a patient sim.</td></tr>
+    <tr><td>Bundle size / local-first compatibility</td><td>Medium</td><td>Delta data served from app origin (ADR-0001), never a runtime CDN.</td></tr>
+    <tr><td>Determinism &amp; PHI safety</td><td class="mustpass">MUST-PASS</td><td>Deterministic output (ADR-0005); no facial-image gathering; nothing leaves device (ADR-0014).</td></tr>
+    <tr><td>Maintenance / provenance</td><td>Medium</td><td>Stable source, clear versioning, low upkeep.</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Deliverables (what Cowork should return)</h2>
+<ul>
+  <li>A ranked comparison of viable options against the criteria above.</li>
+  <li>A recommended option + a concrete integration path (e.g. a one-time bake →
+      <code>face_mesh_morphbasis.json</code>, loaded like the topology asset is today).</li>
+  <li>A license summary and any procurement that would be required.</li>
+  <li>A clear <b>go / no-go</b> with a rough effort estimate — ready to convert into an ADR.</li>
+</ul>
+
+<h2>7. How the result re-enters the build</h2>
+<p>Research output → a new ADR (next number in <code>Memory_management.MD §7</code>) →
+implementation: produce the baked delta asset, swap <code>morph_basis.ts</code> to load it
+(falling back to the procedural basis if the asset is absent), regenerate, and verify.
+<code>avatar_exporter</code> already bakes the deltas by name, so no contract changes are needed.</p>
+
+<h2>8. Hard constraints</h2>
+<ul>
+  <li><b>Local-first (ADR-0001):</b> assets served from the app origin; no runtime CDN.</li>
+  <li><b>Deterministic &amp; auditable (ADR-0005):</b> JSON-defined, reproducible.</li>
+  <li><b>PHI (ADR-0014):</b> nothing leaves the device; never gather or scrape facial images.</li>
+  <li><b>Naming:</b> ARKit-52 canonical names, matching mesh_builder + avatar_exporter.</li>
+</ul>
+
+<div class="foot">
+  VRAI Faces (MedSim V8) · Research briefs live in <code>vrai-faces/research/</code> and follow the
+  research-driven-enhancement strategy in <code>docs/ROADMAP.md</code>. Regenerate this PDF from its
+  HTML with <code>node packages/core/scripts/render-pdf.mjs research/RB-001_blendshape-rig.html research/RB-001_blendshape-rig.pdf</code>.
+</div>
+
+</body>
+</html>
