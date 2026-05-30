@@ -92,6 +92,27 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
   // Track managed meshes so dispose() can free them.
   const managed = new Map<string, THREE.Mesh>();
 
+  // Dolly the camera so the avatar fits the current viewport on BOTH axes
+  // (accounting for aspect), so it never spills off a narrow/tall window.
+  // Re-run on resize and whenever a mesh is attached/detached.
+  function frameAvatar(): void {
+    if (managed.size === 0) return;
+    const box = new THREE.Box3();
+    for (const m of managed.values()) box.expandByObject(m);
+    if (box.isEmpty()) return;
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const fov = (camera.fov * Math.PI) / 180;
+    const tan = Math.max(Math.tan(fov / 2), 1e-3);
+    const aspect = camera.aspect || 1;
+    const distH = (size.y / 2) / tan;
+    const distW = (size.x / 2) / (tan * aspect);
+    const dist = Math.max(distH, distW) * 1.3 + size.z / 2;   // 30% margin + depth
+    camera.position.set(center.x, center.y, center.z + Math.max(dist, 0.2));
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+  }
+
   function fitToWindow(): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = window.innerWidth;
@@ -100,6 +121,7 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
     renderer.setSize(w, h, false);
     camera.aspect = w / Math.max(h, 1);
     camera.updateProjectionMatrix();
+    frameAvatar();
   }
   fitToWindow();
   window.addEventListener('resize', fitToWindow);
@@ -120,6 +142,7 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
       managed.set(meshId, mesh);
       scene.add(mesh);
       animationRuntime.attach(meshId);
+      frameAvatar();
     },
 
     detachMesh(meshId) {
@@ -132,6 +155,7 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
       const mat = mesh.material;
       if (Array.isArray(mat)) { for (const m of mat) m.dispose(); }
       else if (mat) mat.dispose();
+      frameAvatar();
     },
 
     swapMaterial(meshId, materialId) {

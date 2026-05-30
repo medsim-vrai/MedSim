@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, Request, WebSocket
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile, WebSocket
 from fastapi.responses import JSONResponse
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
@@ -521,6 +521,24 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             emotion=emotion if isinstance(emotion, dict) else None,
         )
         return JSONResponse({"ok": True, **result})
+
+    @app.post("/api/face/skins")
+    async def api_face_skins(  # noqa: ANN202
+        label: Annotated[str, Form()] = "",
+        image: UploadFile = File(...),
+    ):
+        """Save a skin pushed from the VRAI Faces app's 'Save skin' button.
+        No auth (same trust as the binding GET); CORS allows the app origin.
+        The portal's own /portal/skins library reads the same store."""
+        data = await image.read()
+        if not data:
+            return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+        if len(data) > _MAX_PORTRAIT_BYTES:
+            return JSONResponse({"ok": False, "error": "too large"}, status_code=413)
+        fn = image.filename or ""
+        ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else "png"
+        skin = save_skin(label, data, ext)
+        return JSONResponse({"ok": True, "id": skin["id"], "label": skin["label"]})
 
     @app.websocket("/ws/face/{scenario_id}/{character_id}")
     async def ws_face(ws: WebSocket, scenario_id: str,  # noqa: ANN202

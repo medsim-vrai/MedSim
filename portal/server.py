@@ -68,6 +68,18 @@ CREDENTIAL_FIELDS: list[tuple[str, str, str]] = [
 ]
 
 app = FastAPI(title="medsim portal", docs_url=None, redoc_url=None)
+# CORS — the VRAI Faces app is a separate origin (e.g. :5173) and calls the
+# no-auth /api/face/* endpoints (binding GET, skin save). Credential-less, so
+# cookie-gated operator routes stay protected (a cross-origin request can't send
+# the session cookie). Local/LAN trust model (ADR-0017).
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.mount("/static", StaticFiles(directory=str(PORTAL_DIR / "static")), name="static")
 # V3 — serves the EHR bundle subresources (data.jsx, ui.jsx, screens.jsx,
 # app.jsx, catalog.json) directly. The index.html for each EHR is served

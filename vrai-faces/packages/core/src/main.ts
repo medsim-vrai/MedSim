@@ -28,6 +28,7 @@ import { installSpeechConsumer } from './shell/speechConsumer';
 import { lazyTts } from './shell/lazy';
 import { mountTranslucencySlider } from './shell/translucency_slider';
 import { mountImportControl } from './shell/import_control';
+import { mountSaveControl } from './shell/save_control';
 
 async function boot(): Promise<void> {
   const launch = parseLaunchUrl(window.location);
@@ -84,6 +85,10 @@ async function boot(): Promise<void> {
   const initialOpacity = bound?.binding.opacityLevel ?? launch?.opacityLevel ?? 0.66;
   let slider = mountTranslucencySlider(app, avatar.materialId, initialOpacity);
 
+  // The face the "Save skin" control persists: the imported portrait once one is
+  // picked, else the bound character's portrait.
+  let currentFace: Blob | null = bound?.binding.sourcePhoto ?? null;
+
   // "Develop the face from an image": import a portrait and rebuild the avatar
   // from it. Build the new avatar FIRST so a failed import leaves the current
   // one (and its slider) intact; the control surfaces the error.
@@ -93,8 +98,14 @@ async function boot(): Promise<void> {
     renderer.detachMesh(avatar.meshId);
     slider.dispose();
     avatar = next;
+    currentFace = file;
     slider = mountTranslucencySlider(app, avatar.materialId, opacity);
   });
+
+  // "Save skin" → the portal's skin library (only when we know the portal origin).
+  if (launch?.apiBase) {
+    mountSaveControl(app, { apiBase: launch.apiBase, getFace: () => currentFace });
+  }
 
   renderer.start();
 
