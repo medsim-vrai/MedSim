@@ -1,16 +1,15 @@
 # ADR-0019 — On-device emotion-inference engine for `emotion_driver`
 
-- **Status:** PROPOSED (not yet ratified — NOT in `Memory_management.MD §7`)
+- **Status:** ACCEPTED 2026-05-29 — recorded in `Memory_management.MD §7` as ADR-0019. Implementation in Phase 3 (see `docs/ROADMAP.md`).
 - **Date:** 2026-05-29
 - **Module:** `emotion_driver`
 - **Supersedes / refines:** the deferral baked into `emotion_driver/impl/create.ts`
 - **Relates to:** ADR-0001 (local-first), ADR-0005 (JSON weights, not free text),
   ADR-0014 (PHI guardrail), ADR-0009 (WebGPU + WASM fallback)
 
-> This is an **ADR scratch doc** (`docs/` per §7 convention). It is written
-> here, in long form, so the human can decide. It is deliberately **not** added
-> to the `§7` one-line ledger yet — that line is drafted at the bottom, ready to
-> paste verbatim if and when this is approved.
+> This is the long-form ADR (`docs/` per §7 convention). **RATIFIED 2026-05-29**
+> — the one-line entry is now recorded in `Memory_management.MD §7` (ADR-0019).
+> Exact model id, bundle budget, and cloud opt-in are settled when Phase 3 is built.
 
 ---
 
@@ -114,22 +113,24 @@ the local-first posture that ADR-0001 treats as non-negotiable.
 - **WASM/WebGPU init cost.** First inference after warmup pays a compile cost;
   `warmup()` must be called off the hot path (it already exists for this purpose).
 
-## Open questions for the human (blockers to ratifying)
+## Open implementation questions (settle during Phase 3)
+
+Ratified 2026-05-29 with the **hybrid** approach, so #3 is decided. The rest are
+Phase-3 implementation tuning, not ratification blockers:
 
 1. **Model pick.** Confirm a specific quantized model id + revision (GoEmotions
    DistilBERT vs a smaller MiniLM) — drives bundle size and the mood mapping.
 2. **Bundle budget.** Is tens-of-MB acceptable in the local-first tablet build,
    or should the model be an optional download fetched on first launch?
-3. **Clinical affects.** Confirm the hybrid (lexicon retains *pain*/*drowsy*)
-   vs. investing in a fine-tune that learns them directly (heavier, later).
+3. ~~Clinical affects~~ — **DECIDED: hybrid** (lexicon retains *pain*/*drowsy*).
 4. **Cloud path.** Ship the Claude opt-in day-1 behind ADR-0014, or keep it a
-   v1.1 flag? (Mirrors the existing open question in `§9` about cloud fallback.)
+   v1.1 flag? (Tracked with the §9 cloud question — Phase 0 decision 3.)
 
-## If approved — paste this line into `Memory_management.MD §7`
+## Recorded in `Memory_management.MD §7` (ratified 2026-05-29)
 
 ```
 - **ADR‑0019 | 2026‑05‑29 | Emotion driver uses transformers.js ON‑DEVICE (hybrid: small quantized GoEmotions‑class model + lexicon fallback/clinical override) — cloud Claude stays opt‑in per scenario** | Lexicon stand‑in can't handle paraphrase/negation/intensity, but local‑first (ADR‑0001) forbids a cloud default and off‑the‑shelf models lack clinical affects (pain/drowsy) | Adds a pinned transformers.js dep + a model in the tools sheet; model loads in `warmup()` not at boot; lexicon retained as the zero‑model fallback; output stays JSON weights (ADR‑0005); any cloud path remains gated by the ADR‑0014 fail‑closed PHI classifier.
 ```
 
-> Until that line exists in `§7`, this ADR is **PROPOSED only** and no
-> transformers.js dependency may be added.
+> ✅ This line is now in `§7`. The pinned transformers.js dependency + model
+> entry (with the tools-sheet row) land in Phase 3, per ADR-0001 local-first.

@@ -202,6 +202,8 @@ Agents must NOT mutate MedSim scenario files; they are read‑only inputs.
 - **ADR‑0016 | 2026‑05‑28 | Cost guardrails: per‑tenant monthly character cap; cap‑80% triggers a switch to local; cap‑100% hard‑stops all cloud calls until next billing cycle** | Premium voices can rack up unpredictable cost on long scenarios | `tts_provider` consults a usage meter before each call; meter persists in `memory_state`.
 - **ADR‑0017 | 2026‑05‑28 | MedSim V8 = MedSim V7 fork + VRAI Faces tablet surface; portal exposes `/qr/face/<id>.svg` and `/portal/face/launch/<id>`** | V7's existing portal already runs FastAPI + segno QR generation; reusing it as the launch host avoids a second service on the LAN. The QR encodes a LAN URL (`VRAI_FACES_BASE_URL` env var) that the tablet camera opens directly | The vrai-faces dev server (`vite`) is the URL the QR points at in dev; in prod the same path is served from `dist/`. `medsim_adapter` is the only place that touches MedSim runtime state.
 - **ADR‑0018 | 2026‑05‑28 | Pause/Resume — `memory_state` aggregates per‑module `SnapshotHooks` and writes one `SessionState` blob to IndexedDB per (scenarioId, characterId) on tab‑hidden, low battery, or shell signal** | Tablets sleep often during scenarios; trainees expect to pick up exactly where they left off. A single aggregate write is faster and atomic vs N partial writes | Every module that holds runtime state implements `Resumable<T>` with structured‑clone‑safe `T`. PHI free‑text is NEVER persisted — only structured runtime state. `resumeAll()` is called from `main.ts` at boot.
+- **ADR‑0019 | 2026‑05‑29 | `emotion_driver` runs transformers.js ON‑DEVICE — hybrid: a small quantized GoEmotions‑class model + the existing lexicon as fallback AND as the override for clinical affects (pain/drowsy); cloud Claude stays per‑scenario opt‑in** | The lexicon stand‑in can't handle paraphrase/negation/intensity, but local‑first (ADR‑0001) forbids a cloud default and off‑the‑shelf emotion models have no pain/drowsy labels | Adds a pinned transformers.js dep + a model entry in the tools sheet; the model loads in `warmup()`, never at boot; lexicon retained as the zero‑model fallback; output stays JSON blendshape weights (ADR‑0005); any cloud path remains gated by the ADR‑0014 fail‑closed PHI classifier. Implemented in Phase 3 (see `docs/ROADMAP.md`).
+- **ADR‑0020 | 2026‑05‑29 | Local TTS fallback = HeadTTS/Kokoro (WebGPU) with a Piper‑WASM floor, chained Kokoro→Piper** | ADR‑0011 makes premium cloud voice primary and local the fallback; the fallback must STILL work when the network, WebGPU, or the cost cap fails — Kokoro gives near‑premium quality on WebGPU, Piper‑WASM guarantees a CPU floor when WebGPU is rejected (ADR‑0009) | `tts_provider` keeps its TIER_CHAIN tail `…→ headtts‑kokoro → piper‑wasm`; both engines are pinned in `VRAI_Faces_Tools_Resources.xlsx`; models load lazily, never at boot; both are on‑device so they sit inside the ADR‑0014 BAA pool (PHI‑safe). Wired in Phase 2 (see `docs/ROADMAP.md`).
 
 ---
 
@@ -215,19 +217,23 @@ Agents must NOT mutate MedSim scenario files; they are read‑only inputs.
 
 ## 9. Open questions for the human
 
-- [ ] Confirm the MedSim V8 character schema path inside
-  `medsim_v8/schemas/` so `medsim_adapter` can wire its Zod schema to
-  real types (currently the scaffold validates `VRAISpeechFrame` only).
-- [ ] Decide whether the cloud fallback ships day‑1 or behind a v1.1 flag.
-- [ ] Pick the default "ghost" base color (clinical white vs neutral grey vs
-  custom per scenario).
-- [ ] Approve the list of voices the local HeadTTS bundle ships with
-  (size‑on‑disk vs voice variety tradeoff).
-- [ ] Decide how the portal exposes a list of *currently launchable*
-  characters (today the QR builder accepts any string).
-- [ ] Confirm: does pause/resume persist across **device** restarts (i.e.
-  the IndexedDB origin survives Capacitor app updates), or only across
-  tab restarts?
+**Phase 0 decisions — resolved 2026‑05‑29** (see `docs/ROADMAP.md`; ADRs in §7):
+
+- [ ] **MedSim V8 character schema path** inside `medsim_v8/schemas/` so
+  `medsim_adapter` can wire its Zod schema to real types (scaffold validates
+  `VRAISpeechFrame` only). → confirm during **Phase 4**.
+- [x] **Cloud TTS timing** — **local‑only launch; cloud tiers (and cloud‑emotion)
+  behind a flag, enabled in v1.1.** Local‑first by default; no BAA/key blocker at launch.
+- [x] **Default "ghost" base color** — **per‑scenario** (carried on the character
+  binding), default **clinical white**. Adds an optional `ghostColor` field through
+  `medsim_adapter → shader_translucent` (Phase 4).
+- [x] **Local voice bundle** — **balanced ~6–8 Kokoro/HeadTTS voices** (gender/age
+  spread). Exact voice IDs chosen in Phase 2.
+- [x] **Portal launchable‑character listing** — **derive from the MedSim
+  scenario/character registry** (single source of truth; validates the QR id). Phase 4.
+- [x] **Pause/resume durability** — **device‑restart durable**: survive tablet
+  reboots and Capacitor app updates (persistent storage + stable origin + a
+  SessionState schema‑version migration). Phase 5.
 
 ---
 

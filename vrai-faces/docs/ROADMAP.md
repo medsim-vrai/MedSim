@@ -39,11 +39,15 @@ real engines/data, wiring MedSim, and hardening for ship.**
 
 ## 2. The path (dependency-ordered)
 
-### Phase 0 — Unblock: ratify decisions  ·  _cheap, gates Phases 2–3_
-Resolve the gated ADRs + `§9` product questions so engine work isn't blocked:
-- **ADR-0019** (emotion engine: transformers.js on-device) — ratify or revise.
-- **Local-TTS engine ADR** — pick Kokoro-WebGPU vs Piper-WASM (+ tools-sheet line).
-- **§9 calls:** cloud TTS day-1 vs v1.1 flag · default "ghost" color · HeadTTS voice bundle · how the portal lists launchable characters · pause/resume across device restarts.
+### Phase 0 — Decisions  ·  ✅ RATIFIED 2026-05-29
+All gated ADRs + §9 product calls resolved:
+- **ADR-0019** (emotion engine) — **ACCEPTED**: transformers.js on-device, hybrid (model + lexicon fallback / clinical-affect override). §7.
+- **ADR-0020** (local TTS) — **ACCEPTED**: Kokoro→Piper fallback (WebGPU quality + WASM CPU floor). §7.
+- **Cloud TTS** — local-only launch; cloud tiers (+ cloud-emotion) are **v1.1**-flagged → Phase 2.2 / 3.
+- **Ghost color** — **per-scenario** (optional `ghostColor` on the character binding), default clinical white → Phase 4.
+- **Local voices** — **balanced ~6–8** Kokoro voices (IDs chosen in Phase 2).
+- **Portal listing** — **derive from the MedSim scenario/character registry** → Phase 4.
+- **Resume durability** — **device-restart durable** (persistent storage + stable origin + SessionState migration) → Phase 5.
 
 ### Phase 1 — Real avatar (visual fidelity)  ·  _critical path_
 1. **mesh_builder — browser-verify the live MediaPipe path** end-to-end (add the real portrait fixture; confirm `detect()` yields 478 landmarks + a real face mesh in Chrome).
