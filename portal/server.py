@@ -4317,11 +4317,18 @@ async def portal_room_encounter_console(
     enc = room.encounters.get(encounter_id)
     if enc is None:
         raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    # V8 — personas the instructor enabled a VRAI Faces avatar for on this bed;
+    # the QR card shows one tablet-pairing code each (resolved to display names).
+    avatar_personas_detail = [
+        {"id": pid, "name": (library.get_persona(pid) or {}).get("name") or pid}
+        for pid in (enc.avatar_personas or [])
+    ]
     return templates.TemplateResponse(
         request, "encounter_console.html",
         {
             "active": "room",
             "encounter": enc,
+            "avatar_personas_detail": avatar_personas_detail,
             "room": {"room_code": room.room_code,
                       "label":     room.label or "",
                       "room_id":   room.room_id},

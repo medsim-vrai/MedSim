@@ -199,6 +199,24 @@
           🩺 Open here
         </a>
       </div>
+      {# V8 — one VRAI Faces avatar QR per persona the instructor enabled for
+         this bed (scoped to this encounter). Reuses /qr/face/<id>.svg, which
+         encodes the avatar app deep-link the tablet opens. #}
+      {% for p in avatar_personas_detail %}
+      <div class="qr-cell qr-cell-avatar">
+        <div class="qr-label">🪞 Avatar · {{ p.name }}</div>
+        <img class="qr-img"
+             src="/qr/face/{{ p.id }}.svg?scenario={{ encounter.id }}"
+             alt="VRAI Faces avatar QR for {{ p.name }}">
+        <code class="qr-url">{{ p.id }}</code>
+        <a class="qr-launch-here"
+           href="/portal/face/launch/{{ p.id }}?scenario={{ encounter.id }}"
+           target="_blank" rel="noopener"
+           title="Open the tablet-pairing page (QR + URL) for this avatar.">
+          🪞 Pair tablet
+        </a>
+      </div>
+      {% endfor %}
     </div>
     <p class="muted small">Join code: <code>{{ encounter.join_code }}</code>. Chat / EHR / Device stations scan once; the join code authenticates them for this encounter. The Nursing Station uses the <strong>room code</strong> <code>{{ room.room_code }}</code> instead — it supervises every bed.</p>
     {# M41 — print just THIS encounter's QR codes (handy when handing the sheet to one bed's team). #}

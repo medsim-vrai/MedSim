@@ -662,6 +662,11 @@
     const scenarioText  = (form.elements.scenario_text?.value || "").trim();
     const scenarioNotes = (form.elements.scenario_notes?.value || "").trim();
     const defaultEhrId  = form.querySelector('input[name="ehr_id"]:checked')?.value || null;
+    // V8 — global "Use VRAI Faces avatar" opt-in (the persona grid checkboxes).
+    // Applied to each encounter below, intersected with that bed's own personas.
+    const avatarChecked = new Set(
+      Array.from(form.querySelectorAll('input[name="avatar_personas"]:checked')).map(cb => cb.value),
+    );
 
     const rows = Array.from(document.querySelectorAll("#room-encounter-rows .encounter-row"));
     if (rows.length < 2) {
@@ -725,6 +730,7 @@
         persona_id:           persona,
         patient_persona_id:   persona,
         personas:             combinedPersonas,
+        avatar_personas:      combinedPersonas.filter(pid => avatarChecked.has(pid)),
         chart_mode:           rowChartMode,
         label:                rowLabel,
         activity_id:          activityId || null,
