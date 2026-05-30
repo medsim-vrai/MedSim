@@ -53,7 +53,25 @@ export async function buildAvatarFromBlob(
   }
 
   const mesh = new THREE.Mesh(geo, matObj);
-  mesh.position.set(0, 0, 0);
+  // Normalize placement: recenter on the geometry's TRUE bounding-box center and
+  // scale to a consistent on-screen size. mesh_builder centers by `lm.x - 0.5`,
+  // which only frames a face that fills the image dead-center; an imported photo
+  // with the face off to one side (or not filling the frame) otherwise renders
+  // offset and mis-sized. Done on the mesh transform (not the geometry) so morph
+  // targets are untouched.
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  if (bb) {
+    const cx = (bb.min.x + bb.max.x) / 2;
+    const cy = (bb.min.y + bb.max.y) / 2;
+    const cz = (bb.min.z + bb.max.z) / 2;
+    const maxDim = Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y) || 1;
+    const s = 1.1 / maxDim; // ~fills the 35° camera view at z = 2
+    mesh.scale.setScalar(s);
+    mesh.position.set(-cx * s, -cy * s, -cz * s);
+  } else {
+    mesh.position.set(0, 0, 0);
+  }
   const meshId = registerMesh(mesh, built.meshId);
 
   renderer.attachMesh(meshId, mesh);
