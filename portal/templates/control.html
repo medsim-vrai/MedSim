@@ -210,6 +210,11 @@
               {% if p.alteredState %}<span class="tag altered">{{ p.alteredState }}</span>{% endif %}
               <span class="tag safety-{{ p.safetyClass }}">{{ p.safetyClass }}</span>
             </div>
+            <div class="avatar-opt" onclick="event.stopPropagation()">
+              <input type="checkbox" name="avatar_personas" value="{{ p.id }}"
+                     onclick="event.stopPropagation()">
+              <span class="muted small">🪞 Use VRAI Faces avatar</span>
+            </div>
           </div>
         </label>
       {% endfor %}

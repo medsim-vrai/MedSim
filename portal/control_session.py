@@ -127,6 +127,9 @@ class ControlSession:
     selected_modules: list[str] = field(default_factory=list)
     scenario_text: str = ""
     selected_personas: list[str] = field(default_factory=list)
+    # Personas (a subset of selected_personas) the instructor opted to give a
+    # VRAI Faces avatar for this encounter. Empty = no avatars (the default).
+    avatar_personas: list[str] = field(default_factory=list)
     stations: dict[str, Station] = field(default_factory=dict)
     transcript: list[TranscriptEntry] = field(default_factory=list)
     started_at: float = field(default_factory=time.time)
@@ -269,6 +272,7 @@ def create_session(
     selected_modules: list[str] | None = None,
     scenario_text: str = "",
     selected_personas: list[str] | None = None,
+    avatar_personas: list[str] | None = None,   # V8 — personas to give an avatar
     ehr_id: str | None = None,           # V3 — wizard step 2b
     elevenlabs_api_key: str = "",        # V4 — captured for character TTS
 ) -> ControlSession:
@@ -289,6 +293,7 @@ def create_session(
         selected_modules=list(selected_modules or []),
         scenario_text=scenario_text,
         selected_personas=list(selected_personas or []),
+        avatar_personas=list(avatar_personas or []),
         api_key=api_key,
         ehr_id=ehr_id,
         elevenlabs_api_key=elevenlabs_api_key,

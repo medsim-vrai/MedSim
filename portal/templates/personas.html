@@ -29,6 +29,10 @@
           {% if p.alteredState %}<span class="tag altered">{{ p.alteredState }}</span>{% endif %}
           <span class="tag safety-{{ p.safetyClass }}">{{ p.safetyClass }}</span>
         </div>
+        <div class="persona-card-actions">
+          <a href="/portal/face/launch/{{ p.id }}" target="_blank" rel="noopener"
+             class="button-link">🪞 Develop &amp; assign avatar →</a>
+        </div>
       </div>
     </article>
   {% endfor %}

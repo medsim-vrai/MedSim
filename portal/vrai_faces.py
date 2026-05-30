@@ -41,7 +41,7 @@ from fastapi import Depends, FastAPI, Request, WebSocket
 from fastapi.responses import JSONResponse
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
-from . import auth, credentials, scenarios
+from . import auth, credentials, library, scenarios
 
 # Facilitator-supplied, consented portraits live here, one per character id
 # (e.g. patel_attending.png). The portal only ever READS local files — it
@@ -280,13 +280,40 @@ def launchable_characters(request: Request) -> list[dict[str, Any]]:
     return out
 
 
+def resolve_card(character_id: str) -> dict[str, Any] | None:
+    """Resolve a renderable character card. Prefers a `characters/*.yaml` card;
+    falls back to the 24-persona library (`P-0xx`) so a persona — the roster the
+    instructor actually picks from — also yields an avatar. None if neither has it."""
+    card = scenarios.get_character(character_id)
+    if card is not None:
+        return card
+    persona = library.get_persona(character_id)
+    if persona is not None:
+        return library.persona_as_character(persona)
+    return None
+
+
+def launch_info(character_id: str) -> dict[str, Any]:
+    """Display info for the facilitator launcher page: resolved name/role and
+    whether a real portrait has been dropped in yet (vs the placeholder)."""
+    card = resolve_card(character_id)
+    _, portrait_source = resolve_portrait(character_id)
+    return {
+        "id": character_id,
+        "name": (card or {}).get("name") or character_id,
+        "role": (card or {}).get("role") or "",
+        "exists": card is not None,
+        "portrait_source": portrait_source,  # 'file' | 'placeholder'
+    }
+
+
 def bind_payload(request: Request, scenario_id: str, character_id: str,
                  opacity: float) -> dict[str, Any] | None:
     """The avatar's bind document: the MedSim card merged with the portrait,
     the speech WebSocket URL, the ghost tint, and opacity — the shape
     medsim_adapter.bindFromCharacter() consumes. None if the character is
     unknown. Presentation data only; never PHI."""
-    card = scenarios.get_character(character_id)
+    card = resolve_card(character_id)
     if card is None:
         return None
     scenario = scenarios.get_scenario(scenario_id)

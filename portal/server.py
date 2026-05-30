@@ -996,6 +996,9 @@ async def control_start(
     selected_personas = [p for p in form.getlist("personas") if p]
     if not selected_personas:
         return JSONResponse({"ok": False, "message": "At least one persona must be selected."})
+    # V8 — personas the instructor opted to give an avatar (only those also selected).
+    _sel = set(selected_personas)
+    avatar_personas = [p for p in form.getlist("avatar_personas") if p in _sel]
     ehr_id = (form.get("ehr_id") or ehr_registry.default_id()).strip()
     if ehr_registry.get(ehr_id) is None:
         ehr_id = ehr_registry.default_id()
@@ -1011,6 +1014,7 @@ async def control_start(
         selected_modules=selected_modules,
         scenario_text=(form.get("scenario_text") or "").strip(),
         selected_personas=selected_personas,
+        avatar_personas=avatar_personas,
         ehr_id=ehr_id,
         elevenlabs_api_key=el_key,
     )
@@ -2602,6 +2606,10 @@ async def api_room_start(
             selected_modules=list(entry.get("modules") or []),
             scenario_text=(entry.get("scenario_text") or "").strip(),
             selected_personas=list(entry.get("personas") or []),
+            avatar_personas=[
+                p for p in (entry.get("avatar_personas") or [])
+                if p in set(entry.get("personas") or [])
+            ],
             api_key=anthropic_key,
             ehr_id=entry.get("ehr_id"),
             elevenlabs_api_key=elevenlabs_key,
@@ -5335,24 +5343,40 @@ async def vrai_face_launcher(
     scenario: str = "default",
     opacity: float = 0.66,
 ):
-    """Facilitator-facing page that displays the QR + the destination URL
-    so a tablet can be paired into a scenario with one camera scan."""
+    """Facilitator-facing "develop & assign" page: shows the resolved
+    name/role, the portrait status (custom vs placeholder), and the QR + URL
+    a tablet scans to open this avatar. Works for both character cards and
+    persona ids (P-0xx) via vrai_faces.resolve_card()."""
+    info = vrai_faces.launch_info(character_id)
     url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
     qr_svg = qrgen.make_qr_svg(url, scale=10)
+    name = info["name"]
+    role = info["role"]
+    if info["portrait_source"] == "file":
+        portrait = "custom portrait ✓"
+    else:
+        portrait = (
+            f"placeholder — drop a consented photo at "
+            f"<code>portal/data/face_portraits/{character_id}.png</code> to develop"
+        )
+    role_line = f'<div class="meta">{role}</div>' if role else ""
     html = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/>
-<title>VRAI Faces launcher — {character_id}</title>
+<title>VRAI Faces — {name}</title>
 <style>
   body {{ font-family: -apple-system, system-ui, sans-serif;
           background: #0b0f1a; color: #e9edf5; margin: 0; padding: 32px;
           display: flex; flex-direction: column; align-items: center; }}
-  h1 {{ font-size: 20px; font-weight: 500; }}
+  h1 {{ font-size: 20px; font-weight: 500; margin-bottom: 2px; }}
   .qr {{ background: #fff; padding: 16px; border-radius: 12px; }}
   code {{ background: #1c2333; padding: 4px 8px; border-radius: 4px;
-          font-size: 14px; word-break: break-all; }}
-  .meta {{ margin-top: 16px; font-size: 14px; color: #b5bccd; }}
+          font-size: 13px; word-break: break-all; }}
+  .meta {{ margin-top: 14px; font-size: 14px; color: #b5bccd; }}
 </style></head><body>
-  <h1>Scan to open avatar — {character_id}</h1>
+  <h1>Develop &amp; assign avatar — {name}</h1>
+  {role_line}
+  <div class="meta">Portrait: {portrait}</div>
+  <div class="meta">Scan on a tablet to assign this avatar:</div>
   <div class="qr">{qr_svg}</div>
   <div class="meta">scenario: <code>{scenario}</code> &nbsp; opacity: <code>{opacity:.2f}</code></div>
   <div class="meta">URL: <code>{url}</code></div>

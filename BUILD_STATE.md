@@ -634,6 +634,26 @@
 > - **Phases 0–5 engineering complete.** The believable local-first demo path (0→1→2.1→3→4) is wired
 >   end-to-end and green on every sandbox-runnable gate.
 >
+> **2026-05-29q — Avatar discoverability (UX fix). All changed Python py_compile-clean.**
+> - **Problem reported:** "not seeing any links to the faces." Root cause: the face *routes*
+>   existed but no UI surfaced them, AND personas (the roster the instructor uses) were a separate
+>   namespace from the avatar (which keyed off `characters/*.yaml`).
+> - **Persona→avatar bridge:** `vrai_faces.resolve_card()` falls back to `library.get_persona()` →
+>   `persona_as_character()`, so a persona id (`P-0xx`) yields a renderable avatar. `bind_payload`
+>   uses it; new `launch_info()` powers the launcher.
+> - **Personas page:** each persona card now has a **🪞 Develop & assign avatar →** link →
+>   `/portal/face/launch/{id}` (now a "develop & assign" page: resolved name/role, portrait status
+>   custom-vs-placeholder + the drop-a-photo hint, QR + bind URL).
+> - **Assignment opt-in (control wizard Step 4):** a per-persona **🪞 Use VRAI Faces avatar**
+>   checkbox (`name="avatar_personas"`, stopPropagation so it doesn't toggle the persona-select).
+>   Persisted on the encounter: `ControlSession.avatar_personas` (+ `create_session` param); parsed
+>   in `POST /portal/control/start` (intersected with selected) and `POST /api/room/start`.
+> - **Remaining:** room-mode (multi-patient) wizard JS doesn't yet emit `avatar_personas` (server
+>   already accepts it); runtime "consumption" (auto-show launch links for avatar-enabled personas in
+>   the running session) is the next visible step.
+> - NOTE: portal isn't runnable in this sandbox (no fastapi); verified via py_compile + grep. The
+>   user reloads the portal (uvicorn --reload) + loads/creates characters to see it.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---
