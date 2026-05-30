@@ -654,6 +654,53 @@
 > - NOTE: portal isn't runnable in this sandbox (no fastapi); verified via py_compile + grep. The
 >   user reloads the portal (uvicorn --reload) + loads/creates characters to see it.
 >
+> **2026-05-30 — Character devices + cloud-STT PTT demo + the tablet HTTPS path (live-testing arc).**
+> Web gate green (`typecheck` + `check:no-any` + 111 tests + `build`); all changed Python py_compile-clean.
+> Worked on real tablet hardware over the LAN — most of this entry is the bring-up debugging that
+> surfaced there. ADRs **0024** (character devices) + **0025** (cloud-STT demo stopgap) added; **RB-002**
+> (on-device voice) authored + rendered.
+> - **Per-character DEVICE QR, both tracks.** Single-encounter **ops view** (`control_ops.html`) now shows
+>   one device QR per character (scenario = the control-session id, so the speech WS + `/listen` push share
+>   a key); multi-patient **encounter console** already had it; scenarios-page QR reworded as the device
+>   launcher. Opens the Chrome interface — avatar if a skin is assigned, else audio-only/placeholder
+>   (ADR-0024). _(4300482, e3640d9)_
+> - **Multi-patient avatar assignment (was missing).** Room-mode Step 4r character drawer gained a per-persona
+>   **🪞 avatar** opt-in + the **skin-thumbnail picker** (it had neither); the room finalize now emits
+>   `avatar_personas` per encounter (it had read the single-mode checkboxes → always empty); the per-bed list
+>   was clipped at 220px → raised to 60vh so the full 24-persona library shows. _(8c79624, 86b9ee6)_
+> - **On-the-fly skin assignment from the ops device cells.** Tap a face under a character's QR → assigns
+>   (`POST /portal/personas/<id>/avatar`) → reload the tablet to apply. `resolve_portrait` hardened to also
+>   honor the `.skin` marker (not just a copied portrait file). _(deef381, 828b117)_
+> - **Cloud-STT push-to-talk DEMO (gated stopgap, ADR-0025).** `shell/device_voice.ts` — Web Speech API,
+>   **off by default**, "🎙 Enable push-to-talk · cloud (not PHI)"; trainee→character PTT + an editable
+>   name-trigger. Portal `POST /api/face/<id>/listen` (no auth, device-origin trust) → character AI turn
+>   (borrows the active control-session key, reuses `runtime.take_turn`) → `push_speech` so the avatar
+>   answers; echoes the heard text when no scenario is running. The PHI-safe on-device replacement stays
+>   gated on **RB-002**. _(435450b)_
+> - **Tablet bring-up fixes (the long arc, in order):**
+>   - **`ws 127.0.0.1 refused`** → the face QR baked the operator's localhost into the app host + `api`
+>     (so the derived speech WS pointed at the tablet itself). Added `_vrai_base_for_qr` + LAN substitution;
+>     QR/launcher pass `lan=True`. _(1293270)_
+>   - **`:5173 ERR_CONNECTION_REFUSED`** → the QR/tablet path never triggered the vite autostart (only
+>     Develop did). `_ensure_vrai_app_for_qr` brings up the LAN-reachable dev server when a QR page renders. _(17f5279)_
+>   - **Avatar didn't populate + no PTT button** → `boot()` awaited the bind before mounting controls.
+>     Reordered: PTT mounts first, the demo shows immediately, the real character binds in the **background**
+>     and hot-swaps demo→bound. _(f97db69)_
+>   - **"demo avatar build failed" on the tablet** → `face_ingest` hashed the portrait with `crypto.subtle`,
+>     which is `undefined` in an insecure context (plain `http://<LAN-IP>`). Fall back to a non-crypto hash
+>     (cache key only; SHA-256 still used on HTTPS/localhost). _(d112ace)_
+>   - **Unskinned (bare WebGL2) avatar** → WebGPU is secure-context-gated, so the tablet fell back to WebGL2
+>     where the translucent material doesn't render the skin. Fix = serve over **HTTPS**:
+>     `scripts/make-dev-cert.sh` (local CA + leaf, SAN = localhost/127.0.0.1/LAN-IP), vite + uvicorn serve TLS
+>     when the cert exists, QR/`api`/WS become `https`/`wss` via `request.url.scheme`; certs gitignored. _(0322183)_
+> - **Net device state (over HTTPS):** the skin renders under WebGPU; demo→bound hot-swap works; PTT button
+>   present. **KNOWN/expected:** the bound avatar is the head-proxy **"egg" textured with the assigned skin** —
+>   real sculpted facial geometry + visible expression/lip-sync are gated on **RB-001** (Phase 1.2); the
+>   cloud-STT mic needs the HTTPS secure context; a character with no assigned skin shows the placeholder egg.
+> - **Next:** see `docs/PLAN-2026-05-30-resecure-and-animation.md` — (A) re-secure the device voice (execute
+>   RB-002 → on-device STT/wake-word, retire the ADR-0025 stopgap) and (B) make the skinned face animate from
+>   the character's prompts/speech (execute RB-001 rig; the speech→viseme/emotion/idle drive is already wired).
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

@@ -86,6 +86,32 @@ All gated ADRs + §9 product calls resolved:
 **Sandbox-buildable scope complete + verified.** Hardware-gated ops remaining: native
 `.ipa`/`.apk` builds, and the live nightly e2e/soak *run* (real browser + ~100 MB assets).
 
+### Phase 5.5 — Character device surface + tablet bring-up  ·  ✅ 2026-05-30
+Per-character **device QR** on both tracks (single-encounter ops view + multi-patient
+console); multi-patient **avatar assignment** (room-mode opt-in + skin picker) + an
+on-the-fly **skin picker in the ops device cells**; a gated **cloud-STT push-to-talk
+demo** (ADR-0025) with a portal `/api/face/<id>/listen` reply loop; and the tablet
+**HTTPS** path (`scripts/make-dev-cert.sh`, vite + uvicorn TLS, scheme-aware QR/`api`/`wss`)
+that gives the device a secure context (WebGPU skin + mic). Full detail in
+`BUILD_STATE.md` (2026-05-30). Surfaced the two forward workstreams below.
+
+### Phase 6 — Re-secure the device voice  ·  _gated on RB-002_
+Replace the **cloud-STT stopgap (ADR-0025)** with **on-device** name wake-word + trainee
+STT (no mic audio leaves the tablet; re-assert ADR-0001/0014), and formalize the
+HTTPS/secure-context + device-trust posture. The `device_voice.ts` UI + the `/listen`
+reply loop are the seams; swap the engine behind them. Run **RB-002** → ADR → build
+`name_trigger` + `device_stt` → retire the stopgap. See
+`docs/PLAN-2026-05-30-resecure-and-animation.md §2`.
+
+### Phase 7 — Speech-driven facial animation  ·  _ungated start; full fidelity gated on RB-001_
+Make the skinned face visibly **lip-sync + emote** from the character AI's spoken lines.
+The drive is already wired (speechConsumer → emotion/viseme/idle → `animation_runtime` →
+`morphTargetInfluences`); the gap is the **deformation basis** (the head-proxy has zero
+morphs; the real path has only 4 procedural shapes). **B0 (ungated):** light up the real
+MediaPipe path on-device + animate the fallback → visible coarse motion now. **B2+ (gated):**
+run **RB-001** → ADR → full **ARKit-52 rig** → phoneme→viseme lip-sync → exporter baking →
+emotion mapping. The ROADMAP's "biggest single unblock." See `PLAN …§3`.
+
 ---
 
 ## 3. Critical path vs. full ship
@@ -124,7 +150,8 @@ dependency. See `research/README.md` for the index + lifecycle.
 
 | Brief | Enhancement | Gates | Status |
 |---|---|---|---|
-| RB-001 | Real ARKit-52 blendshape rig (vs. the procedural basis) | Phase 1.2 | Open |
+| RB-001 | Real ARKit-52 blendshape rig (vs. the procedural basis) | Phase 1.2 / 7 | Open |
+| RB-002 | On-device voice — name wake-word + trainee STT | ADR-0024 / Phase 6 | Open |
 
 As gated items surface in later phases (a cloud emotion model beyond ADR-0019,
 premium-voice procurement, photoreal sculpt per ADR-0002, …), add a brief here rather
