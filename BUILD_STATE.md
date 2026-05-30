@@ -439,6 +439,25 @@
 >   failover STATE MACHINE logic is buildable now with stubs; the engines/SDKs are
 >   the download/procurement-gated parts.
 >
+> **2026-05-29g — Phase 2.2: tts_provider FAILOVER STATE MACHINE (ADR-0013).
+> typecheck CLEAN · check:no-any OK · 82/82 tests (was 77) · build clean.**
+> `speak()` was a passthrough to the synth stand-in; it's now the real router.
+> - `speakWithFailover` walks the request's allowed chain (`resolveChain`, PHI-filtered
+>   per ADR-0014), hopping on FIRST-CHUNK failure; on success it commits and streams.
+>   Two consecutive CLOUD failures (`isLocalProvider` excluded) lock the session to the
+>   local chain (ADR-0013); `resolveChain(req, lockedToLocal)` then ignores the tier and
+>   serves local. Hops surface to diagnostic_panel — `warn` per hop, `error` on lock —
+>   provider names only (PHI-safe). `activeProvider()` reflects the lock.
+> - Per-provider `synths` map (today all → the synthetic stand-in); real engines
+>   (Kokoro/Piper local Phase 2.1; Azure/etc. cloud v1.1) swap in here. `createImpl`
+>   takes an optional `synths` override so failures are injectable in tests.
+> - **Tests (+5):** hop-on-failure + diag; lock after two cloud failures; locked request
+>   skips cloud; all-fail throws; PHI filter holds under failover (cartesia excluded for
+>   trainee_input). Existing pickProvider/stream tests unchanged (default synths never fail).
+> - **Phase 2 remaining (gated):** 2.1 local engine (Kokoro→Piper) — deps + voice-model
+>   downloads + browser runtime; 2.2 real cloud SDKs — v1.1 (BAA + keys). The state
+>   machine is ready for both.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---
