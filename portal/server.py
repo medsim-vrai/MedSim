@@ -5377,30 +5377,82 @@ def _vrai_app_reachable(url: str, timeout: float = 0.4) -> bool:
         return False
 
 
+def _find_node_tool(name: str) -> str | None:
+    """Locate a node-toolchain binary (pnpm/node) even when the portal was
+    launched without the toolchain on PATH (the common case — a GUI/service
+    launch doesn't inherit a login shell's PATH). Checks PATH first, then the
+    usual install dirs (pnpm standalone, Homebrew, nvm/volta/asdf, and the
+    `~/.local/node/current/bin` layout this project uses)."""
+    found = _shutil.which(name)
+    if found:
+        return found
+    import glob as _glob
+    home = _os.path.expanduser("~")
+    candidates = [
+        f"{home}/.local/node/current/bin/{name}",
+        f"{home}/.local/share/pnpm/{name}",
+        f"{home}/Library/pnpm/{name}",
+        "/opt/homebrew/bin/" + name,
+        "/usr/local/bin/" + name,
+        f"{home}/.volta/bin/{name}",
+        f"{home}/.asdf/shims/{name}",
+        *sorted(_glob.glob(f"{home}/.nvm/versions/node/*/bin/{name}"), reverse=True),
+    ]
+    for c in candidates:
+        if _os.path.isfile(c) and _os.access(c, _os.X_OK):
+            return c
+    return None
+
+
 def _ensure_vrai_dev_server(base: str) -> tuple[str, str | None]:
     """Start the vite dev server if it isn't already running. Returns
     (status, error) where status ∈ {"already", "spawned", "error"}. Only ever
-    starts a LOCAL server; the command is fixed (`pnpm -F @vrai/core dev`) — no
-    user input reaches a shell (list args, no shell=True). Detached so it
-    survives this request; idempotent via the port probe + the live handle."""
+    starts a LOCAL server; the command is fixed — no user input reaches a shell
+    (list args, no shell=True). Detached so it survives this request; idempotent
+    via the port probe + the live handle. Falls back to running vite directly
+    with node when pnpm can't be located."""
     global _vrai_dev_proc
     if _vrai_dev_proc is not None and _vrai_dev_proc.poll() is None:
         return "already", None
     vrai_dir = PORTAL_DIR.parent / "vrai-faces"
     if not (vrai_dir / "pnpm-workspace.yaml").is_file():
         return "error", f"vrai-faces workspace not found at {vrai_dir}"
-    pnpm = _shutil.which("pnpm")
-    if not pnpm:
-        return "error", "pnpm is not on the portal's PATH"
+
     port = _urlsplit(base).port or 5173
+    vite_args = ["--port", str(port), "--strictPort", "--host"]
+    node = _find_node_tool("node")
+    pnpm = _find_node_tool("pnpm")
+    vite_js = vrai_dir / "packages" / "core" / "node_modules" / "vite" / "bin" / "vite.js"
+
+    if node and vite_js.is_file():
+        # Preferred: run vite directly. Args go straight to vite (deterministic
+        # port binding) and it needs only node, not pnpm.
+        cmd: list[str] = [node, str(vite_js), *vite_args]
+        cwd = vrai_dir / "packages" / "core"
+        node_dir = _os.path.dirname(node)
+    elif pnpm:
+        # Fallback: pnpm runs the `dev` script. NO `--` — pnpm forwards trailing
+        # args to the script verbatim, so a `--` reaches vite literally and
+        # breaks flag parsing (vite ignores --port and falls back to 5173).
+        cmd = [pnpm, "-F", "@vrai/core", "dev", *vite_args]
+        cwd = vrai_dir
+        node_dir = _os.path.dirname(pnpm)
+    else:
+        return "error", ("couldn't find node+vite or pnpm (looked on PATH + the "
+                         "usual install dirs). Run `pnpm install` in vrai-faces, "
+                         "or launch the portal from a shell with node on PATH")
+
+    # Make sure pnpm's / vite's own child processes (node, esbuild) resolve even
+    # if the portal's PATH lacks the toolchain.
+    env = dict(_os.environ)
+    if node_dir:
+        env["PATH"] = node_dir + _os.pathsep + env.get("PATH", "")
     try:
         log_path = PORTAL_DIR.parent / "data" / "vrai-dev.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log = open(log_path, "ab")  # noqa: SIM115 — handed to the child process
         _vrai_dev_proc = _subprocess.Popen(
-            [pnpm, "-F", "@vrai/core", "dev", "--",
-             "--port", str(port), "--strictPort", "--host"],
-            cwd=str(vrai_dir),
+            cmd, cwd=str(cwd), env=env,
             stdout=log, stderr=_subprocess.STDOUT, stdin=_subprocess.DEVNULL,
             start_new_session=True,
         )
