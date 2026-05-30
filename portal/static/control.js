@@ -169,11 +169,22 @@
       // matches the single-patient Step 4 UX; curriculum drawer
       // mirrors Step 3 (program + week + modules). Each row's data is
       // stashed in data-* attributes so submit can pick it up.
+      const skins = (window.MEDSIM2.avatarSkins || []);
       const personaCheckboxes = personas.map(p => {
         const checked = (existing.personaList || []).includes(p.id) ||
                           (existing.persona === p.id);
         const avatarOn = (existing.avatarList || []).includes(p.id);
-        return `<label class="row-persona-card">
+        // V8 — per-character avatar skin picker, mirroring single-mode Step 4.
+        // Clicking a thumb assigns the skin (global, same endpoint as the
+        // Personas page) and ticks this bed's 🪞 avatar box. ∅ = no skin.
+        const skinThumbs = skins.length ? `
+          <span class="row-persona-skins" onclick="event.stopPropagation()"
+                style="flex-basis:100%;display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">
+            <button type="button" class="avatar-skin-thumb none${!p.avatar_skin ? " sel" : ""}"
+                    data-persona="${p.id}" data-skin="" title="No avatar">∅</button>
+            ${skins.map(sk => `<button type="button" class="avatar-skin-thumb${p.avatar_skin === sk.id ? " sel" : ""}" data-persona="${p.id}" data-skin="${sk.id}" style="background-image:url('/portal/skins/${sk.id}/image')" title="${String(sk.label || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")}"></button>`).join("")}
+          </span>` : "";
+        return `<label class="row-persona-card" style="flex-wrap:wrap">
           <input type="checkbox" data-row-persona value="${p.id}" ${checked ? "checked" : ""}>
           <span><strong>${p.name}</strong> <span class="muted small">${p.id} · ${p.role}</span></span>
           <span class="row-persona-avatar" onclick="event.stopPropagation()"
@@ -182,6 +193,7 @@
             <input type="checkbox" data-row-avatar value="${p.id}" ${avatarOn ? "checked" : ""}>
             <span class="muted small">🪞 avatar</span>
           </span>
+          ${skinThumbs}
         </label>`;
       }).join("");
       const allModules = (window.MEDSIM2.modulesForRoom || []);
@@ -793,10 +805,17 @@
     e.stopPropagation();
     const personaId = btn.dataset.persona;
     const skinId = btn.dataset.skin || "";
-    const wrap = btn.closest(".avatar-skins");
+    // Highlight within this picker — single-mode .avatar-skins OR a room-row
+    // .row-persona-skins.
+    const wrap = btn.closest(".avatar-skins, .row-persona-skins");
     if (wrap) wrap.querySelectorAll(".avatar-skin-thumb").forEach((b) => b.classList.toggle("sel", b === btn));
     const esc = (window.CSS && CSS.escape) ? CSS.escape(personaId) : personaId;
-    const cb = form.querySelector('input[name="avatar_personas"][value="' + esc + '"]');
+    // Picking a skin opts the character in: tick the right "use avatar" box —
+    // this bed's row checkbox in room mode, else the Step-4 grid checkbox.
+    const row = btn.closest(".encounter-row");
+    const cb = row
+      ? row.querySelector('[data-row-avatar][value="' + esc + '"]')
+      : form.querySelector('input[name="avatar_personas"][value="' + esc + '"]');
     if (cb) cb.checked = !!skinId;
     try {
       const fd = new FormData();

@@ -515,6 +515,10 @@
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 4px; margin-top: 4px; max-height: 220px; overflow-y: auto;
 }
+/* The per-bed character list shows the full 24-persona library, same as
+   single-mode Step 4 — a 220px window made it look like characters were
+   missing. Taller cap (skin thumbs add height); scrolls only if truly needed. */
+.row-persona-grid { max-height: 60vh; }
 .row-persona-card, .row-module-card {
   display: flex; gap: 6px; padding: 4px 6px;
   background: #f7f8fb; border: 1px solid #dde2ee; border-radius: 4px;

@@ -307,11 +307,14 @@
     samples: {{ samples | tojson }},
     v1Scenarios: {{ v1_scenarios | tojson }},
     baseUrl: {{ base_url | tojson }},
+    // V8 — the avatar skin library, so the Room-of-N editor can show the same
+    // per-character skin picker as single-mode Step 4.
+    avatarSkins: {{ avatar_skins | tojson }},
     // V7 — pared-down persona list the Room-of-N editor uses to
     // populate per-encounter persona dropdowns. Same source as the
-    // Step 4 grid; just id + name + role for compactness.
+    // Step 4 grid; id + name + role + the currently-assigned avatar skin.
     personasForRoom: [
-      {% for p in personas %}{"id": {{ p.id | tojson }}, "name": {{ p.name | tojson }}, "role": {{ p.role | tojson }}, "roleGroup": {{ p.roleGroup | tojson }}, "safetyClass": {{ p.safetyClass | tojson }}}{{ "," if not loop.last }}{% endfor %}
+      {% for p in personas %}{"id": {{ p.id | tojson }}, "name": {{ p.name | tojson }}, "role": {{ p.role | tojson }}, "roleGroup": {{ p.roleGroup | tojson }}, "safetyClass": {{ p.safetyClass | tojson }}, "avatar_skin": {{ (p.avatar_skin or "") | tojson }}}{{ "," if not loop.last }}{% endfor %}
     ],
     // V7 M31 — modules + programs exposed to JS so the room-mode
     // editor's per-row curriculum picker can render the same options
