@@ -510,6 +510,26 @@
 > - **Phase 2 = launch-complete** (local-first voice + lip-sync + failover). Deferred:
 >   cloud SDKs (v1.1, BAA+keys); browser e2e of the live Kokoro path (Phase 5).
 >
+> **2026-05-29k — Phase 3: emotion_driver HYBRID engine (ADR-0019). typecheck CLEAN
+> · check:no-any OK · 85/85 tests (was 82) · build clean.** No new dependency —
+> `@huggingface/transformers` was already pulled by Kokoro.
+> - Replaced the lexicon-only stand-in with the ratified hybrid: (1) CLINICAL OVERRIDE
+>   — the lexicon flags pain/drowsy (which general emotion models can't) and wins
+>   outright; (2) MODEL — a transformers.js text-classification pipeline maps the
+>   utterance to a general emotion; (3) LEXICON FALLBACK when the model isn't loaded.
+>   The model loads in `warmup()` ONLY (dynamic import → own chunk), so unit tests +
+>   non-browser run the deterministic lexicon path. Output stays JSON weights (ADR-0005).
+> - `LABEL_TO_MOOD` maps Ekman + GoEmotions labels → our moods; `topLabel` normalizes
+>   transformers.js's loose output. Both exported + unit-tested (+3 tests incl. the
+>   clinical-override-beats-general case).
+> - **Model pick (ADR-0019 open Q1/Q2):** defaulted to `SamLowe/roberta-base-go_emotions-onnx`
+>   q8 (28 emotions → rich facial mapping) — but it's ~125 MB and the live path is
+>   browser/Node-gated. The model is NOT bundled yet; that download + size is the
+>   remaining Phase 3 decision (vs a smaller/coarser model, vs HF-loaded, vs RB).
+> - **Phase 3 status:** hybrid ENGINE done + verified (lexicon fallback active). Pending:
+>   model pick/bundle decision; Node-smoke to confirm labels; local-first bundle via
+>   setup:assets + transformers env.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---
