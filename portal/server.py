@@ -1240,6 +1240,9 @@ async def control_ops(
                 # V8 — instructor opted this persona in for a VRAI Faces avatar;
                 # the ops view shows its tablet-pairing QR (assign-for-use).
                 "avatar_enabled": pid in avatar_set,
+                # V8 — currently-assigned skin id so the ops device cell's skin
+                # picker can highlight it (and show "none" when unassigned).
+                "avatar_skin": vrai_faces.assigned_skin_id(pid),
             })
     modules_in_use = []
     for mid in sess.selected_modules:
@@ -1264,6 +1267,9 @@ async def control_ops(
             "session": sess,
             "personas_in_use": personas_in_use,
             "modules_in_use": modules_in_use,
+            # V8 — skin library for the on-the-fly per-character skin picker in
+            # the device QR cells (assign/change a face mid-encounter).
+            "avatar_skins": vrai_faces.list_skins(),
             "base_url": _base_url_for_qr(request),
             "lan_ip": _lan_ip(),
             "default_device_patient_id": default_device_patient,
