@@ -547,6 +547,21 @@
 >   BroadcastChannel is the only live transport today); 4.3 portal speak path +
 >   launchable-character list (Python; also where the portrait gets attached).
 >
+> **2026-05-29m — Phase 4.2: medsim_adapter WebSocket transport (ADR-0007).
+> typecheck CLEAN · check:no-any OK · 91/91 tests (was 88) · build clean.**
+> - The binding's `speechWsUrl` (set by the portal) now drives transport selection:
+>   present → WebSocket (cross-app) with auto-reconnect; else BroadcastChannel
+>   (same-origin). WS carries JSON text frames; the existing `seq` dedup defends
+>   against reconnect replays. A `WsLike` factory is injectable (`createImpl({ wsFactory })`)
+>   so the path is unit-tested without a server.
+> - `connect()` picks WS vs BroadcastChannel; `connectWs` returns a boolean (TS can't
+>   see it mutate `transport`); `disconnect()` cancels reconnect + detaches handlers.
+> - **Tests (+3):** WS selected on speechWsUrl + frame delivery + seq-dedup; reconnect
+>   on unexpected close (fake timers); dispose() stops reconnection. Browser-gated real
+>   WS path falls back to the synth/BroadcastChannel paths in jsdom.
+> - **Phase 4 remaining:** 4.3 portal speak path + launchable-character list (Python,
+>   `portal/server.py`) — also where the portrait gets attached to the character payload.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

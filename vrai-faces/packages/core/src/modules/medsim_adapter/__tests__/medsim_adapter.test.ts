@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { medsimAdapter } from '../index';
+import { createImpl, type WsLike } from '../impl/create';
 import { parseFrame } from '../impl/parse';
 import { parseCharacterCard, voiceIdFromProfile } from '../impl/medsim_character';
+import type { BootDeps, DiagHandle, VRAISpeechFrame } from '@contracts/shared';
 
 describe('medsim_adapter parseFrame', () => {
   it('accepts a minimal valid frame', () => {
@@ -104,5 +106,71 @@ describe('medsim_adapter real character card (schemas/character.json, §9)', () 
     expect(b.voiceProfile as string).toBe('female:Samantha');   // from voice_profile, not default
     expect(b.ghostColor).toBe('#cfe8ff');                       // per-scenario tint (decision 4)
     expect(b.baselineMood).toEqual({});                         // card has no weights; emotion_driver owns live mood
+  });
+});
+
+describe('medsim_adapter WebSocket transport (ADR-0007)', () => {
+  const PORTRAIT = 'data:image/png;base64,aGVsbG8=';
+  function deps(): BootDeps {
+    const diag: DiagHandle = { push() { /* unused */ }, set() { /* unused */ } };
+    return { diag, scenarioId: 'scn', characterId: 'c' };
+  }
+  /** A factory that records each fake socket it hands out (the adapter wires its
+   *  own onmessage/onclose onto them; the test drives those). */
+  function mockFactory(): { factory: (url: string) => WsLike; sockets: WsLike[] } {
+    const sockets: WsLike[] = [];
+    return {
+      sockets,
+      factory: () => {
+        const s: WsLike = { onmessage: null, onclose: null, onerror: null, close() { /* noop */ } };
+        sockets.push(s);
+        return s;
+      },
+    };
+  }
+
+  it('uses WebSocket when the binding carries speechWsUrl; delivers + dedups frames', async () => {
+    const { factory, sockets } = mockFactory();
+    const mod = createImpl({ wsFactory: factory });
+    await mod.boot(deps());
+    await mod.bindFromCharacter({ characterId: 'c', sourcePhoto: PORTRAIT, speechWsUrl: 'wss://host/speech' });
+    expect(mod.transport()).toBe('websocket');
+
+    const got: VRAISpeechFrame[] = [];
+    mod.onSpeechFrame((f) => got.push(f));
+    const sock = sockets[0]!;
+    sock.onmessage?.({ data: JSON.stringify({ v: 1, characterId: 'c', seq: 1, text: 'hi' }) });
+    sock.onmessage?.({ data: JSON.stringify({ v: 1, characterId: 'c', seq: 1, text: 'dup' }) }); // seq ≤ last → drop
+    sock.onmessage?.({ data: JSON.stringify({ v: 1, characterId: 'c', seq: 2, text: 'next' }) });
+    expect(got.map((f) => f.text)).toEqual(['hi', 'next']);
+    mod.dispose();
+  });
+
+  it('reconnects on an unexpected close', async () => {
+    vi.useFakeTimers();
+    const { factory, sockets } = mockFactory();
+    const mod = createImpl({ wsFactory: factory });
+    await mod.boot(deps());
+    await mod.bindFromCharacter({ characterId: 'c', sourcePhoto: PORTRAIT, speechWsUrl: 'wss://h/s' });
+    expect(sockets).toHaveLength(1);
+    sockets[0]!.onclose?.();                 // server dropped us
+    vi.advanceTimersByTime(1000);            // RECONNECT_MS
+    expect(sockets).toHaveLength(2);         // reconnected
+    expect(mod.transport()).toBe('websocket');
+    mod.dispose();
+    vi.useRealTimers();
+  });
+
+  it('dispose() stops reconnection', async () => {
+    vi.useFakeTimers();
+    const { factory, sockets } = mockFactory();
+    const mod = createImpl({ wsFactory: factory });
+    await mod.boot(deps());
+    await mod.bindFromCharacter({ characterId: 'c', sourcePhoto: PORTRAIT, speechWsUrl: 'wss://h/s' });
+    mod.dispose();                           // closes + cancels reconnect, detaches handlers
+    sockets[0]!.onclose?.();                 // a late close must not reconnect
+    vi.advanceTimersByTime(5000);
+    expect(sockets).toHaveLength(1);
+    vi.useRealTimers();
   });
 });

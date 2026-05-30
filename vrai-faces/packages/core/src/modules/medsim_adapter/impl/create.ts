@@ -102,6 +102,7 @@ function parseCharacter(raw: unknown): VraiAvatarBinding {
   const baselineMood = extractMood(o);   // card carries no weights; emotion_driver owns live mood
   const exportPath = str(o, 'exportPath');
   const ghostColor = str(o, 'ghostColor', 'baseColor');
+  const speechWsUrl = str(o, 'speechWsUrl');
 
   const binding: VraiAvatarBinding = {
     characterId, sourcePhoto, voiceProfile, baselineMood, opacityLevel,
@@ -109,16 +110,46 @@ function parseCharacter(raw: unknown): VraiAvatarBinding {
   // exactOptionalPropertyTypes: only set optional keys when present.
   if (exportPath !== undefined) binding.exportPath = exportPath;
   if (ghostColor !== undefined) binding.ghostColor = ghostColor;
+  if (speechWsUrl !== undefined) binding.speechWsUrl = speechWsUrl;
   return binding;
 }
 
-export function createImpl(): MedsimAdapterModule {
+/** Minimal WebSocket surface the adapter uses; lets tests inject a fake. */
+export interface WsLike {
+  onmessage: ((ev: { data: unknown }) => void) | null;
+  onclose: (() => void) | null;
+  onerror: (() => void) | null;
+  close(): void;
+}
+
+const RECONNECT_MS = 1000;   // cross-app reconnect backoff (ADR-0007)
+
+/** Default factory: adapt the real browser WebSocket to WsLike; null off-browser. */
+function realWs(url: string): WsLike | null {
+  if (typeof WebSocket === 'undefined') return null;
+  const sock = new WebSocket(url);
+  const w: WsLike = { onmessage: null, onclose: null, onerror: null, close: () => sock.close() };
+  sock.addEventListener('message', (ev) => w.onmessage?.({ data: ev.data }));
+  sock.addEventListener('close', () => w.onclose?.());
+  sock.addEventListener('error', () => w.onerror?.());
+  return w;
+}
+
+function safeJson(s: string): unknown {
+  try { return JSON.parse(s); } catch { return null; }
+}
+
+export function createImpl(opts?: { wsFactory?: (url: string) => WsLike | null }): MedsimAdapterModule {
+  const makeWs = opts?.wsFactory ?? realWs;
   let _deps: BootDeps | null = null;
   let binding: VraiAvatarBinding | null = null;
   let lastSeq = 0;
   let transport: 'broadcast-channel' | 'websocket' | 'none' = 'none';
   const speechHandlers = new Set<(f: VRAISpeechFrame) => void>();
   let channel: BroadcastChannel | null = null;
+  let ws: WsLike | null = null;
+  let wsClosedByUs = false;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Bridge: incoming raw → parsed → dispatch.
   function dispatch(raw: unknown): void {
@@ -133,13 +164,41 @@ export function createImpl(): MedsimAdapterModule {
   // WebSocket transport is a follow-up; BroadcastChannel covers the common
   // case where MedSim and VRAI Faces share an origin. Guarded so non-browser
   // environments (and unit tests, which never boot) simply stay 'none'.
+  function connectWs(url: string): boolean {
+    const sock = makeWs(url);
+    if (!sock) return false;                 // non-browser / no factory → caller falls back
+    ws = sock;
+    ws.onmessage = (ev) => dispatch(typeof ev.data === 'string' ? safeJson(ev.data) : ev.data);
+    ws.onclose = () => { ws = null; if (!wsClosedByUs) scheduleReconnect(url); };
+    ws.onerror = () => { /* a close event follows; reconnect is handled there */ };
+    transport = 'websocket';
+    return true;
+  }
+  function scheduleReconnect(url: string): void {
+    if (reconnectTimer !== null || wsClosedByUs) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (!wsClosedByUs) connectWs(url);     // lastSeq dedups frames replayed on reconnect
+    }, RECONNECT_MS);
+  }
+
+  // Pick the transport: cross-app WebSocket when the binding carries a URL
+  // (ADR-0007), else same-origin BroadcastChannel (§6.2). Guarded so non-browser
+  // envs (and unit tests, which never boot) stay 'none'.
   function connect(scenarioId: string): void {
-    if (channel || typeof BroadcastChannel === 'undefined') return;
+    if (transport !== 'none') return;        // already connected
+    wsClosedByUs = false;
+    const url = binding?.speechWsUrl;
+    if (url && connectWs(url)) return;       // cross-app WebSocket connected
+    if (typeof BroadcastChannel === 'undefined') return;
     channel = new BroadcastChannel(`vrai:${scenarioId}`);
     channel.onmessage = (ev: MessageEvent) => dispatch(ev.data);
     transport = 'broadcast-channel';
   }
   function disconnect(): void {
+    wsClosedByUs = true;
+    if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (ws) { ws.onmessage = null; ws.onclose = null; ws.onerror = null; ws.close(); ws = null; }
     if (channel) { channel.onmessage = null; channel.close(); channel = null; }
     transport = 'none';
   }

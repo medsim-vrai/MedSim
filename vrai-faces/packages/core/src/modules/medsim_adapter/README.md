@@ -22,8 +22,10 @@ See `src/types/medsim_adapter.ts`. Barrel: `medsimAdapter`.
   rides the binding (Phase 0 decision 4). The avatar's portrait is attached at
   LAUNCH (the portal merges it into the payload — Phase 4.3); live mood is owned by
   `emotion_driver`.
-- WebSocket transport (cross-app tablet) is still a follow-up — BroadcastChannel
-  (same-origin) is the only LIVE transport today.
+- Transport is chosen per binding: `speechWsUrl` set → WebSocket (cross-app,
+  ADR-0007) with auto-reconnect; else BroadcastChannel (same-origin). WS carries
+  JSON text frames; the seq-dedup defends against reconnect replays. A `WsLike`
+  factory is injectable for tests (`createImpl({ wsFactory })`).
 - Frames are dropped fail-closed: malformed JSON → drop + log; never coerce.
 - `seq` is monotonic per utterance — drop frames whose seq ≤ lastSeq to
   defend against reconnect dupes.

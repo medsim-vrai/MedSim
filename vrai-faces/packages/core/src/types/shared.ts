@@ -81,6 +81,9 @@ export interface VraiAvatarBinding {
   exportPath?: string;
   /** Per-scenario ghost tint (Phase 0 decision 4); default clinical white if unset. */
   ghostColor?: string;
+  /** Cross-app speech WebSocket endpoint (ADR-0007). When set, the adapter uses
+   *  WebSocket transport; otherwise same-origin BroadcastChannel. */
+  speechWsUrl?: string;
 }
 
 export type TtsVoiceId = string & { readonly __brand: 'TtsVoiceId' };
