@@ -79,6 +79,8 @@ export interface VraiAvatarBinding {
   baselineMood: BlendshapeWeights;
   opacityLevel: number;               // 0..1
   exportPath?: string;
+  /** Per-scenario ghost tint (Phase 0 decision 4); default clinical white if unset. */
+  ghostColor?: string;
 }
 
 export type TtsVoiceId = string & { readonly __brand: 'TtsVoiceId' };

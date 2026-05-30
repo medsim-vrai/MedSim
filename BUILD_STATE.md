@@ -530,6 +530,23 @@
 >   model pick/bundle decision; Node-smoke to confirm labels; local-first bundle via
 >   setup:assets + transformers env.
 >
+> **2026-05-29l — Phase 4.1: medsim_adapter wires the REAL MedSim character card.
+> typecheck CLEAN · check:no-any OK · 88/88 tests (was 85) · build clean.**
+> - **§9 answered:** the canonical character schema is `medsim_v8/schemas/character.json`.
+>   New `impl/medsim_character.ts` = `characterCardSchema` (Zod, `.passthrough()`) +
+>   `parseCharacterCard` + `voiceIdFromProfile`. `bindFromCharacter` now prefers the real
+>   card (id, voice_profile) and falls back to the tolerant key-scan for synthetic payloads.
+> - **Key finding:** the real card has NO portrait and NO ARKit weights. So
+>   `voice_profile` → a gender-encoded `TtsVoiceId` (the TTS layer maps it to a Kokoro
+>   voice — links Phase 2), live mood stays with `emotion_driver`, and the PORTRAIT is
+>   attached at LAUNCH (the portal merges it — Phase 4.3). `ghostColor` added to
+>   `VraiAvatarBinding` + extracted (Phase 0 decision 4).
+> - **Tests (+3):** real-card validate/reject, voice_profile→id mapping, bind a real
+>   card (+ attached portrait + ghost tint). Existing tolerant-payload tests unchanged.
+> - **Phase 4 remaining:** 4.2 WebSocket transport (cross-app; needs a WS-URL source —
+>   BroadcastChannel is the only live transport today); 4.3 portal speak path +
+>   launchable-character list (Python; also where the portrait gets attached).
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

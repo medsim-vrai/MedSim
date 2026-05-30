@@ -10,6 +10,7 @@ import type {
   VraiAvatarBinding,
 } from '@contracts/shared';
 import { parseFrame } from './parse';
+import { parseCharacterCard, voiceIdFromProfile } from './medsim_character';
 
 const DEFAULT_OPACITY = 0.66;        // table mid-stop (matches the demo default)
 const DEFAULT_VOICE = 'default' as TtsVoiceId;
@@ -83,22 +84,31 @@ function parseCharacter(raw: unknown): VraiAvatarBinding {
   }
   const o = raw as Record<string, unknown>;
 
-  const characterId = str(o, 'characterId', 'id');
+  // Prefer the REAL MedSim character card (schemas/character.json, §9); fall back
+  // to the tolerant key-scan for synthetic/legacy payloads.
+  const card = parseCharacterCard(raw);
+
+  const characterId = card?.id ?? str(o, 'characterId', 'id');
   if (!characterId) {
     throw new Error('medsim_adapter.bindFromCharacter: payload missing characterId/id.');
   }
 
+  // The MedSim card has no portrait — the portal attaches one at launch (Phase 4.3).
   const sourcePhoto = extractPhoto(o);
-  const voiceProfile = (str(o, 'voiceProfile', 'voice', 'voiceId') ?? DEFAULT_VOICE) as TtsVoiceId;
+  const voiceProfile = card?.voice_profile
+    ? voiceIdFromProfile(card.voice_profile)
+    : ((str(o, 'voiceProfile', 'voice', 'voiceId') ?? DEFAULT_VOICE) as TtsVoiceId);
   const opacityLevel = clamp01(num(o, 'opacityLevel', 'opacity', 'translucency') ?? DEFAULT_OPACITY);
-  const baselineMood = extractMood(o);
+  const baselineMood = extractMood(o);   // card carries no weights; emotion_driver owns live mood
   const exportPath = str(o, 'exportPath');
+  const ghostColor = str(o, 'ghostColor', 'baseColor');
 
   const binding: VraiAvatarBinding = {
     characterId, sourcePhoto, voiceProfile, baselineMood, opacityLevel,
   };
-  // exactOptionalPropertyTypes: only set the optional key when present.
+  // exactOptionalPropertyTypes: only set optional keys when present.
   if (exportPath !== undefined) binding.exportPath = exportPath;
+  if (ghostColor !== undefined) binding.ghostColor = ghostColor;
   return binding;
 }
 
