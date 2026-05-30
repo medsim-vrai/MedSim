@@ -115,7 +115,7 @@
     <p><strong>Personas in session ({{ personas_in_use | length }}):</strong></p>
     <ul class="small">
       {% for p in personas_in_use %}
-        <li><code>{{ p.id }}</code> {{ p.name }} — {{ p.role }}{% if p.alteredState %} <span class="tag altered">{{ p.alteredState }}</span>{% endif %}</li>
+        <li><code>{{ p.id }}</code> {{ p.name }} — {{ p.role }}{% if p.alteredState %} <span class="tag altered">{{ p.alteredState }}</span>{% endif %}{% if p.avatar_enabled %} · <a href="/portal/face/launch/{{ p.id }}" target="_blank" rel="noopener">📱 Pair tablet (QR)</a>{% endif %}</li>
       {% endfor %}
     </ul>
   </section>

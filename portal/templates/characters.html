@@ -36,8 +36,8 @@
         {% endif %}
         <div class="actions">
           {% if not c.error %}
-            <a href="/portal/face/launch/{{ c.id }}" target="_blank" rel="noopener"
-               class="button-link">🪞 Launch avatar →</a>
+            <a href="/portal/face/develop/{{ c.id }}" target="_blank" rel="noopener"
+               class="button-link">🪞 Develop avatar →</a>
           {% endif %}
           <a href="/portal/characters/{{ c.id }}/edit" class="button-link">Edit</a>
           <form method="post" action="/portal/characters/{{ c.id }}/duplicate" class="inline-action">

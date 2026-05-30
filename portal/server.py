@@ -1087,10 +1087,17 @@ async def control_ops(
     # Hydrate personas with their resolved voice profile so the operator's
     # PTT panel can speak the response in the right voice without a second fetch.
     personas_in_use = []
+    avatar_set = set(sess.avatar_personas or [])
     for pid in sess.selected_personas:
         p = library.get_persona(pid)
         if p:
-            personas_in_use.append({**p, "voice_profile": library.voice_profile_for(p)})
+            personas_in_use.append({
+                **p,
+                "voice_profile": library.voice_profile_for(p),
+                # V8 — instructor opted this persona in for a VRAI Faces avatar;
+                # the ops view shows its tablet-pairing QR (assign-for-use).
+                "avatar_enabled": pid in avatar_set,
+            })
     modules_in_use = []
     for mid in sess.selected_modules:
         m = library.get_module(mid)
@@ -5335,6 +5342,22 @@ async def vrai_face_qr(
     return Response(content=svg, media_type="image/svg+xml")
 
 
+@app.get("/portal/face/develop/{character_id}")
+async def vrai_face_develop(
+    request: Request,
+    character_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    scenario: str = "default",
+    opacity: float = 0.66,
+):
+    """Open the live avatar in the VRAI Faces app — the 'developer' surface
+    where the facilitator sees/tunes the avatar in the browser. No QR here:
+    pairing a tablet (the QR) happens later, at assign-for-use time. Redirects
+    straight to the vrai-faces app URL (carries `api=` so it self-binds)."""
+    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
+    return RedirectResponse(url, status_code=302)
+
+
 @app.get("/portal/face/launch/{character_id}", response_class=HTMLResponse)
 async def vrai_face_launcher(
     request: Request,
@@ -5343,10 +5366,11 @@ async def vrai_face_launcher(
     scenario: str = "default",
     opacity: float = 0.66,
 ):
-    """Facilitator-facing "develop & assign" page: shows the resolved
-    name/role, the portrait status (custom vs placeholder), and the QR + URL
-    a tablet scans to open this avatar. Works for both character cards and
-    persona ids (P-0xx) via vrai_faces.resolve_card()."""
+    """Tablet-pairing page (assign-for-use): shows the resolved name/role, the
+    portrait status (custom vs placeholder), and the QR + URL a tablet scans to
+    open this avatar. Reached from the ops view for avatar-enabled personas —
+    NOT from the Develop button (that opens the live app). Works for both
+    character cards and persona ids (P-0xx) via vrai_faces.resolve_card()."""
     info = vrai_faces.launch_info(character_id)
     url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
     qr_svg = qrgen.make_qr_svg(url, scale=10)
@@ -5357,7 +5381,7 @@ async def vrai_face_launcher(
     else:
         portrait = (
             f"placeholder — drop a consented photo at "
-            f"<code>portal/data/face_portraits/{character_id}.png</code> to develop"
+            f"<code>portal/data/face_portraits/{character_id}.png</code> for a custom face"
         )
     role_line = f'<div class="meta">{role}</div>' if role else ""
     html = f"""<!doctype html>
@@ -5373,10 +5397,10 @@ async def vrai_face_launcher(
           font-size: 13px; word-break: break-all; }}
   .meta {{ margin-top: 14px; font-size: 14px; color: #b5bccd; }}
 </style></head><body>
-  <h1>Develop &amp; assign avatar — {name}</h1>
+  <h1>Assign avatar to a tablet — {name}</h1>
   {role_line}
   <div class="meta">Portrait: {portrait}</div>
-  <div class="meta">Scan on a tablet to assign this avatar:</div>
+  <div class="meta">Scan on the tablet to open this avatar full-screen:</div>
   <div class="qr">{qr_svg}</div>
   <div class="meta">scenario: <code>{scenario}</code> &nbsp; opacity: <code>{opacity:.2f}</code></div>
   <div class="meta">URL: <code>{url}</code></div>
