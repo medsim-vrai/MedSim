@@ -136,6 +136,17 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
   fitToWindow();
   window.addEventListener('resize', fitToWindow);
 
+  // Dev/diag-only inspection handle (window.__vrai) for debugging the scene.
+  const dbg = (() => {
+    try {
+      const dev = Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV);
+      return dev || (typeof location !== 'undefined' && location.search.includes('diag=1'));
+    } catch { return false; }
+  })();
+  if (dbg && typeof window !== 'undefined') {
+    (window as unknown as { __vrai?: unknown }).__vrai = { camera, scene, managed, frameAvatar };
+  }
+
   let rafId = 0;
   let running = false;
   const frame = (now: number): void => {

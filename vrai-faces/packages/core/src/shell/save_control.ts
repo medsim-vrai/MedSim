@@ -12,14 +12,18 @@ const STYLE_ID = 'vrai-save-style';
 const STYLE_CSS = `
 .vrai-save {
   position: fixed;
-  right: max(16px, env(safe-area-inset-right));
-  top: max(16px, env(safe-area-inset-top));
+  /* Top-centre, directly under the Import control — an obvious, fixed home that
+     never collides with the diagnostics panel (top-right) or the slider. */
+  left: 50%;
+  top: calc(74px + env(safe-area-inset-top, 0px));
+  transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; border-radius: 22px;
-  background: rgba(20, 20, 24, 0.78);
+  padding: 10px 14px; border-radius: 22px;
+  background: rgba(20, 20, 24, 0.82);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   color: #fff; font: 14px -apple-system, system-ui, sans-serif;
   z-index: 50; user-select: none; -webkit-user-select: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
 }
 .vrai-save input[type="text"] {
   width: 160px; height: 40px; padding: 0 10px;
