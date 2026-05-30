@@ -20,11 +20,12 @@ See `src/types/tts_provider.ts`. Barrel: `ttsProvider`.
 ## Gotchas
 - Source classification is fail-CLOSED. If `source: 'unknown'`, route as
   if it were trainee_input.
-- LOCAL-FIRST CAVEAT (ADR-0001): kokoro-js@1.2.1 hardcodes the browser voice URL
-  to huggingface.co. The onnx WASM bundles locally (vite) and the model can be
-  bundled, but voices fetch from HF until a voice-URL fix lands (lib patch /
-  service-worker intercept / cache-prime) — Phase 2.1 follow-up. Until then Kokoro
-  needs first-run network; if it fails, the chain fails over to the synth stand-in.
+- LOCAL-FIRST (ADR-0001): kokoro-js@1.2.1 hardcodes the browser model+voice URLs to
+  huggingface.co; `public/kokoro-sw.js` (registered before load) intercepts them and
+  serves the bundled `/assets/kokoro/` copies. Run `pnpm run setup:assets` to populate
+  (~96 MB, git-ignored). The onnx WASM bundles via vite. On a missing SW/file it falls
+  back to the HF network; on total failure the chain uses the synth stand-in. (Browser
+  interception is QA-pending; the engine itself is Node-verified.)
 - The failover state machine (`speak`) walks the request's chain, hopping on
   first-chunk failure. Two consecutive CLOUD failures lock voice to local for
   the rest of the session (ADR-0013); local failures just hop.

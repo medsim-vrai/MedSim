@@ -48,4 +48,25 @@ if (force || !existsSync(modelDst)) {
 // 3) topology JSON — regenerate from the vendored .obj (no network).
 await import('./gen-face-topology.mjs');
 
+// 4) Kokoro local-first assets — model + curated voices (served by kokoro-sw.js,
+//    ADR-0001). Paths mirror the HF repo so the SW maps them 1:1.
+const KOKORO_BASE = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/';
+const KOKORO_VOICES = ['af_heart', 'af_bella', 'af_nicole', 'af_sarah', 'af_sky', 'af_nova', 'am_adam', 'bf_emma'];
+const KOKORO_FILES = [
+  'config.json', 'tokenizer.json', 'tokenizer_config.json',
+  'onnx/model_quantized.onnx',                    // q8 (~92 MB)
+  ...KOKORO_VOICES.map((v) => `voices/${v}.bin`), // ~510 KB each
+];
+for (const rel of KOKORO_FILES) {
+  const dst = resolve(core, 'public/assets/kokoro', rel);
+  if (!force && existsSync(dst)) { console.log('• kokoro present:', rel); continue; }
+  console.log('↓ kokoro', rel);
+  const res = await fetch(KOKORO_BASE + rel);
+  if (!res.ok) { console.warn(`  (skipped ${rel}: HTTP ${res.status})`); continue; }
+  const buf = Buffer.from(await res.arrayBuffer());
+  mkdirSync(dirname(dst), { recursive: true });
+  writeFileSync(dst, buf);
+}
+console.log('✓ Kokoro → public/assets/kokoro/');
+
 console.log('✓ assets ready.');

@@ -12,11 +12,12 @@ import type { TtsChunk, TtsRequest } from '@contracts/tts_provider';
  * onnxruntime-web land in their own code-split chunk, never the main bundle or
  * the test graph.
  *
- * LOCAL-FIRST CAVEAT (ADR-0001): kokoro-js@1.2.1 hardcodes the browser voice URL
- * to huggingface.co (`/voices/<id>.bin`, Cache-API cached); the model itself can be
- * bundled, but voices currently fetch from HF on first use. Full offline operation
- * needs a voice-URL fix (lib patch / service-worker intercept / cache-prime) —
- * tracked as Phase 2.1 follow-up.
+ * LOCAL-FIRST (ADR-0001): kokoro-js@1.2.1 hardcodes the browser model+voice URLs to
+ * huggingface.co. `ensureKokoroSW()` registers `public/kokoro-sw.js`, which intercepts
+ * those requests and serves the bundled `/assets/kokoro/` copies (populate via
+ * `setup:assets`), so synthesis runs fully offline. If the SW or a bundled file is
+ * unavailable, it falls back to the HF network (and on total failure, the tts chain
+ * fails over to the synth stand-in).
  */
 
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
@@ -40,11 +41,29 @@ function mapVoice(voiceId: string): (typeof KOKORO_VOICES)[number] {
   return KOKORO_VOICES[hash32(voiceId) % KOKORO_VOICES.length] ?? 'af_heart';
 }
 
+/**
+ * Register the local-first service worker (ADR-0001) before Kokoro fetches its
+ * model/voices, so kokoro-js's hardcoded huggingface.co requests are served from
+ * the bundled `/assets/kokoro/`. No-op (→ network fallback) where SWs are absent.
+ */
+let swReady: Promise<void> | null = null;
+function ensureKokoroSW(): Promise<void> {
+  if (!swReady) {
+    swReady = (async () => {
+      if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+      await navigator.serviceWorker.register('/kokoro-sw.js');
+      await navigator.serviceWorker.ready;
+    })().catch(() => { /* no SW → Kokoro falls back to the HF network */ });
+  }
+  return swReady;
+}
+
 // Lazy singleton: load the model once per session (nulled on failure so it retries).
 let kokoroPromise: Promise<KokoroTTS> | null = null;
 async function loadKokoro(): Promise<KokoroTTS> {
   if (!kokoroPromise) {
     kokoroPromise = (async () => {
+      await ensureKokoroSW();   // local-first model+voices (ADR-0001) before the first fetch
       const { KokoroTTS } = await import('kokoro-js');
       const device = typeof navigator !== 'undefined' && 'gpu' in navigator ? 'webgpu' : 'wasm';
       return KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device });

@@ -477,6 +477,24 @@
 > - **NEXT (Phase 2.1):** decide the local-first voice/model bundling approach; then the
 >   Piper-WASM CPU floor; cloud SDKs stay v1.1.
 >
+> **2026-05-29i — Phase 2.1: Kokoro LOCAL-FIRST via service-worker intercept
+> (ADR-0001). typecheck CLEAN · check:no-any OK · 82/82 tests · build clean.**
+> Closes the hardcoded-HF-voice-URL gap (user chose the SW approach).
+> - `public/kokoro-sw.js` intercepts kokoro-js's hardcoded
+>   `huggingface.co/.../Kokoro-82M-v1.0-ONNX/resolve/main/*` requests and serves the
+>   bundled `/assets/kokoro/*` (model + voices), with network passthrough on a miss.
+>   `local_engine.ensureKokoroSW()` registers it before the first model fetch.
+>   `dist/kokoro-sw.js` confirmed served.
+> - `setup:assets` extended: fetches `onnx/model_quantized.onnx` (q8, 92 MB, HEAD-
+>   confirmed) + config/tokenizer + 8 curated voices (~510 KB each) → `public/assets/
+>   kokoro/` (paths mirror HF so the SW maps 1:1; git-ignored, ~96 MB).
+> - **To populate + run offline:** `pnpm --filter @vrai/core setup:assets` (the ~96 MB
+>   fetch wasn't run this turn to keep it bounded). Browser interception is QA-pending;
+>   the engine is Node-verified.
+> - **Phase 2 status:** 2.3 viseme gating ✅, 2.2 failover ✅, 2.1 Kokoro wired +
+>   local-first ✅. Remaining: Piper-WASM CPU floor; cloud SDKs (v1.1); browser e2e of
+>   the Kokoro path.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---
