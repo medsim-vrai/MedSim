@@ -21,6 +21,9 @@ import { parseLaunchUrl } from './shell/parseLaunchUrl';
 import { registerResumableHooks } from './shell/registerLifecycles';
 import { mountRenderer } from './shell/renderer';
 import { bootDemoAvatar } from './shell/demo_boot';
+import { bindFromPortal } from './shell/portalBinding';
+import { installSpeechConsumer } from './shell/speechConsumer';
+import { lazyTts } from './shell/lazy';
 import { mountTranslucencySlider } from './shell/translucency_slider';
 
 async function boot(): Promise<void> {
@@ -54,13 +57,30 @@ async function boot(): Promise<void> {
   if (!canvas) throw new Error('main: #stage canvas not found');
   const renderer = await mountRenderer(canvas);
 
-  // Bring up the demo avatar — placeholder topology + procedural portrait.
-  const { materialId } = await bootDemoAvatar(renderer);
+  // If the QR carried a portal origin, bind a real MedSim character: fetch the
+  // bind doc (portrait + speech WS URL), bind it (connects the speech
+  // transport), and build the avatar from the attached portrait. Any failure
+  // falls back to the standalone demo so the tablet always shows something.
+  const bound = (launch?.apiBase && launch.characterId !== 'default')
+    ? await bindFromPortal(renderer, launch, medsimAdapter)
+    : null;
+  const { materialId } = bound ?? await bootDemoAvatar(renderer);
 
-  // Mount the translucency slider against the demo material. Initial
-  // value matches what demo_boot picked (0.66 mid-stop).
+  // Drive the avatar from MedSim speech frames: emotion + on-device TTS
+  // (ADR-0023). TTS loads lazily on the first spoken line.
+  installSpeechConsumer({
+    adapter: medsimAdapter,
+    audio: audioPipeline,
+    anim: animationRuntime,
+    loadTts: () => lazyTts().then((m) => m.ttsProvider),
+    voice: () => medsimAdapter.currentBinding()?.voiceProfile,
+  });
+
+  // Mount the translucency slider against the active material.
   const app = document.getElementById('app') ?? document.body;
-  mountTranslucencySlider(app, materialId, launch?.opacityLevel ?? 0.66);
+  mountTranslucencySlider(
+    app, materialId, bound?.binding.opacityLevel ?? launch?.opacityLevel ?? 0.66,
+  );
 
   renderer.start();
 
@@ -70,7 +90,8 @@ async function boot(): Promise<void> {
 
   diag.push({
     t: performance.now(), moduleId: 'main', kind: 'info',
-    message: `VRAI Faces booted. scenarioId=${scenarioId} characterId=${characterId}`,
+    message: `VRAI Faces booted (${bound ? 'bound' : 'demo'}). `
+      + `scenarioId=${scenarioId} characterId=${characterId}`,
   });
 }
 

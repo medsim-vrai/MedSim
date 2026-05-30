@@ -584,8 +584,31 @@
 >   delivery+seq-increment+emotion+400+auth-required. **Verified here: `py_compile` of all three
 >   touched files + symbol/behavior checks. Full pytest needs the portal venv (fastapi) — not
 >   installed in this sandbox; run `pytest tests/v8` there.**
-> - **Phase 4 COMPLETE.** Remaining seam (→ Phase 5 e2e): the avatar shell reading `?api=` on
->   load → fetch `/api/face/{id}/binding` → `bindFromCharacter` + connect `speechWsUrl`.
+> - **Phase 4 COMPLETE** (portal side). The shell seam follows in 2026-05-29o.
+>
+> **2026-05-29o — Avatar-shell seam: end-to-end loop closed. typecheck CLEAN ·
+> check:no-any OK · 106/106 tests (was 91) · build clean.**
+> - `parseLaunchUrl` now reads `?api=<portal origin>` (URL-decoded) → `LaunchParams.apiBase`.
+> - NEW `shell/portalBinding.ts`: `fetchBinding()` (builds `${api}/api/face/{id}/binding?scenario=&opacity=`,
+>   fails soft → null on HTTP/network/parse error) + `bindFromPortal()` (fetch → `adapter.bindFromCharacter`
+>   [validates card + connects the speech WS, ADR-0007] → build avatar from the attached portrait).
+>   Injectable `fetchFn`/`buildAvatar` for tests.
+> - NEW `shell/avatar_build.ts`: `buildAvatarFromBlob()` extracted from `demo_boot` (the
+>   face_ingest→mesh_builder→shader_translucent→renderer pipeline); both the demo and bind paths use it.
+> - NEW `shell/speechConsumer.ts`: `installSpeechConsumer()` — bridges audio_pipeline's energy-derived
+>   visemes → `animation_runtime.pushVisemes` (once); each frame's emotion → `setEmotion` (180 ms ease);
+>   text → lazy Kokoro TTS (`lazyTts`) → `audio_pipeline.enqueueAudio` (+ native visemes when present,
+>   ADR-0015); utterances serialized; pre-synth `frame.audio` supported. Voice read per-utterance so a
+>   late bind is honored.
+> - `main.ts`: if `apiBase` + a non-`default` characterId → `bindFromPortal` (else demo); installs the
+>   speech consumer; slider uses the bound opacity. Boot diag logs `bound`/`demo`.
+> - **Lazy preserved:** build splits `kokoro`/`transformers`/`three` into separate chunks; the entry
+>   `index-*.js` is **3.43 kB** (gzip 1.52) — TTS is NOT in first paint.
+> - **Tests (+15):** `portalBinding` (7: URL shape/encode, !ok→null, throw→null; no-apiBase→null,
+>   happy fetch→bind→build, fetch-fail→adapter-not-called, bind-reject→null), `speechConsumer` (6:
+>   emotion, text→TTS+enqueue, native visemes, derived bridge, no-voice no-op, unsub), `parseLaunchUrl` (+2 api).
+> - **Remaining → Phase 5:** real-tablet browser e2e (live MediaPipe + Kokoro over a real WS), soak/perf,
+>   Capacitor, CI. Phase 1.2 ARKit rig stays gated (RB-001).
 >
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**

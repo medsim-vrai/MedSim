@@ -67,7 +67,8 @@ All gated ADRs + §9 product calls resolved:
 ### Phase 4 — MedSim integration (close the loop)  ·  _done_
 1. ✅ **medsim_adapter — real character schema** — Zod against `medsim_v8/schemas/character.json` (§9); `voice_profile`→voice id; portrait attached at launch. _(f04a070)_
 2. ✅ **medsim_adapter — WebSocket transport** — cross-app tablet path (reconnect + `seq` dedup), beyond same-origin BroadcastChannel; injectable `WsLike`. _(29b5d8d, ADR-0007)_
-3. ✅ **portal — speak/drive path + launchable list** — `portal/vrai_faces.py`: `GET /api/face/characters`, `GET /api/face/{id}/binding` (portrait attach, ADR-0022), `WS /ws/face/{scen}/{id}` + `POST /api/face/{id}/speak` (text+emotion only, ADR-0023). _Remaining seam → Phase 5: the avatar shell reading `?api=` and calling fetch-binding + WS-connect on load._
+3. ✅ **portal — speak/drive path + launchable list** — `portal/vrai_faces.py`: `GET /api/face/characters`, `GET /api/face/{id}/binding` (portrait attach, ADR-0022), `WS /ws/face/{scen}/{id}` + `POST /api/face/{id}/speak` (text+emotion only, ADR-0023).
+4. ✅ **shell seam** — `main.ts` reads `?api=` → `portalBinding.bindFromPortal` (fetch bind doc → `bindFromCharacter` connects the speech WS → `avatar_build` from the real portrait), with demo fallback; `speechConsumer` drives frames (emotion → `setEmotion`; text → lazy Kokoro TTS → `audio_pipeline` + visemes). **Loop closed end-to-end.**
 
 ### Phase 5 — Hardening & ship  ·  _blockedBy Phases 1–4_
 1. **e2e** — real portrait fixture; flesh out `soak.spec.ts` (heap/FPS/worklet-underrun over 5 min); the `fixture.spec.ts` full-pipeline run.

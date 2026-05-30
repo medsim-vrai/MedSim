@@ -1,5 +1,5 @@
 // Tablet QR launches hit:
-//   /face/<characterId>?scenario=<scenarioId>&opacity=0.66
+//   /face/<characterId>?scenario=<scenarioId>&opacity=0.66&api=<portal origin>
 // The shell parses this and binds the avatar at boot.
 
 export interface LaunchParams {
@@ -7,6 +7,12 @@ export interface LaunchParams {
   scenarioId: string;
   /** 0..1; defaults to 0.66 (mid-translucent). */
   opacityLevel: number;
+  /**
+   * Portal origin the QR was generated from (URL-decoded). When present, the
+   * shell fetches `${apiBase}/api/face/<id>/binding` to bind a real character
+   * (portrait + speech WS URL). Absent for the standalone demo.
+   */
+  apiBase?: string;
 }
 
 export function parseLaunchUrl(loc: Location): LaunchParams | null {
@@ -24,5 +30,11 @@ export function parseLaunchUrl(loc: Location): LaunchParams | null {
   const opacityLevel = Number.isFinite(opacityRaw)
     ? Math.max(0, Math.min(1, opacityRaw))
     : 0.66;
-  return { characterId, scenarioId, opacityLevel };
+
+  const params: LaunchParams = { characterId, scenarioId, opacityLevel };
+  // URLSearchParams already percent-decodes, so `api` is the plain origin.
+  // exactOptionalPropertyTypes: only set the key when actually present.
+  const apiBase = q.get('api');
+  if (apiBase !== null && apiBase.length > 0) params.apiBase = apiBase;
+  return params;
 }

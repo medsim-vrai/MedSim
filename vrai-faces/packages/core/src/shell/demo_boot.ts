@@ -7,11 +7,7 @@
 // will swap in once a scenario is bound. For now this lets the user
 // see translucency working without uploading a photo.
 
-import * as THREE from 'three/webgpu';
-import { faceIngest }        from '@modules/face_ingest';
-import { meshBuilder }       from '@modules/mesh_builder';
-import { shaderTranslucent } from '@modules/shader_translucent';
-import { lookupGeometry, lookupTexture, lookupMaterial, registerMesh } from '@utils/resource_registry';
+import { buildAvatarFromBlob, type BuiltAvatar } from './avatar_build';
 import type { RendererHandle } from './renderer';
 
 const PORTRAIT_SIZE = 512;
@@ -78,37 +74,11 @@ function syntheticPortrait(): Promise<Blob> {
   });
 }
 
-export interface DemoBootResult {
-  meshId: string;
-  materialId: string;
-}
+export type DemoBootResult = BuiltAvatar;
 
 export async function bootDemoAvatar(renderer: RendererHandle): Promise<DemoBootResult> {
   const portraitBlob = await syntheticPortrait();
-  const portrait = await faceIngest.ingest(portraitBlob);
-  const built    = await meshBuilder.build(portrait);
-
-  const geo = lookupGeometry(built.geometryRef);
-  const tex = lookupTexture(built.textureRef);
-  if (!geo || !tex) throw new Error('demo_boot: mesh_builder did not register geometry/texture');
-
-  const material = shaderTranslucent.build({
-    geometry: built.geometryRef,
-    texture:  built.textureRef,
-  });
-
-  const matObj = lookupMaterial(material.id);
-  if (!matObj) throw new Error('demo_boot: shader_translucent did not register material');
-
-  const mesh = new THREE.Mesh(geo, matObj);
-  mesh.position.set(0, 0, 0);
-  const meshId = registerMesh(mesh, built.meshId);
-
-  renderer.attachMesh(meshId, mesh);
-
   // Start at level 0.66 — the table's mid-stop, where the look reads as
   // "translucent but recognizable" (good demo default).
-  shaderTranslucent.setOpacity(material.id, 0.66);
-
-  return { meshId, materialId: material.id };
+  return buildAvatarFromBlob(renderer, portraitBlob, 0.66);
 }
