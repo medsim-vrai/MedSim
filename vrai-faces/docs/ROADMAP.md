@@ -60,8 +60,9 @@ All gated ADRs + §9 product calls resolved:
 3. **audio_pipeline — ADR-0015 viseme gating** ✅ native-vs-derived `setVisemeSource`.
    - _Remaining:_ browser e2e of the live Kokoro speech path (→ Phase 5 hardening).
 
-### Phase 3 — Real emotion  ·  _blockedBy Phase 0 (ADR-0019)_
-1. **emotion_driver — on-device engine** (transformers.js, hybrid: model + lexicon fallback + clinical-affect override). Keep ADR-0005 JSON-only output; deterministic QA fixtures.
+### Phase 3 — Real emotion  ·  ✅ engine DONE
+1. **emotion_driver — hybrid engine** ✅ clinical override (lexicon: pain/drowsy) → transformers.js model → lexicon fallback; JSON-only (ADR-0005); `moodForLabel`/`topLabel` unit-tested.
+   - The transformers.js model is **wired** (loads in `warmup()`) but **deferred unbundled** by decision — the deterministic **lexicon is the active path** (covers pain/fear/sad/anger/drowsy/relieved + context). The GoEmotions q8 model (~125 MB) drops in later with no code change (like cloud TTS → v1.1).
 
 ### Phase 4 — MedSim integration (close the loop)
 1. **medsim_adapter — real character schema** — Zod against `medsim_v8/schemas/` (confirm path, §9); bind real portraits/personas.
