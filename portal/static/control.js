@@ -128,6 +128,9 @@
       personaList:  Array.from(
         row.querySelectorAll('[data-row-persona]:checked'),
       ).map(cb => cb.value),
+      avatarList:   Array.from(
+        row.querySelectorAll('[data-row-avatar]:checked'),
+      ).map(cb => cb.value),
       modulesList:  Array.from(
         row.querySelectorAll('[data-row-module]:checked'),
       ).map(cb => cb.value),
@@ -169,9 +172,16 @@
       const personaCheckboxes = personas.map(p => {
         const checked = (existing.personaList || []).includes(p.id) ||
                           (existing.persona === p.id);
+        const avatarOn = (existing.avatarList || []).includes(p.id);
         return `<label class="row-persona-card">
           <input type="checkbox" data-row-persona value="${p.id}" ${checked ? "checked" : ""}>
           <span><strong>${p.name}</strong> <span class="muted small">${p.id} · ${p.role}</span></span>
+          <span class="row-persona-avatar" onclick="event.stopPropagation()"
+                title="Open this character on a tablet with a VRAI Faces avatar"
+                style="display:inline-flex;align-items:center;gap:4px;margin-left:auto;white-space:nowrap">
+            <input type="checkbox" data-row-avatar value="${p.id}" ${avatarOn ? "checked" : ""}>
+            <span class="muted small">🪞 avatar</span>
+          </span>
         </label>`;
       }).join("");
       const allModules = (window.MEDSIM2.modulesForRoom || []);
@@ -219,7 +229,7 @@
           <p class="muted small">Tip: pick an Activity above to pre-fill, then edit. Cleared text falls back to the Step 3 general scenario.</p>
         </div>
         <div class="characters-drawer" hidden>
-          <p class="muted small">Pick every persona this bed's scenario uses — patient (primary above) + family + staff. Multi-select like Step 4 single-mode.</p>
+          <p class="muted small">Pick every persona this bed's scenario uses — patient (primary above) + family + staff. Tick 🪞 avatar to give that character a tablet face/device for this bed.</p>
           <div class="row-persona-grid">
             ${personaCheckboxes}
           </div>
@@ -662,11 +672,11 @@
     const scenarioText  = (form.elements.scenario_text?.value || "").trim();
     const scenarioNotes = (form.elements.scenario_notes?.value || "").trim();
     const defaultEhrId  = form.querySelector('input[name="ehr_id"]:checked')?.value || null;
-    // V8 — global "Use VRAI Faces avatar" opt-in (the persona grid checkboxes).
-    // Applied to each encounter below, intersected with that bed's own personas.
-    const avatarChecked = new Set(
-      Array.from(form.querySelectorAll('input[name="avatar_personas"]:checked')).map(cb => cb.value),
-    );
+    // V8 — avatar opt-in is PER ENCOUNTER in room mode: each bed's Characters
+    // drawer has its own "🪞 avatar" checkbox per persona (data-row-avatar),
+    // collected per-row below. The single-mode name="avatar_personas" grid is a
+    // different finalize path (/portal/control/start) and must NOT be read here,
+    // or every room bed would get an empty avatar list.
 
     const rows = Array.from(document.querySelectorAll("#room-encounter-rows .encounter-row"));
     if (rows.length < 2) {
@@ -684,6 +694,9 @@
       // join the list.
       const rowPersonas = Array.from(
         row.querySelectorAll('[data-row-persona]:checked'),
+      ).map(cb => cb.value);
+      const rowAvatars = Array.from(
+        row.querySelectorAll('[data-row-avatar]:checked'),
       ).map(cb => cb.value);
       const combinedPersonas = persona && !rowPersonas.includes(persona)
         ? [persona, ...rowPersonas]
@@ -730,7 +743,7 @@
         persona_id:           persona,
         patient_persona_id:   persona,
         personas:             combinedPersonas,
-        avatar_personas:      combinedPersonas.filter(pid => avatarChecked.has(pid)),
+        avatar_personas:      combinedPersonas.filter(pid => rowAvatars.includes(pid)),
         chart_mode:           rowChartMode,
         label:                rowLabel,
         activity_id:          activityId || null,
