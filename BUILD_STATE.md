@@ -458,6 +458,25 @@
 >   downloads + browser runtime; 2.2 real cloud SDKs — v1.1 (BAA + keys). The state
 >   machine is ready for both.
 >
+> **2026-05-29h — Phase 2.1: Kokoro local TTS engine WIRED + build-verified.
+> typecheck CLEAN · check:no-any OK · 82/82 tests · build clean.** ADR-0020 primary
+> local engine (user-approved the q8 download).
+> - Added `kokoro-js@1.2.1` + `@huggingface/transformers@4.2.0` (onnxruntime-web).
+>   `impl/local_engine.ts` = the `headtts-kokoro` synth: DYNAMIC import (own chunk),
+>   browser-gated (bails in jsdom/Node → failover), lazy model singleton,
+>   `.stream(text,{voice})` → Float32 24 kHz → PCM16 chunks (last = endOfUtterance),
+>   persona voice id → curated Kokoro voice. Wired via `DEFAULT_SYNTHS`.
+> - **Node smoke VERIFIED the engine**: q8 loads (~39 s) and synthesizes 24 kHz audio
+>   (2.45 s clip for a sentence). Build code-splits `kokoro` (2.2 MB lazy) and bundles
+>   onnxruntime WASM locally (`ort-wasm-…jsep` 21.6 MB in dist) — runtime is local-first.
+> - **LOCAL-FIRST GAP (ADR-0001):** kokoro-js@1.2.1 hardcodes the browser voice URL to
+>   huggingface.co; the model can be bundled but VOICES fetch from HF until a voice-URL
+>   fix (lib patch / service worker / cache-prime). Until then Kokoro needs first-run
+>   network; on failure the chain falls over to the synth stand-in. Browser synthesis is
+>   QA-pending (Node already proved the engine).
+> - **NEXT (Phase 2.1):** decide the local-first voice/model bundling approach; then the
+>   Piper-WASM CPU floor; cloud SDKs stay v1.1.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

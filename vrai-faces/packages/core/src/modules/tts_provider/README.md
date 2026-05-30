@@ -10,14 +10,21 @@ See `src/types/tts_provider.ts`. Barrel: `ttsProvider`.
 
 ## Dependencies
 - `@contracts/*`
-- Provider engines swap in per-provider via the `synths` map: Kokoro/Piper
-  (local — Phase 2.1) and Azure/ElevenLabs/Cartesia (cloud — v1.1). TODAY every
-  provider uses the on-device synthetic stand-in, so failover never fires in
-  production yet (the state machine + tests use injected failing providers).
+- `kokoro-js` + `@huggingface/transformers` (onnxruntime-web) — the real
+  `headtts-kokoro` engine (`impl/local_engine.ts`), dynamically imported (own
+  code-split chunk), browser-only. Node smoke confirms q8 → 24 kHz audio.
+- Other providers still use the synthetic stand-in: Piper (local CPU floor) is a
+  Phase 2.1 follow-up; Azure/ElevenLabs/Cartesia (cloud) are v1.1. `DEFAULT_SYNTHS`
+  picks the real engine per provider; the rest fall back to `synthVoice`.
 
 ## Gotchas
 - Source classification is fail-CLOSED. If `source: 'unknown'`, route as
   if it were trainee_input.
+- LOCAL-FIRST CAVEAT (ADR-0001): kokoro-js@1.2.1 hardcodes the browser voice URL
+  to huggingface.co. The onnx WASM bundles locally (vite) and the model can be
+  bundled, but voices fetch from HF until a voice-URL fix lands (lib patch /
+  service-worker intercept / cache-prime) — Phase 2.1 follow-up. Until then Kokoro
+  needs first-run network; if it fails, the chain fails over to the synth stand-in.
 - The failover state machine (`speak`) walks the request's chain, hopping on
   first-chunk failure. Two consecutive CLOUD failures lock voice to local for
   the rest of the session (ADR-0013); local failures just hop.

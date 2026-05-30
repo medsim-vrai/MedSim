@@ -6,6 +6,7 @@ import type {
   TtsTier,
 } from '@contracts/tts_provider';
 import type { BootDeps } from '@contracts/shared';
+import { kokoroSynth } from './local_engine';
 
 /**
  * Tier → ordered provider chain (ADR-0011..0015).
@@ -111,6 +112,11 @@ async function* synthVoice(req: TtsRequest): AsyncGenerator<TtsChunk> {
 /** A per-provider synthesizer. Today all map to `synthVoice`; tests inject failures. */
 type Synth = (req: TtsRequest) => AsyncIterable<TtsChunk>;
 
+/** Real default engine per provider; the rest use the synthetic stand-in for now. */
+const DEFAULT_SYNTHS: Partial<Record<ProviderName, Synth>> = {
+  'headtts-kokoro': kokoroSynth,   // ADR-0020 primary local (Phase 2.1)
+};
+
 const CONSECUTIVE_CLOUD_FAILS_TO_LOCK = 2;   // ADR-0013
 
 export function createImpl(overrides?: { synths?: Partial<Record<ProviderName, Synth>> }): TtsProviderModule {
@@ -120,7 +126,7 @@ export function createImpl(overrides?: { synths?: Partial<Record<ProviderName, S
   let consecutiveCloudFailures = 0;
   let lockedToLocal = false;
 
-  const synthFor = (p: ProviderName): Synth => overrides?.synths?.[p] ?? synthVoice;
+  const synthFor = (p: ProviderName): Synth => overrides?.synths?.[p] ?? DEFAULT_SYNTHS[p] ?? synthVoice;
 
   function note(kind: 'info' | 'warn' | 'error', message: string): void {
     _deps?.diag.push({ t: performance.now(), moduleId: 'tts_provider', kind, message });

@@ -17,8 +17,10 @@
     "gen:topology": "node scripts/gen-face-topology.mjs"
   },
   "dependencies": {
-    "three": "^0.170.0",
+    "@huggingface/transformers": "^4.2.0",
     "@mediapipe/tasks-vision": "^0.10.18",
+    "kokoro-js": "^1.2.1",
+    "three": "^0.170.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
