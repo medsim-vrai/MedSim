@@ -1253,6 +1253,9 @@ async def control_ops(
         or sess.patient_persona_id
         or (sess.selected_personas[0] if sess.selected_personas else "")
     )
+    # This page shows the per-character device QRs — make sure the avatar app is
+    # up + LAN-reachable so a scanned tablet doesn't hit connection-refused.
+    _ensure_vrai_app_for_qr(request)
     return templates.TemplateResponse(
         request, "control_ops.html",
         {
@@ -4489,6 +4492,8 @@ async def portal_room_encounter_console(
         {"id": pid, "name": (library.get_persona(pid) or {}).get("name") or pid}
         for pid in (enc.avatar_personas or [])
     ]
+    # Shows per-character device QRs — ensure the avatar app is up + LAN-reachable.
+    _ensure_vrai_app_for_qr(request)
     return templates.TemplateResponse(
         request, "encounter_console.html",
         {
@@ -5658,6 +5663,25 @@ def _ensure_vrai_dev_server(base: str) -> tuple[str, str | None]:
     return "spawned", None
 
 
+def _ensure_vrai_app_for_qr(request: Request) -> None:
+    """Best-effort: bring up the LAN-reachable vite dev server before we hand a
+    device QR to a tablet, so a scan doesn't hit ERR_CONNECTION_REFUSED on the
+    app port. The tablet loads the app host directly — it never touches the
+    portal's autostart — so the portal must start it when it shows the QR.
+    Local-managed only (a configured VRAI_FACES_BASE_URL is the operator's to
+    run); idempotent via a reachability probe; never raises (a QR page must not
+    500 on autostart). The first call cold-starts vite (~seconds), so give it a
+    moment before scanning; reloading the tablet page then succeeds."""
+    try:
+        if _os.environ.get("VRAI_FACES_BASE_URL"):
+            return
+        base = _vrai_base_for_qr(request)
+        if not _vrai_app_reachable(base):
+            _ensure_vrai_dev_server(base)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @app.get("/portal/face/dev-status")
 async def vrai_face_dev_status(
     request: Request,
@@ -5774,6 +5798,9 @@ async def vrai_face_launcher(
     NOT from the Develop button (that opens the live app). Works for both
     character cards and persona ids (P-0xx) via vrai_faces.resolve_card()."""
     info = vrai_faces.launch_info(character_id)
+    # The whole point of this page is to hand a tablet the QR — make sure the
+    # avatar app is up + LAN-reachable first, so the scan doesn't refuse-connect.
+    _ensure_vrai_app_for_qr(request)
     # lan=True: this is the tablet-pairing page — both the QR and the URL it
     # prints must be LAN-reachable (see _vrai_faces_url), so the scanned tablet
     # can reach the portal's bind + speech WebSocket rather than its own host.
