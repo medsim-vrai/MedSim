@@ -64,15 +64,45 @@ async function normalizeToPng(bm: ImageBitmap): Promise<Blob> {
   });
 }
 
-async function sha256Hex(blob: Blob): Promise<string> {
+/**
+ * A stable hex hash of the normalized PNG, used ONLY as a cache key (mesh_builder
+ * keys its built mesh on it) — never for security. Prefers SHA-256 via
+ * SubtleCrypto, but falls back to a fast non-crypto hash when `crypto.subtle` is
+ * unavailable.
+ *
+ * That fallback is essential on a tablet: the device loads the app over a plain
+ * `http://<LAN-IP>` origin, which is NOT a secure context, so `window.crypto.subtle`
+ * is `undefined`. Calling it threw, which took down the WHOLE avatar build (demo
+ * AND bound) — the "demo avatar build failed" we saw on the device.
+ */
+async function portraitHashHex(blob: Blob): Promise<string> {
   const buf = await blob.arrayBuffer();
-  const digest = await crypto.subtle.digest('SHA-256', buf);
-  const bytes = new Uint8Array(digest);
-  let out = '';
-  for (let i = 0; i < bytes.length; i++) {
-    out += bytes[i]!.toString(16).padStart(2, '0');
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle) {
+    try {
+      const digest = await subtle.digest('SHA-256', buf);
+      const bytes = new Uint8Array(digest);
+      let out = '';
+      for (let i = 0; i < bytes.length; i++) {
+        out += bytes[i]!.toString(16).padStart(2, '0');
+      }
+      return out;
+    } catch {
+      // Secure-context check passed but digest failed — fall through.
+    }
   }
-  return out;
+  // Non-crypto 64-bit FNV-1a (two 32-bit lanes, forward + reverse for spread).
+  // Collisions are astronomically unlikely for distinct portraits and would only
+  // reuse a cached mesh — acceptable for this insecure-context fallback path.
+  const view = new Uint8Array(buf);
+  let a = 0x811c9dc5;
+  let b = 0x811c9dc5;
+  for (let i = 0; i < view.length; i++) {
+    a = Math.imul(a ^ view[i]!, 0x01000193);
+    b = Math.imul(b ^ view[view.length - 1 - i]!, 0x01000193);
+  }
+  const hex = (n: number): string => (n >>> 0).toString(16).padStart(8, '0');
+  return `fnv1a-${hex(a)}${hex(b)}`;
 }
 
 export function createImpl(): FaceIngestModule {
@@ -88,7 +118,7 @@ export function createImpl(): FaceIngestModule {
       const bm = await loadBitmap(input);
       try {
         const png = await normalizeToPng(bm);
-        const hash = await sha256Hex(png);
+        const hash = await portraitHashHex(png);
         return {
           png,
           width: TARGET_SIZE,
