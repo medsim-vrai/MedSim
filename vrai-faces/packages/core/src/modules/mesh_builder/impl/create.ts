@@ -89,7 +89,6 @@ export function createImpl(): MeshBuilderModule {
     },
 
     async build(portrait: NormalizedPortrait): Promise<BuiltMesh> {
-      void _deps;
       const cached = cache.get(portrait.hash);
       if (cached) return cached;
 
@@ -109,6 +108,18 @@ export function createImpl(): MeshBuilderModule {
         geo = buildBaseGeometry();
         baselineMood = baselineFrom({});
       }
+
+      // Surface which path ran — observable in diagnostic_panel + console. No PHI
+      // (counts only), so it satisfies the ADR-0014 message-only rule.
+      _deps?.diag.push({
+        t: performance.now(),
+        moduleId: 'mesh_builder',
+        kind: topo && detection ? 'info' : 'warn',
+        message:
+          topo && detection
+            ? `real mesh: ${detection.landmarks.length} landmarks, ${((geo.getIndex()?.count ?? 0) / 3) | 0} tris`
+            : `fallback head-proxy (topology=${topo ? 'ok' : 'absent'}, detection=${detection ? 'ok' : 'none'})`,
+      });
 
       const geometryRef = registerGeometry(geo);
       const textureRef  = registerTexture(tex);

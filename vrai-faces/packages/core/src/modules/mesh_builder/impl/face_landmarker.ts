@@ -38,12 +38,17 @@ export async function detectFaceLandmarks(png: Blob): Promise<FaceDetection | nu
 
     const vision = await import('@mediapipe/tasks-vision');
     const fileset = await vision.FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_BASE);
-    const landmarker = await vision.FaceLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate: 'GPU' },
-      runningMode: 'IMAGE',
-      numFaces: 1,
-      outputFaceBlendshapes: true,
-    });
+    // Prefer the GPU delegate, but fall back to CPU when GPU init fails (headless,
+    // no-WebGPU/WebGL tablets, CI). Without this the whole real path silently drops
+    // to the sphere even when a face is present.
+    const make = (delegate: 'GPU' | 'CPU') =>
+      vision.FaceLandmarker.createFromOptions(fileset, {
+        baseOptions: { modelAssetPath: FACE_MODEL_URL, delegate },
+        runningMode: 'IMAGE',
+        numFaces: 1,
+        outputFaceBlendshapes: true,
+      });
+    const landmarker = await make('GPU').catch(() => make('CPU'));
 
     try {
       const bitmap = await createImageBitmap(png);

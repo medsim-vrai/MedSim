@@ -383,6 +383,27 @@
 >   (then `avatar_exporter` can bake real morph deltas); browser-verify the live
 >   FaceLandmarker path (e2e fixture) since it can't run in jsdom.
 >
+> **2026-05-29d — Phase 1.1: live MediaPipe path BROWSER-VERIFIED. typecheck CLEAN
+> · 72/72 unit · e2e (desktop-chromium) GREEN (7.3s).** Phase 1 (real avatar
+> geometry) started; Phase 0 decisions ratified just prior (ADR-0019/0020 + §9).
+> - **GPU→CPU delegate fallback** (`face_landmarker.ts`): FaceLandmarker tries the
+>   GPU delegate, falls back to CPU on failure (headless / no-WebGPU tablets / CI).
+>   Without it the whole real path silently dropped to the sphere even with a face.
+> - **Observable path log**: `mesh_builder.build()` pushes a diag event — "real mesh:
+>   N landmarks, M tris" vs "fallback head-proxy (topology=…, detection=…)" —
+>   surfaced in diagnostic_panel, PHI-safe (counts only, ADR-0014).
+> - **e2e `test/e2e/face-pipeline.spec.ts`** (desktop-chromium, PASS): the demo boot
+>   drives mesh_builder → loadFaceTopology + detectFaceLandmarks; the test asserts the
+>   topology JSON, the `face_landmarker.task` model, and a `vision_wasm_*.wasm` all
+>   fetch 200 with zero page errors ⇒ FilesetResolver + FaceLandmarker.createFromOptions
+>   + detect() all run in a real browser. The live stack is wired end-to-end.
+> - **NOT verified here (input-gated):** real photo → 478 landmarks → real mesh. Needs
+>   a consented portrait fixture (facial-image policy) — documented in the spec as a QA
+>   step; the synthetic demo portrait correctly falls back to the head-proxy.
+> - **NEXT:** Phase 1.3 exporter morph baking against the current procedural basis
+>   (achievable now), and/or Phase 1.2 a real ARKit-52→MediaPipe-468 rig (hard to
+>   source — no clean off-the-shelf asset).
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---
