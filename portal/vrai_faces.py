@@ -91,20 +91,44 @@ def _placeholder_portrait() -> str:
     return f"data:image/png;base64,{_PLACEHOLDER_PNG_B64}"
 
 
+def _file_data_uri(p: Path) -> str | None:
+    """Read a local image file → data: URI, or None if missing / too large."""
+    try:
+        raw = p.read_bytes()
+    except OSError:
+        return None
+    if len(raw) > _MAX_PORTRAIT_BYTES:
+        return None
+    mime = mimetypes.guess_type(p.name)[0] or "image/png"
+    return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+
+
 def resolve_portrait(character_id: str) -> tuple[str, str]:
     """(data_uri, source) for a character's portrait. source ∈ {"file",
-    "placeholder"}. Reads a local consented file if present; else the neutral
-    placeholder. Never reaches the network."""
+    "placeholder"}. Resolution order: a dropped consented file, then the skin
+    assigned via the picker, then the neutral placeholder. Never hits the
+    network.
+
+    NOTE: assigning a skin COPIES it into face_portraits/<id> (the first check),
+    so the marker fallback below is belt-and-suspenders — it still resolves an
+    assignment whose copied file went missing. A *saved* skin that was never
+    assigned to this character yields the placeholder (the blank head-proxy)."""
     cid = (character_id or "").strip()
     if cid and PORTRAITS_DIR.is_dir():
         for suffix in _PORTRAIT_SUFFIXES:
             p = PORTRAITS_DIR / f"{cid}{suffix}"
             if p.is_file():
-                raw = p.read_bytes()
-                if len(raw) <= _MAX_PORTRAIT_BYTES:
-                    mime = mimetypes.guess_type(p.name)[0] or "image/png"
-                    b64 = base64.b64encode(raw).decode("ascii")
-                    return f"data:{mime};base64,{b64}", "file"
+                uri = _file_data_uri(p)
+                if uri:
+                    return uri, "file"
+    # Honor an assigned-skin marker even if the copied portrait file is absent.
+    sid = assigned_skin_id(cid)
+    if sid:
+        sp = skin_image_path(sid)
+        if sp is not None:
+            uri = _file_data_uri(sp)
+            if uri:
+                return uri, "file"
     return _placeholder_portrait(), "placeholder"
 
 
