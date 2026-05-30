@@ -1,0 +1,76 @@
+name: CI
+
+# Fast, deterministic PR gate for both stacks in this repo:
+#   - web:    the vrai-faces TS workspace (typecheck / no-any / unit tests / build)
+#   - portal: the MedSim FastAPI portal (pytest)
+# The heavy browser e2e + soak lane lives in e2e.yml (nightly / manual).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch/PR cancels the in-flight run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web (vrai-faces)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vrai-faces
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: vrai-faces/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # Same chain run locally before every commit (BUILD_STATE convention).
+      - name: Typecheck
+        run: pnpm -r typecheck
+      - name: Forbidden-token scan (no `any`)
+        run: pnpm -F @vrai/core run check:no-any
+      - name: Unit tests
+        run: pnpm -r test
+      - name: Build
+        run: pnpm -F @vrai/core build
+
+  portal:
+    name: portal (medsim)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install (dev + serve extras)
+        run: pip install -e ".[dev,serve]"
+
+      # Gating: the VRAI Faces ⇄ portal integration (Phase 4.3). Known-good
+      # with the dev+serve extras; this is what protects the avatar loop.
+      - name: VRAI portal tests
+        run: pytest tests/v8 -q
+
+      # Informative: the full legacy suite (v3/v7). Some suites may need extra
+      # services/keys in CI; surfaced but non-blocking until those are pinned.
+      - name: Full portal suite (non-blocking)
+        run: pytest tests -q
+        continue-on-error: true

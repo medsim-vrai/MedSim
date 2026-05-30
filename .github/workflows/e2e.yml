@@ -1,0 +1,73 @@
+name: e2e
+
+# Heavy browser lane: live MediaPipe + the full face pipeline in a real
+# browser, plus the optional 5-minute soak. Kept off the PR path because it
+# downloads ~100 MB of models (setup:assets) and needs a Chromium build.
+#
+# Runs nightly and on manual dispatch. Set the `soak` input to also run the
+# 5-minute soak (soak.spec.ts gates on the SOAK env var).
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # 07:00 UTC nightly
+  workflow_dispatch:
+    inputs:
+      soak:
+        description: 'Run the 5-minute soak test'
+        type: boolean
+        default: false
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: playwright (desktop-chromium)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vrai-faces
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: vrai-faces/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fetch the MediaPipe model + WASM and the Kokoro model (gitignored).
+      - name: Fetch runtime assets
+        run: pnpm -F @vrai/core run setup:assets
+
+      - name: Install Chromium for Playwright
+        run: pnpm -F @vrai/core exec playwright install --with-deps chromium
+
+      # vite preview (started by playwright.config webServer) serves dist/.
+      - name: Build
+        run: pnpm -F @vrai/core build
+
+      - name: e2e (desktop-chromium)
+        working-directory: vrai-faces/packages/core
+        # Headless Chromium has no WebGPU adapter; WebGPURenderer falls back to
+        # its WebGL2 backend (ADR-0009), so the pipeline still boots.
+        env:
+          SOAK: ${{ github.event.inputs.soak == 'true' && '1' || '' }}
+        run: pnpm exec playwright test --project=desktop-chromium
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: vrai-faces/packages/core/playwright-report
+          retention-days: 7
