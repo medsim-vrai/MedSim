@@ -29,6 +29,9 @@ export interface RendererHandle {
   camera: THREE.PerspectiveCamera;
   /** Add a mesh and bind it to the animation runtime by id. */
   attachMesh(meshId: string, mesh: THREE.Mesh): void;
+  /** Remove a managed mesh (scene + animation runtime) and free its GPU
+   *  resources. Used when the avatar is rebuilt from a new portrait. */
+  detachMesh(meshId: string): void;
   /** Bind the same material to a different mesh later if needed. */
   swapMaterial(meshId: string, materialId: string): void;
   start(): void;
@@ -117,6 +120,18 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
       managed.set(meshId, mesh);
       scene.add(mesh);
       animationRuntime.attach(meshId);
+    },
+
+    detachMesh(meshId) {
+      const mesh = managed.get(meshId);
+      if (!mesh) return;
+      animationRuntime.detach(meshId);
+      scene.remove(mesh);
+      managed.delete(meshId);
+      mesh.geometry.dispose();
+      const mat = mesh.material;
+      if (Array.isArray(mat)) { for (const m of mat) m.dispose(); }
+      else if (mat) mat.dispose();
     },
 
     swapMaterial(meshId, materialId) {

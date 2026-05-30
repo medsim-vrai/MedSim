@@ -22,10 +22,12 @@ import { parseLaunchUrl } from './shell/parseLaunchUrl';
 import { registerResumableHooks } from './shell/registerLifecycles';
 import { mountRenderer } from './shell/renderer';
 import { bootDemoAvatar } from './shell/demo_boot';
+import { buildAvatarFromBlob } from './shell/avatar_build';
 import { bindFromPortal } from './shell/portalBinding';
 import { installSpeechConsumer } from './shell/speechConsumer';
 import { lazyTts } from './shell/lazy';
 import { mountTranslucencySlider } from './shell/translucency_slider';
+import { mountImportControl } from './shell/import_control';
 
 async function boot(): Promise<void> {
   const launch = parseLaunchUrl(window.location);
@@ -65,7 +67,7 @@ async function boot(): Promise<void> {
   const bound = (launch?.apiBase && launch.characterId !== 'default')
     ? await bindFromPortal(renderer, launch, medsimAdapter)
     : null;
-  const { materialId } = bound ?? await bootDemoAvatar(renderer);
+  let avatar = bound ?? await bootDemoAvatar(renderer);
 
   // Drive the avatar from MedSim speech frames: emotion + on-device TTS
   // (ADR-0023). TTS loads lazily on the first spoken line.
@@ -79,9 +81,20 @@ async function boot(): Promise<void> {
 
   // Mount the translucency slider against the active material.
   const app = document.getElementById('app') ?? document.body;
-  mountTranslucencySlider(
-    app, materialId, bound?.binding.opacityLevel ?? launch?.opacityLevel ?? 0.66,
-  );
+  const initialOpacity = bound?.binding.opacityLevel ?? launch?.opacityLevel ?? 0.66;
+  let slider = mountTranslucencySlider(app, avatar.materialId, initialOpacity);
+
+  // "Develop the face from an image": import a portrait and rebuild the avatar
+  // from it. Build the new avatar FIRST so a failed import leaves the current
+  // one (and its slider) intact; the control surfaces the error.
+  mountImportControl(app, async (file) => {
+    const opacity = slider.getValue();
+    const next = await buildAvatarFromBlob(renderer, file, opacity);
+    renderer.detachMesh(avatar.meshId);
+    slider.dispose();
+    avatar = next;
+    slider = mountTranslucencySlider(app, avatar.materialId, opacity);
+  });
 
   renderer.start();
 
