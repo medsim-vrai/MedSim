@@ -119,10 +119,21 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
     camera.updateProjectionMatrix();
   }
 
+  let lastW = -1, lastH = -1, lastDpr = -1;
   function fitToWindow(): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = window.innerWidth;
     const h = window.innerHeight;
+    if (typeof window !== 'undefined') {
+      const d = window as unknown as { __fit?: { calls: number; w: number; h: number } };
+      d.__fit = { calls: (d.__fit?.calls ?? 0) + 1, w, h };
+    }
+    // Skip redundant resizes — same dimensions ⇒ no work. Crucially this breaks
+    // any resize feedback loop (e.g. setSize → reflow → resize → setSize …),
+    // which would otherwise re-dolly the camera every event and make the avatar
+    // pulse/scale rapidly while idle.
+    if (w === lastW && h === lastH && dpr === lastDpr) return;
+    lastW = w; lastH = h; lastDpr = dpr;
     renderer.setPixelRatio(dpr);
     // updateStyle=true: set the canvas CSS size to the logical w×h (buffer stays
     // w×dpr for crispness). With `false`, a retina canvas (dpr 2) displayed at
@@ -131,7 +142,10 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
     renderer.setSize(w, h, true);
     camera.aspect = w / Math.max(h, 1);
     camera.updateProjectionMatrix();
-    frameAvatar();
+    // NOTE: deliberately NOT re-framing here. The avatar is framed once on
+    // attach; resize only updates the buffer + aspect. Re-dollying on every
+    // resize event made the head scale/pulse if anything fired resize in a loop.
+    // Aspect changes letterbox the view — they never change the head's size.
   }
   fitToWindow();
   window.addEventListener('resize', fitToWindow);
