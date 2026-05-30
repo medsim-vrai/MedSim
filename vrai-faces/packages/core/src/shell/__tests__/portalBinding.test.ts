@@ -87,9 +87,25 @@ describe('bindFromPortal', () => {
     });
     const fetchFn: FetchLike = () =>
       Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
-    const r = await bindFromPortal(renderer, launch, adapter, { fetchFn });
+    const r = await bindFromPortal(renderer, launch, adapter, { fetchFn, retries: 0 });
     expect(r).toBeNull();
     expect(bindCalled).toBe(false);
+  });
+
+  it('retries a transient fetch failure, then binds', async () => {
+    let n = 0;
+    const fetchFn: FetchLike = () => {
+      n += 1;
+      if (n < 3) return Promise.reject(new Error('transient'));   // fail the first two
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ characterId: 'c' }) });
+    };
+    const r = await bindFromPortal(renderer, launch, fakeAdapter({}), {
+      fetchFn,
+      buildAvatar: () => Promise.resolve({ meshId: 'm', materialId: 'mat' }),
+      retryDelayMs: 1, // keep the test fast
+    });
+    expect(n).toBe(3);                 // failed twice, succeeded on the 3rd try
+    expect(r?.binding.characterId).toBe('c');
   });
 
   it('returns null when bindFromCharacter rejects', async () => {
