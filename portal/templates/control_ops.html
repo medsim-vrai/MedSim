@@ -115,9 +115,39 @@
     <p><strong>Personas in session ({{ personas_in_use | length }}):</strong></p>
     <ul class="small">
       {% for p in personas_in_use %}
-        <li><code>{{ p.id }}</code> {{ p.name }} — {{ p.role }}{% if p.alteredState %} <span class="tag altered">{{ p.alteredState }}</span>{% endif %}{% if p.avatar_enabled %} · <a href="/portal/face/launch/{{ p.id }}" target="_blank" rel="noopener">📱 Pair tablet (QR)</a>{% endif %}</li>
+        <li><code>{{ p.id }}</code> {{ p.name }} — {{ p.role }}{% if p.alteredState %} <span class="tag altered">{{ p.alteredState }}</span>{% endif %}</li>
       {% endfor %}
     </ul>
+
+    {# V8 — Character device QR codes for the single-encounter track. One per
+       persona: scan to open that character's Chrome interface on a tablet. It
+       shows the 3D avatar when the instructor enabled it (and a skin is
+       assigned), otherwise an audio-only / placeholder interface. EVERY
+       character gets a device QR (ADR-0024 — "avatar OR non-graphic"), which is
+       why this no longer gates on avatar_enabled. Mirrors the multi-patient
+       encounter console; scenario = this control session's id so the avatar's
+       speech WebSocket + the /listen push routing line up. #}
+    <p class="muted small" style="margin-top:10px;">
+      <strong>Character devices</strong> — scan to open a character on a tablet
+      (its avatar if enabled, otherwise audio-only / placeholder):
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin:6px 0 2px;">
+      {% for p in personas_in_use %}
+      <div style="width:132px;border:1px solid #dde2ee;border-radius:8px;padding:8px;text-align:center;background:#fff;">
+        <div style="font-size:11px;font-weight:600;color:#41495a;margin-bottom:4px;line-height:1.25;">
+          {% if p.avatar_enabled %}🪞 Avatar{% else %}🔊 Audio-only{% endif %} · {{ p.name }}
+        </div>
+        <img src="/qr/face/{{ p.id }}.svg?scenario={{ session.id }}&scale=4"
+             alt="Device QR for {{ p.name }}"
+             style="width:112px;height:112px;display:block;margin:0 auto;">
+        <code style="display:block;font-size:10px;color:#7a8194;margin-top:3px;">{{ p.id }}</code>
+        <a href="/portal/face/launch/{{ p.id }}?scenario={{ session.id }}"
+           target="_blank" rel="noopener" style="display:inline-block;margin-top:5px;font-size:11px;">
+          📱 Pair / open
+        </a>
+      </div>
+      {% endfor %}
+    </div>
   </section>
 
   <!-- BOTTOM-LEFT — Operator PTT panel (engage a character) -->
