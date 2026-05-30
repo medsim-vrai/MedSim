@@ -404,6 +404,23 @@
 >   (achievable now), and/or Phase 1.2 a real ARKit-52→MediaPipe-468 rig (hard to
 >   source — no clean off-the-shelf asset).
 >
+> **2026-05-29e — Phase 1.3: avatar_exporter MORPH-TARGET BAKING. typecheck CLEAN
+> · check:no-any OK · 74/74 tests (was 72) · build clean.** Closes the long-deferred
+> exporter TODO ("add a targets[] block per primitive when real deltas land").
+> - `extractArrays` now reads `geometry.morphAttributes.position` (the 52 deltas)
+>   + `userData.morphTargetNames`. `writeGlb` bakes each blendshape as a per-primitive
+>   `targets[]` POSITION-delta accessor (with per-target min/max bounds), plus
+>   `mesh.weights` (all 0) and `mesh.extras.targetNames` so the ARKit-52 set
+>   round-trips BY NAME. Morph deltas append to the BIN buffer after indices, 4-aligned.
+> - Decoupled from the rig question: works against ANY non-zero basis — today
+>   mesh_builder's procedural deltas, a real rig later via the same path. Omitted
+>   entirely for unrigged/placeholder geometry (existing tests unaffected).
+> - **Tests (+2):** named `targets[]` + `weights` + `extras.targetNames` + non-zero
+>   accessor bounds on a registered 2-target geom; targets omitted for placeholder.
+> - **NEXT:** Phase 1.2 (real ARKit-52→MediaPipe-468 rig) is GATED — captured as a
+>   Cowork research brief (`research/`), see the research-driven-enhancement strategy
+>   added to `docs/ROADMAP.md`.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

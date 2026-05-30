@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three/webgpu';
 import { avatarExporter } from '../index';
+import { registerGeometry } from '@utils/resource_registry';
 import type { ExportInput } from '@contracts/avatar_exporter';
 import type { BuiltMesh, GeometryRef, TextureRef } from '@contracts/mesh_builder';
 import type { TranslucentMaterialSnapshot } from '@contracts/shader_translucent';
@@ -36,6 +38,12 @@ interface GltfDoc {
   buffers: Array<{ byteLength: number }>;
   extensionsUsed: string[];
   extensions?: Record<string, unknown>;
+  meshes?: Array<{
+    weights?: number[];
+    extras?: { targetNames?: string[] };
+    primitives: Array<{ targets?: Array<Record<string, number>> }>;
+  }>;
+  accessors?: Array<{ count: number; type: string; min?: number[]; max?: number[] }>;
 }
 
 async function parseGlb(blob: Blob): Promise<{ magic: number; version: number; jsonType: number; doc: GltfDoc }> {
@@ -91,5 +99,44 @@ describe('avatar_exporter exportVRM', () => {
     expect(magic).toBe(GLB_MAGIC);
     expect(doc.extensionsUsed).toContain('VRMC_vrm');
     expect(doc.extensions?.['VRMC_vrm']).toBeTruthy();
+  });
+});
+
+describe('avatar_exporter morph-target baking', () => {
+  it('bakes geometry morph targets into glTF targets[] + named weights', async () => {
+    // A 3-vertex geom with two named morph targets (one non-zero, one all-zero).
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3));
+    geo.setIndex(new THREE.BufferAttribute(new Uint32Array([0, 1, 2]), 1));
+    const jaw = new THREE.BufferAttribute(new Float32Array([0, 0, 0, 0, -0.2, 0, 0, -0.1, 0]), 3);
+    const smile = new THREE.BufferAttribute(new Float32Array(9), 3); // all zero
+    geo.morphAttributes.position = [jaw, smile];
+    geo.userData['morphTargetNames'] = ['jawOpen', 'mouthSmileLeft'];
+    const ref = registerGeometry(geo);
+
+    const rigged: BuiltMesh = { ...mesh, geometryRef: ref, vertexCount: 3 };
+    const { doc } = await parseGlb(
+      await avatarExporter.exportGLB({ mesh: rigged, translucency, bakeOpacity: true }),
+    );
+
+    const prim = doc.meshes?.[0]?.primitives[0];
+    expect(prim?.targets).toHaveLength(2);                       // one per blendshape
+    expect(doc.meshes?.[0]?.weights).toEqual([0, 0]);           // initial weights
+    expect(doc.meshes?.[0]?.extras?.targetNames).toEqual(['jawOpen', 'mouthSmileLeft']);
+
+    // The jawOpen target's POSITION accessor carries real (non-zero) bounds.
+    const jawAccessorIdx = prim?.targets?.[0]?.['POSITION'];
+    expect(typeof jawAccessorIdx).toBe('number');
+    const acc = doc.accessors?.[jawAccessorIdx as number];
+    expect(acc?.type).toBe('VEC3');
+    expect(acc?.count).toBe(3);
+    expect(acc?.min?.[1]).toBeCloseTo(-0.2);                    // min Y delta
+  });
+
+  it('omits the targets block for unrigged (placeholder) geometry', async () => {
+    // The shared `input` uses an unregistered ref → placeholder geometry, no morphs.
+    const { doc } = await parseGlb(await avatarExporter.exportGLB(input));
+    expect(doc.meshes?.[0]?.primitives[0]?.targets).toBeUndefined();
+    expect(doc.meshes?.[0]?.weights).toBeUndefined();
   });
 });
