@@ -2,6 +2,15 @@
 {% block title %}Control room{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="/static/control.css">
+<style>
+  .avatar-skins { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+  .avatar-skin-thumb { width: 36px; height: 36px; border-radius: 6px; border: 2px solid #b9c2d6;
+    background-size: cover; background-position: center; background-color: #e8ecf5;
+    cursor: pointer; padding: 0; }
+  .avatar-skin-thumb.none { display: flex; align-items: center; justify-content: center;
+    color: #8a93a8; font-size: 14px; background: #fff; }
+  .avatar-skin-thumb.sel { border-color: #1a7f4b; box-shadow: 0 0 0 2px rgba(26,127,75,0.3); }
+</style>
 
 <header class="page-header">
   <h1>Control room — setup wizard</h1>
@@ -215,6 +224,19 @@
                      onclick="event.stopPropagation()">
               <span class="muted small">🪞 Use VRAI Faces avatar</span>
             </div>
+            {% if avatar_skins %}
+            <div class="avatar-skins" onclick="event.stopPropagation()">
+              <button type="button" data-persona="{{ p.id }}" data-skin=""
+                      class="avatar-skin-thumb none{% if not p.avatar_skin %} sel{% endif %}"
+                      title="No avatar">∅</button>
+              {% for sk in avatar_skins %}
+                <button type="button" data-persona="{{ p.id }}" data-skin="{{ sk.id }}"
+                        class="avatar-skin-thumb{% if p.avatar_skin == sk.id %} sel{% endif %}"
+                        style="background-image:url('/portal/skins/{{ sk.id }}/image')"
+                        title="{{ sk.label }}"></button>
+              {% endfor %}
+            </div>
+            {% endif %}
           </div>
         </label>
       {% endfor %}

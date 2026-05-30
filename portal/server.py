@@ -1090,7 +1090,13 @@ async def control_wizard(
         request, "control.html",
         {
             "active": "control",
-            "personas": library.list_personas(),
+            # Annotate each persona with its currently-assigned avatar skin so the
+            # encounter-authoring grid can show the picker default.
+            "personas": [
+                {**p, "avatar_skin": vrai_faces.assigned_skin_id(str(p.get("id") or ""))}
+                for p in library.list_personas()
+            ],
+            "avatar_skins": vrai_faces.list_skins(),
             "programs": library.list_programs(),
             "modules": library.list_modules(),
             "samples": library.list_sample_scenarios(),

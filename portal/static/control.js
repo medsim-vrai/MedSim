@@ -767,4 +767,28 @@
       if (result) { result.textContent = "Network error: " + err; result.className = "test-result err"; }
     }
   });
+
+  // V8 — avatar skin picker in the Step-4 persona grid. Clicking a thumbnail
+  // assigns that skin to the persona (persists immediately, same endpoint as the
+  // Personas page), highlights it, and ticks "Use avatar". Delegated so it works
+  // for every persona card. These are <button type=button>, so they never submit
+  // the wizard form.
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".avatar-skin-thumb");
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const personaId = btn.dataset.persona;
+    const skinId = btn.dataset.skin || "";
+    const wrap = btn.closest(".avatar-skins");
+    if (wrap) wrap.querySelectorAll(".avatar-skin-thumb").forEach((b) => b.classList.toggle("sel", b === btn));
+    const esc = (window.CSS && CSS.escape) ? CSS.escape(personaId) : personaId;
+    const cb = form.querySelector('input[name="avatar_personas"][value="' + esc + '"]');
+    if (cb) cb.checked = !!skinId;
+    try {
+      const fd = new FormData();
+      fd.append("skin_id", skinId);
+      await fetch("/portal/personas/" + encodeURIComponent(personaId) + "/avatar", { method: "POST", body: fd });
+    } catch (_) { /* UI already updated optimistically */ }
+  });
 })();
