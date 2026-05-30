@@ -958,13 +958,14 @@ def _base_url_for_qr(request: Request) -> str:
     Prefers the request's host header (which may be LAN IP if the operator
     is already on iPad mode); falls back to detecting the LAN IP.
     """
+    scheme = request.url.scheme or "http"
     host = request.url.hostname or ""
     port = request.url.port
     if host in ("127.0.0.1", "localhost", ""):
         host = _lan_ip()
     if port:
-        return f"http://{host}:{port}"
-    return f"http://{host}"
+        return f"{scheme}://{host}:{port}"
+    return f"{scheme}://{host}"
 
 
 # ----- Personas library viewer --------------------------------------------
@@ -5488,7 +5489,7 @@ def _vrai_base(request: Request) -> str:
     if not base:
         host = request.url.hostname or "localhost"
         port = int(_os.environ.get("VRAI_FACES_VITE_PORT", "5173"))
-        base = f"http://{host}:{port}"
+        base = f"{request.url.scheme or 'http'}://{host}:{port}"
     return base.rstrip("/")
 
 
@@ -5504,7 +5505,7 @@ def _vrai_base_for_qr(request: Request) -> str:
     if host in ("127.0.0.1", "localhost", "::1", ""):
         host = _lan_ip()
     port = int(_os.environ.get("VRAI_FACES_VITE_PORT", "5173"))
-    return f"http://{host}:{port}"
+    return f"{request.url.scheme or 'http'}://{host}:{port}"
 
 
 def _vrai_faces_url(

@@ -1,5 +1,28 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath, URL } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
+
+// HTTPS for tablet testing. Serving over https gives the device a *secure
+// context*, which is what lets the avatar render under WebGPU and unlocks the
+// push-to-talk mic (getUserMedia / Web Speech) + crypto.subtle. Reads the dev
+// cert from scripts/make-dev-cert.sh (env override or the default certs dir);
+// when absent we fall back to plain HTTP so nothing breaks without a cert.
+function devHttps(): { key: Buffer; cert: Buffer } | undefined {
+  try {
+    const certPath = process.env.MEDSIM_TLS_CERT
+      ?? fileURLToPath(new URL('../../../portal/data/certs/dev-cert.pem', import.meta.url));
+    const keyPath = process.env.MEDSIM_TLS_KEY
+      ?? fileURLToPath(new URL('../../../portal/data/certs/dev-key.pem', import.meta.url));
+    if (existsSync(certPath) && existsSync(keyPath)) {
+      return { cert: readFileSync(certPath), key: readFileSync(keyPath) };
+    }
+  } catch {
+    // fall through to HTTP
+  }
+  return undefined;
+}
+
+const https = devHttps();
 
 export default defineConfig({
   resolve: {
@@ -15,10 +38,14 @@ export default defineConfig({
     host: true,                 // expose on LAN so tablet QR launches reach it
     port: 5173,
     strictPort: true,
+    // https when a dev cert exists, else plain HTTP. Spread so the key is absent
+    // (not `undefined`) under exactOptionalPropertyTypes.
+    ...(https ? { https } : {}),
   },
   preview: {
     host: true,
     port: 4173,
+    ...(https ? { https } : {}),
   },
   worker: {
     format: 'es',

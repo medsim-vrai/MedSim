@@ -22,6 +22,18 @@ import uvicorn
 HOST = os.environ.get("MEDSIM_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MEDSIM_PORT", "8765"))
 
+# TLS for tablet testing. When a dev cert exists (scripts/make-dev-cert.sh), the
+# portal serves HTTPS — required so a tablet gets a *secure context* (WebGPU for
+# the avatar skin, getUserMedia/Web Speech for push-to-talk). The vite app reads
+# the same cert. No cert → plain HTTP, exactly as before.
+_CERT_DIR = Path(__file__).resolve().parent / "portal" / "data" / "certs"
+
+
+def _tls_files() -> tuple[str, str] | None:
+    cert = os.environ.get("MEDSIM_TLS_CERT") or str(_CERT_DIR / "dev-cert.pem")
+    key = os.environ.get("MEDSIM_TLS_KEY") or str(_CERT_DIR / "dev-key.pem")
+    return (cert, key) if os.path.isfile(cert) and os.path.isfile(key) else None
+
 
 def _lan_ip() -> str:
     """Best-effort LAN IP discovery — no traffic is sent."""
@@ -117,7 +129,8 @@ def _open_browser() -> None:
     if os.environ.get("MEDSIM_NO_BROWSER"):
         return
     time.sleep(1.5)
-    url = f"http://127.0.0.1:{PORT}"
+    scheme = "https" if _tls_files() else "http"
+    url = f"{scheme}://127.0.0.1:{PORT}"
     if _open_in_chrome(url):
         print("  → Opened in Chrome.")
     else:
@@ -133,11 +146,15 @@ def main() -> None:
     # cwd silently picks up whichever 'portal' package is on sys.path.
     os.chdir(Path(__file__).resolve().parent)
 
+    tls = _tls_files()
+    scheme = "https" if tls else "http"
     lines = ["", "  medsim v7 · operator portal · multi-patient + devices + control + debrief", ""]
-    lines.append(f"  Local:     http://127.0.0.1:{PORT}")
+    if tls:
+        lines.append("  TLS:       on (dev cert) — trust portal/data/certs/rootCA.pem on each tablet")
+    lines.append(f"  Local:     {scheme}://127.0.0.1:{PORT}")
     if HOST in ("0.0.0.0", "::"):
         lan = _lan_ip()
-        lines.append(f"  LAN/iPad:  http://{lan}:{PORT}")
+        lines.append(f"  LAN/iPad:  {scheme}://{lan}:{PORT}")
         lines.append("")
         lines.append("  On iPad/iPhone: open the LAN URL in Safari,")
         lines.append("  then Share → Add to Home Screen for an app-like shortcut.")
@@ -149,6 +166,8 @@ def main() -> None:
     print("\n".join(lines))
 
     threading.Thread(target=_open_browser, daemon=True).start()
+    tls = _tls_files()
+    ssl_kwargs = {"ssl_certfile": tls[0], "ssl_keyfile": tls[1]} if tls else {}
     try:
         uvicorn.run(
             "portal.server:app",
@@ -156,6 +175,7 @@ def main() -> None:
             port=PORT,
             reload=False,
             log_level="info",
+            **ssl_kwargs,
         )
     except KeyboardInterrupt:
         print("\n  Portal stopped.")
