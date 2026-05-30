@@ -108,6 +108,9 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
     const distH = (size.y / 2) / tan;
     const distW = (size.x / 2) / (tan * aspect);
     const dist = Math.max(distH, distW) * 1.3 + size.z / 2;   // 30% margin + depth
+    // Degenerate/NaN geometry must not poison the camera (→ blank screen).
+    if (!Number.isFinite(dist) || !Number.isFinite(center.x)
+        || !Number.isFinite(center.y) || !Number.isFinite(center.z)) return;
     camera.position.set(center.x, center.y, center.z + Math.max(dist, 0.2));
     camera.lookAt(center);
     camera.updateProjectionMatrix();

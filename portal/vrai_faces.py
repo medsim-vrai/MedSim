@@ -36,7 +36,9 @@ import mimetypes
 import re
 import secrets
 import shutil
+import struct
 import time
+import zlib
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote
@@ -58,23 +60,35 @@ _MAX_PORTRAIT_BYTES = 8 * 1024 * 1024  # 8 MB safety cap on inlined images
 
 DEFAULT_OPACITY = 0.66  # table mid-stop; matches the QR launcher default
 
-# A neutral, deliberately abstract head-and-shoulders silhouette. Contains no
-# real face — its only job is to keep the bind/render path alive when no
-# consented portrait has been dropped in. Slate tones match the launcher.
-_PLACEHOLDER_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" '
-    'viewBox="0 0 512 512" role="img" aria-label="No portrait" '
-    'data-vrai-placeholder="1">'
-    '<rect width="512" height="512" fill="#0b0f1a"/>'
-    '<circle cx="256" cy="196" r="92" fill="#2a3550"/>'
-    '<path d="M96 460c0-88 72-150 160-150s160 62 160 150z" fill="#2a3550"/>'
-    "</svg>"
-)
+# A neutral solid-slate placeholder for characters with no assigned avatar. It
+# MUST be a raster (PNG): the VRAI Faces app decodes portraits with the browser's
+# createImageBitmap(), which cannot decode SVG in Chromium — an SVG placeholder
+# made face_ingest throw and blanked the app. mesh_builder falls back to the
+# canonical face topology on a featureless image, so this renders a plain head.
+
+def _solid_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
+    """A minimal valid solid-color RGB PNG (stdlib only — no PIL)."""
+    row = b"\x00" + bytes(rgb) * width            # filter byte 0 + W RGB pixels
+    raw = row * height
+
+    def _chunk(typ: bytes, data: bytes) -> bytes:
+        body = typ + data
+        return (struct.pack(">I", len(data)) + body
+                + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF))
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + _chunk(b"IDAT", zlib.compress(raw, 9))
+        + _chunk(b"IEND", b"")
+    )
+
+
+_PLACEHOLDER_PNG_B64 = base64.b64encode(_solid_png(256, 256, (42, 53, 80))).decode("ascii")
 
 
 def _placeholder_portrait() -> str:
-    b64 = base64.b64encode(_PLACEHOLDER_SVG.encode("utf-8")).decode("ascii")
-    return f"data:image/svg+xml;base64,{b64}"
+    return f"data:image/png;base64,{_PLACEHOLDER_PNG_B64}"
 
 
 def resolve_portrait(character_id: str) -> tuple[str, str]:

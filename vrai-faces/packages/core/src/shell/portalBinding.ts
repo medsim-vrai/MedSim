@@ -96,10 +96,20 @@ export async function bindFromPortal(
     return null;
   }
 
-  const built = await buildAvatar(renderer, binding.sourcePhoto, binding.opacityLevel);
-  diag.push({
-    t: performance.now(), moduleId: MODULE, kind: 'info',
-    message: `bound ${binding.characterId} (transport=${adapter.transport()})`,
-  });
-  return { ...built, binding };
+  try {
+    const built = await buildAvatar(renderer, binding.sourcePhoto, binding.opacityLevel);
+    diag.push({
+      t: performance.now(), moduleId: MODULE, kind: 'info',
+      message: `bound ${binding.characterId} (transport=${adapter.transport()})`,
+    });
+    return { ...built, binding };
+  } catch (e) {
+    // A bad/undecodable portrait must not blank the screen — fall back to demo.
+    diag.push({
+      t: performance.now(), moduleId: MODULE, kind: 'error',
+      message: 'avatar build from binding failed; falling back to demo',
+      data: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
 }
