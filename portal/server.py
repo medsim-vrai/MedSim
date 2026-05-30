@@ -14,9 +14,12 @@ import socket
 import time
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import quote_plus as _quote_plus
 
-from fastapi import Cookie, Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi import Cookie, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import (
+    FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -323,6 +326,93 @@ async def scenarios_list(
         request, "scenarios.html",
         {"active": "scenarios", "scenarios": scens},
     )
+
+
+# ── Avatar skin library (V8) ───────────────────────────────────────────
+# Save a face once (labeled), then assign it to any character/persona instead
+# of re-importing each time. Assigning copies the image into face_portraits/.
+
+@app.get("/portal/skins", response_class=HTMLResponse)
+async def skins_page(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Avatar skin library — saved labeled portraits, assignable to any
+    character or persona."""
+    targets: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for c in scenarios.list_characters():
+        cid = str(c.get("id") or "")
+        if cid and cid not in seen:
+            seen.add(cid)
+            targets.append({"id": cid, "name": f"{c.get('name') or cid} · character"})
+    for p in library.list_personas():
+        pid = str(p.get("id") or "")
+        if pid and pid not in seen:
+            seen.add(pid)
+            targets.append({"id": pid, "name": f"{p.get('name') or pid} · persona"})
+    return templates.TemplateResponse(
+        request, "skins.html",
+        {
+            "active": "skins",
+            "skins": vrai_faces.list_skins(),
+            "targets": targets,
+            "saved": request.query_params.get("saved"),
+            "assigned": request.query_params.get("assigned"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@app.post("/portal/skins")
+async def skins_upload(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    label: Annotated[str, Form()] = "",
+    image: UploadFile = File(...),
+):
+    """Save an uploaded portrait as a labeled skin."""
+    data = await image.read()
+    if not data:
+        return RedirectResponse("/portal/skins?error=empty", status_code=303)
+    if len(data) > 8 * 1024 * 1024:
+        return RedirectResponse("/portal/skins?error=toobig", status_code=303)
+    fn = image.filename or ""
+    ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else "png"
+    skin = vrai_faces.save_skin(label, data, ext)
+    return RedirectResponse(
+        f"/portal/skins?saved={_quote_plus(skin['label'])}", status_code=303)
+
+
+@app.get("/portal/skins/{skin_id}/image")
+async def skins_image(
+    skin_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    p = vrai_faces.skin_image_path(skin_id)
+    if p is None:
+        raise HTTPException(404, "skin not found")
+    return FileResponse(str(p))
+
+
+@app.post("/portal/skins/{skin_id}/assign")
+async def skins_assign(
+    skin_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    character_id: Annotated[str, Form()],
+):
+    ok = vrai_faces.assign_skin(skin_id, character_id)
+    qs = f"assigned={_quote_plus(character_id)}" if ok else "error=assign"
+    return RedirectResponse(f"/portal/skins?{qs}", status_code=303)
+
+
+@app.post("/portal/skins/{skin_id}/delete")
+async def skins_delete(
+    skin_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    vrai_faces.delete_skin(skin_id)
+    return RedirectResponse("/portal/skins", status_code=303)
 
 
 @app.get("/portal/scenarios/new", response_class=HTMLResponse)

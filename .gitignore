@@ -21,3 +21,11 @@ debrief_*.md
 # Node (vrai-faces has its own .gitignore too; this is a safety net)
 node_modules/
 *.log
+
+# Avatar runtime assets — consented uploads (skins + assigned portraits).
+# Never commit faces; keep the dir READMEs.
+portal/data/face_skins/
+portal/data/face_portraits/*.png
+portal/data/face_portraits/*.jpg
+portal/data/face_portraits/*.jpeg
+portal/data/face_portraits/*.webp

@@ -31,7 +31,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import mimetypes
+import re
+import secrets
+import shutil
 import time
 from pathlib import Path
 from typing import Annotated, Any
@@ -98,6 +102,104 @@ def has_portrait(character_id: str) -> bool:
     if not cid or not PORTRAITS_DIR.is_dir():
         return False
     return any((PORTRAITS_DIR / f"{cid}{suf}").is_file() for suf in _PORTRAIT_SUFFIXES)
+
+
+# ── Skin library ──────────────────────────────────────────────────────
+# A "skin" is a labeled portrait the facilitator saves once and assigns to any
+# character/persona, instead of re-importing a face each time. Stored as
+# data/face_skins/<id>.<ext> (+ <id>.json sidecar). Assigning copies the image
+# into face_portraits/<character_id>, which the avatar + scenario badge read.
+SKINS_DIR = Path(__file__).resolve().parent / "data" / "face_skins"
+_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _safe_id(value: str) -> str:
+    """Reject anything that isn't a plain id token (path-traversal guard)."""
+    v = (value or "").strip()
+    return v if _ID_RE.match(v) else ""
+
+
+def list_skins() -> list[dict[str, Any]]:
+    """Saved skins, newest first: {id, label, ext, created}."""
+    if not SKINS_DIR.is_dir():
+        return []
+    out: list[dict[str, Any]] = []
+    for meta in SKINS_DIR.glob("*.json"):
+        try:
+            d = json.loads(meta.read_text())
+        except (OSError, ValueError):
+            continue
+        out.append({
+            "id": d.get("id") or meta.stem,
+            "label": d.get("label") or meta.stem,
+            "ext": d.get("ext") or "png",
+            "created": d.get("created") or 0,
+        })
+    out.sort(key=lambda s: s["created"], reverse=True)
+    return out
+
+
+def save_skin(label: str, data: bytes, ext: str) -> dict[str, Any]:
+    """Persist a skin (image bytes + label). Returns its metadata."""
+    SKINS_DIR.mkdir(parents=True, exist_ok=True)
+    ext = (ext or "png").lower().lstrip(".")
+    if ext == "jpeg":
+        ext = "jpg"
+    if f".{ext}" not in _PORTRAIT_SUFFIXES and ext != "jpg":
+        ext = "png"
+    skin_id = secrets.token_urlsafe(6)
+    (SKINS_DIR / f"{skin_id}.{ext}").write_bytes(data)
+    meta: dict[str, Any] = {
+        "id": skin_id,
+        "label": (label or "").strip()[:80] or "Untitled skin",
+        "ext": ext,
+        "created": int(time.time()),
+    }
+    (SKINS_DIR / f"{skin_id}.json").write_text(json.dumps(meta))
+    return meta
+
+
+def skin_image_path(skin_id: str) -> Path | None:
+    sid = _safe_id(skin_id)
+    if not sid or not SKINS_DIR.is_dir():
+        return None
+    for suf in _PORTRAIT_SUFFIXES:
+        p = SKINS_DIR / f"{sid}{suf}"
+        if p.is_file():
+            return p
+    return None
+
+
+def delete_skin(skin_id: str) -> bool:
+    sid = _safe_id(skin_id)
+    if not sid:
+        return False
+    removed = False
+    img = skin_image_path(sid)
+    if img:
+        img.unlink()
+        removed = True
+    meta = SKINS_DIR / f"{sid}.json"
+    if meta.is_file():
+        meta.unlink()
+        removed = True
+    return removed
+
+
+def assign_skin(skin_id: str, character_id: str) -> bool:
+    """Copy a skin's image into face_portraits/<character_id> so it becomes that
+    character's assigned avatar (replacing any existing portrait for the id)."""
+    src = skin_image_path(skin_id)
+    cid = _safe_id(character_id)
+    if src is None or not cid:
+        return False
+    PORTRAITS_DIR.mkdir(parents=True, exist_ok=True)
+    for suf in _PORTRAIT_SUFFIXES:           # clear any existing portrait (any ext)
+        ex = PORTRAITS_DIR / f"{cid}{suf}"
+        if ex.is_file():
+            ex.unlink()
+    shutil.copyfile(src, PORTRAITS_DIR / f"{cid}{src.suffix}")
+    return True
 
 
 def voice_id_from_profile(vp: dict[str, Any] | None) -> str:

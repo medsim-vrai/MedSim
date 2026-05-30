@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Avatar skins{% endblock %}
+{% block content %}
+<style>
+  .skin-upload { background:#fff; border:1px solid #dde2ee; border-radius:8px;
+    padding:14px 16px; margin:10px 0 18px; }
+  .skin-upload .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .skin-upload input[type="text"] { flex:1 1 240px; padding:8px 10px;
+    border:1px solid #dde2ee; border-radius:6px; }
+  .flash { padding:8px 12px; border-radius:6px; margin:8px 0; font-size:14px; }
+  .flash.ok { background:#e7f6ee; color:#1a7f4b; border:1px solid #b6e3c9; }
+  .flash.err { background:#fdecec; color:#b22; border:1px solid #f3c4c4; }
+  .skin-grid { list-style:none; padding:0; margin:0; display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; }
+  .skin-card { background:#fff; border:1px solid #dde2ee; border-radius:8px; padding:10px; }
+  .skin-thumb { width:100%; height:150px; object-fit:cover; border-radius:6px;
+    background:#f0f2f7; }
+  .skin-card .skin-label { font-weight:600; margin:8px 0 6px; color:#1c2333;
+    word-break:break-word; }
+  .skin-card select { width:100%; padding:6px; border:1px solid #dde2ee;
+    border-radius:6px; margin-bottom:6px; }
+</style>
+
+<header class="page-header">
+  <h1>Avatar skins</h1>
+</header>
+
+<p class="muted">Save a face once with a label, then assign it to any character or
+   persona — no need to re-import a portrait each time. Assigning sets that
+   character's avatar (it then shows <strong>🪞 avatar assigned</strong> on the
+   Scenarios page and is what the tablet renders).</p>
+
+{% if saved %}<div class="flash ok">Saved skin “{{ saved }}” ✓</div>{% endif %}
+{% if assigned %}<div class="flash ok">Assigned to <code>{{ assigned }}</code> ✓</div>{% endif %}
+{% if error == 'empty' %}<div class="flash err">No image was uploaded.</div>{% endif %}
+{% if error == 'toobig' %}<div class="flash err">Image too large (max 8 MB).</div>{% endif %}
+{% if error == 'assign' %}<div class="flash err">Couldn't assign that skin.</div>{% endif %}
+
+<form class="skin-upload" method="post" action="/portal/skins" enctype="multipart/form-data">
+  <div class="row">
+    <input type="text" name="label" maxlength="80"
+           placeholder="Skin label (e.g. “Tired night-shift RN”)">
+    <input type="file" name="image" accept="image/png,image/jpeg,image/webp" required>
+    <button type="submit" class="primary-action">💾 Save skin</button>
+  </div>
+</form>
+
+{% if not skins %}
+  <div class="empty">
+    <p>No skins saved yet. Upload a consented portrait above to start your library.</p>
+  </div>
+{% else %}
+  <ul class="skin-grid">
+    {% for s in skins %}
+      <li class="skin-card">
+        <img class="skin-thumb" loading="lazy"
+             src="/portal/skins/{{ s.id }}/image" alt="{{ s.label }}">
+        <div class="skin-label">{{ s.label }}</div>
+        <form method="post" action="/portal/skins/{{ s.id }}/assign">
+          <select name="character_id" required>
+            <option value="">— assign to… —</option>
+            {% for t in targets %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="secondary">Assign</button>
+        </form>
+        <form method="post" action="/portal/skins/{{ s.id }}/delete"
+              data-confirm="Delete skin '{{ s.label }}'?" style="margin-top:6px">
+          <button type="submit" class="danger">Delete</button>
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}
