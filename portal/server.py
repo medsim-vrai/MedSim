@@ -27,7 +27,7 @@ from . import (
     intercom as intercom_mod, library, qrgen, runtime, scenarios, scenes,
     telemetry as telemetry_mod,
     ehr as ehr_registry, ehr_db, ehr_seed,
-    voices, ws_room,
+    voices, ws_room, vrai_faces,
 )
 from fastapi import WebSocket
 
@@ -75,6 +75,11 @@ app.mount("/ehr-static", StaticFiles(directory=str(PORTAL_DIR / "ehr")), name="e
 # are attached here so the new feature is self-contained.
 from .devices import routes as _device_routes   # noqa: E402
 _device_routes.attach(app, templates)
+
+# v8 — VRAI Faces avatar integration: launchable-character list, bind payload
+# (portrait attach), and the speech WebSocket + speak path. Self-contained in
+# portal/vrai_faces.py; attached here like the device subsystem.
+vrai_faces.attach(app, templates)
 
 
 # V7 — Activity catalog seed. Idempotent — only inserts rows missing
@@ -5272,6 +5277,7 @@ async def portal_cohort_debrief_index(
 # full-screen, bound to <character_id>.
 
 import os as _os  # local, only this section uses it
+from urllib.parse import quote as _quote  # local, only this section uses it
 
 
 def _vrai_faces_url(
@@ -5298,7 +5304,11 @@ def _vrai_faces_url(
     safe_char = character_id.strip()
     safe_scen = scenario_id.strip() or "default"
     op = max(0.0, min(1.0, opacity))
-    return f"{base.rstrip('/')}/face/{safe_char}?scenario={safe_scen}&opacity={op:.2f}"
+    # Carry the portal origin so the avatar can call back for its bind payload
+    # (portrait + speech WS URL) — GET {api}/api/face/{char}/binding (Phase 4.3).
+    api = _quote(str(request.base_url).rstrip("/"), safe="")
+    return (f"{base.rstrip('/')}/face/{safe_char}"
+            f"?scenario={safe_scen}&opacity={op:.2f}&api={api}")
 
 
 @app.get("/qr/face/{character_id}.svg")

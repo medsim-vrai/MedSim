@@ -64,10 +64,10 @@ All gated ADRs + §9 product calls resolved:
 1. **emotion_driver — hybrid engine** ✅ clinical override (lexicon: pain/drowsy) → transformers.js model → lexicon fallback; JSON-only (ADR-0005); `moodForLabel`/`topLabel` unit-tested.
    - The transformers.js model is **wired** (loads in `warmup()`) but **deferred unbundled** by decision — the deterministic **lexicon is the active path** (covers pain/fear/sad/anger/drowsy/relieved + context). The GoEmotions q8 model (~125 MB) drops in later with no code change (like cloud TTS → v1.1).
 
-### Phase 4 — MedSim integration (close the loop)
-1. **medsim_adapter — real character schema** — Zod against `medsim_v8/schemas/` (confirm path, §9); bind real portraits/personas.
-2. **medsim_adapter — WebSocket transport** — cross-app tablet path (reconnect + `seq` dedup), beyond same-origin BroadcastChannel.
-3. **portal — speak/drive path** — push `VRAISpeechFrame`s to the avatar; launchable-character list.
+### Phase 4 — MedSim integration (close the loop)  ·  _done_
+1. ✅ **medsim_adapter — real character schema** — Zod against `medsim_v8/schemas/character.json` (§9); `voice_profile`→voice id; portrait attached at launch. _(f04a070)_
+2. ✅ **medsim_adapter — WebSocket transport** — cross-app tablet path (reconnect + `seq` dedup), beyond same-origin BroadcastChannel; injectable `WsLike`. _(29b5d8d, ADR-0007)_
+3. ✅ **portal — speak/drive path + launchable list** — `portal/vrai_faces.py`: `GET /api/face/characters`, `GET /api/face/{id}/binding` (portrait attach, ADR-0022), `WS /ws/face/{scen}/{id}` + `POST /api/face/{id}/speak` (text+emotion only, ADR-0023). _Remaining seam → Phase 5: the avatar shell reading `?api=` and calling fetch-binding + WS-connect on load._
 
 ### Phase 5 — Hardening & ship  ·  _blockedBy Phases 1–4_
 1. **e2e** — real portrait fixture; flesh out `soak.spec.ts` (heap/FPS/worklet-underrun over 5 min); the `fixture.spec.ts` full-pipeline run.

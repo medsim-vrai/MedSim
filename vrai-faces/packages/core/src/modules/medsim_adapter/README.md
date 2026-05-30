@@ -20,8 +20,13 @@ See `src/types/medsim_adapter.ts`. Barrel: `medsimAdapter`.
   ARKit weights. `parseCharacterCard` (Zod) validates it; `voice_profile` → a
   gender-encoded `TtsVoiceId` the TTS layer maps to a Kokoro voice; `ghostColor`
   rides the binding (Phase 0 decision 4). The avatar's portrait is attached at
-  LAUNCH (the portal merges it into the payload — Phase 4.3); live mood is owned by
-  `emotion_driver`.
+  LAUNCH by the portal: `GET {api}/api/face/{id}/binding` inlines a `data:` URI
+  under `sourcePhoto` (`portal/vrai_faces.py`, ADR-0022) — consented local file or
+  a neutral placeholder. The bind doc also carries `speechWsUrl` + `ghostColor`.
+  Live mood is owned by `emotion_driver`.
+- Speech arrives as text+emotion only (no audio bytes — ADR-0023); the tablet
+  synthesizes locally (Kokoro). The portal's `POST /api/face/{id}/speak` /
+  `push_speech` emit those frames over `WS /ws/face/{scenario}/{id}`.
 - Transport is chosen per binding: `speechWsUrl` set → WebSocket (cross-app,
   ADR-0007) with auto-reconnect; else BroadcastChannel (same-origin). WS carries
   JSON text frames; the seq-dedup defends against reconnect replays. A `WsLike`

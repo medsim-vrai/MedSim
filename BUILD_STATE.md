@@ -559,8 +559,33 @@
 > - **Tests (+3):** WS selected on speechWsUrl + frame delivery + seq-dedup; reconnect
 >   on unexpected close (fake timers); dispose() stops reconnection. Browser-gated real
 >   WS path falls back to the synth/BroadcastChannel paths in jsdom.
-> - **Phase 4 remaining:** 4.3 portal speak path + launchable-character list (Python,
->   `portal/server.py`) — also where the portrait gets attached to the character payload.
+> **2026-05-29n — Phase 4.3: portal speak path + launchable list (Python). Phase 4 COMPLETE.**
+> - New self-contained `portal/vrai_faces.py` (+ `attach(app)` in server.py, mirroring the
+>   device subsystem). Four surfaces:
+>   - `GET /api/face/characters` (auth) — launchable-character list; reuses
+>     `scenarios.list_characters()`/`list_scenarios()`; `launchable` = referenced by ≥1 scenario
+>     (Phase 0 decision 6) + emits qr/bind/speech URLs.
+>   - `GET /api/face/{id}/binding` (NO auth — same trust as the `/qr/face` deep link) — the bind
+>     doc `medsim_adapter.bindFromCharacter()` consumes: the real card merged with `sourcePhoto`
+>     (portrait inlined as a `data:` URI — **portrait attach**, ADR-0022), `voiceProfile`
+>     (voice_profile→gender-encoded id), `speechWsUrl`, `ghostColor?`, `opacityLevel`.
+>   - `WS /ws/face/{scenario}/{id}` — avatar speech transport (mirrors `ws_room._RoomManager`).
+>   - `POST /api/face/{id}/speak` (auth) + in-process `push_speech()` — emit
+>     `VRAISpeechFrame {v:1,characterId,seq,text,emotion?,endOfUtterance}`; **text+emotion only,
+>     no audio bytes** (tablet synthesizes locally, ADR-0023); `seq` seeded from wall clock so a
+>     portal restart never replays a de-duped value.
+> - **Portrait source (ADR-0022):** `portal/data/face_portraits/{id}.{png,jpg,jpeg,webp}`
+>   (facilitator-supplied, consented, READ-only — no scraping); neutral placeholder + canonical-
+>   topology fallback when absent. README added in that dir.
+> - server.py: `_vrai_faces_url` now appends `&api=<portal origin>` so the avatar can call back
+>   for its binding.
+> - **Tests:** `tests/v8/test_vrai_faces.py` (TestClient, sandboxed vault + tmp YAML dirs) —
+>   list/launchable; binding placeholder+file portrait+voice map+ghost+404+no-auth; speak
+>   delivery+seq-increment+emotion+400+auth-required. **Verified here: `py_compile` of all three
+>   touched files + symbol/behavior checks. Full pytest needs the portal venv (fastapi) — not
+>   installed in this sandbox; run `pytest tests/v8` there.**
+> - **Phase 4 COMPLETE.** Remaining seam (→ Phase 5 e2e): the avatar shell reading `?api=` on
+>   load → fetch `/api/face/{id}/binding` → `bindFromCharacter` + connect `speechWsUrl`.
 >
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
