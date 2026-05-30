@@ -495,6 +495,21 @@
 >   local-first ✅. Remaining: Piper-WASM CPU floor; cloud SDKs (v1.1); browser e2e of
 >   the Kokoro path.
 >
+> **2026-05-29j — Phase 2 launch-scope DONE: Kokoro bundle populated + Piper dropped
+> (ADR-0021). typecheck CLEAN · check:no-any OK · 82/82 tests · build clean.**
+> - **Bundle populated:** ran `setup:assets` — `public/assets/kokoro/` now holds the q8
+>   model (`model_quantized.onnx`, exact 92,361,116 B), config/tokenizer, and 8 curated
+>   voices (~92 MB, git-ignored). Kokoro is fully local-first (SW-served) on this machine.
+> - **Piper DROPPED — ADR-0021 (amends ADR-0020).** Recon showed `piper-tts-web` pins
+>   conflicting `onnxruntime-web@1.20` + `transformers@3.3` (vs Kokoro's 1.26 / 4.2 →
+>   duplicate clashing runtimes) and Piper voices are ~63 MB EACH. Kokoro already runs on
+>   `device:'wasm'` (CPU) when WebGPU is absent, so it IS the floor. TIER_CHAIN drops
+>   `piper-wasm` (primary `[azure, kokoro]`, local `[kokoro]`); the provider literal is
+>   retained but unused. Synthetic-stand-in unit test moved to tier `primary` (azure has
+>   no real engine yet → synthVoice); failover all-fail test now kokoro-only.
+> - **Phase 2 = launch-complete** (local-first voice + lip-sync + failover). Deferred:
+>   cloud SDKs (v1.1, BAA+keys); browser e2e of the live Kokoro path (Phase 5).
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

@@ -13,9 +13,11 @@ See `src/types/tts_provider.ts`. Barrel: `ttsProvider`.
 - `kokoro-js` + `@huggingface/transformers` (onnxruntime-web) — the real
   `headtts-kokoro` engine (`impl/local_engine.ts`), dynamically imported (own
   code-split chunk), browser-only. Node smoke confirms q8 → 24 kHz audio.
-- Other providers still use the synthetic stand-in: Piper (local CPU floor) is a
-  Phase 2.1 follow-up; Azure/ElevenLabs/Cartesia (cloud) are v1.1. `DEFAULT_SYNTHS`
-  picks the real engine per provider; the rest fall back to `synthVoice`.
+- Cloud providers (Azure/ElevenLabs/Cartesia) still use the synthetic stand-in until
+  v1.1. Piper was DROPPED (ADR-0021) — Kokoro on onnxruntime-web's WASM/CPU backend is
+  the local floor (it falls back to `device:'wasm'` when WebGPU is absent), so a second
+  CPU engine isn't needed. `DEFAULT_SYNTHS` picks the real engine per provider; the rest
+  fall back to `synthVoice`.
 
 ## Gotchas
 - Source classification is fail-CLOSED. If `source: 'unknown'`, route as

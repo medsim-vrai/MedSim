@@ -28,9 +28,11 @@ describe('pickProvider PHI guardrail (ADR-0014)', () => {
   });
 });
 
-describe('tts_provider.speak (local synthetic stand-in)', () => {
+describe('tts_provider.speak (synthetic stand-in)', () => {
+  // tier 'primary' → azure-hd-v2 has no real engine yet, so it serves the synthetic
+  // stand-in. ('local' is now Kokoro-only — browser-gated — per ADR-0021.)
   const REQ: TtsRequest = {
-    tier: 'local',
+    tier: 'primary',
     source: 'scripted',
     text: 'Hello there, how are you feeling today?',
     voice: VOICE,
@@ -112,7 +114,7 @@ describe('tts_provider failover state machine (ADR-0013)', () => {
 
   it('throws if every provider in the chain fails', async () => {
     const { deps } = fakeDeps();
-    const tts = createImpl({ synths: { 'headtts-kokoro': failSynth, 'piper-wasm': failSynth } });
+    const tts = createImpl({ synths: { 'headtts-kokoro': failSynth } });   // local = [kokoro] only (ADR-0021)
     await tts.boot(deps);
     await expect(drain(tts.speak(req('local')))).rejects.toThrow(/all providers failed/);
     tts.dispose();

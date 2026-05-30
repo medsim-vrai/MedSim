@@ -54,10 +54,11 @@ All gated ADRs + §9 product calls resolved:
 2. **Blendshape-delta rig** — replace the procedural morph basis (`morph_basis.ts`, 4 shapes) with a real ARKit-52 deformation basis on the 468-vertex topology (source/author a rig; bundle as a data asset).
 3. **avatar_exporter — morph-target baking** — add the per-primitive `targets[]` block now that real deltas exist; round-trip test the GLB morphs. *(blockedBy #2)*
 
-### Phase 2 — Real speech (voice + lip-sync)  ·  _blockedBy Phase 0_
-1. **tts_provider — local fallback engine** (Kokoro/Piper per Phase 0) — the local-first default; replaces synthetic voicing offline.
-2. **tts_provider — cloud tiers** (Azure HD primary w/ native visemes; ElevenLabs/Cartesia) behind the BAA guardrail; implement + test the **failover state machine** (ADR-0013).
-3. **audio_pipeline — ADR-0015 viseme gating** — use provider-native visemes when present; HeadAudio-derived bridge otherwise.
+### Phase 2 — Real speech (voice + lip-sync)  ·  ✅ launch-scope DONE
+1. **tts_provider — local engine** ✅ Kokoro (q8) wired + Node-verified; local-first via `kokoro-sw.js` (model+voices bundled, 92 MB). **Piper DROPPED (ADR-0021)** — Kokoro-on-WASM is the CPU floor.
+2. **tts_provider — failover state machine** ✅ (ADR-0013): chain-walk, lock-to-local, diag-surfaced. Real **cloud tiers** (Azure/ElevenLabs/Cartesia) stay **v1.1** (BAA + keys) per Phase 0.
+3. **audio_pipeline — ADR-0015 viseme gating** ✅ native-vs-derived `setVisemeSource`.
+   - _Remaining:_ browser e2e of the live Kokoro speech path (→ Phase 5 hardening).
 
 ### Phase 3 — Real emotion  ·  _blockedBy Phase 0 (ADR-0019)_
 1. **emotion_driver — on-device engine** (transformers.js, hybrid: model + lexicon fallback + clinical-affect override). Keep ADR-0005 JSON-only output; deterministic QA fixtures.

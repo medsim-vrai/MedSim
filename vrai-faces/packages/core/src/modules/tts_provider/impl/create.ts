@@ -13,11 +13,15 @@ import { kokoroSynth } from './local_engine';
  * The router walks the chain on failure; chain hops are silent to UI but
  * always surfaced to diagnostic_panel + telemetry (ADR-0013).
  */
+// ADR-0021 (amends ADR-0020): Piper dropped. Kokoro runs on onnxruntime-web's
+// WASM/CPU backend when WebGPU is absent (see local_engine device pick), so it IS
+// the universal local floor. `piper-wasm` stays in ProviderName for a possible lean
+// revisit but no longer appears in any chain.
 export const TIER_CHAIN: Record<TtsTier, ProviderName[]> = {
-  primary:        ['azure-hd-v2',     'headtts-kokoro', 'piper-wasm'],
-  hero:           ['elevenlabs-v3',   'azure-hd-v2',    'headtts-kokoro'],
-  conversational: ['cartesia-sonic-3','azure-hd-v2',    'headtts-kokoro'],
-  local:          ['headtts-kokoro',  'piper-wasm'],
+  primary:        ['azure-hd-v2',     'headtts-kokoro'],
+  hero:           ['elevenlabs-v3',   'azure-hd-v2', 'headtts-kokoro'],
+  conversational: ['cartesia-sonic-3','azure-hd-v2', 'headtts-kokoro'],
+  local:          ['headtts-kokoro'],
 };
 
 /** PHI-safe providers per ADR-0014 (BAA pool). */
