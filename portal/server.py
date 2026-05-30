@@ -5299,7 +5299,7 @@ async def portal_cohort_debrief_index(
 # full-screen, bound to <character_id>.
 
 import os as _os  # local, only this section uses it
-from urllib.parse import quote as _quote  # local, only this section uses it
+from urllib.parse import quote as _quote, urlsplit as _urlsplit  # local, this section
 
 
 def _vrai_faces_url(
@@ -5349,6 +5349,21 @@ async def vrai_face_qr(
     return Response(content=svg, media_type="image/svg+xml")
 
 
+def _vrai_app_reachable(url: str, timeout: float = 0.4) -> bool:
+    """Quick TCP probe of the VRAI Faces app host:port. Lets the develop route
+    give actionable guidance instead of a cryptic browser 'connection refused'
+    when the vite app isn't running. A local refused connection returns at once;
+    only a truly unreachable remote host waits out the (short) timeout."""
+    try:
+        parts = _urlsplit(url)
+        host = parts.hostname or "localhost"
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 @app.get("/portal/face/develop/{character_id}")
 async def vrai_face_develop(
     request: Request,
@@ -5360,9 +5375,45 @@ async def vrai_face_develop(
     """Open the live avatar in the VRAI Faces app — the 'developer' surface
     where the facilitator sees/tunes the avatar in the browser. No QR here:
     pairing a tablet (the QR) happens later, at assign-for-use time. Redirects
-    straight to the vrai-faces app URL (carries `api=` so it self-binds)."""
+    straight to the vrai-faces app URL (carries `api=` so it self-binds) when
+    the app is up; otherwise renders setup guidance instead of dead-ending on a
+    browser 'connection refused'."""
     url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
-    return RedirectResponse(url, status_code=302)
+    if _vrai_app_reachable(url):
+        return RedirectResponse(url, status_code=302)
+    # App not running — guide instead of redirecting into a refused connection.
+    safe_url = url.replace("&", "&amp;")
+    retry = (f"/portal/face/develop/{_quote(character_id)}"
+             f"?scenario={_quote(scenario)}&amp;opacity={opacity:.2f}")
+    html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>VRAI Faces app not running</title>
+<style>
+  body {{ font-family: -apple-system, system-ui, sans-serif; background:#0b0f1a;
+          color:#e9edf5; margin:0; padding:40px; line-height:1.5; }}
+  .card {{ max-width:640px; margin:0 auto; background:#121829; border:1px solid #243049;
+           border-radius:12px; padding:28px 32px; }}
+  h1 {{ font-size:20px; font-weight:600; margin:0 0 8px; }}
+  code,pre {{ background:#1c2333; border-radius:6px; }}
+  code {{ padding:2px 6px; font-size:13px; word-break:break-all; }}
+  pre {{ padding:12px 14px; overflow:auto; font-size:13px; }}
+  .muted {{ color:#9aa6c0; font-size:13px; }}
+  a.btn {{ display:inline-block; margin-top:8px; padding:8px 16px; background:#2a3550;
+           color:#e9edf5; border-radius:8px; text-decoration:none; }}
+</style></head><body>
+  <div class="card">
+    <h1>🪞 Avatar app isn't running</h1>
+    <p>The <strong>VRAI Faces</strong> developer app must be running to open
+       <code>{character_id}</code>. It's a separate service from this portal.</p>
+    <p>Start it (from <code>vrai-faces/</code>):</p>
+    <pre>pnpm -F @vrai/core dev</pre>
+    <p>Then retry: <a class="btn" href="{retry}">↻ Open developer</a></p>
+    <p class="muted">Target: <code>{safe_url}</code><br>
+       Serving it elsewhere? Set <code>VRAI_FACES_BASE_URL</code> (or
+       <code>VRAI_FACES_VITE_PORT</code>) and restart the portal.</p>
+  </div>
+</body></html>"""
+    return HTMLResponse(html, status_code=503)
 
 
 @app.get("/portal/face/launch/{character_id}", response_class=HTMLResponse)
