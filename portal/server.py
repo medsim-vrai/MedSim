@@ -1483,6 +1483,30 @@ async def join_landing(request: Request, code: str | None = None):
     )
 
 
+@app.get("/api/join/{code}/personas")
+async def api_join_personas(code: str):
+    """Public persona list for the join page — the join code is the access token
+    (no operator auth, same trust as /join). Returns the personas a student can
+    join AS for this session/bed (the encounter's selected_personas), resolved
+    to {id, name, role, roleGroup} for the dropdown. The previous client used
+    the operator-only /api/personas, which 401s for a public student and left
+    the dropdown empty."""
+    sess = control_session.get_by_join_code(code)
+    if sess is None:
+        return JSONResponse({"ok": False, "personas": []}, status_code=404)
+    out: list[dict[str, Any]] = []
+    for pid in sess.selected_personas:
+        p = library.get_persona(pid)
+        if p:
+            out.append({
+                "id": pid,
+                "name": p.get("name") or pid,
+                "role": p.get("role") or "",
+                "roleGroup": p.get("roleGroup") or "Personas",
+            })
+    return JSONResponse({"ok": True, "personas": out})
+
+
 @app.post("/join")
 async def join_submit(
     request: Request,

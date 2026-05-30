@@ -15,24 +15,25 @@
     if (code.length < 4) { statusEl.textContent = ""; return; }
     statusEl.textContent = "Checking code…";
     try {
-      // Probe by trying to fetch a (cached) personas list; for the join page
-      // we use a lightweight endpoint that doesn't require auth: the code
-      // itself is the access token. Here we just trust the user entered
-      // a valid code and let them pick from the full 24-persona library
-      // — server will reject on submit if the persona isn't in this session.
-      const res = await fetch("/api/personas").catch(() => null);
-      // /api/personas is auth-gated for the operator; without that, fall back
-      // to a public allowed list. For v2 we show all 24 personas; server
-      // validates persona is in session at submit time.
+      // Public, code-scoped persona list — the join code is the access token
+      // (no operator auth). Returns exactly the personas the instructor put in
+      // this session/bed. (The old client hit the operator-only /api/personas,
+      // which 401s for a public student and left this dropdown empty.)
+      const res = await fetch(`/api/join/${encodeURIComponent(code)}/personas`).catch(() => null);
       if (res && res.ok) {
         const data = await res.json();
-        populate(data.personas || []);
+        const personas = data.personas || [];
+        if (personas.length) {
+          populate(personas);
+          btnJoin.disabled = false;
+        } else {
+          statusEl.textContent = "No personas are assigned to this session yet — ask the operator.";
+          personaSelect.innerHTML = '<option value="">— none assigned —</option>';
+        }
       } else {
-        // Fallback: just show a generic message; user picks an ID
-        statusEl.textContent = "Enter your assigned persona ID below, then submit.";
-        personaSelect.innerHTML = '<option value="">— ask the operator for your persona ID —</option>';
+        statusEl.textContent = "That join code isn't active. Check the code on the control-room screen.";
+        personaSelect.innerHTML = '<option value="">— invalid or expired code —</option>';
       }
-      btnJoin.disabled = false;
     } catch (e) {
       statusEl.textContent = "Could not load personas. Try again or ask the operator.";
     }
