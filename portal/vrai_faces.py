@@ -186,6 +186,12 @@ def delete_skin(skin_id: str) -> bool:
     return removed
 
 
+def _skin_marker(cid: str) -> Path:
+    """Sidecar recording which skin id is assigned to a character (so the picker
+    can highlight the current/prior selection — the copied image alone can't)."""
+    return PORTRAITS_DIR / f"{cid}.skin"
+
+
 def assign_skin(skin_id: str, character_id: str) -> bool:
     """Copy a skin's image into face_portraits/<character_id> so it becomes that
     character's assigned avatar (replacing any existing portrait for the id)."""
@@ -199,7 +205,42 @@ def assign_skin(skin_id: str, character_id: str) -> bool:
         if ex.is_file():
             ex.unlink()
     shutil.copyfile(src, PORTRAITS_DIR / f"{cid}{src.suffix}")
+    try:
+        _skin_marker(cid).write_text(_safe_id(skin_id))
+    except OSError:
+        pass
     return True
+
+
+def assigned_skin_id(character_id: str) -> str | None:
+    """The skin id currently assigned to a character, if recorded."""
+    cid = _safe_id(character_id)
+    if not cid:
+        return None
+    m = _skin_marker(cid)
+    if m.is_file():
+        try:
+            return _safe_id(m.read_text().strip()) or None
+        except OSError:
+            return None
+    return None
+
+
+def clear_portrait(character_id: str) -> bool:
+    """Remove a character's assigned avatar (portrait + marker) → back to none."""
+    cid = _safe_id(character_id)
+    if not cid:
+        return False
+    removed = False
+    for suf in _PORTRAIT_SUFFIXES:
+        p = PORTRAITS_DIR / f"{cid}{suf}"
+        if p.is_file():
+            p.unlink()
+            removed = True
+    m = _skin_marker(cid)
+    if m.is_file():
+        m.unlink()
+    return removed
 
 
 def voice_id_from_profile(vp: dict[str, Any] | None) -> str:

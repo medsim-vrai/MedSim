@@ -974,14 +974,36 @@ async def personas_page(
     request: Request,
     _: Annotated[credentials.Vault, Depends(auth.require_vault)],
 ):
+    # Shallow-copy each persona (library dicts may be cached) and annotate the
+    # currently-assigned avatar skin, so the picker can highlight it.
+    personas = [
+        {**p, "avatar_skin": vrai_faces.assigned_skin_id(str(p.get("id") or ""))}
+        for p in library.list_personas()
+    ]
     return templates.TemplateResponse(
         request, "personas.html",
         {
             "active": "personas",
-            "personas": library.list_personas(),
+            "personas": personas,
             "behavioral_dimensions": library.behavioral_dimensions(),
+            "skins": vrai_faces.list_skins(),
         },
     )
+
+
+@app.post("/portal/personas/{persona_id}/avatar")
+async def persona_avatar_assign(
+    persona_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    skin_id: Annotated[str, Form()] = "",
+):
+    """Activate/select this persona's avatar from the skin library (empty
+    skin_id clears it). Redirects back to the personas page."""
+    if skin_id.strip():
+        vrai_faces.assign_skin(skin_id.strip(), persona_id)
+    else:
+        vrai_faces.clear_portrait(persona_id)
+    return RedirectResponse("/portal/personas", status_code=303)
 
 
 # ----- Curriculum modules viewer ------------------------------------------

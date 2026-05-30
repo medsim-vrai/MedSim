@@ -2,6 +2,20 @@
 {% block title %}Personas{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="/static/control.css">
+<style>
+  .avatar-pick { margin-top: 8px; border-top: 1px solid #eef1f7; padding-top: 8px; }
+  .avatar-pick-label { font-size: 12px; color: #6b7280; margin-bottom: 5px; }
+  .avatar-pick-label .on { color: #1a7f4b; font-weight: 600; }
+  .avatar-pick-label .off { color: #9aa6c0; }
+  .avatar-pick-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .avatar-pick-row form { margin: 0; }
+  .avatar-thumb { width: 44px; height: 44px; border-radius: 8px; border: 2px solid #dde2ee;
+    background-size: cover; background-position: center; background-color: #f0f2f7;
+    cursor: pointer; padding: 0; }
+  .avatar-thumb.none { display: flex; align-items: center; justify-content: center;
+    color: #9aa6c0; font-size: 18px; background-color: #fff; }
+  .avatar-thumb.sel { border-color: #1a7f4b; box-shadow: 0 0 0 2px rgba(26,127,75,0.25); }
+</style>
 <header class="page-header">
   <h1>Persona library (24)</h1>
   <span class="muted small">From Voice4MedSim_v6 Appendix A</span>
@@ -32,6 +46,33 @@
         <div class="persona-card-actions">
           <a href="/portal/face/develop/{{ p.id }}" target="_blank" rel="noopener"
              class="button-link">🪞 Develop avatar →</a>
+        </div>
+        <div class="avatar-pick">
+          <div class="avatar-pick-label">🪞 Use avatar face:
+            {% if p.avatar_skin %}<span class="on">on</span>{% else %}<span class="off">off</span>{% endif %}
+          </div>
+          {% if skins %}
+            <div class="avatar-pick-row">
+              <form method="post" action="/portal/personas/{{ p.id }}/avatar" title="No avatar (off)">
+                <input type="hidden" name="skin_id" value="">
+                <button type="submit"
+                        class="avatar-thumb none {% if not p.avatar_skin %}sel{% endif %}"
+                        aria-label="No avatar">∅</button>
+              </form>
+              {% for sk in skins %}
+                <form method="post" action="/portal/personas/{{ p.id }}/avatar" title="{{ sk.label }}">
+                  <input type="hidden" name="skin_id" value="{{ sk.id }}">
+                  <button type="submit"
+                          class="avatar-thumb {% if p.avatar_skin == sk.id %}sel{% endif %}"
+                          style="background-image:url('/portal/skins/{{ sk.id }}/image')"
+                          aria-label="Use skin {{ sk.label }}"></button>
+                </form>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="muted small">No skins saved yet —
+              <a href="/portal/skins">save one</a> to assign.</div>
+          {% endif %}
         </div>
       </div>
     </article>
