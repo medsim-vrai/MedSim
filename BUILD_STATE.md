@@ -421,6 +421,24 @@
 >   Cowork research brief (`research/`), see the research-driven-enhancement strategy
 >   added to `docs/ROADMAP.md`.
 >
+> **2026-05-29f — Phase 2.3: audio_pipeline ADR-0015 viseme gating. typecheck CLEAN
+> · check:no-any OK · 77/77 tests (was 74) · build clean.** Phase 2 (real speech)
+> started with the achievable, no-download piece.
+> - `audio_pipeline` gains `setVisemeSource('native' | 'derived')`. `'native'`
+>   (the provider streams its own visemes — Azure/AWS Polly) SUPPRESSES the
+>   energy→`jawOpen` derived bridge so visemes aren't doubled; `'derived'` (default)
+>   runs it. `startVisemeLoop` is guarded; the source round-trips in `AudioSnapshot`
+>   (optional field; restore defaults to 'derived'). Consumer of `tts_provider.speak()`
+>   sets it per utterance from whether `TtsChunk.visemes` is present.
+> - **Tests (+3):** default derived; native/derived round-trips snapshot↔restore;
+>   restore w/o the field defaults derived; callable pre-prime. (Real audio graph +
+>   energy bridge stay browser-gated.)
+> - **NEXT (Phase 2, gated):** 2.1 local TTS engine (Kokoro→Piper, ADR-0020) needs
+>   the engine deps + voice-model downloads (large, browser-gated runtime); 2.2 cloud
+>   tiers + failover state machine are v1.1-flagged (real SDKs need BAA + keys). The
+>   failover STATE MACHINE logic is buildable now with stubs; the engines/SDKs are
+>   the download/procurement-gated parts.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

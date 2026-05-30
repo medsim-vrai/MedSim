@@ -3,6 +3,7 @@ import type {
   AudioSnapshot,
   Unsubscribe,
   VisemeHandler,
+  VisemeSource,
 } from '@contracts/audio_pipeline';
 import type { BootDeps } from '@contracts/shared';
 
@@ -35,6 +36,7 @@ export function createImpl(): AudioPipelineModule {
   let _deps: BootDeps | null = null;
   let primed = false;
   let queueDepth = 0;
+  let visemeSource: VisemeSource = 'derived';   // ADR-0015: 'native' suppresses the derived bridge
   const visemeHandlers = new Set<VisemeHandler>();
 
   // Web Audio graph (all null until primed in a real browser).
@@ -64,6 +66,7 @@ export function createImpl(): AudioPipelineModule {
 
   function startVisemeLoop(): void {
     if (rafId !== null) return;
+    if (visemeSource !== 'derived') return;   // ADR-0015: native visemes → no derived bridge
     if (typeof requestAnimationFrame === 'undefined' || !analyser) return;
     const td = new Float32Array(analyser.fftSize);
     const tick = (): void => {
@@ -121,6 +124,7 @@ export function createImpl(): AudioPipelineModule {
       queueDepth = 0;
       playhead = 0;
       primed = false;
+      visemeSource = 'derived';
       _deps = null;
     },
 
@@ -159,6 +163,13 @@ export function createImpl(): AudioPipelineModule {
       return () => visemeHandlers.delete(handler);
     },
 
+    setVisemeSource(source) {
+      visemeSource = source;
+      // ADR-0015: native → kill the derived bridge now; derived → resume if audio is live.
+      if (source === 'native') stopVisemeLoop();
+      else if (active.size > 0) startVisemeLoop();
+    },
+
     flush() {
       for (const s of active) { try { s.stop(); } catch { /* already stopped */ } s.disconnect(); }
       active.clear();
@@ -170,7 +181,7 @@ export function createImpl(): AudioPipelineModule {
     // --- Resumable ---
     async pause()  { stopVisemeLoop(); if (ctx) await ctx.suspend(); },
     async resume() { if (ctx) await ctx.resume(); if (active.size > 0) startVisemeLoop(); },
-    snapshot(): AudioSnapshot { return { primed, queueDepth }; },
-    async restore(s) { primed = s.primed; queueDepth = s.queueDepth; },
+    snapshot(): AudioSnapshot { return { primed, queueDepth, visemeSource }; },
+    async restore(s) { primed = s.primed; queueDepth = s.queueDepth; visemeSource = s.visemeSource ?? 'derived'; },
   };
 }
