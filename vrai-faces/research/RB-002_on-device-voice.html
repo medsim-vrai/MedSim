@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>VRAI Faces — Research Brief RB-002: On-device voice (name wake-word + trainee STT)</title>
+<style>
+  @page { size: letter; margin: 22mm 18mm; }
+  body { font: 12px/1.55 -apple-system, system-ui, "Segoe UI", sans-serif; color: #1a1f2b; }
+  h1 { font-size: 21px; margin: 0 0 2px; }
+  h2 { font-size: 15px; margin: 20px 0 6px; padding-bottom: 3px; border-bottom: 1.5px solid #cfd6e4; }
+  h3 { font-size: 13px; margin: 14px 0 4px; }
+  .sub { color: #5b6577; font-size: 12px; margin: 0 0 14px; }
+  .meta { background: #f4f6fb; border: 1px solid #dde3ee; border-radius: 8px; padding: 10px 14px;
+          font-size: 11px; display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; }
+  .meta b { color: #41495a; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 11px; }
+  th, td { border: 1px solid #cfd6e4; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #eef1f8; }
+  code { background: #eef1f8; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+  ul, ol { margin: 4px 0 8px; padding-left: 20px; }
+  li { margin: 2px 0; }
+  .tag { display: inline-block; background: #e7eefc; color: #2a4a8f; border-radius: 4px;
+         padding: 0 7px; font-size: 10px; font-weight: 600; }
+  .warn { background: #fff5ec; border: 1px solid #f3d6b6; border-radius: 6px; padding: 8px 12px; }
+</style>
+</head>
+<body>
+  <h1>RB-002 — On-device voice for the character device</h1>
+  <p class="sub">Name wake-word + privacy-safe trainee speech-to-text for the VRAI Faces tablet</p>
+
+  <div class="meta">
+    <b>Brief</b><span>RB-002</span>
+    <b>Status</b><span>Open — to be executed in Claude Cowork (deep research), then go/no-go → ADR + drop-in.</span>
+    <b>Gates</b><span>Heavy / maturing in-browser on-device ASR; must not breach local-first (ADR-0001) or the PHI guardrail (ADR-0014).</span>
+    <b>Decisions ratified</b><span>Name-trigger = on-device only; PTT = trainee→character (per the operator's request).</span>
+    <b>Drives</b><span>The "Character devices" workstream (ADR-0024): per-character QR device interface + hold-to-talk + name activation.</span>
+  </div>
+
+  <h2>1. Objective</h2>
+  <p>Let a bedside tablet running the per-character Chrome interface (avatar or audio-only) (a) <b>activate
+  when the character's name is spoken nearby</b> ("Hey, Amy…") and (b) let a trainee <b>push-to-talk</b> to the
+  character — with <b>all microphone audio processed on the device</b>. The transcribed text routes to the
+  existing character-AI turn path, which returns a <code>VRAISpeechFrame</code> the avatar speaks (Phase 4.3).
+  The voice capture/recognition is the only missing, gated piece.</p>
+
+  <h2>2. Why this is gated</h2>
+  <ul>
+    <li><b>Privacy / PHI.</b> A wake-word means a continuously-listening mic. The trivial route — the browser
+      <code>SpeechRecognition</code> (Web Speech API) — streams audio to Google's servers. Trainee speech is
+      <b>trainee_input → PHI</b> (ADR-0014, BAA-only) and ambient capture leaving the device breaks local-first
+      (ADR-0001). So cloud ASR is disqualified for this surface.</li>
+    <li><b>Maturity / weight.</b> Real on-device ASR/keyword-spotting in the browser is heavy (model download,
+      WASM/WebGPU compute) and fast-moving. It needs measurement before we commit a dependency + a model to the
+      tools sheet (project rule: new lib/model ⇒ ADR + tools-sheet line).</li>
+  </ul>
+
+  <h2>3. Current state</h2>
+  <ul>
+    <li>Per-character <b>device QR</b> ships today (<code>/qr/face/&lt;id&gt;.svg</code>) → opens the interface
+      (real face if a skin is assigned, else placeholder/head-proxy).</li>
+    <li>The <b>reply loop already exists</b>: text → character AI turn → <code>VRAISpeechFrame</code> → on-device
+      Kokoro TTS + lip-sync (Phases 2–4). Only speech→text on the device is missing.</li>
+    <li>The <b>operator</b> PTT uses cloud Web Speech (operator-only, not trainee PHI) — not reusable for the
+      bedside trainee device.</li>
+  </ul>
+
+  <h2>4. Research questions</h2>
+  <ol>
+    <li><b>On-device STT engine.</b> transformers.js Whisper (tiny/base, WASM + WebGPU) vs. a dedicated
+      streaming ASR — accuracy on short clinical utterances, first-token + full-utterance latency on an iPad-class
+      tablet, model size, cold-load time, battery/thermal over a session.</li>
+    <li><b>Name wake-word.</b> A lightweight always-on keyword-spotter (e.g. openWakeWord / a small CNN/RNN on
+      mel-spectrograms) vs. running tiny-STT in a rolling buffer and matching the name. False-accept / false-reject
+      rate for arbitrary character names (the name is data, not a fixed model) in a noisy room.</li>
+    <li><b>Custom name handling.</b> Names are per-scenario (not bakeable into a fixed wake model) — phonetic
+      matching, fuzzy text match on rolling STT, or per-name enrollment?</li>
+    <li><b>Chrome on-device path.</b> Is Chrome's on-device <code>SpeechRecognition</code>
+      (<code>processLocally</code>, no network) available + reliable enough on the target OS/version to use directly?</li>
+    <li><b>Capacitor/native.</b> Does the iOS/Android shell (ADR-0006) offer a better native on-device ASR than
+      the web layer, and is the bridge worth it?</li>
+  </ol>
+
+  <h2>5. Evaluation criteria</h2>
+  <table>
+    <tr><th>Criterion</th><th>Target / threshold</th><th>Why</th></tr>
+    <tr><td>Audio leaves device</td><td><b>Never</b> (hard gate)</td><td>ADR-0001 / ADR-0014</td></tr>
+    <tr><td>Wake-word false-accept</td><td>&lt; 1 / 10 min idle</td><td>No spurious activations mid-scenario</td></tr>
+    <tr><td>Wake-word detect latency</td><td>&lt; 500 ms</td><td>Feels responsive when named</td></tr>
+    <tr><td>PTT utterance → text</td><td>&lt; 1.5 s after release</td><td>Keeps the turn conversational (§5 budgets)</td></tr>
+    <tr><td>STT word error rate</td><td>&lt; 12% on clinical phrases</td><td>Reliable enough to drive the AI turn</td></tr>
+    <tr><td>Model footprint / cold load</td><td>&le; ~80 MB; &le; ~5 s</td><td>Tablet memory + first-launch UX</td></tr>
+    <tr><td>Sustained cost</td><td>No thermal throttle over 20 min</td><td>Tablet runs a full scenario</td></tr>
+  </table>
+
+  <h2>6. Deliverables</h2>
+  <ul>
+    <li>Recommended engine(s) for (a) wake-word and (b) PTT STT, with the measured numbers above.</li>
+    <li>A pinned model + size + license, ready for a tools-sheet line, and the per-name strategy.</li>
+    <li>A drop-in module contract: <code>name_trigger</code> (emits "addressed") + <code>device_stt</code>
+      (PTT audio → text), both on-device, fail-closed.</li>
+    <li>The portal trainee-input endpoint shape (text in → character AI turn → <code>VRAISpeechFrame</code>),
+      including auth/cost handling for the no-auth device origin.</li>
+  </ul>
+
+  <h2>7. How the result re-enters the build</h2>
+  <ol>
+    <li>Go/no-go from the measured criteria → convert this brief into an ADR (engine + model pinned).</li>
+    <li>Add the model to <code>VRAI_Faces_Tools_Resources.xlsx</code> + <code>setup:assets</code> (lazy, never at boot).</li>
+    <li>Implement <code>name_trigger</code> + <code>device_stt</code> shell modules; wire PTT → portal
+      trainee-input → character AI → speech frame (the avatar already speaks frames).</li>
+    <li>Ship behind the device interface that already loads via the per-character QR.</li>
+  </ol>
+
+  <h2>8. Hard constraints</h2>
+  <div class="warn">
+    <ul style="margin:0">
+      <li>Microphone audio is processed <b>on the device</b>; raw audio never leaves it. <span class="tag">ADR-0001 / ADR-0014</span></li>
+      <li>Wake-word is opt-in per device and clearly indicated when the mic is live; PTT is explicit (press-and-hold).</li>
+      <li>Recognition fails <b>closed</b> (no detection ⇒ no action); never auto-sends trainee audio anywhere.</li>
+      <li>No new runtime dependency without an ADR + a tools-sheet line. Models load lazily, never at boot.</li>
+    </ul>
+  </div>
+</body>
+</html>
