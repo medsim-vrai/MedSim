@@ -1,6 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Scenarios{% endblock %}
 {% block content %}
+<style>
+  .char-avatars { margin: 12px 0 4px; }
+  .char-avatar-list { list-style: none; padding: 0; margin: 6px 0 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .char-avatar { display: flex; gap: 10px; align-items: center;
+    background: #fff; border: 1px solid #dde2ee; border-radius: 8px; padding: 8px; }
+  .char-qr { width: 64px; height: 64px; background: #fff; border-radius: 6px;
+    flex: 0 0 auto; }
+  .char-avatar-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .char-avatar-meta .char-name { font-weight: 600; color: #1c2333; }
+  .avatar-badge { font-size: 12px; }
+  .avatar-badge.on { color: #1a7f4b; }
+  .avatar-badge.off { color: #6b7280; }
+  .char-avatar-meta .button-link { font-size: 12px; }
+</style>
 <header class="page-header">
   <h1>Scenarios</h1>
   <a href="/portal/scenarios/new" class="primary-action">+ New scenario</a>
@@ -31,6 +46,32 @@
             <div><dt>Patient</dt><dd>{{ s.patient_summary or '—' }}</dd></div>
             <div><dt>Characters</dt><dd>{{ s.characters|length }}</dd></div>
           </dl>
+          {% if s.characters_detail %}
+            <div class="char-avatars">
+              <div class="muted small">Avatars — scan to open on a tablet:</div>
+              <ul class="char-avatar-list">
+                {% for c in s.characters_detail %}
+                  <li class="char-avatar">
+                    <img class="char-qr" loading="lazy"
+                         src="/qr/face/{{ c.id }}.svg?scenario={{ s.id }}&scale=4"
+                         alt="Avatar QR for {{ c.name }}"
+                         title="Scan to open {{ c.name }}'s avatar on a tablet">
+                    <div class="char-avatar-meta">
+                      <span class="char-name">{{ c.name }}</span>
+                      {% if c.has_avatar %}
+                        <span class="avatar-badge on">🪞 avatar assigned</span>
+                      {% else %}
+                        <span class="avatar-badge off">○ no avatar yet</span>
+                      {% endif %}
+                      <a class="button-link"
+                         href="/portal/face/develop/{{ c.id }}?scenario={{ s.id }}"
+                         target="_blank" rel="noopener">Develop →</a>
+                    </div>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
         {% endif %}
         <div class="actions">
           <button data-launch-id="{{ s.id }}" class="primary-action">Launch (text)</button>

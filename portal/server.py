@@ -307,9 +307,21 @@ async def scenarios_list(
     request: Request,
     _: Annotated[credentials.Vault, Depends(auth.require_vault)],
 ):
+    # V8 — resolve each scenario's characters to {id, name, has_avatar} so the
+    # card can show a per-character avatar QR + whether an avatar is assigned.
+    scens = scenarios.list_scenarios()
+    for s in scens:
+        s["characters_detail"] = [
+            {
+                "id": cid,
+                "name": (vrai_faces.resolve_card(cid) or {}).get("name") or cid,
+                "has_avatar": vrai_faces.has_portrait(cid),
+            }
+            for cid in (s.get("characters") or [])
+        ]
     return templates.TemplateResponse(
         request, "scenarios.html",
-        {"active": "scenarios", "scenarios": scenarios.list_scenarios()},
+        {"active": "scenarios", "scenarios": scens},
     )
 
 

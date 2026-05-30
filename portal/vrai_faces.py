@@ -90,6 +90,16 @@ def resolve_portrait(character_id: str) -> tuple[str, str]:
     return _placeholder_portrait(), "placeholder"
 
 
+def has_portrait(character_id: str) -> bool:
+    """True when a custom consented portrait file exists for this character —
+    i.e. an avatar has been assigned/developed for it, as opposed to falling
+    back to the generic placeholder silhouette."""
+    cid = (character_id or "").strip()
+    if not cid or not PORTRAITS_DIR.is_dir():
+        return False
+    return any((PORTRAITS_DIR / f"{cid}{suf}").is_file() for suf in _PORTRAIT_SUFFIXES)
+
+
 def voice_id_from_profile(vp: dict[str, Any] | None) -> str:
     """Mirror medsim_adapter.voiceIdFromProfile: "<gender>:<hint>" where hint
     is the first voice_hint, else language, else en-US. Default neutral:en-US."""
