@@ -6,7 +6,9 @@ we ship a Capacitor shell with `UIBackgroundModes` audio.
 
 ## Required iOS Info.plist keys
 
-When `pnpm sync` runs, edit `ios/App/App/Info.plist` and ensure:
+`pnpm sync` runs `apply:ios-perms` (`scripts/apply-ios-permissions.sh`), which
+idempotently applies the ADR-0006 keys to `ios/App/App/Info.plist` via
+PlistBuddy — no hand-editing, and they survive every `cap sync`:
 
 ```xml
 <key>UIBackgroundModes</key>
@@ -16,6 +18,12 @@ When `pnpm sync` runs, edit `ios/App/App/Info.plist` and ensure:
 <key>NSMicrophoneUsageDescription</key>
 <string>VRAI Faces does not record audio. This entitlement is required
 by AudioWorklet only and is never used to capture.</string>
+```
+
+Run it standalone any time after `npx cap add ios`:
+
+```bash
+pnpm -F @vrai/tablet-ios apply:ios-perms
 ```
 
 ## Build

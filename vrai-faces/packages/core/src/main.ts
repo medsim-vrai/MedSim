@@ -15,6 +15,7 @@ import { shaderTranslucent } from './modules/shader_translucent';
 import { faceIngest } from './modules/face_ingest';
 import { meshBuilder } from './modules/mesh_builder';
 import { diag } from './perf/diag';
+import { installPerfProbe } from './perf/probe';
 import { installFirstGestureWarmup } from './shell/firstGesture';
 import { installVisibilityWatch } from './shell/visibilityWatch';
 import { parseLaunchUrl } from './shell/parseLaunchUrl';
@@ -87,6 +88,9 @@ async function boot(): Promise<void> {
   // Dev diagnostics overlay. Self-gates to DEV / ?diag=1 — a no-op (and mounts
   // no DOM) in production, so this is safe to call unconditionally.
   diagnosticPanel.show();
+
+  // Perf probe for the e2e/soak harness (window.__vraiPerf). Same DEV/?diag gate.
+  installPerfProbe();
 
   diag.push({
     t: performance.now(), moduleId: 'main', kind: 'info',

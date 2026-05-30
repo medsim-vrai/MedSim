@@ -3,9 +3,10 @@
   "version": "0.1.0-a0",
   "private": true,
   "scripts": {
-    "sync": "cap sync ios",
+    "sync": "cap sync ios && pnpm run apply:ios-perms",
     "open": "cap open ios",
-    "build:web": "pnpm -F @vrai/core build && cap copy ios"
+    "build:web": "pnpm -F @vrai/core build && cap copy ios",
+    "apply:ios-perms": "bash scripts/apply-ios-permissions.sh"
   },
   "dependencies": {
     "@capacitor/core": "^6.1.0",

@@ -70,12 +70,21 @@ All gated ADRs + §9 product calls resolved:
 3. ✅ **portal — speak/drive path + launchable list** — `portal/vrai_faces.py`: `GET /api/face/characters`, `GET /api/face/{id}/binding` (portrait attach, ADR-0022), `WS /ws/face/{scen}/{id}` + `POST /api/face/{id}/speak` (text+emotion only, ADR-0023).
 4. ✅ **shell seam** — `main.ts` reads `?api=` → `portalBinding.bindFromPortal` (fetch bind doc → `bindFromCharacter` connects the speech WS → `avatar_build` from the real portrait), with demo fallback; `speechConsumer` drives frames (emotion → `setEmotion`; text → lazy Kokoro TTS → `audio_pipeline` + visemes). **Loop closed end-to-end.**
 
-### Phase 5 — Hardening & ship  ·  _blockedBy Phases 1–4_
-1. **e2e** — real portrait fixture; flesh out `soak.spec.ts` (heap/FPS/worklet-underrun over 5 min); the `fixture.spec.ts` full-pipeline run.
-2. **perf** — validate §5 budgets with `latency_meter`; optional telemetry export.
-3. **OffscreenCanvas worker** — finish renderer offload (optional, perf only).
-4. **Capacitor** — `cap add ios/android`, `Info.plist` `UIBackgroundModes=audio` (ADR-0006), build `.ipa`/`.apk`; verify pause/resume across device restarts.
-5. **CI** — `.github/workflows`: typecheck + check:no-any + test + build gates.
+### Phase 5 — Hardening & ship
+1. ✅ **e2e** — specs: `face-pipeline` (live MediaPipe asset fetches), `bind-path` (mocked
+   portal binding → bound mode), `qr-launch`, `pause-resume`, `soak` (5-min slider sweep,
+   reads the `window.__vraiPerf` probe). All compile + collect; they **run on real hardware**
+   via the nightly `e2e.yml` lane (headless has no WebGPU → WebGL2 fallback).
+2. ✅ **perf** — `latency_meter` §5 budgets unit-tested; `perf/probe.ts` exposes fps/heap/
+   budget-warns to the soak harness (DEV/?diag gated). Live budget validation = nightly soak.
+3. ⏸ **OffscreenCanvas worker** — deferred (optional, perf only; main-thread renderer ships).
+4. ◐ **Capacitor** — config + ADR-0006 `apply-ios-permissions.sh` (idempotent PlistBuddy,
+   wired into `pnpm sync`). _Native `cap add ios/android` + `.ipa`/`.apk` builds run on a Mac/SDK
+   (not in CI/sandbox)._
+5. ✅ **CI** — `.github/workflows/ci.yml` (web + portal gate) + `e2e.yml` (nightly browser lane).
+
+**Sandbox-buildable scope complete + verified.** Hardware-gated ops remaining: native
+`.ipa`/`.apk` builds, and the live nightly e2e/soak *run* (real browser + ~100 MB assets).
 
 ---
 

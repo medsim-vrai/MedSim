@@ -610,6 +610,30 @@
 > - **Remaining → Phase 5:** real-tablet browser e2e (live MediaPipe + Kokoro over a real WS), soak/perf,
 >   Capacitor, CI. Phase 1.2 ARKit rig stays gated (RB-001).
 >
+> **2026-05-29p — Phase 5: hardening & ship (sandbox-buildable scope). typecheck CLEAN ·
+> check:no-any OK · 110/110 unit tests (was 106) · e2e specs compile (5) · build clean.**
+> - **CI** (commit 98bec21): `.github/workflows/ci.yml` — `web` (pnpm9/node22: typecheck +
+>   check:no-any + test + build) + `portal` (py3.11: `pip install .[dev,serve]` → `pytest tests/v8`
+>   gating, full `pytest tests` non-blocking). `e2e.yml` — nightly cron + dispatch: setup:assets →
+>   Playwright Chromium → build → desktop-chromium (headless → WebGL2 fallback per ADR-0009; soak
+>   behind a dispatch input). Both YAMLs parse-validated.
+> - **perf:** `perf/probe.ts` exposes `window.__vraiPerf()` (fps from animation_runtime diag, JS heap,
+>   over-budget latency warns) — DEV/?diag gated like the diag panel; wired in `main.ts`.
+>   `latency_meter` §5 budgets unit-tested (+4): elapsed/consume, unknown→-1, over-budget→warn,
+>   under→metric.
+> - **e2e:** `soak.spec` rewritten (5-min slider sweep, samples the probe, asserts no errors +
+>   budgetWarns==0 + fps≥55 + heap growth ≤8%, all guarded for headless); NEW `bind-path.spec`
+>   (`page.route` mocks `/api/face/*/binding` → asserts the shell took the BOUND path + #stage +
+>   no crash). All 5 specs compile via `playwright test --list`.
+> - **Capacitor (ADR-0006):** `tablet-ios/scripts/apply-ios-permissions.sh` — idempotent PlistBuddy
+>   that sets `UIBackgroundModes=[audio]` + `NSMicrophoneUsageDescription`; wired into `pnpm sync`
+>   (`apply:ios-perms`); README updated. `bash -n` clean.
+> - **Deferred:** OffscreenCanvas worker (optional, perf-only). **Hardware-gated (not sandbox/CI):**
+>   native `cap add ios/android` + `.ipa`/`.apk` builds; the live nightly e2e/soak *run* (real
+>   browser + ~100 MB assets). Phase 1.2 ARKit rig stays gated (RB-001).
+> - **Phases 0–5 engineering complete.** The believable local-first demo path (0→1→2.1→3→4) is wired
+>   end-to-end and green on every sandbox-runnable gate.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---
