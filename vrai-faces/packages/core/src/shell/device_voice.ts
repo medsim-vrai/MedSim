@@ -133,7 +133,7 @@ export function mountDeviceVoice(
   const toggleBtn = document.createElement('button');
   toggleBtn.type = 'button';
   toggleBtn.className = 'vrai-voice-toggle';
-  toggleBtn.textContent = '🎙 Voice';
+  toggleBtn.textContent = '🎙 Enable push-to-talk';
   toggleRow.append(toggleBtn);
 
   const controls = document.createElement('div');
@@ -310,7 +310,7 @@ export function mountDeviceVoice(
 
   function setMaster(on: boolean): void {
     masterOn = on;
-    toggleBtn.textContent = on ? '🎙 Cloud voice ON' : '🎙 Voice';
+    toggleBtn.textContent = on ? '🎙 Push-to-talk ON · cloud (not PHI)' : '🎙 Enable push-to-talk';
     toggleBtn.classList.toggle('on', on);
     panel.classList.toggle('vrai-voice-open', on);
     if (on) {

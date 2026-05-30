@@ -22,7 +22,7 @@ import { parseLaunchUrl } from './shell/parseLaunchUrl';
 import { registerResumableHooks } from './shell/registerLifecycles';
 import { mountRenderer } from './shell/renderer';
 import { bootDemoAvatar } from './shell/demo_boot';
-import { buildAvatarFromBlob } from './shell/avatar_build';
+import { buildAvatarFromBlob, type BuiltAvatar } from './shell/avatar_build';
 import { bindFromPortal } from './shell/portalBinding';
 import { installSpeechConsumer } from './shell/speechConsumer';
 import { lazyTts } from './shell/lazy';
@@ -61,18 +61,24 @@ async function boot(): Promise<void> {
   const canvas = document.getElementById('stage') as HTMLCanvasElement | null;
   if (!canvas) throw new Error('main: #stage canvas not found');
   const renderer = await mountRenderer(canvas);
+  const app = document.getElementById('app') ?? document.body;
 
-  // If the QR carried a portal origin, bind a real MedSim character: fetch the
-  // bind doc (portrait + speech WS URL), bind it (connects the speech
-  // transport), and build the avatar from the attached portrait. Any failure
-  // falls back to the standalone demo so the tablet always shows something.
-  const bound = (launch?.apiBase && launch.characterId !== 'default')
-    ? await bindFromPortal(renderer, launch, medsimAdapter)
-    : null;
-  let avatar = bound ?? await bootDemoAvatar(renderer);
+  // Device voice (PTT + name-trigger) mounts FIRST and independently of the
+  // avatar — it only needs the portal origin. So a slow, failed, or unreachable
+  // portal bind can never strand the tablet without a way to talk. Off by
+  // default (cloud STT — not for PHI, ADR-0025); tap to enable.
+  if (launch?.apiBase) {
+    mountDeviceVoice(app, {
+      apiBase: launch.apiBase,
+      characterId,
+      scenarioId,
+      wakeName: characterId,
+    });
+  }
 
   // Drive the avatar from MedSim speech frames: emotion + on-device TTS
-  // (ADR-0023). TTS loads lazily on the first spoken line.
+  // (ADR-0023). TTS loads lazily on the first spoken line. Independent of which
+  // avatar (demo vs bound) is on screen — reads the binding lazily per frame.
   installSpeechConsumer({
     adapter: medsimAdapter,
     audio: audioPipeline,
@@ -81,42 +87,44 @@ async function boot(): Promise<void> {
     voice: () => medsimAdapter.currentBinding()?.voiceProfile,
   });
 
-  // Mount the translucency slider against the active material.
-  const app = document.getElementById('app') ?? document.body;
-  const initialOpacity = bound?.binding.opacityLevel ?? launch?.opacityLevel ?? 0.66;
-  let slider = mountTranslucencySlider(app, avatar.materialId, initialOpacity);
-
-  // The face the "Save skin" control persists: the imported portrait once one is
-  // picked, else the bound character's portrait.
-  let currentFace: Blob | null = bound?.binding.sourcePhoto ?? null;
-
-  // "Develop the face from an image": import a portrait and rebuild the avatar
-  // from it. Build the new avatar FIRST so a failed import leaves the current
-  // one (and its slider) intact; the control surfaces the error.
-  mountImportControl(app, async (file) => {
-    const opacity = slider.getValue();
-    const next = await buildAvatarFromBlob(renderer, file, opacity);
-    renderer.detachMesh(avatar.meshId);
-    slider.dispose();
-    avatar = next;
-    currentFace = file;
-    slider = mountTranslucencySlider(app, avatar.materialId, opacity);
-  });
-
-  // "Save skin" → the portal's skin library (only when we know the portal origin).
-  if (launch?.apiBase) {
-    mountSaveControl(app, { apiBase: launch.apiBase, getFace: () => currentFace });
-
-    // Device voice (DEMO / cloud STT — not for PHI; off by default): hold-to-talk
-    // + name-trigger that POST the trainee's transcribed line to the portal,
-    // which runs the character AI turn and pushes a speech frame back here so the
-    // avatar answers. On-device, PHI-safe voice is gated on RB-002 (ADR-0025).
-    mountDeviceVoice(app, {
-      apiBase: launch.apiBase,
-      characterId,
-      scenarioId,
-      wakeName: characterId,
+  // Show the demo avatar IMMEDIATELY so the screen never sits empty while the
+  // (possibly slow / unreachable) portal bind is attempted in the background.
+  // A demo-build failure must not take down the controls mounted above/below.
+  let avatar: BuiltAvatar | null = null;
+  try {
+    avatar = await bootDemoAvatar(renderer);
+  } catch (e) {
+    diag.push({
+      t: performance.now(), moduleId: 'main', kind: 'error',
+      message: 'demo avatar build failed', data: e instanceof Error ? e.message : String(e),
     });
+  }
+
+  // Avatar-dependent controls (translucency slider, import, save) — only when an
+  // avatar actually built. `avatar`/`slider`/`currentFace` are reassigned by both
+  // the import control and the background bind hot-swap below.
+  let slider: ReturnType<typeof mountTranslucencySlider> | null = null;
+  let currentFace: Blob | null = null;
+  if (avatar) {
+    slider = mountTranslucencySlider(app, avatar.materialId, launch?.opacityLevel ?? 0.66);
+
+    // "Develop the face from an image": build the new avatar FIRST so a failed
+    // import leaves the current one (and its slider) intact.
+    mountImportControl(app, async (file) => {
+      const cur = avatar;
+      if (!cur) return;
+      const opacity = slider?.getValue() ?? launch?.opacityLevel ?? 0.66;
+      const next = await buildAvatarFromBlob(renderer, file, opacity);
+      renderer.detachMesh(cur.meshId);
+      slider?.dispose();
+      avatar = next;
+      currentFace = file;
+      slider = mountTranslucencySlider(app, avatar.materialId, opacity);
+    });
+
+    if (launch?.apiBase) {
+      mountSaveControl(app, { apiBase: launch.apiBase, getFace: () => currentFace });
+    }
   }
 
   renderer.start();
@@ -130,9 +138,34 @@ async function boot(): Promise<void> {
 
   diag.push({
     t: performance.now(), moduleId: 'main', kind: 'info',
-    message: `VRAI Faces booted (${bound ? 'bound' : 'demo'}). `
+    message: `VRAI Faces booted (demo${avatar ? '' : ' FAILED'}). `
       + `scenarioId=${scenarioId} characterId=${characterId}`,
   });
+
+  // Background: bind the real MedSim character (portrait + speech WS), then
+  // hot-swap the demo for it. Fail-soft — any failure (incl. an unreachable
+  // portal) leaves the demo avatar in place rather than blanking the screen.
+  if (launch?.apiBase && launch.characterId !== 'default') {
+    void bindFromPortal(renderer, launch, medsimAdapter).then((bound) => {
+      if (!bound) return;
+      const prev = avatar;
+      if (prev) renderer.detachMesh(prev.meshId);
+      slider?.dispose();
+      avatar = bound;
+      currentFace = bound.binding.sourcePhoto;
+      slider = mountTranslucencySlider(app, bound.materialId, bound.binding.opacityLevel);
+      diag.push({
+        t: performance.now(), moduleId: 'main', kind: 'info',
+        message: `bound ${bound.binding.characterId} — hot-swapped demo → portrait`,
+      });
+    }).catch((e: unknown) => {
+      diag.push({
+        t: performance.now(), moduleId: 'main', kind: 'warn',
+        message: 'background bind failed; staying on demo',
+        data: e instanceof Error ? e.message : String(e),
+      });
+    });
+  }
 }
 
 boot().catch((e: unknown) => {
