@@ -577,6 +577,80 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         )
         return JSONResponse({"ok": True, **result})
 
+    @app.post("/api/face/{character_id}/listen")
+    async def api_face_listen(  # noqa: ANN202
+        request: Request,
+        character_id: str,
+    ):
+        """Device-facing trainee input (no auth — same trust as the binding/speak
+        deep link that opened the tablet). The trainee's transcribed utterance →
+        the character AI turn → push_speech, so the avatar answers in its voice.
+
+        DEMO STOPGAP (ADR-0025). The tablet transcribes with the browser's cloud
+        Web Speech API, which is NOT PHI-safe — so this path is OFF by default,
+        gated behind an explicit 'cloud voice — not for PHI' toggle in the app,
+        and is for non-PHI live testing only. The PHI-safe on-device replacement
+        is gated on RB-002 (ADR-0024). The AI key is borrowed from the active
+        control session; with no running scenario the avatar simply echoes what
+        it heard, so the end-to-end mic→STT→portal→avatar loop is still testable.
+        """
+        # Local imports: keep the cross-module deps lazy (no import-time cycle),
+        # mirroring how runtime/operator turn pull the Anthropic client lazily.
+        from . import control_session, runtime
+
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        text = str(body.get("text") or "").strip()
+        if not text:
+            return JSONResponse({"ok": False, "error": "text required"},
+                                status_code=400)
+        scenario_id = str(body.get("scenario") or "default")
+
+        card = resolve_card(character_id)
+        if card is None:
+            return JSONResponse(
+                {"ok": False, "error": f"character {character_id} not found"},
+                status_code=404,
+            )
+        cid = str(card.get("id") or character_id)
+
+        # Borrow the running scenario's Anthropic key for a real character reply.
+        # No active session (device opened standalone) → echo, so the avatar
+        # still speaks and the voice→avatar pipeline can be exercised live.
+        sess = control_session.get_active()
+        reply = ""
+        mode = "echo"
+        if sess is not None and getattr(sess, "api_key", ""):
+            scenario = {
+                "id": sess.id,
+                "name": getattr(sess, "scenario_name", "") or scenario_id,
+                "patient": ({"history": sess.scenario_text}
+                            if getattr(sess, "scenario_text", "") else {}),
+            }
+            sim = runtime.create_session_from_data(
+                scenario=scenario, characters={cid: card}, api_key=sess.api_key,
+            )
+            result = runtime.take_turn(sim.id, cid, text)
+            runtime.end_session(sim.id)
+            if result.get("ok"):
+                reply = str(result.get("reply") or "").strip()
+                mode = "ai"
+            else:
+                reply = f"(the character could not respond: {result.get('error')})"
+                mode = "error"
+        if not reply:
+            reply = f"I heard you say: {text}"
+            if mode != "error":
+                mode = "echo"
+
+        spoken = await push_speech(scenario_id, cid, text=reply)
+        return JSONResponse(
+            {"ok": True, "heard": text, "reply": reply, "mode": mode, **spoken})
+
     @app.post("/api/face/skins")
     async def api_face_skins(  # noqa: ANN202
         label: Annotated[str, Form()] = "",

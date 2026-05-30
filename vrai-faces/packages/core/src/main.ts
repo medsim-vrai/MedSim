@@ -29,6 +29,7 @@ import { lazyTts } from './shell/lazy';
 import { mountTranslucencySlider } from './shell/translucency_slider';
 import { mountImportControl } from './shell/import_control';
 import { mountSaveControl } from './shell/save_control';
+import { mountDeviceVoice } from './shell/device_voice';
 
 async function boot(): Promise<void> {
   const launch = parseLaunchUrl(window.location);
@@ -105,6 +106,17 @@ async function boot(): Promise<void> {
   // "Save skin" → the portal's skin library (only when we know the portal origin).
   if (launch?.apiBase) {
     mountSaveControl(app, { apiBase: launch.apiBase, getFace: () => currentFace });
+
+    // Device voice (DEMO / cloud STT — not for PHI; off by default): hold-to-talk
+    // + name-trigger that POST the trainee's transcribed line to the portal,
+    // which runs the character AI turn and pushes a speech frame back here so the
+    // avatar answers. On-device, PHI-safe voice is gated on RB-002 (ADR-0025).
+    mountDeviceVoice(app, {
+      apiBase: launch.apiBase,
+      characterId,
+      scenarioId,
+      wakeName: characterId,
+    });
   }
 
   renderer.start();
