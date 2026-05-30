@@ -98,7 +98,10 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
   function frameAvatar(): void {
     if (managed.size === 0) return;
     const box = new THREE.Box3();
-    for (const m of managed.values()) box.expandByObject(m);
+    for (const m of managed.values()) {
+      m.updateMatrixWorld(true);   // bake position/scale so the bbox reflects them
+      box.expandByObject(m);
+    }
     if (box.isEmpty()) return;
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -121,7 +124,11 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
     const w = window.innerWidth;
     const h = window.innerHeight;
     renderer.setPixelRatio(dpr);
-    renderer.setSize(w, h, false);
+    // updateStyle=true: set the canvas CSS size to the logical w×h (buffer stays
+    // w×dpr for crispness). With `false`, a retina canvas (dpr 2) displayed at
+    // its buffer size — 2× the viewport — pushing the centred avatar into the
+    // bottom-right corner (only "fixed" by zooming the window under 100%).
+    renderer.setSize(w, h, true);
     camera.aspect = w / Math.max(h, 1);
     camera.updateProjectionMatrix();
     frameAvatar();
