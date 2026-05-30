@@ -47,6 +47,10 @@ function buildBaseGeometry(): THREE.BufferGeometry {
     morphs.push(new THREE.BufferAttribute(new Float32Array(vertCount * 3), 3));
   }
   geo.morphAttributes.position = morphs;
+  // Deltas, not absolute targets — see face_topology.ts. Without this the
+  // zero-displacement morphs scale the whole head toward the origin as
+  // morphTargetInfluences change each frame.
+  geo.morphTargetsRelative = true;
 
   geo.userData['morphTargetNames'] = [...ARKIT_52];
   return geo;

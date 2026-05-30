@@ -106,6 +106,12 @@ export function buildFaceGeometry(
   // the rest zero), each sized to the real vertex count.
   const basis = computeMorphBasis(pos, n, ARKIT_52);
   geo.morphAttributes.position = basis.map((arr) => new THREE.BufferAttribute(arr, 3));
+  // CRITICAL: the basis arrays are DELTAS (displacement from base), and most are
+  // zero (only jawOpen/smile/brow filled). Without this flag Three treats them
+  // as ABSOLUTE target positions, so any influence — including idle_motion's
+  // zero-filled eye shapes — pulls every vertex toward the origin and scales the
+  // whole head each frame. Relative = add the delta (zero ⇒ no movement).
+  geo.morphTargetsRelative = true;
   geo.userData['morphTargetNames'] = [...ARKIT_52];
 
   return geo;
