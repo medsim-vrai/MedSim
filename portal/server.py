@@ -5298,8 +5298,27 @@ async def portal_cohort_debrief_index(
 # dev/preview server; the tablet camera scans it and the avatar boots
 # full-screen, bound to <character_id>.
 
-import os as _os  # local, only this section uses it
+import os as _os                  # local, only this section uses it
+import shutil as _shutil          # local — locate pnpm for dev-server autostart
+import subprocess as _subprocess  # local — spawn the vite dev server on demand
 from urllib.parse import quote as _quote, urlsplit as _urlsplit  # local, this section
+
+# Handle to the vite dev server the portal auto-starts when an instructor clicks
+# "Develop avatar" and the app isn't already running. Idempotent: we re-probe
+# the port before spawning, so a lost handle (portal restart) or a manually
+# started server is handled gracefully.
+_vrai_dev_proc: "_subprocess.Popen[bytes] | None" = None
+
+
+def _vrai_base(request: Request) -> str:
+    """The scheme://host:port the VRAI Faces app is served at — VRAI_FACES_BASE_URL
+    if set, else derived from the portal's own host + VRAI_FACES_VITE_PORT (5173)."""
+    base = _os.environ.get("VRAI_FACES_BASE_URL")
+    if not base:
+        host = request.url.hostname or "localhost"
+        port = int(_os.environ.get("VRAI_FACES_VITE_PORT", "5173"))
+        base = f"http://{host}:{port}"
+    return base.rstrip("/")
 
 
 def _vrai_faces_url(
@@ -5318,18 +5337,13 @@ def _vrai_faces_url(
     If the env var is unset, the URL is derived from the portal's own
     request hostname plus port 5173.
     """
-    base = _os.environ.get("VRAI_FACES_BASE_URL")
-    if not base:
-        host = request.url.hostname or "localhost"
-        port = int(_os.environ.get("VRAI_FACES_VITE_PORT", "5173"))
-        base = f"http://{host}:{port}"
     safe_char = character_id.strip()
     safe_scen = scenario_id.strip() or "default"
     op = max(0.0, min(1.0, opacity))
     # Carry the portal origin so the avatar can call back for its bind payload
     # (portrait + speech WS URL) — GET {api}/api/face/{char}/binding (Phase 4.3).
     api = _quote(str(request.base_url).rstrip("/"), safe="")
-    return (f"{base.rstrip('/')}/face/{safe_char}"
+    return (f"{_vrai_base(request)}/face/{safe_char}"
             f"?scenario={safe_scen}&opacity={op:.2f}&api={api}")
 
 
@@ -5350,10 +5364,9 @@ async def vrai_face_qr(
 
 
 def _vrai_app_reachable(url: str, timeout: float = 0.4) -> bool:
-    """Quick TCP probe of the VRAI Faces app host:port. Lets the develop route
-    give actionable guidance instead of a cryptic browser 'connection refused'
-    when the vite app isn't running. A local refused connection returns at once;
-    only a truly unreachable remote host waits out the (short) timeout."""
+    """Quick TCP probe of the VRAI Faces app host:port. A local refused
+    connection returns at once; only a truly unreachable remote host waits out
+    the (short) timeout."""
     try:
         parts = _urlsplit(url)
         host = parts.hostname or "localhost"
@@ -5364,6 +5377,65 @@ def _vrai_app_reachable(url: str, timeout: float = 0.4) -> bool:
         return False
 
 
+def _ensure_vrai_dev_server(base: str) -> tuple[str, str | None]:
+    """Start the vite dev server if it isn't already running. Returns
+    (status, error) where status ∈ {"already", "spawned", "error"}. Only ever
+    starts a LOCAL server; the command is fixed (`pnpm -F @vrai/core dev`) — no
+    user input reaches a shell (list args, no shell=True). Detached so it
+    survives this request; idempotent via the port probe + the live handle."""
+    global _vrai_dev_proc
+    if _vrai_dev_proc is not None and _vrai_dev_proc.poll() is None:
+        return "already", None
+    vrai_dir = PORTAL_DIR.parent / "vrai-faces"
+    if not (vrai_dir / "pnpm-workspace.yaml").is_file():
+        return "error", f"vrai-faces workspace not found at {vrai_dir}"
+    pnpm = _shutil.which("pnpm")
+    if not pnpm:
+        return "error", "pnpm is not on the portal's PATH"
+    port = _urlsplit(base).port or 5173
+    try:
+        log_path = PORTAL_DIR.parent / "data" / "vrai-dev.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log = open(log_path, "ab")  # noqa: SIM115 — handed to the child process
+        _vrai_dev_proc = _subprocess.Popen(
+            [pnpm, "-F", "@vrai/core", "dev", "--",
+             "--port", str(port), "--strictPort", "--host"],
+            cwd=str(vrai_dir),
+            stdout=log, stderr=_subprocess.STDOUT, stdin=_subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        return "error", str(exc)
+    return "spawned", None
+
+
+@app.get("/portal/face/dev-status")
+async def vrai_face_dev_status(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Polled by the 'starting…' page — reports whether the avatar app is up."""
+    return JSONResponse({"up": _vrai_app_reachable(_vrai_base(request))})
+
+
+_VRAI_DEV_STYLE = (
+    "body{font-family:-apple-system,system-ui,sans-serif;background:#0b0f1a;"
+    "color:#e9edf5;margin:0;padding:40px;line-height:1.5}"
+    ".card{max-width:640px;margin:0 auto;background:#121829;border:1px solid #243049;"
+    "border-radius:12px;padding:28px 32px}"
+    "h1{font-size:20px;font-weight:600;margin:0 0 12px}"
+    "code,pre{background:#1c2333;border-radius:6px}"
+    "code{padding:2px 6px;font-size:13px;word-break:break-all}"
+    "pre{padding:12px 14px;overflow:auto;font-size:13px}"
+    ".muted{color:#9aa6c0;font-size:13px}a{color:#8ab4ff}"
+    "a.btn{display:inline-block;margin-top:8px;padding:8px 16px;background:#2a3550;"
+    "color:#e9edf5;border-radius:8px;text-decoration:none}"
+    ".spinner{width:28px;height:28px;border:3px solid #243049;border-top-color:#8ab4ff;"
+    "border-radius:50%;animation:spin .8s linear infinite;margin:8px 0 4px}"
+    "@keyframes spin{to{transform:rotate(360deg)}}"
+)
+
+
 @app.get("/portal/face/develop/{character_id}")
 async def vrai_face_develop(
     request: Request,
@@ -5372,48 +5444,71 @@ async def vrai_face_develop(
     scenario: str = "default",
     opacity: float = 0.66,
 ):
-    """Open the live avatar in the VRAI Faces app — the 'developer' surface
-    where the facilitator sees/tunes the avatar in the browser. No QR here:
-    pairing a tablet (the QR) happens later, at assign-for-use time. Redirects
-    straight to the vrai-faces app URL (carries `api=` so it self-binds) when
-    the app is up; otherwise renders setup guidance instead of dead-ending on a
-    browser 'connection refused'."""
+    """Open the live avatar in the VRAI Faces app — the 'developer' surface. If
+    the app is up, redirect straight in. If not, for a LOCAL app the portal
+    auto-starts the vite dev server and shows a 'starting…' page that opens the
+    avatar as soon as it's ready (no commands for the instructor). Pairing a
+    tablet (the QR) happens later, at assign-for-use time."""
     url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity)
-    if _vrai_app_reachable(url):
+    base = _vrai_base(request)
+    if _vrai_app_reachable(base):
         return RedirectResponse(url, status_code=302)
-    # App not running — guide instead of redirecting into a refused connection.
+
+    # Only auto-start a LOCAL server we manage. A configured VRAI_FACES_BASE_URL
+    # (possibly remote) is the operator's to run.
+    host = (_urlsplit(base).hostname or "").lower()
+    if host in ("localhost", "127.0.0.1", "::1") and not _os.environ.get("VRAI_FACES_BASE_URL"):
+        status, err = _ensure_vrai_dev_server(base)
+    else:
+        status, err = "error", (
+            "the avatar app is configured at a remote address "
+            "(VRAI_FACES_BASE_URL); start it on that host")
+
     safe_url = url.replace("&", "&amp;")
     retry = (f"/portal/face/develop/{_quote(character_id)}"
              f"?scenario={_quote(scenario)}&amp;opacity={opacity:.2f}")
-    html = f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8"/>
-<title>VRAI Faces app not running</title>
-<style>
-  body {{ font-family: -apple-system, system-ui, sans-serif; background:#0b0f1a;
-          color:#e9edf5; margin:0; padding:40px; line-height:1.5; }}
-  .card {{ max-width:640px; margin:0 auto; background:#121829; border:1px solid #243049;
-           border-radius:12px; padding:28px 32px; }}
-  h1 {{ font-size:20px; font-weight:600; margin:0 0 8px; }}
-  code,pre {{ background:#1c2333; border-radius:6px; }}
-  code {{ padding:2px 6px; font-size:13px; word-break:break-all; }}
-  pre {{ padding:12px 14px; overflow:auto; font-size:13px; }}
-  .muted {{ color:#9aa6c0; font-size:13px; }}
-  a.btn {{ display:inline-block; margin-top:8px; padding:8px 16px; background:#2a3550;
-           color:#e9edf5; border-radius:8px; text-decoration:none; }}
-</style></head><body>
-  <div class="card">
-    <h1>🪞 Avatar app isn't running</h1>
-    <p>The <strong>VRAI Faces</strong> developer app must be running to open
-       <code>{character_id}</code>. It's a separate service from this portal.</p>
-    <p>Start it (from <code>vrai-faces/</code>):</p>
-    <pre>pnpm -F @vrai/core dev</pre>
-    <p>Then retry: <a class="btn" href="{retry}">↻ Open developer</a></p>
-    <p class="muted">Target: <code>{safe_url}</code><br>
-       Serving it elsewhere? Set <code>VRAI_FACES_BASE_URL</code> (or
-       <code>VRAI_FACES_VITE_PORT</code>) and restart the portal.</p>
-  </div>
-</body></html>"""
-    return HTMLResponse(html, status_code=503)
+
+    if status == "error":
+        inner = (
+            "<h1>🪞 Avatar app isn't running</h1>"
+            f"<p>Couldn't start it automatically: <code>{err}</code></p>"
+            "<p>Start it manually (from <code>vrai-faces/</code>):</p>"
+            "<pre>pnpm -F @vrai/core dev</pre>"
+            f'<p><a class="btn" href="{retry}">↻ Open developer</a></p>'
+            f'<p class="muted">Target: <code>{safe_url}</code></p>')
+        script = ""
+        code = 503
+    else:
+        verb = "Starting" if status == "spawned" else "Opening"
+        inner = (
+            f"<h1>🪞 {verb} the avatar developer…</h1>"
+            '<div class="spinner"></div>'
+            "<p class=\"muted\">First launch compiles the app — usually a few seconds, "
+            f"up to ~20s cold. <code>{character_id}</code> opens here automatically "
+            "when it's ready.</p>"
+            f'<p id="slow" class="muted" style="display:none">Still working — you can '
+            f'<a href="{retry}">retry</a>. Target <code>{safe_url}</code>.</p>')
+        script = (
+            "<script>\n"
+            "  const TARGET = " + json.dumps(url) + ";\n"
+            "  const STATUS = " + json.dumps('/portal/face/dev-status') + ";\n"
+            "  let n = 0;\n"
+            "  function again(){ if(++n===8){var s=document.getElementById('slow');"
+            "if(s)s.style.display='block';} if(n<60) setTimeout(poll,1000); }\n"
+            "  function poll(){ fetch(STATUS,{cache:'no-store'})"
+            ".then(function(r){return r.json();})"
+            ".then(function(j){ if(j&&j.up){location.replace(TARGET);return;} again(); })"
+            ".catch(again); }\n"
+            "  poll();\n"
+            "</script>")
+        code = 202
+
+    html = (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"/>'
+        '<meta name="viewport" content="width=device-width, initial-scale=1"/>'
+        "<title>VRAI Faces · developer</title><style>" + _VRAI_DEV_STYLE + "</style>"
+        '</head><body><div class="card">' + inner + "</div>" + script + "</body></html>")
+    return HTMLResponse(html, status_code=code)
 
 
 @app.get("/portal/face/launch/{character_id}", response_class=HTMLResponse)
