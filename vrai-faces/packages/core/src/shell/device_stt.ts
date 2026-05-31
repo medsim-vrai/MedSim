@@ -90,7 +90,17 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         // first when an adapter exists. Falls back to CDN/HF if the bundles are absent.
         const wasmFlags = tf.env?.backends?.onnx?.wasm;
         if (wasmFlags) {
-          wasmFlags.wasmPaths = '/assets/ort/';
+          // Use the OBJECT form {wasm,mjs}: it triggers transformers' wasm pre-load
+          // + backend registration. A bare string path skips that step, which leaves
+          // ORT with "no available backend found" even though the files fetch fine.
+          // Pick the build variant transformers expects per browser — asyncify for
+          // non-Safari (Android Chrome), the plain threaded build for Safari.
+          const safari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+          const variant = safari ? 'ort-wasm-simd-threaded' : 'ort-wasm-simd-threaded.asyncify';
+          wasmFlags.wasmPaths = {
+            wasm: `/assets/ort/${variant}.wasm`,
+            mjs: `/assets/ort/${variant}.mjs`,
+          };
           wasmFlags.numThreads = 1;
           wasmFlags.proxy = false;
         }
@@ -121,9 +131,12 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         // COI=false/SAB=false ⇒ the page is NOT cross-origin isolated (usually a
         // stale cached app or missing COOP/COEP) → the threaded wasm can't start.
         const iso = `[COI=${String(crossOriginIsolated)} SAB=${typeof SharedArrayBuffer !== 'undefined'}]`;
-        // Surface the WASM reason specifically — on a no-WebGPU tablet the webgpu
-        // "failed to get GPU adapter" is expected and masks the real wasm failure.
-        sttError = `${iso} wasm: ${wasmErr || lastErr || 'no STT backend available'}`;
+        // Show the [wasm] portion of ORT's aggregated error — it leads with the
+        // expected [webgpu] no-adapter note on a no-WebGPU tablet, which masks the
+        // real wasm reason.
+        const full = wasmErr || lastErr || 'no STT backend available';
+        const w = full.indexOf('[wasm]');
+        sttError = `${iso} ${w >= 0 ? full.slice(w) : full}`;
         return null;
       } catch (e) {
         sttError = e instanceof Error ? e.message : String(e);
