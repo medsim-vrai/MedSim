@@ -5577,6 +5577,26 @@ async def vrai_face_qr(
     return Response(content=svg, media_type="image/svg+xml")
 
 
+@app.get("/rootca.pem")
+async def vrai_rootca():  # noqa: ANN202
+    """Serve the dev CA so a tablet can install + trust it (ADR-0027 HTTPS) without
+    emailing files around. Open this URL on the device (proceed past the one-time
+    warning), then install the downloaded cert as a CA. No auth — it's the PUBLIC
+    CA certificate (the thing you install); the private key never leaves the Mac.
+    The x-x509-ca-cert type makes Android offer the CA-install flow directly."""
+    ca = PORTAL_DIR / "data" / "certs" / "rootCA.pem"
+    if not ca.is_file():
+        return JSONResponse(
+            {"ok": False, "error": "no dev CA — run scripts/make-dev-cert.sh first"},
+            status_code=404,
+        )
+    return Response(
+        content=ca.read_bytes(),
+        media_type="application/x-x509-ca-cert",
+        headers={"Content-Disposition": 'attachment; filename="medsim-dev-ca.crt"'},
+    )
+
+
 def _vrai_app_reachable(url: str, timeout: float = 0.4) -> bool:
     """Quick TCP probe of the VRAI Faces app host:port. A local refused
     connection returns at once; only a truly unreachable remote host waits out
