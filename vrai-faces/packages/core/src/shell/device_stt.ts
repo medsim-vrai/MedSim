@@ -1,0 +1,172 @@
+// On-device push-to-talk STT (Phase 6, ADR-0026). Records mic audio and
+// transcribes it ENTIRELY on the device with whisper-tiny.en via the
+// already-bundled transformers.js (WebGPU, WASM fallback). Microphone audio
+// NEVER leaves the device (ADR-0001 / ADR-0014) — this replaces the cloud
+// Web Speech stopgap (ADR-0025).
+//
+// Lazy: transformers.js + the model load on first use, never at boot (kept out
+// of the main bundle via dynamic import, like tts_provider + emotion_driver).
+// The model is fetched once from HF then cached by transformers.js; bundling it
+// local-first via setup:assets (like Kokoro) is a follow-up (ADR-0026).
+//
+// RB-002 caveat: every latency/WER/thermal figure in the research is
+// laptop-measured — this is ship-gated on an on-device pilot (primary target:
+// Android Chrome tablets; iOS Safari 26 secondary).
+
+import { diag } from '@perf/diag';
+
+const MODULE = 'shell.deviceStt';
+const MODEL = 'onnx-community/whisper-tiny.en'; // MIT; fits the ~80 MB budget (ADR-0026)
+const SAMPLE_RATE = 16000;                      // whisper input rate
+
+// transformers.js is loosely typed; declare just the slice we call (no `any`).
+type AsrPipeline = (audio: Float32Array) => Promise<unknown>;
+
+export interface DeviceSttHandle {
+  /** Begin capturing mic audio (call on PTT press). No-op while already recording. */
+  start(): Promise<void>;
+  /** Stop capturing + transcribe the take on-device → text (call on PTT release). */
+  stopAndTranscribe(): Promise<string>;
+  /** True once the model has loaded (first load is lazy / may take seconds). */
+  isReady(): boolean;
+  dispose(): void;
+}
+
+interface WindowAudio {
+  AudioContext?: typeof AudioContext;
+  webkitAudioContext?: typeof AudioContext;
+}
+
+function audioCtxCtor(): typeof AudioContext | null {
+  const w = window as unknown as WindowAudio;
+  return w.AudioContext ?? w.webkitAudioContext ?? null;
+}
+
+/** Pull the transcript string out of transformers.js's loosely-typed output. */
+function textOf(raw: unknown): string {
+  const first = Array.isArray(raw) ? raw[0] : raw;
+  if (first && typeof first === 'object' && 'text' in first) {
+    const t = (first as { text: unknown }).text;
+    if (typeof t === 'string') return t.trim();
+  }
+  return '';
+}
+
+let asrPromise: Promise<AsrPipeline | null> | null = null;
+
+/** Lazy-load the ASR pipeline once. WebGPU first, WASM (CPU) fallback. */
+async function loadAsr(): Promise<AsrPipeline | null> {
+  if (!asrPromise) {
+    asrPromise = (async (): Promise<AsrPipeline | null> => {
+      try {
+        const { pipeline } = await import('@huggingface/transformers');
+        for (const device of ['webgpu', 'wasm'] as const) {
+          try {
+            const pipe = await pipeline('automatic-speech-recognition', MODEL, { device });
+            diag.push({
+              t: performance.now(), moduleId: MODULE, kind: 'info',
+              message: `on-device STT ready (whisper-tiny.en, ${device})`,
+            });
+            return (audio: Float32Array) => pipe(audio) as Promise<unknown>;
+          } catch (e) {
+            diag.push({
+              t: performance.now(), moduleId: MODULE, kind: 'warn',
+              message: `STT ${device} init failed; trying next backend`,
+              data: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+        return null;
+      } catch (e) {
+        diag.push({
+          t: performance.now(), moduleId: MODULE, kind: 'error',
+          message: 'transformers.js load failed', data: e instanceof Error ? e.message : String(e),
+        });
+        return null;
+      }
+    })();
+  }
+  return asrPromise;
+}
+
+/** Resample/downmix an AudioBuffer to 16 kHz mono Float32 (whisper input). */
+async function to16kMono(buf: AudioBuffer): Promise<Float32Array> {
+  if (buf.sampleRate === SAMPLE_RATE && buf.numberOfChannels === 1) {
+    return buf.getChannelData(0).slice();
+  }
+  const frames = Math.max(1, Math.ceil(buf.duration * SAMPLE_RATE));
+  const off = new OfflineAudioContext(1, frames, SAMPLE_RATE);
+  const src = off.createBufferSource();
+  src.buffer = buf;
+  src.connect(off.destination);
+  src.start();
+  const rendered = await off.startRendering();
+  return rendered.getChannelData(0).slice();
+}
+
+export function createDeviceStt(): DeviceSttHandle {
+  let stream: MediaStream | null = null;
+  let recorder: MediaRecorder | null = null;
+  let chunks: Blob[] = [];
+  let ready = false;
+
+  // Warm the model in the background so the first PTT release isn't blocked on
+  // the full model download.
+  void loadAsr().then((a) => { ready = a !== null; });
+
+  return {
+    isReady: () => ready,
+
+    async start(): Promise<void> {
+      if (recorder && recorder.state === 'recording') return;
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunks = [];
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = (e: BlobEvent) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.start();
+    },
+
+    async stopAndTranscribe(): Promise<string> {
+      const rec = recorder;
+      if (!rec) return '';
+      const stopped = new Promise<void>((resolve) => { rec.onstop = () => resolve(); });
+      if (rec.state !== 'inactive') rec.stop();
+      await stopped;
+      // Release the mic at once (privacy + battery).
+      stream?.getTracks().forEach((t) => t.stop());
+      stream = null;
+      recorder = null;
+
+      const type = chunks[0]?.type || 'audio/webm';
+      const blob = new Blob(chunks, { type });
+      chunks = [];
+      if (blob.size === 0) return '';
+
+      const Ctor = audioCtxCtor();
+      const asr = await loadAsr();
+      if (!Ctor || !asr) return '';
+      const ctx = new Ctor();
+      try {
+        const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+        const audio = await to16kMono(decoded);
+        return textOf(await asr(audio));
+      } catch (e) {
+        diag.push({
+          t: performance.now(), moduleId: MODULE, kind: 'error',
+          message: 'on-device transcription failed', data: e instanceof Error ? e.message : String(e),
+        });
+        return '';
+      } finally {
+        void ctx.close();
+      }
+    },
+
+    dispose(): void {
+      try { if (recorder && recorder.state !== 'inactive') recorder.stop(); } catch { /* noop */ }
+      stream?.getTracks().forEach((t) => t.stop());
+      stream = null;
+      recorder = null;
+      chunks = [];
+    },
+  };
+}
