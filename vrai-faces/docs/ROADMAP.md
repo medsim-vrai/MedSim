@@ -114,17 +114,22 @@ launches the device (no QR re-scan).
 Decision still open: hand-rolled SW (current) vs `vite-plugin-pwa` ⇒ ADR. Full
 evaluation (benefits + risks now/future) in `docs/PLAN-2026-05-30-resecure-and-animation.md §7`.
 
-### Phase 6 — Re-secure the device voice  ·  _gated on RB-002_
-Replace the **cloud-STT stopgap (ADR-0025)** with **on-device** name wake-word + trainee
-STT (no mic audio leaves the tablet; re-assert ADR-0001/0014), and formalize the
-HTTPS/secure-context + device-trust posture. **Scope now also covers cached PHI-at-rest**
-(the Phase 5.7 skin pack persists consented faces on device → retention / clear-on-unpair /
-optional encryption; never cache secrets/tokens) — the same security the operator wants
-"added back." The `device_voice.ts` UI + the `/listen` reply loop are the seams; swap the
-engine behind them. **Voice activation: PTT-first** (current) → **name-gated activation
-next** (the device keys in only once its character's name is heard — on-device wake-word,
-documented for future). Run **RB-002** → ADR → build `name_trigger` + `device_stt` → retire
-the stopgap. See `docs/PLAN-2026-05-30-resecure-and-animation.md §2, §7.6, §8`.
+### Phase 6 — Re-secure the device voice  ·  RB-002 ✅ → **ADR-0026** decided
+Replace the **cloud-STT stopgap (ADR-0025)** with **on-device** STT (no mic audio leaves the
+tablet; re-asserts ADR-0001/0014), and formalize the HTTPS/secure-context + device-trust +
+cached-skin **PHI-at-rest** posture (the Phase 5.7 skin pack → retention / clear-on-unpair;
+never cache secrets) — the security the operator wants "added back."
+- **Engine (ADR-0026):** PTT STT = the already-bundled `transformers.js` running
+  `whisper-tiny.en` (ONNX, MIT) on WebGPU + WASM fallback (lazy, SW-cached like Kokoro);
+  `vosk-browser` (Apache-2.0, no-WebGPU) is the CPU floor. Cloud Web Speech + Porcupine
+  rejected. Build `device_stt` behind the existing `device_voice` UI + `/listen` loop.
+- **Validation gate (RB-002 caveat):** ship-gated on an **on-device pilot** — every RB-002
+  number is laptop/desktop; measure PTT latency / clinical WER / thermal on real iPad Safari
+  26 before retiring the stopgap. Capacitor-native `SFSpeechRecognizer` is the iOS fallback.
+- **Voice activation: PTT-first** (current) → **name-gated next** — DEFERRED: no clean open
+  in-browser keyword-spotter for arbitrary names, so `name_trigger` = fuzzy/phonetic match
+  over a rolling on-device STT buffer (built + validated after PTT). See
+  `docs/PLAN-2026-05-30-resecure-and-animation.md §2, §7.6, §8`.
 
 ### Phase 7 — Speech-driven facial animation  ·  _ungated start; full fidelity gated on RB-001_
 Make the skinned face visibly **lip-sync + emote** from the character AI's spoken lines.
@@ -174,7 +179,7 @@ dependency. See `research/README.md` for the index + lifecycle.
 | Brief | Enhancement | Gates | Status |
 |---|---|---|---|
 | RB-001 | Real ARKit-52 blendshape rig (vs. the procedural basis) | Phase 1.2 / 7 | Open |
-| RB-002 | On-device voice — name wake-word + trainee STT | ADR-0024 / Phase 6 | Open |
+| RB-002 | On-device voice — name wake-word + trainee STT | ADR-0024 / Phase 6 | ✅ Executed → ADR-0026 |
 
 As gated items surface in later phases (a cloud emotion model beyond ADR-0019,
 premium-voice procurement, photoreal sculpt per ADR-0002, …), add a brief here rather
