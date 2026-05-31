@@ -5631,13 +5631,26 @@ def _ensure_vrai_dev_server(base: str) -> tuple[str, str | None]:
     vite_args = ["--port", str(port), "--strictPort", "--host"]
     node = _find_node_tool("node")
     pnpm = _find_node_tool("pnpm")
-    vite_js = vrai_dir / "packages" / "core" / "node_modules" / "vite" / "bin" / "vite.js"
+    core_dir = vrai_dir / "packages" / "core"
+    vite_js = core_dir / "node_modules" / "vite" / "bin" / "vite.js"
+    # PREVIEW mode (opt-in, VRAI_FACES_SERVE=preview): build + serve the
+    # production bundle so the device gets the real app-shell cache + installable
+    # PWA (the dev server serves /src, not the hashed /assets the SW caches).
+    # Default stays the dev server (HMR) for avatar development — unchanged path.
+    serve_mode = (_os.environ.get("VRAI_FACES_SERVE") or "dev").strip().lower()
+    serve_preview_js = core_dir / "scripts" / "serve-preview.mjs"
 
-    if node and vite_js.is_file():
-        # Preferred: run vite directly. Args go straight to vite (deterministic
-        # port binding) and it needs only node, not pnpm.
-        cmd: list[str] = [node, str(vite_js), *vite_args]
-        cwd = vrai_dir / "packages" / "core"
+    if serve_mode == "preview" and node and serve_preview_js.is_file():
+        # Build-then-preview via the vite JS API (one node process; first start
+        # pays the ~5–15 s build, then serves dist over preview on `port`).
+        cmd: list[str] = [node, str(serve_preview_js), str(port)]
+        cwd = core_dir
+        node_dir = _os.path.dirname(node)
+    elif node and vite_js.is_file():
+        # Preferred (dev): run vite directly. Args go straight to vite
+        # (deterministic port binding) and it needs only node, not pnpm.
+        cmd = [node, str(vite_js), *vite_args]
+        cwd = core_dir
         node_dir = _os.path.dirname(node)
     elif pnpm:
         # Fallback: pnpm runs the `dev` script. NO `--` — pnpm forwards trailing
