@@ -119,10 +119,12 @@ Replace the **cloud-STT stopgap (ADR-0025)** with **on-device** STT (no mic audi
 tablet; re-asserts ADR-0001/0014), and formalize the HTTPS/secure-context + device-trust +
 cached-skin **PHI-at-rest** posture (the Phase 5.7 skin pack → retention / clear-on-unpair;
 never cache secrets) — the security the operator wants "added back."
-- **Engine (ADR-0026):** PTT STT = the already-bundled `transformers.js` running
-  `whisper-tiny.en` (ONNX, MIT) on WebGPU + WASM fallback (lazy, SW-cached like Kokoro);
-  `vosk-browser` (Apache-2.0, no-WebGPU) is the CPU floor. Cloud Web Speech + Porcupine
-  rejected. Build `device_stt` behind the existing `device_voice` UI + `/listen` loop.
+- **Engine (ADR-0026): ✅ BUILT.** PTT STT = the already-bundled `transformers.js` running
+  `whisper-tiny.en` (ONNX, MIT) on WebGPU + WASM fallback (`shell/device_stt.ts`, lazy);
+  `device_voice` PTT records-on-hold → transcribes-on-release on-device; the **cloud Web
+  Speech stopgap (ADR-0025) is retired**. `vosk-browser` is the documented no-WebGPU floor;
+  Porcupine rejected. _Remaining:_ bundle `whisper-tiny.en` local-first via `setup:assets`
+  (like Kokoro) — today it fetches from HF + caches on first use.
 - **Validation gate (RB-002 caveat):** ship-gated on an **on-device pilot** — every RB-002
   number is laptop/desktop; measure PTT latency / clinical WER / thermal on real iPad Safari
   26 before retiring the stopgap. Capacitor-native `SFSpeechRecognizer` is the iOS fallback.
