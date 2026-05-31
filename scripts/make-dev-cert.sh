@@ -57,20 +57,21 @@ SAN="${SAN%,}"
 # Squash any exact duplicate entries for tidiness.
 SAN="$(printf '%s' "$SAN" | tr ',' '\n' | awk '!seen[$0]++' | paste -sd, -)"
 
-if [ -f "$CERT_DIR/dev-cert.pem" ] && [ -z "${FORCE:-}" ]; then
-  echo "Certs already exist in $CERT_DIR (set FORCE=1 to regenerate)."
-  echo "  SAN of existing leaf:"
-  openssl x509 -in "$CERT_DIR/dev-cert.pem" -noout -ext subjectAltName | sed 's/^/    /'
-  exit 0
-fi
-
-echo "Generating dev TLS cert for: $SAN"
+echo "Issuing dev TLS leaf for: $SAN"
 cd "$CERT_DIR"
 
-# --- 1. Local root CA ---------------------------------------------------------
-openssl genrsa -out rootCA-key.pem 2048 >/dev/null 2>&1
-openssl req -x509 -new -nodes -key rootCA-key.pem -sha256 -days 825 \
-  -out rootCA.pem -subj "/CN=MedSim Dev Local CA" >/dev/null 2>&1
+# --- 1. Local root CA — REUSE if present so trusted devices stay valid --------
+# Re-issuing the leaf for a new LAN IP keeps the SAME CA, so a tablet that
+# already trusts rootCA.pem does NOT need to re-trust anything. FORCE=1 mints a
+# brand-new CA (then you must re-install rootCA.pem on each device).
+if [ -f rootCA.pem ] && [ -f rootCA-key.pem ] && [ -z "${FORCE:-}" ]; then
+  echo "  ↻ reusing existing root CA (no device re-trust needed)."
+else
+  echo "  + creating a new root CA (re-trust rootCA.pem on each device afterward)."
+  openssl genrsa -out rootCA-key.pem 2048 >/dev/null 2>&1
+  openssl req -x509 -new -nodes -key rootCA-key.pem -sha256 -days 825 \
+    -out rootCA.pem -subj "/CN=MedSim Dev Local CA" >/dev/null 2>&1
+fi
 
 # --- 2. Leaf key + CSR --------------------------------------------------------
 openssl genrsa -out dev-key.pem 2048 >/dev/null 2>&1
