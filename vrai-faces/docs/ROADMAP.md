@@ -133,8 +133,8 @@ never cache secrets) — the security the operator wants "added back."
   26 before retiring the stopgap. Capacitor-native `SFSpeechRecognizer` is the iOS fallback.
 - **Security posture (A6): ✅ ADR-0027.** Formalized: HTTPS/secure-context is REQUIRED on the
   device (unlocks WebGPU + mic + crypto.subtle); the `/api/face/*` routes keep LAN-origin
-  trust (explicit, like join codes) with a **per-session device token on `/listen` as a
-  recorded hardening follow-up** (stops stray LAN clients driving the avatar / spending AI);
+  trust (explicit, like join codes) with a **per-session device token on `/listen` — ✅ built,
+  opt-in via `MEDSIM_FACE_TOKEN`** (stops stray LAN clients driving the avatar / spending AI);
   cached skins are PHI-at-rest → **clear-on-unpair + manual "forget faces", never cache
   secrets**. Unblocks the Phase 5.7 skin pack.
 - **Voice activation: PTT-first** (current) → **name-gated next** — DEFERRED: no clean open
