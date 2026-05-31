@@ -77,7 +77,18 @@ async function loadAsr(): Promise<AsrPipeline | null> {
       const t0 = performance.now();
       let lastErr = '';
       try {
-        const { pipeline } = await import('@huggingface/transformers');
+        const tf = await import('@huggingface/transformers');
+        // onnxruntime-web's MULTI-threaded WASM needs cross-origin isolation
+        // (SharedArrayBuffer via COOP+COEP), which our pages don't set — without
+        // it the threaded WASM EP fails to register ("no available backend").
+        // Force SINGLE-threaded so the CPU backend always loads (slower but works;
+        // WebGPU is still tried first for devices that have an adapter).
+        const wasmFlags = tf.env?.backends?.onnx?.wasm;
+        if (wasmFlags) {
+          wasmFlags.numThreads = 1;
+          wasmFlags.proxy = false;
+        }
+        const { pipeline } = tf;
         for (const device of ['webgpu', 'wasm'] as const) {
           try {
             const pipe = await pipeline('automatic-speech-recognition', MODEL, { device });
