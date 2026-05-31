@@ -27,11 +27,65 @@ const DEFAULT_RETRY_MS = 400;    // linear backoff base between retries
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/** Default fetch with an abort timeout, so a hung/slow portal can't stall boot. */
-const timeoutFetch: FetchLike = (url) => {
+// ── Binding cache (Phase 5.7 "skin pack" · ADR-0027) ──────────────────────────
+// The bind document carries the character's skin inlined as a data: URI, so
+// caching it persists the device's own face for instant startup + offline. It's
+// PHI-at-rest, so: NETWORK-FIRST (a reassigned skin shows on the next reload),
+// CACHED FALLBACK only when the portal is unreachable, and each successful cache
+// PURGES other characters' entries — clear-on-unpair, so only this device's
+// paired face is ever stored. `clearBindingCache()` is the manual "forget faces".
+const BINDING_CACHE = 'vrai-binding-v1';
+
+async function cacheBinding(url: string, res: Response): Promise<void> {
+  try {
+    const cache = await caches.open(BINDING_CACHE);
+    for (const req of await cache.keys()) {
+      if (req.url !== url) void cache.delete(req); // clear-on-unpair
+    }
+    await cache.put(url, res);
+  } catch { /* cache unavailable — non-fatal */ }
+}
+
+async function cachedBinding(url: string): Promise<Response | null> {
+  try {
+    const cache = await caches.open(BINDING_CACHE);
+    return (await cache.match(url)) ?? null;
+  } catch { return null; }
+}
+
+/** Clear all cached faces from this device (ADR-0027 "forget faces" control). */
+export async function clearBindingCache(): Promise<void> {
+  try { if (typeof caches !== 'undefined') await caches.delete(BINDING_CACHE); }
+  catch { /* noop */ }
+}
+
+/**
+ * Default fetch: abort-timeout + the network-first binding cache above (cached
+ * fallback when the portal is unreachable). Unit tests inject their own fetchFn
+ * and never hit this, so the Cache API is only touched in the real app.
+ */
+const cachingTimeoutFetch: FetchLike = async (url) => {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  return fetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (res.ok && typeof caches !== 'undefined') void cacheBinding(url, res.clone());
+    return res;
+  } catch (e) {
+    if (typeof caches !== 'undefined') {
+      const hit = await cachedBinding(url);
+      if (hit) {
+        diag.push({
+          t: performance.now(), moduleId: MODULE, kind: 'info',
+          message: 'portal unreachable — bound from cached face (offline)',
+        });
+        return hit;
+      }
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 /**
@@ -94,7 +148,7 @@ export async function bindFromPortal(
   deps: BindDeps = {},
 ): Promise<BindResult | null> {
   if (!launch.apiBase) return null;
-  const fetchFn = deps.fetchFn ?? timeoutFetch;
+  const fetchFn = deps.fetchFn ?? cachingTimeoutFetch;
   const buildAvatar = deps.buildAvatar ?? buildAvatarFromBlob;
   const retries = deps.retries ?? DEFAULT_RETRIES;
   const retryDelayMs = deps.retryDelayMs ?? DEFAULT_RETRY_MS;

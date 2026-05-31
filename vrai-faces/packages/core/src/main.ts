@@ -23,7 +23,7 @@ import { registerResumableHooks } from './shell/registerLifecycles';
 import { mountRenderer } from './shell/renderer';
 import { bootDemoAvatar } from './shell/demo_boot';
 import { buildAvatarFromBlob, type BuiltAvatar } from './shell/avatar_build';
-import { bindFromPortal } from './shell/portalBinding';
+import { bindFromPortal, clearBindingCache } from './shell/portalBinding';
 import { installSpeechConsumer } from './shell/speechConsumer';
 import { lazyTts } from './shell/lazy';
 import { mountTranslucencySlider } from './shell/translucency_slider';
@@ -48,6 +48,11 @@ async function boot(): Promise<void> {
   }
   if (navigator.storage?.persist) {
     void navigator.storage.persist().catch(() => { /* non-fatal */ });
+  }
+  // Manual "forget faces" (ADR-0027): `?forget` clears the cached skin/binding
+  // before re-binding fresh — for handing a tablet on or re-pointing it.
+  if (new URLSearchParams(window.location.search).has('forget')) {
+    await clearBindingCache();
   }
 
   const deps = { diag, scenarioId, characterId };
