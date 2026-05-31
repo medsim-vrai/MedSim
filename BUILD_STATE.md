@@ -783,6 +783,21 @@
 > HONEST GAPS (in §8.4, need a focused follow-up): the cert GO/NO-GO (step-ca vs public+DNS-01), and
 > on-device confirmation of PWA/Web-Clip mic-permission persistence + Android CA→site-TLS trust.
 >
+> **2026-05-31d — STT fix (Phase 1): serve the ONNX runtime from OUR origin, not jsdelivr.**
+> Root cause of the tablet "STT unavailable: no available backend": transformers.js loads the
+> onnxruntime-web WASM from the **jsdelivr CDN** at runtime, which fails on a contained/flaky LAN.
+> (Verified the COI red herring is moot: transformers picks the single-threaded **`.asyncify`** build
+> on non-Safari, so NO cross-origin isolation / COOP+COEP / service-worker changes are needed.)
+> - **`setup-assets.mjs`** now also copies the `ort-wasm-simd-threaded*` runtime (.wasm + .mjs, 8 files)
+>   from the onnxruntime-web that the bundled transformers@4.2.0 resolves to (1.26) into
+>   `public/assets/ort/` — reproducible, **no network** (the files ship in node_modules).
+> - **`device_stt.ts`** sets `env.backends.onnx.wasm.wasmPaths='/assets/ort/'` so the runtime loads
+>   same-origin from the portal; falls back to the CDN default if absent. Web gate green (typecheck +
+>   check:no-any + tests + build); portal serves `/assets/ort/*.wasm` as `application/wasm` (verified).
+> - **Phase 2 (deferred to deployment):** bundle the `whisper-tiny.en` MODEL locally too (a ~download
+>   via `setup:assets`) for full offline / PHI-contained sites. On a normal dev network the model still
+>   loads from HF, so Phase 1 alone should clear "no available backend" — **device-test on a clean LAN.**
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

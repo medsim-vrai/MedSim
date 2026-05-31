@@ -11,13 +11,15 @@
 //
 // Local-first (ADR-0001): assets are served from the app origin, never a CDN at runtime.
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const core = resolve(here, '..'); // packages/core
 const force = process.argv.includes('--force');
+const require = createRequire(import.meta.url);
 
 // 1) WASM — copy from the installed package (reproducible, no network).
 const wasmSrc = resolve(core, 'node_modules/@mediapipe/tasks-vision/wasm');
@@ -28,6 +30,30 @@ const wasmDst = resolve(core, 'public/assets/mediapipe/wasm');
 mkdirSync(wasmDst, { recursive: true });
 cpSync(wasmSrc, wasmDst, { recursive: true });
 console.log('✓ WASM   → public/assets/mediapipe/wasm/');
+
+// 1b) ONNX Runtime WASM for on-device STT (whisper via transformers.js, ADR-0026).
+//     Copy the simd-threaded* runtime (.wasm + .mjs) from the SAME onnxruntime-web
+//     the bundled @huggingface/transformers resolves to, so device_stt loads the
+//     runtime from OUR origin (/assets/ort/) instead of jsdelivr at runtime —
+//     local-first (ADR-0001) and the fix for "no available backend" on a contained
+//     or flaky LAN. transformers picks the .asyncify build on non-Safari (single-
+//     threaded, NO cross-origin isolation needed), so this needs no COOP/COEP.
+//     No network — the files ship inside node_modules.
+// Resolve the package mains (not /package.json — onnxruntime-web's exports map
+// blocks that). dirname(ort main) is the dist/ dir that ships the .wasm/.mjs.
+const tfEntry = require.resolve('@huggingface/transformers', { paths: [core] });
+const ortDist = dirname(require.resolve('onnxruntime-web', { paths: [dirname(tfEntry)] }));
+const ortDst = resolve(core, 'public/assets/ort');
+mkdirSync(ortDst, { recursive: true });
+let ortCopied = 0;
+for (const f of readdirSync(ortDist)) {
+  if (/^ort-wasm-simd-threaded.*\.(wasm|mjs)$/.test(f)) {
+    copyFileSync(resolve(ortDist, f), resolve(ortDst, f));
+    ortCopied++;
+  }
+}
+if (ortCopied === 0) throw new Error(`No ORT runtime files found in ${ortDist}`);
+console.log(`✓ ORT    → public/assets/ort/ (${ortCopied} runtime files)`);
 
 // 2) model — download only if missing (or --force).
 const MODEL_URL =

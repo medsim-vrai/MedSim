@@ -78,13 +78,17 @@ async function loadAsr(): Promise<AsrPipeline | null> {
       let lastErr = '';
       try {
         const tf = await import('@huggingface/transformers');
-        // onnxruntime-web's MULTI-threaded WASM needs cross-origin isolation
-        // (SharedArrayBuffer via COOP+COEP), which our pages don't set — without
-        // it the threaded WASM EP fails to register ("no available backend").
-        // Force SINGLE-threaded so the CPU backend always loads (slower but works;
-        // WebGPU is still tried first for devices that have an adapter).
+        // Load the ONNX runtime WASM from OUR origin (/assets/ort/, bundled by
+        // setup:assets) instead of the jsdelivr CDN — this is the fix for
+        // "no available backend" on a contained/flaky LAN and keeps STT
+        // local-first (ADR-0001/0026). transformers selects the single-threaded
+        // `.asyncify` build on non-Safari, so NO cross-origin isolation
+        // (SharedArrayBuffer / COOP+COEP) is required; proxy off + numThreads=1
+        // keep the CPU path simple (WebGPU is still tried first when an adapter
+        // exists). If /assets/ort/ is absent it falls back to the CDN default.
         const wasmFlags = tf.env?.backends?.onnx?.wasm;
         if (wasmFlags) {
+          wasmFlags.wasmPaths = '/assets/ort/';
           wasmFlags.numThreads = 1;
           wasmFlags.proxy = false;
         }
