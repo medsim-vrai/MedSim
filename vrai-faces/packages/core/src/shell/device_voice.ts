@@ -62,6 +62,7 @@ const STYLE_CSS = `
 .vrai-voice .vrai-voice-status.err { color: #ff9b9b; opacity: 1; }
 .vrai-voice .vrai-voice-metrics { font-size: 11px; opacity: 0.6; min-height: 13px;
   font-variant-numeric: tabular-nums; }
+.vrai-voice .vrai-voice-metrics.err { color: #ff9b9b; opacity: 1; word-break: break-word; }
 `;
 
 function ensureStyle(): void {
@@ -127,7 +128,14 @@ export function mountDeviceVoice(
 
   function renderMetrics(): void {
     const m = stt?.metrics();
-    if (!m || !m.backend) { metricsEl.textContent = ''; return; }
+    metricsEl.classList.remove('err');
+    if (!m) { metricsEl.textContent = ''; return; }
+    if (m.error) {                              // surface the load failure on-screen
+      metricsEl.textContent = `STT unavailable: ${m.error}`;
+      metricsEl.classList.add('err');
+      return;
+    }
+    if (!m.backend) { metricsEl.textContent = ''; return; }
     const cold = m.loadMs !== null ? ` · cold ${m.loadMs}ms` : '';
     const last = m.lastMs !== null ? ` · last ${m.lastMs}ms` : '';
     metricsEl.textContent = `STT: ${m.backend}${cold}${last}`;
@@ -192,12 +200,12 @@ export function mountDeviceVoice(
       // Surface backend + cold-load as soon as the model finishes warming.
       if (!s.isReady() && readyPoll === null) {
         readyPoll = window.setInterval(() => {
-          if (!on || s.isReady()) {
+          const failed = s.metrics().error !== null;
+          if (!on || s.isReady() || failed) {
             if (readyPoll !== null) { clearInterval(readyPoll); readyPoll = null; }
-            if (on && s.isReady()) {
-              setStatus('On-device voice ready — hold to talk.');
-              renderMetrics();
-            }
+            if (on && s.isReady()) setStatus('On-device voice ready — hold to talk.');
+            else if (on && failed) setStatus('On-device voice unavailable — details below.', true);
+            renderMetrics();
           }
         }, 400);
       }

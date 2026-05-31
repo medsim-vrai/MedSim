@@ -28,6 +28,7 @@ export interface DeviceSttMetrics {
   backend: string | null;     // 'webgpu' | 'wasm'
   loadMs: number | null;      // cold-load of the model (first time)
   lastMs: number | null;      // last take's release→transcript latency
+  error: string | null;       // why the model failed to load (surfaced in the UI)
 }
 
 export interface DeviceSttHandle {
@@ -67,12 +68,14 @@ let asrPromise: Promise<AsrPipeline | null> | null = null;
 let sttBackend: string | null = null;
 let sttLoadMs: number | null = null;
 let sttLastMs: number | null = null;
+let sttError: string | null = null;
 
 /** Lazy-load the ASR pipeline once. WebGPU first, WASM (CPU) fallback. */
 async function loadAsr(): Promise<AsrPipeline | null> {
   if (!asrPromise) {
     asrPromise = (async (): Promise<AsrPipeline | null> => {
       const t0 = performance.now();
+      let lastErr = '';
       try {
         const { pipeline } = await import('@huggingface/transformers');
         for (const device of ['webgpu', 'wasm'] as const) {
@@ -80,24 +83,27 @@ async function loadAsr(): Promise<AsrPipeline | null> {
             const pipe = await pipeline('automatic-speech-recognition', MODEL, { device });
             sttBackend = device;
             sttLoadMs = Math.round(performance.now() - t0);
+            sttError = null;
             diag.push({
               t: performance.now(), moduleId: MODULE, kind: 'info',
               message: `on-device STT ready (whisper-tiny.en, ${device}, cold-load ${sttLoadMs}ms)`,
             });
             return (audio: Float32Array) => pipe(audio) as Promise<unknown>;
           } catch (e) {
+            lastErr = e instanceof Error ? e.message : String(e);
             diag.push({
               t: performance.now(), moduleId: MODULE, kind: 'warn',
-              message: `STT ${device} init failed; trying next backend`,
-              data: e instanceof Error ? e.message : String(e),
+              message: `STT ${device} init failed; trying next backend`, data: lastErr,
             });
           }
         }
+        sttError = lastErr || 'no STT backend available';
         return null;
       } catch (e) {
+        sttError = e instanceof Error ? e.message : String(e);
         diag.push({
           t: performance.now(), moduleId: MODULE, kind: 'error',
-          message: 'transformers.js load failed', data: e instanceof Error ? e.message : String(e),
+          message: 'transformers.js load failed', data: sttError,
         });
         return null;
       }
@@ -133,7 +139,9 @@ export function createDeviceStt(): DeviceSttHandle {
 
   return {
     isReady: () => ready,
-    metrics: (): DeviceSttMetrics => ({ backend: sttBackend, loadMs: sttLoadMs, lastMs: sttLastMs }),
+    metrics: (): DeviceSttMetrics => ({
+      backend: sttBackend, loadMs: sttLoadMs, lastMs: sttLastMs, error: sttError,
+    }),
 
     async start(): Promise<void> {
       if (recorder && recorder.state === 'recording') return;
