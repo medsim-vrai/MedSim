@@ -121,6 +121,10 @@ async function loadAsr(): Promise<AsrPipeline | null> {
           } catch (e) {
             lastErr = e instanceof Error ? e.message : String(e);
             if (device === 'wasm') wasmErr = lastErr;
+            // Route the FULL error object (message + stack + cause) to console so
+            // the on-device 🐞 debug console captures it — diag.push alone is not
+            // visible there. This is what surfaces the real wasm reason.
+            console.error(`[STT] ${device} init failed:`, e);
             diag.push({
               t: performance.now(), moduleId: MODULE, kind: 'warn',
               message: `STT ${device} init failed; trying next backend`, data: lastErr,
@@ -140,6 +144,7 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         return null;
       } catch (e) {
         sttError = e instanceof Error ? e.message : String(e);
+        console.error('[STT] transformers load failed:', e);
         diag.push({
           t: performance.now(), moduleId: MODULE, kind: 'error',
           message: 'transformers.js load failed', data: sttError,

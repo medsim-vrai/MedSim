@@ -16,7 +16,7 @@
  * The live AI reply loop still needs the portal — caching speeds STARTUP, not the
  * encounter. Bump CACHE_VERSION on a breaking shell change; activate() drops old.
  */
-const CACHE_VERSION = 'vrai-shell-v3'; // v3: on-device debug console for the STT pilot
+const CACHE_VERSION = 'vrai-shell-v4'; // v4: STT errors routed to console for the 🐞 panel
 const HF_PREFIX = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/';
 const LOCAL_BASE = '/assets/kokoro/';
 
