@@ -60,6 +60,8 @@ const STYLE_CSS = `
 .vrai-voice .vrai-voice-note { font-size: 11px; color: #bfe6cf; line-height: 1.4; }
 .vrai-voice .vrai-voice-status { font-size: 12px; opacity: 0.85; min-height: 16px; }
 .vrai-voice .vrai-voice-status.err { color: #ff9b9b; opacity: 1; }
+.vrai-voice .vrai-voice-metrics { font-size: 11px; opacity: 0.6; min-height: 13px;
+  font-variant-numeric: tabular-nums; }
 `;
 
 function ensureStyle(): void {
@@ -114,9 +116,22 @@ export function mountDeviceVoice(
   const status = document.createElement('div');
   status.className = 'vrai-voice-status';
 
-  controls.append(note, pttRow, status);
+  // Pilot readout (ADR-0026): backend + cold-load + last-take latency, so the
+  // on-device validation produces numbers instead of impressions.
+  const metricsEl = document.createElement('div');
+  metricsEl.className = 'vrai-voice-metrics';
+
+  controls.append(note, pttRow, status, metricsEl);
   panel.append(toggleRow, controls);
   container.appendChild(panel);
+
+  function renderMetrics(): void {
+    const m = stt?.metrics();
+    if (!m || !m.backend) { metricsEl.textContent = ''; return; }
+    const cold = m.loadMs !== null ? ` · cold ${m.loadMs}ms` : '';
+    const last = m.lastMs !== null ? ` · last ${m.lastMs}ms` : '';
+    metricsEl.textContent = `STT: ${m.backend}${cold}${last}`;
+  }
 
   function setStatus(msg: string, isErr = false): void {
     status.textContent = msg;
@@ -134,6 +149,7 @@ export function mountDeviceVoice(
   let on = false;
   let busy = false;                       // transcribing a take
   let startP: Promise<void> | null = null; // in-flight start(), so stop waits for it
+  let readyPoll: number | null = null;     // polls model readiness to show metrics
 
   function sendUtterance(text: string): void {
     const clean = text.trim();
@@ -168,17 +184,33 @@ export function mountDeviceVoice(
     panel.classList.toggle('vrai-voice-open', enabled);
     if (enabled) {
       if (!stt) stt = createDeviceStt(); // warms the model in the background
-      setStatus(stt.isReady()
+      const s = stt;
+      setStatus(s.isReady()
         ? 'On-device voice ready — hold to talk.'
         : 'Loading on-device voice model… (first time, ~once).');
+      renderMetrics();
+      // Surface backend + cold-load as soon as the model finishes warming.
+      if (!s.isReady() && readyPoll === null) {
+        readyPoll = window.setInterval(() => {
+          if (!on || s.isReady()) {
+            if (readyPoll !== null) { clearInterval(readyPoll); readyPoll = null; }
+            if (on && s.isReady()) {
+              setStatus('On-device voice ready — hold to talk.');
+              renderMetrics();
+            }
+          }
+        }, 400);
+      }
       diag.push({
         t: performance.now(), moduleId: MODULE, kind: 'info',
         message: 'on-device push-to-talk enabled (whisper-tiny, audio stays on device)',
       });
     } else {
+      if (readyPoll !== null) { clearInterval(readyPoll); readyPoll = null; }
       stt?.dispose();
       stt = null;
       setStatus('');
+      renderMetrics();
     }
   }
 
@@ -213,6 +245,7 @@ export function mountDeviceVoice(
       try {
         await startP;                       // ensure recording actually began
         const text = await s.stopAndTranscribe();
+        renderMetrics();                    // surface backend + latency for the pilot
         if (text) sendUtterance(text);
         else setStatus('(no speech detected)');
       } catch {
@@ -237,6 +270,7 @@ export function mountDeviceVoice(
       pttBtn.removeEventListener('pointerup', onPttUp);
       pttBtn.removeEventListener('pointerleave', onPttUp);
       pttBtn.removeEventListener('pointercancel', onPttUp);
+      if (readyPoll !== null) { clearInterval(readyPoll); readyPoll = null; }
       stt?.dispose();
       stt = null;
       panel.remove();

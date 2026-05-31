@@ -22,6 +22,14 @@ const SAMPLE_RATE = 16000;                      // whisper input rate
 // transformers.js is loosely typed; declare just the slice we call (no `any`).
 type AsrPipeline = (audio: Float32Array) => Promise<unknown>;
 
+/** Pilot metrics (ADR-0026 ship-gate): the backend actually used, the one-time
+ *  model cold-load, and the last release→text latency. Nulls until measured. */
+export interface DeviceSttMetrics {
+  backend: string | null;     // 'webgpu' | 'wasm'
+  loadMs: number | null;      // cold-load of the model (first time)
+  lastMs: number | null;      // last take's release→transcript latency
+}
+
 export interface DeviceSttHandle {
   /** Begin capturing mic audio (call on PTT press). No-op while already recording. */
   start(): Promise<void>;
@@ -29,6 +37,8 @@ export interface DeviceSttHandle {
   stopAndTranscribe(): Promise<string>;
   /** True once the model has loaded (first load is lazy / may take seconds). */
   isReady(): boolean;
+  /** Pilot measurements for the on-device validation (ADR-0026). */
+  metrics(): DeviceSttMetrics;
   dispose(): void;
 }
 
@@ -53,19 +63,26 @@ function textOf(raw: unknown): string {
 }
 
 let asrPromise: Promise<AsrPipeline | null> | null = null;
+// Pilot metrics (ADR-0026) — module-level since the ASR loads once per session.
+let sttBackend: string | null = null;
+let sttLoadMs: number | null = null;
+let sttLastMs: number | null = null;
 
 /** Lazy-load the ASR pipeline once. WebGPU first, WASM (CPU) fallback. */
 async function loadAsr(): Promise<AsrPipeline | null> {
   if (!asrPromise) {
     asrPromise = (async (): Promise<AsrPipeline | null> => {
+      const t0 = performance.now();
       try {
         const { pipeline } = await import('@huggingface/transformers');
         for (const device of ['webgpu', 'wasm'] as const) {
           try {
             const pipe = await pipeline('automatic-speech-recognition', MODEL, { device });
+            sttBackend = device;
+            sttLoadMs = Math.round(performance.now() - t0);
             diag.push({
               t: performance.now(), moduleId: MODULE, kind: 'info',
-              message: `on-device STT ready (whisper-tiny.en, ${device})`,
+              message: `on-device STT ready (whisper-tiny.en, ${device}, cold-load ${sttLoadMs}ms)`,
             });
             return (audio: Float32Array) => pipe(audio) as Promise<unknown>;
           } catch (e) {
@@ -116,6 +133,7 @@ export function createDeviceStt(): DeviceSttHandle {
 
   return {
     isReady: () => ready,
+    metrics: (): DeviceSttMetrics => ({ backend: sttBackend, loadMs: sttLoadMs, lastMs: sttLastMs }),
 
     async start(): Promise<void> {
       if (recorder && recorder.state === 'recording') return;
@@ -129,6 +147,7 @@ export function createDeviceStt(): DeviceSttHandle {
     async stopAndTranscribe(): Promise<string> {
       const rec = recorder;
       if (!rec) return '';
+      const t0 = performance.now(); // release → transcript latency (ADR-0026 pilot)
       const stopped = new Promise<void>((resolve) => { rec.onstop = () => resolve(); });
       if (rec.state !== 'inactive') rec.stop();
       await stopped;
@@ -149,7 +168,9 @@ export function createDeviceStt(): DeviceSttHandle {
       try {
         const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
         const audio = await to16kMono(decoded);
-        return textOf(await asr(audio));
+        const text = textOf(await asr(audio));
+        sttLastMs = Math.round(performance.now() - t0);
+        return text;
       } catch (e) {
         diag.push({
           t: performance.now(), moduleId: MODULE, kind: 'error',
