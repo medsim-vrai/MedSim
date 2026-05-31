@@ -95,16 +95,23 @@ demo** (ADR-0025) with a portal `/api/face/<id>/listen` reply loop; and the tabl
 that gives the device a secure context (WebGPU skin + mic). Full detail in
 `BUILD_STATE.md` (2026-05-30). Surfaced the two forward workstreams below.
 
-### Phase 5.7 — On-device caching + install (PWA)  ·  _parallel to Phase 6, mostly ungated_
+### Phase 5.7 — On-device caching + install (PWA)  ·  ◐ quick wins LANDED 2026-05-30
 For dedicated bedside tablets that rarely change their app: **near-instant startup after
 the first download**, localized data, lower latency, and a **home-screen icon** that
-launches the device (no QR re-scan). Adds a web-app **manifest + icon**, an **app-shell
-precache SW** (versioned by build hash; recommend hand-rolled, like `kokoro-sw.js`, to
-avoid a new dep — else `vite-plugin-pwa` ⇒ ADR), **large-asset caching** (MediaPipe / Kokoro
-[done] / the future rig + STT model), a **device "skin pack"** (pre-cache the 10–15 active
-consented skins, stale-while-revalidate), a **binding cache**, and `storage.persist()`.
-**Quick wins now:** the manifest + icon and the app-shell precache (no research gate). The
-skin pack lands **with Phase 6** so its **PHI-at-rest** review is covered together. Full
+launches the device (no QR re-scan).
+- ✅ **Installable PWA + home-screen icon** — `manifest.webmanifest` + branded PNG icons
+  (`scripts/make-icons.mjs`, Playwright), `apple-touch-icon`, per-character `document.title`.
+- ✅ **Unified app-shell SW** (`public/app-sw.js`, replaces `kokoro-sw.js`) — Kokoro
+  passthrough + dev-safe runtime cache (navigations network-first, `/assets/*` cache-first,
+  version-keyed) + `storage.persist()`.
+- ✅ **Opt-in PREVIEW serve mode** (`VRAI_FACES_SERVE=preview` → `scripts/serve-preview.mjs`
+  build+preview) so the device serves the hashed build the SW actually caches. Default stays
+  the dev server.
+- ◻ **Remaining (with Phase 6):** the **device "skin pack"** (pre-cache the 10–15 active
+  consented skins, stale-while-revalidate) + a **binding cache** — gated *only* by the
+  **PHI-at-rest** policy that Phase 6's security ADR covers (retention / clear-on-unpair).
+  Plus making **preview the default** for deployed (non-dev) devices.
+Decision still open: hand-rolled SW (current) vs `vite-plugin-pwa` ⇒ ADR. Full
 evaluation (benefits + risks now/future) in `docs/PLAN-2026-05-30-resecure-and-animation.md §7`.
 
 ### Phase 6 — Re-secure the device voice  ·  _gated on RB-002_
