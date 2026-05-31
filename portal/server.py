@@ -117,7 +117,19 @@ if _portal_serves_app():
     # (the portal's face routes are all /api/face, /qr/face, /portal/face).
     @app.get("/face/{character_id}", response_class=HTMLResponse, include_in_schema=False)
     async def vrai_app_entry(character_id: str) -> HTMLResponse:  # noqa: ARG001
-        return HTMLResponse((_VRAI_DIST / "index.html").read_text(encoding="utf-8"))
+        # COOP+COEP make the page CROSS-ORIGIN ISOLATED → SharedArrayBuffer is
+        # available, which the on-device STT runtime needs: the only onnxruntime-web
+        # wasm build is threaded (shared memory) and a no-WebGPU tablet has no other
+        # backend (ADR-0026 device-pilot fix). Same-origin assets (the whole app +
+        # /assets/ort + mediapipe + the bundled model) load fine under require-corp;
+        # the one cross-origin asset (Kokoro via the SW) is re-served with CORP.
+        return HTMLResponse(
+            (_VRAI_DIST / "index.html").read_text(encoding="utf-8"),
+            headers={
+                "Cross-Origin-Opener-Policy": "same-origin",
+                "Cross-Origin-Embedder-Policy": "require-corp",
+            },
+        )
 
     # Root PWA files the app references absolutely (service worker must be served
     # from the origin root for its scope; manifest + icons for Add-to-Home-Screen).

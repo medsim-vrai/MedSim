@@ -16,7 +16,7 @@
  * The live AI reply loop still needs the portal — caching speeds STARTUP, not the
  * encounter. Bump CACHE_VERSION on a breaking shell change; activate() drops old.
  */
-const CACHE_VERSION = 'vrai-shell-v1';
+const CACHE_VERSION = 'vrai-shell-v2'; // v2: CORP on the Kokoro passthrough (COEP)
 const HF_PREFIX = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/';
 const LOCAL_BASE = '/assets/kokoro/';
 
@@ -34,11 +34,21 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
 
   // (1) Kokoro model/voice assets → bundled-first, network fallback.
+  // The page is cross-origin isolated (COEP require-corp, for on-device STT), so
+  // this cross-origin (huggingface.co) request must come back embeddable: re-wrap
+  // the bundled same-origin copy with Cross-Origin-Resource-Policy so TTS keeps
+  // working under COEP. (Network fallback is returned as-is — rare.)
   if (req.url.startsWith(HF_PREFIX)) {
     const localUrl = LOCAL_BASE + req.url.slice(HF_PREFIX.length);
-    event.respondWith(
-      fetch(localUrl).then((r) => (r && r.ok ? r : fetch(req))).catch(() => fetch(req)),
-    );
+    event.respondWith((async () => {
+      const local = await fetch(localUrl).catch(() => null);
+      if (local && local.ok) {
+        const headers = new Headers(local.headers);
+        headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+        return new Response(local.body, { status: local.status, statusText: local.statusText, headers });
+      }
+      return fetch(req);
+    })());
     return;
   }
 

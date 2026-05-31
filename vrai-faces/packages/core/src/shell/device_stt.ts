@@ -78,24 +78,27 @@ async function loadAsr(): Promise<AsrPipeline | null> {
       let lastErr = '';
       try {
         const tf = await import('@huggingface/transformers');
-        // Load the ONNX runtime WASM from OUR origin (/assets/ort/, bundled by
-        // setup:assets) instead of the jsdelivr CDN — this is the fix for
-        // "no available backend" on a contained/flaky LAN and keeps STT
-        // local-first (ADR-0001/0026). transformers selects the single-threaded
-        // `.asyncify` build on non-Safari, so NO cross-origin isolation
-        // (SharedArrayBuffer / COOP+COEP) is required; proxy off + numThreads=1
-        // keep the CPU path simple (WebGPU is still tried first when an adapter
-        // exists). If /assets/ort/ is absent it falls back to the CDN default.
+        // Local-first runtime + model (ADR-0026), both served from OUR origin — no
+        // jsdelivr and no HuggingFace at runtime (offline / PHI-contained capable):
+        //  • wasmPaths    → the ORT runtime bundled at /assets/ort/ (setup:assets).
+        //  • localModelPath → the whisper model bundled at /assets/models/ (q8).
+        // The only onnxruntime-web wasm build is THREADED (shared memory), so the
+        // page must be cross-origin isolated for SharedArrayBuffer — the portal
+        // sends COOP+COEP on /face (a no-WebGPU tablet has no other backend).
+        // numThreads=1 + proxy off keep the CPU path simple; WebGPU is still tried
+        // first when an adapter exists. Falls back to CDN/HF if the bundles are absent.
         const wasmFlags = tf.env?.backends?.onnx?.wasm;
         if (wasmFlags) {
           wasmFlags.wasmPaths = '/assets/ort/';
           wasmFlags.numThreads = 1;
           wasmFlags.proxy = false;
         }
+        tf.env.allowLocalModels = true;          // default false in-browser; enables the bundled model
+        tf.env.localModelPath = '/assets/models/';
         const { pipeline } = tf;
         for (const device of ['webgpu', 'wasm'] as const) {
           try {
-            const pipe = await pipeline('automatic-speech-recognition', MODEL, { device });
+            const pipe = await pipeline('automatic-speech-recognition', MODEL, { device, dtype: 'q8' });
             sttBackend = device;
             sttLoadMs = Math.round(performance.now() - t0);
             sttError = null;

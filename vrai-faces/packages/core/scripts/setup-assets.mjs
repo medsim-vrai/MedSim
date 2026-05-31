@@ -95,4 +95,29 @@ for (const rel of KOKORO_FILES) {
 }
 console.log('✓ Kokoro → public/assets/kokoro/');
 
+// 5) Whisper STT model (ADR-0026) — local-first so on-device STT needs NO HuggingFace
+//    at runtime (works offline / PHI-contained, and loads under COEP cross-origin
+//    isolation). q8 set ≈ 41 MB. The path mirrors the HF repo so transformers.js
+//    (env.localModelPath = '/assets/models/') resolves it 1:1.
+const WHISPER_REPO = 'onnx-community/whisper-tiny.en';
+const WHISPER_BASE = `https://huggingface.co/${WHISPER_REPO}/resolve/main/`;
+const WHISPER_FILES = [
+  'config.json', 'generation_config.json', 'preprocessor_config.json',
+  'tokenizer.json', 'tokenizer_config.json', 'vocab.json', 'merges.txt',
+  'added_tokens.json', 'normalizer.json', 'special_tokens_map.json',
+  'onnx/encoder_model_quantized.onnx',        // q8 ≈ 10 MB
+  'onnx/decoder_model_merged_quantized.onnx', // q8 ≈ 31 MB
+];
+for (const rel of WHISPER_FILES) {
+  const dst = resolve(core, 'public/assets/models', WHISPER_REPO, rel);
+  if (!force && existsSync(dst)) { console.log('• whisper present:', rel); continue; }
+  console.log('↓ whisper', rel);
+  const res = await fetch(WHISPER_BASE + rel);
+  if (!res.ok) { console.warn(`  (skipped ${rel}: HTTP ${res.status})`); continue; }
+  const buf = Buffer.from(await res.arrayBuffer());
+  mkdirSync(dirname(dst), { recursive: true });
+  writeFileSync(dst, buf);
+}
+console.log(`✓ Whisper → public/assets/models/${WHISPER_REPO}/`);
+
 console.log('✓ assets ready.');

@@ -22,3 +22,5 @@ packages/core/public/assets/kokoro/
 # ONNX Runtime WASM for on-device STT — exact node_modules copy (no network).
 # Regenerate with `pnpm run setup:assets`.
 packages/core/public/assets/ort/
+# Whisper STT model (q8 ≈ 41 MB) — downloaded from HF. Regenerate with `setup:assets`.
+packages/core/public/assets/models/
