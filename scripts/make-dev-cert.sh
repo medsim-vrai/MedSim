@@ -69,8 +69,13 @@ if [ -f rootCA.pem ] && [ -f rootCA-key.pem ] && [ -z "${FORCE:-}" ]; then
 else
   echo "  + creating a new root CA (re-trust rootCA.pem on each device afterward)."
   openssl genrsa -out rootCA-key.pem 2048 >/dev/null 2>&1
-  openssl req -x509 -new -nodes -key rootCA-key.pem -sha256 -days 825 \
-    -out rootCA.pem -subj "/CN=MedSim Dev Local CA" >/dev/null 2>&1
+  # CRITICAL: a CA cert MUST carry basicConstraints CA:TRUE + keyCertSign, or
+  # Android/Chrome reject it as a signer ("not secure") even though macOS's
+  # lenient `openssl verify` accepts a bare self-signed cert.
+  openssl req -x509 -new -nodes -key rootCA-key.pem -sha256 -days 3650 \
+    -out rootCA.pem -subj "/CN=MedSim Dev Local CA" \
+    -addext "basicConstraints=critical,CA:TRUE" \
+    -addext "keyUsage=critical,keyCertSign,cRLSign" >/dev/null 2>&1
 fi
 
 # --- 2. Leaf key + CSR --------------------------------------------------------
@@ -87,7 +92,7 @@ extendedKeyUsage=serverAuth
 subjectAltName=$SAN
 EXT
 openssl x509 -req -in dev.csr -CA rootCA.pem -CAkey rootCA-key.pem -CAcreateserial \
-  -out dev-leaf.pem -days 825 -sha256 -extfile "$EXT_FILE" >/dev/null 2>&1
+  -out dev-leaf.pem -days 398 -sha256 -extfile "$EXT_FILE" >/dev/null 2>&1
 rm -f "$EXT_FILE" dev.csr rootCA.srl
 
 # Served chain = leaf + CA (so clients that don't yet trust the CA still see it).
