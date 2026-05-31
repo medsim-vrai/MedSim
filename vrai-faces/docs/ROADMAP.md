@@ -137,6 +137,14 @@ never cache secrets) — the security the operator wants "added back."
   opt-in via `MEDSIM_FACE_TOKEN`** (stops stray LAN clients driving the avatar / spending AI);
   cached skins are PHI-at-rest → **clear-on-unpair + manual "forget faces", never cache
   secrets**. Unblocks the Phase 5.7 skin pack.
+- **Durable one-origin serving (A7): ✅ ADR-0028.** Deployed tablets no longer use the separate
+  vite `:5173` + a cross-origin `api`/WS + a second TLS cert — the root cause of the recurring
+  `binding fetch failed` / "connection not secure" / unskinned-demo failures (two servers, two
+  certs, any drift breaks the tablet). With **`VRAI_FACES_SERVE=portal`**, `run_portal.py` builds
+  `dist/` once and the portal serves the app itself (`/face/<id>` SPA + `/assets` + PWA files);
+  the QR points at the portal origin with `api` = same origin → **one origin, one cert, no
+  cross-origin**. Dev/HMR (the Develop button) still uses vite. _Supersedes `VRAI_FACES_SERVE=preview`
+  as the device path; preview remains for SW-cache checks on the dev box._
 - **Voice activation: PTT-first** (current) → **name-gated next** — DEFERRED: no clean open
   in-browser keyword-spotter for arbitrary names, so `name_trigger` = fuzzy/phonetic match
   over a rolling on-device STT buffer (built + validated after PTT). See

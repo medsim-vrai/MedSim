@@ -701,6 +701,41 @@
 >   RB-002 → on-device STT/wake-word, retire the ADR-0025 stopgap) and (B) make the skinned face animate from
 >   the character's prompts/speech (execute RB-001 rig; the speech→viseme/emotion/idle drive is already wired).
 >
+> **2026-05-30b — On-device STT + PWA/cache + the cert CA-fix + DURABLE one-origin serving (ADR-0028).**
+> Web gate green (`typecheck` + `check:no-any` + **111 tests** + `build`); changed Python py_compile-clean +
+> route-registration verified via FastAPI `TestClient`. ADRs **0026** (on-device STT), **0027** (device
+> security posture), **0028** (durable serving) added.
+> - **On-device PTT STT (Phase 6, ADR-0026).** `shell/device_stt.ts` runs `whisper-tiny.en` (ONNX, MIT) via
+>   the bundled transformers.js, WebGPU→WASM fallback; `device_voice.ts` switched off the cloud Web Speech
+>   stopgap to record-on-hold→transcribe-on-release, audio never leaves the device. Forced
+>   onnxruntime-web `numThreads=1`/`proxy=false` (multi-threaded WASM needs COOP/COEP we don't set) so the
+>   CPU floor always loads; the panel shows a `STT: <backend> · cold <ms> · last <ms>` line + surfaces a
+>   load error in-UI. _(184e4f5, adc4ef4)_
+> - **PWA + app-shell cache (Phase 5.5/5.7).** Home-screen icon (`manifest.webmanifest` + apple-touch-icon),
+>   unified `app-sw.js` (Kokoro passthrough + app-shell runtime cache, navigations network-first), persistent
+>   storage, and the binding cache (`vrai-binding-v1`, clear-on-unpair, `?forget`). Fast restart after the
+>   first download; consented skins stay on the device (PHI-at-rest rules in ADR-0027).
+> - **Cert root-cause (the "not secure" saga).** Android-strict cert validation rejected our CA because it
+>   carried **no X509v3 extensions** (no `basicConstraints=CA:TRUE`/`keyCertSign`) — macOS `openssl verify`
+>   was lenient and hid it. `scripts/make-dev-cert.sh` now mints the CA with those critical extensions
+>   (reusing the CA across LAN-IP changes so devices keep trust; leaf ≤398d), and `GET /rootca.pem` serves
+>   the CA for one-tap install. _(b5e4c40, c95aa6c, d6f080f)_
+> - **DURABLE one-origin serving (ADR-0028) — "build it out so it doesn't repeat".** The recurring tablet
+>   failures (`binding fetch failed`, "connection not secure", unskinned demo-fallback) all traced to TWO
+>   servers each holding a SEPARATE cert — vite `:5173` (app) + uvicorn `:8765` (api) — with a cross-origin
+>   bind + speech WS between them; any drift (changed LAN IP, a stale vite on an old cert) broke the tablet.
+>   Patching certs fixed instances, not the class. Now, with **`VRAI_FACES_SERVE=portal`**, `run_portal.py`
+>   builds `dist/` once and `portal/server.py` serves the avatar app itself: `/face/<id>` → `index.html`
+>   (SPA), `/assets` mount (hashed bundles + bundled Kokoro/MediaPipe/face models), root PWA files. The QR
+>   then points at the **portal origin** with `api` = the same origin, so binding/listen/speak/WS are all
+>   **same-origin → one cert, no cross-origin, no `:5173`**. `_ensure_vrai_app_for_qr` skips the vite
+>   autostart in this mode. Default (no env) = unchanged dev (vite + HMR via the Develop button). No new dep.
+> - **Run (deployed tablets):** `VRAI_FACES_SERVE=portal MEDSIM_HOST=0.0.0.0 python3 run_portal.py` —
+>   trust the one `portal/data/certs/rootCA.pem` on each tablet, then scan the device QR. See
+>   `docs/PILOT-2026-05-30-on-device.md`.
+> - **Next:** the on-device pilot (task #50) on a stable one-origin/one-cert surface — measure PTT latency /
+>   clinical WER / thermal on the Android tablet, then tune (dtype / bundle whisper via `setup:assets`).
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

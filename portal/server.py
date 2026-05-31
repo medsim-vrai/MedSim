@@ -9,6 +9,7 @@ the full route inventory.
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import socket
 import time
@@ -36,6 +37,18 @@ from fastapi import WebSocket
 
 PORTAL_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(PORTAL_DIR / "templates"))
+
+# Durable device mode (ADR-0028): serve the BUILT VRAI Faces app from the portal
+# itself, so the tablet loads the app from the SAME origin as the api + speech
+# WebSocket — one server, one cert, no separate vite :5173, no cross-origin bind.
+# Enabled by VRAI_FACES_SERVE=portal (and the dist build present). Dev/HMR still
+# uses the vite dev server (the Develop button); this is the deployed-device path.
+_VRAI_DIST = PORTAL_DIR.parent / "vrai-faces" / "packages" / "core" / "dist"
+
+
+def _portal_serves_app() -> bool:
+    return (os.environ.get("VRAI_FACES_SERVE") or "").strip().lower() == "portal" \
+        and (_VRAI_DIST / "index.html").is_file()
 
 # V6 — cache-busting helper for static assets. Templates call
 # {{ static_v('control_ops.js') }} and get back e.g. "/static/control_ops.js?v=1779581234"
@@ -85,6 +98,48 @@ app.mount("/static", StaticFiles(directory=str(PORTAL_DIR / "static")), name="st
 # app.jsx, catalog.json) directly. The index.html for each EHR is served
 # by the route handler below so V3 can inject the bootstrap globals.
 app.mount("/ehr-static", StaticFiles(directory=str(PORTAL_DIR / "ehr")), name="ehr_static")
+
+# --- Durable device mode (ADR-0028): serve the BUILT VRAI Faces app -----------
+# When VRAI_FACES_SERVE=portal and the dist build is present, the portal serves
+# the avatar app itself. The tablet then loads the app, the /api/face/* binding,
+# the /listen turn, AND the speech WebSocket all from ONE origin (this portal) —
+# so there is ONE TLS cert and NO cross-origin fetch. This permanently ends the
+# separate-vite (:5173) + dual-cert + cross-origin class of "binding fetch
+# failed" / "connection not secure" failures. Dev/HMR still uses the vite dev
+# server (the Develop button); this is the deployed-device path only.
+if _portal_serves_app():
+    # The app's hashed bundles + bundled models (Kokoro/MediaPipe/face topology)
+    # all live under dist/assets and are referenced absolutely (vite base "/").
+    app.mount("/assets", StaticFiles(directory=str(_VRAI_DIST / "assets")), name="vrai_assets")
+
+    # SPA entry: any /face/<id> serves index.html; the app reads the path + query
+    # client-side (parseLaunchUrl). No bare /face/<id> route exists elsewhere
+    # (the portal's face routes are all /api/face, /qr/face, /portal/face).
+    @app.get("/face/{character_id}", response_class=HTMLResponse, include_in_schema=False)
+    async def vrai_app_entry(character_id: str) -> HTMLResponse:  # noqa: ARG001
+        return HTMLResponse((_VRAI_DIST / "index.html").read_text(encoding="utf-8"))
+
+    # Root PWA files the app references absolutely (service worker must be served
+    # from the origin root for its scope; manifest + icons for Add-to-Home-Screen).
+    def _vrai_dist_file(fname: str, media: str):  # noqa: ANN202
+        async def _serve() -> Response:
+            p = _VRAI_DIST / fname
+            return FileResponse(str(p), media_type=media) if p.is_file() \
+                else Response(status_code=404)
+        return _serve
+
+    for _vf_name, _vf_media in (
+        ("app-sw.js", "text/javascript"),
+        ("manifest.webmanifest", "application/manifest+json"),
+        ("apple-touch-icon.png", "image/png"),
+        ("icon-192.png", "image/png"),
+        ("icon-512.png", "image/png"),
+        ("icon-maskable-512.png", "image/png"),
+    ):
+        app.add_api_route(
+            f"/{_vf_name}", _vrai_dist_file(_vf_name, _vf_media),
+            methods=["GET"], include_in_schema=False,
+        )
 
 # V6 — device subsystem. Routes + WebSocket live in portal/devices/ and
 # are attached here so the new feature is self-contained.
@@ -5547,7 +5602,13 @@ def _vrai_faces_url(
     # The speech WS URL is derived (server-side) from whatever host the app used
     # here, so making `api` LAN-reachable also makes the WebSocket LAN-reachable.
     portal_origin = _base_url_for_qr(request) if lan else str(request.base_url).rstrip("/")
-    app_base = _vrai_base_for_qr(request) if lan else _vrai_base(request)
+    if _portal_serves_app():
+        # Durable device mode (ADR-0028): the portal IS the app host, so the app
+        # base and the `api` origin are one and the same — every fetch + the
+        # speech WS is same-origin (one cert, no cross-origin, no vite :5173).
+        app_base = portal_origin
+    else:
+        app_base = _vrai_base_for_qr(request) if lan else _vrai_base(request)
     api = _quote(portal_origin, safe="")
     url = (f"{app_base}/face/{safe_char}"
            f"?scenario={safe_scen}&opacity={op:.2f}&api={api}")
@@ -5718,6 +5779,8 @@ def _ensure_vrai_app_for_qr(request: Request) -> None:
     500 on autostart). The first call cold-starts vite (~seconds), so give it a
     moment before scanning; reloading the tablet page then succeeds."""
     try:
+        if _portal_serves_app():
+            return  # durable mode (ADR-0028): the portal serves the app — no vite
         if _os.environ.get("VRAI_FACES_BASE_URL"):
             return
         base = _vrai_base_for_qr(request)

@@ -11,10 +11,17 @@ off the device. Add **`&diag=1`** to the URL for the diagnostics overlay (fps,
 backend logs, errors).
 
 ## Setup (once)
-1. Portal in LAN + HTTPS mode on the MacBook: `MEDSIM_HOST=0.0.0.0 python3 run_portal.py`
-   (TLS auto-on once the dev cert exists). For the *cached/production* build, add
-   `VRAI_FACES_SERVE=preview`.
-2. Trust `portal/data/certs/rootCA.pem` on each tablet (one-time).
+1. Portal in LAN + HTTPS + **durable device mode** on the MacBook:
+   `VRAI_FACES_SERVE=portal MEDSIM_HOST=0.0.0.0 python3 run_portal.py`
+   (TLS auto-on once the dev cert exists). `VRAI_FACES_SERVE=portal` (ADR-0028)
+   makes the portal build + serve the avatar app itself, so the tablet loads the
+   app, the api, and the speech WebSocket all from **one origin / one cert** — no
+   separate vite `:5173`, no cross-origin bind. This is the deployed-device path
+   and the cure for the recurring `binding fetch failed` / "connection not secure"
+   failures. (Omit the env var only when actively developing the app with HMR —
+   that path still uses the vite dev server via the Develop button.)
+2. Trust `portal/data/certs/rootCA.pem` on each tablet (one-time). With portal
+   mode there is only this **one** cert to trust (the old dual-cert mismatch is gone).
 3. Assign each test character a **real face photo** skin (Personas page or the ops
    device cell) — needed to exercise the real MediaPipe mesh, not just the egg.
 4. On the tablet: scan the character's device QR (or Add-to-Home-Screen for the icon),
