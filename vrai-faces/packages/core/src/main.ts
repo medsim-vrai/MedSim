@@ -30,8 +30,10 @@ import { mountTranslucencySlider } from './shell/translucency_slider';
 import { mountImportControl } from './shell/import_control';
 import { mountSaveControl } from './shell/save_control';
 import { mountDeviceVoice } from './shell/device_voice';
+import { mountDebugConsole } from './shell/debug_console';
 
 async function boot(): Promise<void> {
+  mountDebugConsole(); // TEMP pilot aid — on-device console (🐞 button), cable-free
   const launch = parseLaunchUrl(window.location);
   const scenarioId  = launch?.scenarioId  ?? 'default';
   const characterId = launch?.characterId ?? 'default';
