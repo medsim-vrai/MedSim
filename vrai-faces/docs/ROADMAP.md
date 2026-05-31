@@ -107,10 +107,11 @@ launches the device (no QR re-scan).
 - ✅ **Opt-in PREVIEW serve mode** (`VRAI_FACES_SERVE=preview` → `scripts/serve-preview.mjs`
   build+preview) so the device serves the hashed build the SW actually caches. Default stays
   the dev server.
-- ◻ **Remaining (with Phase 6):** the **device "skin pack"** (pre-cache the 10–15 active
-  consented skins, stale-while-revalidate) + a **binding cache** — gated *only* by the
-  **PHI-at-rest** policy that Phase 6's security ADR covers (retention / clear-on-unpair).
-  Plus making **preview the default** for deployed (non-dev) devices.
+- ◻ **Remaining — now UNBLOCKED by ADR-0027:** the **device "skin pack"** (pre-cache the
+  10–15 active consented skins, stale-while-revalidate) + a **binding cache**, with the
+  PHI-at-rest rules decided (cache only the paired character's skins, **clear-on-unpair** +
+  a manual "forget faces" control, never cache secrets). Plus making **preview the default**
+  for deployed (non-dev) devices.
 Decision still open: hand-rolled SW (current) vs `vite-plugin-pwa` ⇒ ADR. Full
 evaluation (benefits + risks now/future) in `docs/PLAN-2026-05-30-resecure-and-animation.md §7`.
 
@@ -128,6 +129,12 @@ never cache secrets) — the security the operator wants "added back."
 - **Validation gate (RB-002 caveat):** ship-gated on an **on-device pilot** — every RB-002
   number is laptop/desktop; measure PTT latency / clinical WER / thermal on real iPad Safari
   26 before retiring the stopgap. Capacitor-native `SFSpeechRecognizer` is the iOS fallback.
+- **Security posture (A6): ✅ ADR-0027.** Formalized: HTTPS/secure-context is REQUIRED on the
+  device (unlocks WebGPU + mic + crypto.subtle); the `/api/face/*` routes keep LAN-origin
+  trust (explicit, like join codes) with a **per-session device token on `/listen` as a
+  recorded hardening follow-up** (stops stray LAN clients driving the avatar / spending AI);
+  cached skins are PHI-at-rest → **clear-on-unpair + manual "forget faces", never cache
+  secrets**. Unblocks the Phase 5.7 skin pack.
 - **Voice activation: PTT-first** (current) → **name-gated next** — DEFERRED: no clean open
   in-browser keyword-spotter for arbitrary names, so `name_trigger` = fuzzy/phonetic match
   over a rolling on-device STT buffer (built + validated after PTT). See
