@@ -210,9 +210,14 @@ export function mountDeviceVoice(
     setStatus(`Heard: “${clean}” — sending…`);
     const base = opts.apiBase.replace(/\/+$/, '');
     const url = `${base}/api/face/${encodeURIComponent(opts.characterId)}/listen`;
+    // NB: send as a CORS "simple" request — NO `content-type: application/json`
+    // header (which would force a preflight OPTIONS that, cross-origin over the
+    // self-signed-CA HTTPS dev cert, gets blocked on iOS Safari — the symptom
+    // "STT made on device but not received by the computer"). With the default
+    // text/plain body the POST is sent directly, like the save-skin POST that
+    // works; the portal's `request.json()` parses the body regardless of type.
     void fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text: clean, scenario: opts.scenarioId }),
     })
       .then(async (r) => {
