@@ -115,7 +115,11 @@ async function loadAsr(): Promise<AsrPipeline | null> {
             });
           }
         }
-        sttError = lastErr || 'no STT backend available';
+        // Prefix the isolation status so a failure is self-diagnosing on-device:
+        // COI=false/SAB=false ⇒ the page is NOT cross-origin isolated (usually a
+        // stale cached app or missing COOP/COEP) → the threaded wasm can't start.
+        const iso = `[COI=${String(crossOriginIsolated)} SAB=${typeof SharedArrayBuffer !== 'undefined'}]`;
+        sttError = `${iso} ${lastErr || 'no STT backend available'}`;
         return null;
       } catch (e) {
         sttError = e instanceof Error ? e.message : String(e);
