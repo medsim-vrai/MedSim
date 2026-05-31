@@ -32,8 +32,30 @@ import { mountSaveControl } from './shell/save_control';
 import { mountDeviceVoice } from './shell/device_voice';
 import { mountDebugConsole } from './shell/debug_console';
 
+/** No-WebGPU-adapter tablets (e.g. many Android) expose `navigator.gpu` but
+ *  `requestAdapter()` returns null. The ONNX runtime behind on-device STT probes
+ *  navigator.gpu during init, and that failed probe blocks its WASM CPU backend
+ *  from registering ("no available backend found"). If there's no real adapter,
+ *  hide navigator.gpu BEFORE anything imports the runtime, so STT takes the WASM
+ *  path cleanly. The avatar renderer already falls back to WebGL2 here, so this
+ *  changes nothing for rendering. Best-effort; runs once at boot. (ADR-0026) */
+async function hideDeadWebGpu(): Promise<void> {
+  try {
+    const nav = navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } };
+    if (!nav.gpu) return;
+    let adapter: unknown = null;
+    try { adapter = await nav.gpu.requestAdapter(); } catch { adapter = null; }
+    if (adapter == null) {
+      Object.defineProperty(nav, 'gpu', { configurable: true, value: undefined });
+      diag.push({ t: performance.now(), moduleId: 'shell.boot', kind: 'info',
+        message: 'no WebGPU adapter — hid navigator.gpu so STT uses the WASM backend' });
+    }
+  } catch { /* best-effort */ }
+}
+
 async function boot(): Promise<void> {
   mountDebugConsole(); // TEMP pilot aid — on-device console (🐞 button), cable-free
+  await hideDeadWebGpu(); // must run before the renderer / transformers import
   const launch = parseLaunchUrl(window.location);
   const scenarioId  = launch?.scenarioId  ?? 'default';
   const characterId = launch?.characterId ?? 'default';
