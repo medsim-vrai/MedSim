@@ -238,3 +238,120 @@ warrants its own decision).
 > **Confirm before building the gated pieces.** A3/B3 depend on the RB-002 /
 > RB-001 outcomes — run the briefs first, then ADR, then drop in. B0/B1 and the
 > A4/A6 hardening can proceed now without a research gate.
+
+---
+
+## 7. On-device caching + install (PWA) + skin pre-cache  ·  **Phase 5.7** (evaluation)
+
+**Why (operator's framing).** A bedside tablet runs **one character and rarely
+changes its app**; the active skin set "won't change often." So after the first
+download we want **near-instant startup**, **localized data**, **lower latency**,
+and a **home-screen icon that launches the device** — not a re-scan each time.
+
+> Sequencing note: **Phase 6 → Phase 7 stands.** Caching is **cross-cutting and
+> mostly ungated**, so it runs as a **parallel track (Phase 5.7)** alongside
+> Phase 6 — it does **not** reorder 6/7. Its one real coupling is that it
+> **expands Phase 6's security scope** (PHI-at-rest for cached faces) — see §7.6.
+
+### 7.1 What's already local-first (don't rebuild)
+- `public/kokoro-sw.js` — a registered **service worker** that serves the bundled
+  Kokoro TTS model locally (fetch passthrough: bundled-first, network-fallback;
+  `skipWaiting` + `clients.claim`). It is **not** an app-shell precache.
+- `memory_state` — **IndexedDB** at origin `vrai-faces`, store `session-state`
+  (Pause/Resume durability, device-restart durable).
+- `mesh_builder` — in-memory mesh cache keyed by `portrait.hash`.
+- `index.html` — already has `apple-mobile-web-app-capable=yes`, `theme-color`,
+  status-bar style, `viewport-fit=cover` → **partially iOS-installable today**.
+- **Missing:** a web-app **manifest**, a home-screen **icon** (`apple-touch-icon`),
+  an **app-shell precache**, and explicit **asset/skin** caching with versioning.
+
+### 7.2 The strategy (what to add)
+1. **Installable PWA + home-screen icon.** Add `manifest.webmanifest` (name,
+   icons, `display:standalone`, `start_url`, `theme/background`) + `apple-touch-icon`.
+   The device launches full-screen from an icon. **Per-character icon:** the
+   facilitator does **Add to Home Screen** on that character's deep link once; iOS
+   honors a per-page title + `apple-touch-icon`, so each bed's icon opens its own
+   character. (One manifest per origin — per-character identity rides on the
+   bookmarked URL + dynamic `<title>`/icon, set from the launch params.)
+2. **App-shell precache SW** (versioned by build hash). Precache the built
+   JS/CSS/HTML; cache-first for the shell, network-fallback. Two implementation
+   options — **decision to record as an ADR:**
+   - **Hand-rolled SW** (extends the kokoro-sw pattern) — **no new dependency**,
+     matches the project's ethos; we own the cache-version + update logic.
+   - **`vite-plugin-pwa` / Workbox** — batteries-included precache + update flow,
+     but a **new build dependency** ⇒ ADR + tools-sheet line.
+3. **Large-asset cache** (Cache API / IndexedDB), lazy, **integrity-checked**:
+   MediaPipe `face_landmarker.task` (~10 MB), Kokoro (~92 MB, already SW-served),
+   and later the **ARKit rig** (Phase 7) + **on-device STT model** (Phase 6).
+4. **Skin pre-cache — a "device skin pack."** At pair/install time, fetch + cache
+   the **10–15 active skins** (consented face images, ~120 KB each ≈ ~2 MB) keyed
+   by `skin-id + version`; **stale-while-revalidate** when online. A character's
+   avatar then loads from cache instantly and survives a flaky network.
+5. **Binding cache.** Cache the bind payload (card + portrait data URI) so the
+   avatar binds from cache instantly, then revalidate against the portal online.
+6. **`navigator.storage.persist()`** — request persistent storage to resist iOS
+   eviction; always degrade gracefully on a cache miss (re-fetch, don't break).
+
+### 7.3 What it ADDS (benefits)
+| Benefit | Mechanism |
+|---|---|
+| Near-instant startup after first download | app-shell + asset precache (no re-download of ~100 MB) |
+| Lower per-launch latency + bandwidth | cached binding/portrait/models; stale-while-revalidate |
+| Icon launch (no QR re-scan) | PWA manifest + Add-to-Home-Screen, per-character deep link |
+| Localized skins (instant avatar) | the 10–15-skin device pack, cached by id+version |
+| Offline-capable *shell* + instant avatar | SW precache + cached skin (live AI reply still needs the portal) |
+| Matches "devices rarely change" reality | controlled, versioned update flow instead of per-launch fetch |
+
+### 7.4 RISKS — now
+| Risk | Mitigation |
+|---|---|
+| **Version skew / stale shell** (old cached client vs new portal/protocol) | cache name = build hash; SW update flow (skipWaiting + "new version → reload"); keep `VRAISpeechFrame` versioned |
+| **PHI at rest** — consented faces cached on each tablet | retention/clear policy (clear-on-unpair / logout), eviction, optional encrypt-at-rest; **fold into the Phase 6 security ADR** (ADR-0001/0014) |
+| **iOS storage cap + eviction** (ITP ~7-day, pressure) | `storage.persist()`; graceful re-fetch on miss; never *assume* a cache hit |
+| **Stale reassigned skin** | versioned skin URLs (etag/hash) + stale-while-revalidate + the existing reload-to-apply flow |
+| **Secrets in cache** | never cache auth/the future device token/vault material — public assets + consented skins only |
+| **Cache integrity** (a poisoned entry persists) | hash/SRI-check precached models + assets |
+
+### 7.5 RISKS — future development
+| Risk | Note |
+|---|---|
+| Protocol evolution | cached old clients are a long-lived compat surface → keep API/frames back-compatible or force-update; `seq`+version already help |
+| Cumulative cache footprint | shell + Kokoro (92 MB) + MediaPipe (~10 MB) + **rig (Phase 7)** + **STT model (Phase 6, ≤~80 MB)** can approach iOS limits → budget + prioritize/evict the skin pack first |
+| Fleet invalidation | pushing updates to many devices (MDM vs SW-update vs manual reload) is operational; decide before scale |
+| Compliance creep | if a PHI-at-rest review mandates encryption, the cache layer must support it (added complexity) — design the seam now |
+
+### 7.6 How it ALTERS the plan
+- **New Phase 5.7 (parallel, mostly ungated):** PWA manifest + icon, app-shell
+  precache SW, skin pre-cache, binding cache, persistent storage. Independent of
+  Phase 6/7; **does not reorder them.**
+- **Expands Phase 6's security scope (the real coupling):** the re-secure ADR
+  (A6) must now also cover **PHI-at-rest for cached faces** (retention, clear-on-
+  unpair, optional encryption) and **"never cache secrets/tokens."** Caching makes
+  the device a longer-lived data-at-rest surface — exactly the security the
+  operator wants "added back," so it belongs in the same ADR.
+- **Sets up Phase 7:** budget the **ARKit rig asset** into the device cache; the
+  rig + STT model are the two big future cache items.
+- **One ADR to record:** hand-rolled precache SW vs `vite-plugin-pwa`/Workbox
+  (new dep ⇒ tools-sheet line). Recommendation: **hand-rolled** to stay
+  dependency-free and own the version/update logic, consistent with kokoro-sw.
+- **Quick wins available now (ungated, low-risk):** the **manifest + icon** (the
+  "icon to launch the device") and the **app-shell precache** — both standalone,
+  no research gate. The skin pack + PHI-at-rest policy should land **with** Phase 6
+  so the security review covers them together.
+
+---
+
+## 8. Voice-directed activation — current vs future (per operator direction)
+
+- **Now (in place):** **push-to-talk** is the activation model — explicit
+  hold-to-talk. Today that's the cloud-STT stopgap (ADR-0025); Phase 6 swaps it to
+  **on-device** PTT (`device_stt`). **Start here.**
+- **Future enhancement (documented, not built yet):** **name-gated voice
+  activation** — the device stays **passive** until the character's name is spoken
+  nearby ("Hey, Amy…"), and only **keys into the system once its own name is
+  recognized**, then listens/responds. This is the on-device **`name_trigger`**
+  wake-word in **RB-002 / ADR-0024** (on-device only; no ambient audio leaves the
+  tablet). Layer it **after** PTT is solid. Per-device name comes from the bound
+  character (editable), already surfaced in the `device_voice` UI.
+- Net: **PTT-first, name-trigger-next** — both on-device (Phase 6); the
+  name-gated path is parked against RB-002 as the next voice enhancement.

@@ -95,13 +95,29 @@ demo** (ADR-0025) with a portal `/api/face/<id>/listen` reply loop; and the tabl
 that gives the device a secure context (WebGPU skin + mic). Full detail in
 `BUILD_STATE.md` (2026-05-30). Surfaced the two forward workstreams below.
 
+### Phase 5.7 — On-device caching + install (PWA)  ·  _parallel to Phase 6, mostly ungated_
+For dedicated bedside tablets that rarely change their app: **near-instant startup after
+the first download**, localized data, lower latency, and a **home-screen icon** that
+launches the device (no QR re-scan). Adds a web-app **manifest + icon**, an **app-shell
+precache SW** (versioned by build hash; recommend hand-rolled, like `kokoro-sw.js`, to
+avoid a new dep — else `vite-plugin-pwa` ⇒ ADR), **large-asset caching** (MediaPipe / Kokoro
+[done] / the future rig + STT model), a **device "skin pack"** (pre-cache the 10–15 active
+consented skins, stale-while-revalidate), a **binding cache**, and `storage.persist()`.
+**Quick wins now:** the manifest + icon and the app-shell precache (no research gate). The
+skin pack lands **with Phase 6** so its **PHI-at-rest** review is covered together. Full
+evaluation (benefits + risks now/future) in `docs/PLAN-2026-05-30-resecure-and-animation.md §7`.
+
 ### Phase 6 — Re-secure the device voice  ·  _gated on RB-002_
 Replace the **cloud-STT stopgap (ADR-0025)** with **on-device** name wake-word + trainee
 STT (no mic audio leaves the tablet; re-assert ADR-0001/0014), and formalize the
-HTTPS/secure-context + device-trust posture. The `device_voice.ts` UI + the `/listen`
-reply loop are the seams; swap the engine behind them. Run **RB-002** → ADR → build
-`name_trigger` + `device_stt` → retire the stopgap. See
-`docs/PLAN-2026-05-30-resecure-and-animation.md §2`.
+HTTPS/secure-context + device-trust posture. **Scope now also covers cached PHI-at-rest**
+(the Phase 5.7 skin pack persists consented faces on device → retention / clear-on-unpair /
+optional encryption; never cache secrets/tokens) — the same security the operator wants
+"added back." The `device_voice.ts` UI + the `/listen` reply loop are the seams; swap the
+engine behind them. **Voice activation: PTT-first** (current) → **name-gated activation
+next** (the device keys in only once its character's name is heard — on-device wake-word,
+documented for future). Run **RB-002** → ADR → build `name_trigger` + `device_stt` → retire
+the stopgap. See `docs/PLAN-2026-05-30-resecure-and-animation.md §2, §7.6, §8`.
 
 ### Phase 7 — Speech-driven facial animation  ·  _ungated start; full fidelity gated on RB-001_
 Make the skinned face visibly **lip-sync + emote** from the character AI's spoken lines.
