@@ -5549,8 +5549,13 @@ def _vrai_faces_url(
     portal_origin = _base_url_for_qr(request) if lan else str(request.base_url).rstrip("/")
     app_base = _vrai_base_for_qr(request) if lan else _vrai_base(request)
     api = _quote(portal_origin, safe="")
-    return (f"{app_base}/face/{safe_char}"
-            f"?scenario={safe_scen}&opacity={op:.2f}&api={api}")
+    url = (f"{app_base}/face/{safe_char}"
+           f"?scenario={safe_scen}&opacity={op:.2f}&api={api}")
+    # ADR-0027 device token (opt-in, MEDSIM_FACE_TOKEN): a per-(scenario,character)
+    # capability the device echoes back on /listen. LAN/QR URLs only.
+    if lan and vrai_faces.token_enabled():
+        url += f"&token={vrai_faces.face_token(safe_scen, safe_char)}"
+    return url
 
 
 @app.get("/qr/face/{character_id}.svg")

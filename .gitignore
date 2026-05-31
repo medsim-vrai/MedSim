@@ -37,3 +37,6 @@ portal/data/certs/
 # Runtime device/encounter state — never commit (per-deployment, regenerated).
 portal/data/face_portraits/*.skin
 data/debriefs/
+
+# Per-deployment device-token secret (ADR-0027) — never commit.
+portal/data/.face_token_secret

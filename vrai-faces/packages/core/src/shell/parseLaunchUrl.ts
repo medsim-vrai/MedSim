@@ -13,6 +13,8 @@ export interface LaunchParams {
    * (portrait + speech WS URL). Absent for the standalone demo.
    */
   apiBase?: string;
+  /** Opt-in device-capability token (ADR-0027); echoed back on /listen when present. */
+  token?: string;
 }
 
 export function parseLaunchUrl(loc: Location): LaunchParams | null {
@@ -36,5 +38,7 @@ export function parseLaunchUrl(loc: Location): LaunchParams | null {
   // exactOptionalPropertyTypes: only set the key when actually present.
   const apiBase = q.get('api');
   if (apiBase !== null && apiBase.length > 0) params.apiBase = apiBase;
+  const token = q.get('token');
+  if (token !== null && token.length > 0) params.token = token;
   return params;
 }

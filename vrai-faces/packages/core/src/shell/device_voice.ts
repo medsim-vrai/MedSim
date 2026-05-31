@@ -25,6 +25,8 @@ export interface DeviceVoiceOpts {
   scenarioId: string;
   /** Reserved for the deferred name-trigger (ADR-0026); unused today. */
   wakeName?: string;
+  /** Opt-in device-capability token (ADR-0027); echoed back on /listen when set. */
+  token?: string;
 }
 
 const STYLE_ID = 'vrai-voice-style';
@@ -141,7 +143,10 @@ export function mountDeviceVoice(
     const url = `${base}/api/face/${encodeURIComponent(opts.characterId)}/listen`;
     // CORS "simple" request (no application/json header → no preflight); the
     // portal's request.json() parses the body regardless of content-type.
-    void fetch(url, { method: 'POST', body: JSON.stringify({ text: clean, scenario: opts.scenarioId }) })
+    const payload: { text: string; scenario: string; token?: string } =
+      { text: clean, scenario: opts.scenarioId };
+    if (opts.token) payload.token = opts.token; // ADR-0027 capability (when enforced)
+    void fetch(url, { method: 'POST', body: JSON.stringify(payload) })
       .then(async (r) => {
         const j = (await r.json().catch(() => null)) as { ok?: boolean; mode?: string } | null;
         if (r.ok && j?.ok) {

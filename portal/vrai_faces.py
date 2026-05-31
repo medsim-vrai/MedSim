@@ -31,8 +31,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import hmac
 import json
 import mimetypes
+import os
 import re
 import secrets
 import shutil
@@ -59,6 +62,41 @@ _PORTRAIT_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 _MAX_PORTRAIT_BYTES = 8 * 1024 * 1024  # 8 MB safety cap on inlined images
 
 DEFAULT_OPACITY = 0.66  # table mid-stop; matches the QR launcher default
+
+# ── Device token (ADR-0027 hardening — OPT-IN via MEDSIM_FACE_TOKEN) ──────────
+# A per-(scenario,character) capability minted into the QR/launch URL and required
+# on the AI-spend route POST /api/face/<id>/listen, so a stray LAN client that
+# never scanned the QR can't drive an avatar or spend Anthropic budget. Stateless
+# HMAC over "<scenario>|<character>" with a per-deployment secret. OFF by default
+# (no behavior change; pilots unaffected) — set MEDSIM_FACE_TOKEN=1 to enforce.
+_TOKEN_SECRET_FILE = Path(__file__).resolve().parent / "data" / ".face_token_secret"
+_token_secret_cache: bytes | None = None
+
+
+def token_enabled() -> bool:
+    return bool((os.environ.get("MEDSIM_FACE_TOKEN") or "").strip())
+
+
+def _token_secret() -> bytes:
+    global _token_secret_cache
+    if _token_secret_cache is None:
+        try:
+            if _TOKEN_SECRET_FILE.is_file():
+                _token_secret_cache = _TOKEN_SECRET_FILE.read_bytes()
+            else:
+                _TOKEN_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+                sec = secrets.token_bytes(32)
+                _TOKEN_SECRET_FILE.write_bytes(sec)
+                _token_secret_cache = sec
+        except OSError:
+            _token_secret_cache = secrets.token_bytes(32)  # ephemeral (this run only)
+    return _token_secret_cache
+
+
+def face_token(scenario_id: str, character_id: str) -> str:
+    """A short capability token for (scenario, character). Stable per deployment."""
+    msg = f"{(scenario_id or '').strip()}|{(character_id or '').strip()}".encode("utf-8")
+    return hmac.new(_token_secret(), msg, hashlib.sha256).hexdigest()[:24]
 
 # A neutral solid-slate placeholder for characters with no assigned avatar. It
 # MUST be a raster (PNG): the VRAI Faces app decodes portraits with the browser's
@@ -633,6 +671,14 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             return JSONResponse({"ok": False, "error": "text required"},
                                 status_code=400)
         scenario_id = str(body.get("scenario") or "default")
+
+        # Device-token capability check (ADR-0027) — only when enforcement is on.
+        # The token is minted into the QR/launch URL for (scenario, character), so a
+        # LAN client that never scanned the QR can't drive the avatar / spend AI.
+        if token_enabled() and not hmac.compare_digest(
+                str(body.get("token") or ""), face_token(scenario_id, character_id)):
+            return JSONResponse({"ok": False, "error": "invalid device token"},
+                                status_code=403)
 
         card = resolve_card(character_id)
         if card is None:
