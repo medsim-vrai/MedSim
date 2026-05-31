@@ -20,8 +20,14 @@ backend logs, errors).
    and the cure for the recurring `binding fetch failed` / "connection not secure"
    failures. (Omit the env var only when actively developing the app with HMR —
    that path still uses the vite dev server via the Develop button.)
-2. Trust `portal/data/certs/rootCA.pem` on each tablet (one-time). With portal
-   mode there is only this **one** cert to trust (the old dual-cert mismatch is gone).
+2. **Trust the CA — this is what stops "not secure"; the cert itself is fine (ADR-0029).**
+   - **Mac (once):** `sudo scripts/trust-ca-mac.sh` → then fully quit + reopen Chrome.
+   - **Each tablet (once):** open `https://<lan-ip>:8765/rootca.pem` → Settings → Security →
+     Install a certificate → **CA certificate** → confirm the fingerprint. Remove any older
+     "MedSim Dev Local CA" first.
+   - **Verify anytime:** `scripts/cert-doctor.sh` (read-only; tells you cert vs trust, and the fix).
+   - Don't re-mint the CA — `make-dev-cert.sh` reuses it across IP changes (a new IP only reissues
+     the leaf, so trusted devices stay trusted). With portal mode there is only this **one** cert.
 3. Assign each test character a **real face photo** skin (Personas page or the ops
    device cell) — needed to exercise the real MediaPipe mesh, not just the egg.
 4. On the tablet: scan the character's device QR (or Add-to-Home-Screen for the icon),

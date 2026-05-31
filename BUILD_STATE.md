@@ -736,6 +736,25 @@
 > - **Next:** the on-device pilot (task #50) on a stable one-origin/one-cert surface — measure PTT latency /
 >   clinical WER / thermal on the Android tablet, then tune (dtype / bundle whisper via `setup:assets`).
 >
+> **2026-05-31 — Root-caused the recurring "not secure" (Mac + tablet): it's CA TRUST, not the cert (ADR-0029).**
+> `scripts/cert-doctor.sh` proves the served TLS is fully correct — cert/key moduli match, leaf chains to the
+> CA, within validity, SAN covers the LAN IP (`192.168.1.185`) — yet macOS `security verify-cert` returns
+> **`CSSMERR_TP_NOT_TRUSTED`**: the CA is in the keychain but never marked trusted, and it had been re-minted
+> (which silently invalidates trust on every device). Every prior "fix" regenerated certs → *more* re-trust churn.
+> - **`scripts/trust-ca-mac.sh`** — one command (`sudo`) that clears stale System-keychain copies then installs +
+>   **trusts** the current `rootCA.pem` as a root (the missing `add-trusted-cert -d -r trustRoot` step). Trusting
+>   a root CA is a system-security change, so the operator runs it (not automated).
+> - **`scripts/cert-doctor.sh`** — read-only: serving mode, cert/key match, chain, validity, SAN-vs-LAN-IP, and the
+>   decisive macOS trust check, plus the CA fingerprint + tablet install steps. SAN is parsed from `-text` (macOS
+>   LibreSSL has no `-ext` flag — the doctor's first run flagged its own false "SAN missing" and that was fixed).
+> - **Re-mint GUARD in `make-dev-cert.sh`** — `FORCE=1` now REFUSES unless `REMINT_CA=yes`, so the CA is
+>   mint-once / trust-once and survives DHCP IP changes (leaf-only reissue keeps the trusted CA). Verified: the
+>   guard refused + left the CA byte-identical.
+> - **Operator runbook:** `sudo scripts/trust-ca-mac.sh` → fully quit + reopen Chrome (lock icon); on each tablet
+>   install `rootCA.pem` once (fingerprint `DA:1C:D6:7E…`); `scripts/cert-doctor.sh` to verify. Plain-HTTP +
+>   Chrome treat-as-secure-origin was REJECTED for real use (would put the trainee transcript = PHI unencrypted
+>   on the LAN); non-PHI testing only.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

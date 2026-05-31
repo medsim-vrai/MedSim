@@ -62,12 +62,36 @@ cd "$CERT_DIR"
 
 # --- 1. Local root CA — REUSE if present so trusted devices stay valid --------
 # Re-issuing the leaf for a new LAN IP keeps the SAME CA, so a tablet that
-# already trusts rootCA.pem does NOT need to re-trust anything. FORCE=1 mints a
-# brand-new CA (then you must re-install rootCA.pem on each device).
-if [ -f rootCA.pem ] && [ -f rootCA-key.pem ] && [ -z "${FORCE:-}" ]; then
-  echo "  ↻ reusing existing root CA (no device re-trust needed)."
+# already trusts rootCA.pem does NOT need to re-trust anything.
+#
+# RE-MINTING THE CA INVALIDATES TRUST ON EVERY DEVICE — it is the #1 cause of the
+# recurring "not secure" pain — so it is GUARDED: FORCE=1 alone is NOT enough to
+# replace an existing CA; you must ALSO pass REMINT_CA=yes to confirm you accept
+# re-trusting every Mac + tablet afterward. To merely reissue the LEAF for a new
+# IP, run with NO flags (the CA is reused automatically).
+MINT_CA=0
+if [ -f rootCA.pem ] && [ -f rootCA-key.pem ]; then
+  if [ -n "${FORCE:-}" ]; then
+    if [ "${REMINT_CA:-}" != "yes" ]; then
+      echo "✗ REFUSING to re-mint the existing root CA."
+      echo "  FORCE=1 was set, but re-minting invalidates CA trust on EVERY device"
+      echo "  (the Mac keychain + each tablet). If you truly intend that, re-run with:"
+      echo "      FORCE=1 REMINT_CA=yes $0 $*"
+      echo "  To only reissue the leaf for a new IP, drop FORCE (the CA is reused)."
+      exit 1
+    fi
+    echo "  ⚠️  RE-MINTING the root CA (REMINT_CA=yes) — you MUST re-trust rootCA.pem on"
+    echo "      every device afterward (sudo scripts/trust-ca-mac.sh + reinstall on tablets)."
+    MINT_CA=1
+  else
+    echo "  ↻ reusing existing root CA (no device re-trust needed)."
+  fi
 else
-  echo "  + creating a new root CA (re-trust rootCA.pem on each device afterward)."
+  echo "  + creating the root CA for the first time."
+  MINT_CA=1
+fi
+
+if [ "$MINT_CA" = 1 ]; then
   openssl genrsa -out rootCA-key.pem 2048 >/dev/null 2>&1
   # CRITICAL: a CA cert MUST carry basicConstraints CA:TRUE + keyCertSign, or
   # Android/Chrome reject it as a signer ("not secure") even though macOS's
@@ -100,8 +124,13 @@ cat dev-leaf.pem rootCA.pem > dev-cert.pem
 rm -f dev-leaf.pem
 
 echo "✓ Wrote:"
-echo "    $CERT_DIR/rootCA.pem    (trust this on each tablet)"
+echo "    $CERT_DIR/rootCA.pem    (trust this on each device)"
 echo "    $CERT_DIR/dev-cert.pem  (served by vite + uvicorn)"
 echo "    $CERT_DIR/dev-key.pem   (private key — never commit)"
 echo ""
-echo "Next: trust rootCA.pem on the tablet, then start the portal + app over HTTPS."
+echo "rootCA SHA-256: $(openssl x509 -in rootCA.pem -noout -fingerprint -sha256 | sed 's/.*=//')"
+echo ""
+echo "Next (trusting the CA is what stops the 'not secure' warning — the cert is fine):"
+echo "  • Mac:    sudo $ROOT_DIR/scripts/trust-ca-mac.sh   then fully quit + reopen Chrome"
+echo "  • Tablet: install rootCA.pem (Settings → Install a certificate → CA certificate)"
+echo "  • Verify: $ROOT_DIR/scripts/cert-doctor.sh"
