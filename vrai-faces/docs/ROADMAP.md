@@ -107,11 +107,13 @@ launches the device (no QR re-scan).
 - ✅ **Opt-in PREVIEW serve mode** (`VRAI_FACES_SERVE=preview` → `scripts/serve-preview.mjs`
   build+preview) so the device serves the hashed build the SW actually caches. Default stays
   the dev server.
-- ◻ **Remaining — now UNBLOCKED by ADR-0027:** the **device "skin pack"** (pre-cache the
-  10–15 active consented skins, stale-while-revalidate) + a **binding cache**, with the
-  PHI-at-rest rules decided (cache only the paired character's skins, **clear-on-unpair** +
-  a manual "forget faces" control, never cache secrets). Plus making **preview the default**
-  for deployed (non-dev) devices.
+- ✅ **Device skin / binding cache (ADR-0027)** — `portalBinding` caches the paired
+  character's bind doc (skin inlined): network-first (reassigned skin shows on reload),
+  cached fallback (offline-resilient avatar), purge-others = **clear-on-unpair**;
+  `clearBindingCache()` + `?forget` = the manual "forget faces". Scoped to the device's OWN
+  character (the full library stays on the portal — PHI-at-rest).
+- ◻ **Remaining (minor):** make **preview the default** for deployed (non-dev) devices; the
+  hand-rolled-SW vs `vite-plugin-pwa` decision. **Phase 5.7 is otherwise complete.**
 Decision still open: hand-rolled SW (current) vs `vite-plugin-pwa` ⇒ ADR. Full
 evaluation (benefits + risks now/future) in `docs/PLAN-2026-05-30-resecure-and-animation.md §7`.
 
@@ -140,14 +142,19 @@ never cache secrets) — the security the operator wants "added back."
   over a rolling on-device STT buffer (built + validated after PTT). See
   `docs/PLAN-2026-05-30-resecure-and-animation.md §2, §7.6, §8`.
 
-### Phase 7 — Speech-driven facial animation  ·  _ungated start; full fidelity gated on RB-001_
+### Phase 7 — Speech-driven facial animation  ·  ◐ B0 LANDED; full fidelity gated on RB-001
 Make the skinned face visibly **lip-sync + emote** from the character AI's spoken lines.
-The drive is already wired (speechConsumer → emotion/viseme/idle → `animation_runtime` →
-`morphTargetInfluences`); the gap is the **deformation basis** (the head-proxy has zero
-morphs; the real path has only 4 procedural shapes). **B0 (ungated):** light up the real
-MediaPipe path on-device + animate the fallback → visible coarse motion now. **B2+ (gated):**
-run **RB-001** → ADR → full **ARKit-52 rig** → phoneme→viseme lip-sync → exporter baking →
-emotion mapping. The ROADMAP's "biggest single unblock." See `PLAN …§3`.
+The drive was already wired (speechConsumer → emotion/viseme/idle → `animation_runtime` →
+`morphTargetInfluences`); the gap was the **deformation basis**.
+- ✅ **B0b — animate the fallback:** the head-proxy now carries the procedural `morph_basis`
+  (jawOpen / smiles / browInnerUp), so the egg lip-syncs (energy→jaw) + shifts expression
+  with emotion — visible motion now, no gated rig.
+- ✅ **B0a — real path bundled:** the MediaPipe model + topology ship under `public/assets/`
+  and the app-shell SW caches them, so a real-face skin yields an animated real mesh (egg is
+  the fallback). _On-device detection is part of the device pilot._
+- ◻ **B1 — device-verify** the speech→viseme/emotion/idle chain + §5 budgets on a tablet.
+- ◻ **B2+ (gated):** run **RB-001** → ADR → full **ARKit-52 rig** → phoneme→viseme lip-sync →
+  exporter baking → emotion mapping. The "biggest single unblock." See `PLAN …§3`.
 
 ---
 
