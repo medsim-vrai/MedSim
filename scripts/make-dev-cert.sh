@@ -39,7 +39,13 @@ PY
 
 HOSTS=("localhost")
 IPS=("127.0.0.1")
+# Always cover the configured stable hostname (ADR-0030) so the cert can't drift
+# from MEDSIM_PUBLIC_HOST — set it once and every reissue includes it.
+[ -n "${MEDSIM_PUBLIC_HOST:-}" ] && HOSTS+=("$MEDSIM_PUBLIC_HOST")
 if [ "$#" -gt 0 ]; then
+  # NOTE: when you pass IPs explicitly, ALL the ones you want must be listed
+  # (e.g. both locations: `make-dev-cert.sh 192.168.1.185 192.168.1.165`) — a
+  # bare run only auto-adds the *current* IP and would drop the others.
   for arg in "$@"; do
     if [[ "$arg" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then IPS+=("$arg"); else HOSTS+=("$arg"); fi
   done

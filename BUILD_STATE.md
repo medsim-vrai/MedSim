@@ -755,6 +755,24 @@
 >   Chrome treat-as-secure-origin was REJECTED for real use (would put the trainee transcript = PHI unencrypted
 >   on the LAN); non-PHI testing only.
 >
+> **2026-05-31b — Network strategy (ADR-0030) + `MEDSIM_PUBLIC_HOST` (first software step).**
+> The recurring tablet "can't reach the portal" was finally root-caused as a NETWORK problem (a
+> range-extender's isolated `192.168.1.x` LAN — same gateway, different physical net), not certs.
+> Strategy written (`docs/NETWORK-STRATEGY.md`, ADR-0030): own the network, address the portal by
+> NAME, push CA+Wi-Fi+app via MDM, contain PHI at the network layer; Option 2 now, Option 3 noted.
+> - **`MEDSIM_PUBLIC_HOST`** — when set (e.g. `portal.medsim.lan`), `_base_url_for_qr` +
+>   `_vrai_base_for_qr` build every QR/device URL from the NAME, not the auto-detected LAN IP. So a
+>   DHCP/between-locations IP change never breaks the cert or a baked QR. Opt-in (unset = unchanged).
+> - **Cert** now covers `localhost, portal.medsim.lan, 127.0.0.1, 192.168.1.185, 192.168.1.165`
+>   (both dev locations + the name) — same CA, **no device re-trust**. `make-dev-cert.sh` auto-adds
+>   `MEDSIM_PUBLIC_HOST` to the SAN and warns to pass ALL IPs on reissue (a bare run drops the others).
+> - **`cert-doctor.sh`** now also checks the hostname is in the SAN and resolves here (site-doctor seed).
+> - **Activate:** add `127.0.0.1 portal.medsim.lan` to `/etc/hosts` (Mac self-test) or a gateway DNS
+>   record (devices), run with `MEDSIM_PUBLIC_HOST=portal.medsim.lan`, and restart the portal to serve
+>   the refreshed cert. Verified: py_compile + the URL builders return the name when set / LAN IP when not.
+> - Observed mid-build: the Mac's LAN IP was `.165` (moved to the 2nd location) — both IPs in the cert,
+>   so it kept working — a live demonstration of why the hostname matters.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

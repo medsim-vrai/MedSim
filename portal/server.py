@@ -1007,17 +1007,32 @@ def _lan_ip() -> str:
     return ip
 
 
+def _public_host() -> str:
+    """A STABLE hostname for the portal across networks/locations (ADR-0030).
+
+    When MEDSIM_PUBLIC_HOST is set (e.g. 'portal.medsim.lan'), every QR / device
+    URL targets the NAME instead of the auto-detected LAN IP — so a DHCP or
+    between-locations IP change never breaks the cert or a baked QR (the cert is
+    issued for the name). Requires the name to RESOLVE: a gateway DNS record for
+    the fleet, or an /etc/hosts entry for local Mac testing. Unset → the prior
+    LAN-IP behavior, unchanged (opt-in, no regression)."""
+    return (os.environ.get("MEDSIM_PUBLIC_HOST") or "").strip()
+
+
 def _base_url_for_qr(request: Request) -> str:
     """Build a URL that mobile devices on the same LAN can reach.
 
-    Prefers the request's host header (which may be LAN IP if the operator
-    is already on iPad mode); falls back to detecting the LAN IP.
+    MEDSIM_PUBLIC_HOST (if set) wins — a stable name that survives IP changes.
+    Otherwise prefers the request's host header (which may be a LAN IP if the
+    operator is already on iPad mode); falls back to detecting the LAN IP.
     """
     scheme = request.url.scheme or "http"
-    host = request.url.hostname or ""
     port = request.url.port
-    if host in ("127.0.0.1", "localhost", ""):
-        host = _lan_ip()
+    host = _public_host()
+    if not host:
+        host = request.url.hostname or ""
+        if host in ("127.0.0.1", "localhost", ""):
+            host = _lan_ip()
     if port:
         return f"{scheme}://{host}:{port}"
     return f"{scheme}://{host}"
@@ -5562,7 +5577,7 @@ def _vrai_base_for_qr(request: Request) -> str:
     base = _os.environ.get("VRAI_FACES_BASE_URL")
     if base:
         return base.rstrip("/")
-    host = request.url.hostname or "localhost"
+    host = _public_host() or (request.url.hostname or "localhost")
     if host in ("127.0.0.1", "localhost", "::1", ""):
         host = _lan_ip()
     port = int(_os.environ.get("VRAI_FACES_VITE_PORT", "5173"))

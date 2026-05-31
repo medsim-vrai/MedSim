@@ -209,6 +209,9 @@ def main() -> None:
     if vrai_serve_status:
         lines.append(f"  Avatar:    {vrai_serve_status}")
     lines.append(f"  Local:     {scheme}://127.0.0.1:{PORT}")
+    pub = os.environ.get("MEDSIM_PUBLIC_HOST", "").strip()
+    if pub:
+        lines.append(f"  Name:      {scheme}://{pub}:{PORT}  (devices use this; needs DNS/hosts to resolve)")
     if HOST in ("0.0.0.0", "::"):
         lan = _lan_ip()
         lines.append(f"  LAN/iPad:  {scheme}://{lan}:{PORT}")

@@ -59,6 +59,20 @@ if [ -n "${lan:-}" ]; then
   else bad "SAN is MISSING this LAN IP ($lan) — reissue: scripts/make-dev-cert.sh $lan"; fi
 fi
 
+# Stable hostname (ADR-0030): if MEDSIM_PUBLIC_HOST is set it must be in the SAN
+# AND must resolve here, or devices addressing the portal by name will fail.
+pub="${MEDSIM_PUBLIC_HOST:-}"
+if [ -n "$pub" ]; then
+  printf '%s' "$san" | grep -q "$pub" \
+    && ok "SAN covers MEDSIM_PUBLIC_HOST ($pub)" \
+    || bad "SAN missing MEDSIM_PUBLIC_HOST ($pub) — reissue: MEDSIM_PUBLIC_HOST=$pub scripts/make-dev-cert.sh <ips>"
+  if python3 -c "import socket; socket.gethostbyname('$pub')" >/dev/null 2>&1; then
+    ok "$pub resolves on this machine"
+  else
+    bad "$pub does NOT resolve here — add a gateway DNS record (devices) or an /etc/hosts entry (this Mac)"
+  fi
+fi
+
 # THE key check on macOS — is the CA actually TRUSTED (not just present)?
 if [ "$(uname)" = "Darwin" ]; then
   if security verify-cert -c "$C/rootCA.pem" >/dev/null 2>&1; then

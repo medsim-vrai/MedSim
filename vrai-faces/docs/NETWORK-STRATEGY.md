@@ -136,7 +136,8 @@ Everything above is built so this is an *expansion*, not a redo:
 
 ## 7. Software changes this strategy needs (our side)
 Tracked separately; the network design above assumes these land:
-1. **Hostname support** — the portal/cert/QR builders honor a configured `MEDSIM_PUBLIC_HOST` (e.g. `portal.medsim.lan`) instead of the auto‑detected LAN IP. *This is the structural fix to the IP/cert churn and the first thing to build.*
-2. **Cert for the hostname** — `make-dev-cert.sh` issues the leaf for the name (+ IP SAN); auto‑renew job.
-3. **Site‑doctor** — extend `cert-doctor.sh` to also verify DNS resolution, portal reachability, and the egress rules.
+1. **Hostname support — ✅ DONE (2026‑05‑31).** `MEDSIM_PUBLIC_HOST` (e.g. `portal.medsim.lan`) makes the portal's QR/URL builders (`_base_url_for_qr`, `_vrai_base_for_qr`) target the NAME instead of the auto‑detected LAN IP. Opt‑in: unset = prior LAN‑IP behavior. The structural fix to IP/cert churn between locations.
+   - **Activate (dev):** `make-dev-cert.sh` auto‑adds `MEDSIM_PUBLIC_HOST` to the cert SAN; for the Mac to reach itself by name add `127.0.0.1 portal.medsim.lan` to `/etc/hosts`; then run with `MEDSIM_PUBLIC_HOST=portal.medsim.lan` and **restart the portal** to serve the refreshed cert. For devices, the gateway DNS must map the name → the portal's reserved IP.
+2. **Cert for the hostname — ✅ DONE.** `make-dev-cert.sh` issues the leaf for the name (auto‑includes `MEDSIM_PUBLIC_HOST`) alongside the IP SANs. _Remaining:_ an auto‑renew job (re‑issue < 398d + reload uvicorn).
+3. **Site‑doctor — ◐ seeded.** `cert-doctor.sh` now also checks the hostname is in the SAN and resolves on this machine. _Remaining:_ portal reachability + egress‑rule checks for a full per‑site preflight.
 4. (Carries existing) single‑origin serving (ADR‑0028), CA re‑mint guard (ADR‑0029), on‑device STT bundling (ADR‑0026 follow‑up).
