@@ -773,6 +773,16 @@
 > - Observed mid-build: the Mac's LAN IP was `.165` (moved to the 2nd location) — both IPs in the cert,
 >   so it kept working — a live demonstration of why the hostname matters.
 >
+> **2026-05-31c — Deep-research: fleet BOM + MDM specifics → NETWORK-STRATEGY.md §8.**
+> Workflow `wwusvbr4p` (114 agents, 31 sources, 23 verified claims). VERIFIED: UniFi is the strongest
+> fit (gateway binds a local DNS A-record to a DHCP reservation in one step) — U6 Pro (~$159, Wi-Fi 6,
+> 802.11r/k/v), keep "Client Device Isolation" OFF, don't pair 802.11r with switch-port isolation; dev
+> BOM ~$600-1,150. Omada ER605 (~$60-70) the cheaper alt (leave "SSID Isolation" off, NEVER "Guest
+> Network"). MDM: iOS auto-trusts an MDM-deployed CA for TLS (no manual step); Intune "Trusted
+> certificate" profile; managed-Chrome URLAllowlist/Blocklist locks Android to the portal origin.
+> HONEST GAPS (in §8.4, need a focused follow-up): the cert GO/NO-GO (step-ca vs public+DNS-01), and
+> on-device confirmation of PWA/Web-Clip mic-permission persistence + Android CA→site-TLS trust.
+>
 > ---
 > **Below: V7 BUILD STATE, preserved 1:1 from the fork moment.**
 > ---

@@ -141,3 +141,35 @@ Tracked separately; the network design above assumes these land:
 2. **Cert for the hostname — ✅ DONE.** `make-dev-cert.sh` issues the leaf for the name (auto‑includes `MEDSIM_PUBLIC_HOST`) alongside the IP SANs. _Remaining:_ an auto‑renew job (re‑issue < 398d + reload uvicorn).
 3. **Site‑doctor — ◐ seeded.** `cert-doctor.sh` now also checks the hostname is in the SAN and resolves on this machine. _Remaining:_ portal reachability + egress‑rule checks for a full per‑site preflight.
 4. (Carries existing) single‑origin serving (ADR‑0028), CA re‑mint guard (ADR‑0029), on‑device STT bundling (ADR‑0026 follow‑up).
+
+---
+
+## 8. Researched BOM + config specifics (deep‑research, 2026‑05‑31)
+Run `wwusvbr4p` (114 agents, 31 sources, 23 verified claims). **Verified** = vendor‑doc‑cited and adversarially confirmed. **Analysis** = my reasoning to fill a gap the research left open — verify on‑device before shipping.
+
+### 8.1 Networking — VERIFIED
+- **Recommended: UniFi** — strongest fit because the gateway natively binds a local DNS **Host (A)** record to a **DHCP reservation** in one step ("Fixed IP Address" + "Local DNS Record"), which is exactly the stable‑hostname design. Local hostnames resolve **only** for clients using the gateway as DNS (DHCP hands that out by default — works cleanly; keep Content/Domain Filtering OFF on the device subnet). [help.ui.com/15179064940439]
+  - **Gateway:** UniFi Cloud Gateway (UCG‑Ultra ≈ $129). Local DNS at Settings → Policy Table → DNS → Host (A) (Network 9.4).
+  - **APs:** **U6 Pro ≈ $159 ea** — Wi‑Fi 6 dual‑band (NOT 6E/no 6 GHz), per‑SSID **802.11r/k/v** toggles, dynamic‑VLAN capable. Size by **room coverage** at **~20–30 active tablets/AP** (the "250+/AP" figure was **refuted 0‑3** — do not size by it) → **2–4 APs** for 15–60 across rooms. [techspecs.ui.com/unifi/wifi/u6-pro]
+  - **Switch:** USW‑Lite‑8‑PoE (≈ $109) → USW‑24‑PoE (≈ $379) by room count.
+  - **Config musts:** per‑SSID **"Client Device Isolation" OFF** (default OFF on *standard* — non‑guest — networks; only blocks same‑AP east‑west, cross‑AP is the VLAN "Network Isolation" setting). **Do NOT enable Switch Port Isolation alongside 802.11r** — documented conflict; keep Fast Roaming ON. [help.ui.com/32065480092951]
+  - **Dev BOM ≈ $600–1,150** (medium confidence on line items beyond the U6 Pro).
+- **Alternative: TP‑Link Omada (cheaper)** — **ER605** router (≈ $60–70): DHCP reservation, 802.1Q VLAN, **LAN→WAN deny/permit ACLs** (permit portal host : TCP 443, deny fleet → PHI containment at the gateway), 802.11r per‑SSID on Controller **6.2+**. **Leave "SSID Isolation" OFF and NEVER set the SSID as a "Guest Network"** — Guest blocks all client‑to‑client *and* all private‑subnet (10/172.16/192.168) access: the exact breakage we hit. [omadanetworks.com/.../er605, support.omadanetworks.com/12928]
+- **Alternative: HPE Aruba** — client isolation = **"Deny Intra VLAN Traffic"** (leave OFF). Standalone Aruba Instant 802.11r needs a **manually‑matched MDID** on every AP. [arubanetworking.hpe.com]
+
+### 8.2 MDM — VERIFIED
+- **iOS/iPadOS: a CA deployed via MDM / enrollment profile is AUTO‑trusted for SSL/TLS — NO manual trust step** (best practice: bundle the cert in the enrollment profile). The manual "Enable Full Trust" toggle only applies to certs installed via email/web. [support.apple.com/102390]
+- **Intune:** deploy the root via a **"Trusted certificate"** profile (Devices → Configuration → Create → Trusted certificate). [learn.microsoft.com, updated 2026‑04]
+- **Browser‑layer PHI containment** (Android Enterprise COBO/COSU, managed Chrome via Intune **app configuration policy**): `URLBlocklist=["*"]` + `URLAllowlist=["<portal host>"]` locks the fleet to the portal origin. Complements — does not replace — the VLAN/firewall network containment; use both. [learn.microsoft.com, updated 2026‑04]
+
+### 8.3 Gaps the research flagged — ANALYSIS (verify on‑device before shipping)
+- **Mic pre‑grant (Android, load‑bearing):** use managed‑Chrome enterprise policy `AudioCaptureAllowed` + `AudioCaptureAllowedUrls=["<portal origin>"]` (via Intune app config) to grant the mic to the portal **without a prompt**. (Policy exists — chromeenterprise.google/policies/audio-capture-allowed-urls — but persistence under kiosk was not workflow‑confirmed.)
+- **Android CA → site TLS:** Chrome on Android requires Certificate Transparency only for **publicly‑trusted** roots, **not** locally/MDM‑installed roots → a private MDM‑pushed CA works for site TLS. Confirm on the target Android version.
+- **iPadOS Safari Web Clip mic persistence is weaker than Android** (may re‑prompt) → a reason Android is primary; the Capacitor‑native wrapper is the iOS fallback.
+- **Name resolution:** a real local **DNS A‑record (chosen)** is the safe path — do **not** rely on mDNS/`.local` on Android.
+- **Port:** `:8765` works in browsers; **443** is cleaner (no port in the QR) and dodges rare proxy/port filters — move to 443 for Option 3.
+- **HSTS:** a trusted private cert gives a full secure context; just don't enable HSTS **preload**.
+
+### 8.4 OPEN — needs a focused follow‑up before committing
+- **Cert decision (C) — NOT resolved by the workflow.** Reasoned lean: **internal ACME (step‑ca)** for the MDM‑managed / PHI / air‑gap‑capable case (CA distribution is "free" via MDM, zero external dependency); **public‑cert + DNS‑01 + split‑horizon DNS** for zero‑CA‑distribution / BYOD / cleanest sales optics (needs a domain + outbound to the DNS+ACME API at each site). Industry context: TLS lifetimes are dropping toward **~47 days** → **automate renewal regardless of path**. Confirm with dedicated research. [smallstep.com, digicert.com, letsencrypt.org]
+- Also unconfirmed here: Jamf Pro payload names, Wi‑Fi auto‑join profiles (PSK + WPA2/3‑Enterprise) across all three MDMs.
