@@ -76,6 +76,7 @@ async function loadAsr(): Promise<AsrPipeline | null> {
     asrPromise = (async (): Promise<AsrPipeline | null> => {
       const t0 = performance.now();
       let lastErr = '';
+      let wasmErr = '';
       try {
         const tf = await import('@huggingface/transformers');
         // Local-first runtime + model (ADR-0026), both served from OUR origin — no
@@ -109,6 +110,7 @@ async function loadAsr(): Promise<AsrPipeline | null> {
             return (audio: Float32Array) => pipe(audio) as Promise<unknown>;
           } catch (e) {
             lastErr = e instanceof Error ? e.message : String(e);
+            if (device === 'wasm') wasmErr = lastErr;
             diag.push({
               t: performance.now(), moduleId: MODULE, kind: 'warn',
               message: `STT ${device} init failed; trying next backend`, data: lastErr,
@@ -119,7 +121,9 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         // COI=false/SAB=false ⇒ the page is NOT cross-origin isolated (usually a
         // stale cached app or missing COOP/COEP) → the threaded wasm can't start.
         const iso = `[COI=${String(crossOriginIsolated)} SAB=${typeof SharedArrayBuffer !== 'undefined'}]`;
-        sttError = `${iso} ${lastErr || 'no STT backend available'}`;
+        // Surface the WASM reason specifically — on a no-WebGPU tablet the webgpu
+        // "failed to get GPU adapter" is expected and masks the real wasm failure.
+        sttError = `${iso} wasm: ${wasmErr || lastErr || 'no STT backend available'}`;
         return null;
       } catch (e) {
         sttError = e instanceof Error ? e.message : String(e);
