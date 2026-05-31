@@ -4,6 +4,7 @@ import type { BootDeps, BlendshapeWeights } from '@contracts/shared';
 import type { NormalizedPortrait } from '@contracts/face_ingest';
 import { registerGeometry, registerTexture } from '@utils/resource_registry';
 import { ARKIT_52, buildFaceGeometry, loadFaceTopology } from './face_topology';
+import { computeMorphBasis } from './morph_basis';
 import { detectFaceLandmarks } from './face_landmarker';
 
 /**
@@ -16,18 +17,17 @@ import { detectFaceLandmarks } from './face_landmarker';
  * `face_topology.ts`.
  *
  * FALLBACK PATH (jsdom, no GPU, or assets not yet bundled): a smooth elongated
- * sphere with the ARKit-52 morph attributes allocated at ZERO displacement, so:
- *   - `animation_runtime` can write `morphTargetInfluences[i]` without blowing
- *     up (the contract holds);
- *   - the user still sees a translucent head-proxy with their portrait UV-mapped
- *     onto it, so `shader_translucent` can be tuned end-to-end.
+ * sphere carrying the SAME procedural morph basis as the real path (Phase 7 B0),
+ * so the head-proxy actually animates — `animation_runtime` writes
+ * `morphTargetInfluences[i]` and the jaw/smile/brow shapes move — with the
+ * portrait UV-mapped onto it for `shader_translucent` to tune end-to-end.
  *
  * The real path activates automatically once two data assets land (local-first,
  * ADR-0001): the `face_landmarker.task` model and the canonical
  * triangulation/UV table (`face_mesh_topology.json`). Until then every build
  * degrades to the fallback — honestly signaling the real topology isn't here yet.
- * Real per-blendshape morph DELTAS are a further slice (they need a deformation
- * basis MediaPipe doesn't ship); morph attributes stay zero for now.
+ * Both paths use the PROCEDURAL `morph_basis` (jawOpen / smiles / browInnerUp
+ * filled, the rest zero); the full ARKit-52 deformation rig is RB-001 (Phase 7 B2+).
  */
 
 function buildBaseGeometry(): THREE.BufferGeometry {
@@ -39,16 +39,16 @@ function buildBaseGeometry(): THREE.BufferGeometry {
   const basePos = geo.getAttribute('position') as THREE.BufferAttribute;
   const vertCount = basePos.count;
 
-  // Allocate 52 zero-displacement morph attributes so morphTargetInfluences
-  // writes are valid. ~1.2 MB at this segment count — acceptable for a
-  // fallback; the real path allocates these sized to the 468/478-vert topology.
-  const morphs: THREE.BufferAttribute[] = [];
-  for (let i = 0; i < ARKIT_52.length; i++) {
-    morphs.push(new THREE.BufferAttribute(new Float32Array(vertCount * 3), 3));
-  }
-  geo.morphAttributes.position = morphs;
+  // Phase 7 B0 — give the head-proxy the PROCEDURAL morph basis (jawOpen /
+  // smiles / browInnerUp) so it actually animates from speech + emotion, instead
+  // of zero-displacement morphs that move nothing. computeMorphBasis is purely
+  // geometric (bbox region rules, no landmark indices), so the same basis the
+  // real MediaPipe path uses applies to this sphere too. Eye/other shapes stay
+  // zero — the full ARKit-52 rig is RB-001 (Phase 7 B2+).
+  const basis = computeMorphBasis(basePos.array as Float32Array, vertCount, ARKIT_52);
+  geo.morphAttributes.position = basis.map((arr) => new THREE.BufferAttribute(arr, 3));
   // Deltas, not absolute targets — see face_topology.ts. Without this the
-  // zero-displacement morphs scale the whole head toward the origin as
+  // morphs would be treated as absolute positions and scale/warp the head as
   // morphTargetInfluences change each frame.
   geo.morphTargetsRelative = true;
 
