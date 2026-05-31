@@ -36,6 +36,20 @@ async function boot(): Promise<void> {
   const scenarioId  = launch?.scenarioId  ?? 'default';
   const characterId = launch?.characterId ?? 'default';
 
+  // Phase 5.7 — fast startup + home-screen install for dedicated tablets:
+  //  - name the home-screen icon per character (Add-to-Home-Screen reads the title),
+  //  - register the unified app SW (app-shell cache + Kokoro passthrough) early so
+  //    the shell caches on first load, and
+  //  - request persistent storage so the cache survives restarts.
+  // All best-effort — a failure here never blocks boot.
+  if (characterId && characterId !== 'default') document.title = `VRAI · ${characterId}`;
+  if ('serviceWorker' in navigator) {
+    void navigator.serviceWorker.register('/app-sw.js').catch(() => { /* non-fatal */ });
+  }
+  if (navigator.storage?.persist) {
+    void navigator.storage.persist().catch(() => { /* non-fatal */ });
+  }
+
   const deps = { diag, scenarioId, characterId };
 
   await Promise.all([

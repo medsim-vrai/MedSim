@@ -23,7 +23,7 @@ See `src/types/tts_provider.ts`. Barrel: `ttsProvider`.
 - Source classification is fail-CLOSED. If `source: 'unknown'`, route as
   if it were trainee_input.
 - LOCAL-FIRST (ADR-0001): kokoro-js@1.2.1 hardcodes the browser model+voice URLs to
-  huggingface.co; `public/kokoro-sw.js` (registered before load) intercepts them and
+  huggingface.co; `public/app-sw.js` (the unified app SW, registered before load) intercepts them and
   serves the bundled `/assets/kokoro/` copies. Run `pnpm run setup:assets` to populate
   (~96 MB, git-ignored). The onnx WASM bundles via vite. On a missing SW/file it falls
   back to the HF network; on total failure the chain uses the synth stand-in. (Browser

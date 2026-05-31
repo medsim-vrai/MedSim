@@ -6,6 +6,12 @@
     <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="VRAI Faces" />
+    <!-- PWA install / home-screen icon (Phase 5.7). iOS Add-to-Home-Screen uses
+         the apple-touch-icon + title; Android installs via the manifest. A
+         per-character title is set at boot (main.ts) so each bed's icon is named. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>VRAI Faces</title>
     <style>
       html, body, #app { height: 100%; margin: 0; background: #000; color: #fff;

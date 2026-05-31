@@ -13,7 +13,8 @@ import type { TtsChunk, TtsRequest } from '@contracts/tts_provider';
  * the test graph.
  *
  * LOCAL-FIRST (ADR-0001): kokoro-js@1.2.1 hardcodes the browser model+voice URLs to
- * huggingface.co. `ensureKokoroSW()` registers `public/kokoro-sw.js`, which intercepts
+ * huggingface.co. `ensureKokoroSW()` registers `public/app-sw.js` (the unified app
+ * service worker — Phase 5.7; also carries the app-shell cache), which intercepts
  * those requests and serves the bundled `/assets/kokoro/` copies (populate via
  * `setup:assets`), so synthesis runs fully offline. If the SW or a bundled file is
  * unavailable, it falls back to the HF network (and on total failure, the tts chain
@@ -51,7 +52,10 @@ function ensureKokoroSW(): Promise<void> {
   if (!swReady) {
     swReady = (async () => {
       if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
-      await navigator.serviceWorker.register('/kokoro-sw.js');
+      // The unified app SW (Phase 5.7) carries the Kokoro passthrough + the
+      // app-shell cache; main.ts registers it early too. register() is
+      // idempotent for the same scriptURL, so calling it here stays safe.
+      await navigator.serviceWorker.register('/app-sw.js');
       await navigator.serviceWorker.ready;
     })().catch(() => { /* no SW → Kokoro falls back to the HF network */ });
   }
