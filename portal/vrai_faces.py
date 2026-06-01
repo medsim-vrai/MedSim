@@ -717,6 +717,24 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             if mode != "error":
                 mode = "echo"
 
+        # Surface the exchange in the OPERATOR's control transcript. The turn above
+        # runs in a throwaway runtime session, so without this the operator never
+        # sees device-voice input/replies. log_turn appends the student utterance +
+        # the character reply (two entries) that /api/control/transcript serves.
+        if sess is not None:
+            persona_name = str(card.get("name") or cid)
+            try:
+                sess.log_turn(
+                    source=f"device:{cid}",
+                    source_label=f"{persona_name} · device voice",
+                    persona_id=cid,
+                    persona_name=persona_name,
+                    student_text=text,
+                    character_text=reply,
+                )
+            except Exception:  # noqa: BLE001 — a logging hiccup must never fail the turn
+                pass
+
         spoken = await push_speech(scenario_id, cid, text=reply)
         return JSONResponse(
             {"ok": True, "heard": text, "reply": reply, "mode": mode, **spoken})
