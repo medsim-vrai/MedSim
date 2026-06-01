@@ -441,10 +441,15 @@ manager = _FaceManager()
 
 def speech_frame(character_id: str, seq: int, *, text: str,
                  emotion: dict[str, Any] | None = None,
-                 end_of_utterance: bool = True) -> dict[str, Any]:
+                 end_of_utterance: bool = True,
+                 audio_b64: str | None = None,
+                 audio_format: str | None = None) -> dict[str, Any]:
     """A VRAISpeechFrame v1 (Memory_management.MD §6.2; shared.ts). Text +
-    optional emotion only — no audio bytes (the tablet synthesizes locally,
-    ADR-0001/0014)."""
+    optional emotion. Optionally carries pre-synthesized audio (base64) when the
+    portal voices the line server-side (ADR-0031, ElevenLabs) — for tablets that
+    can't run the on-device ONNX TTS; otherwise the tablet synthesizes locally
+    (ADR-0001/0014). The audio is the *character's* reply, never trainee
+    free-text, so it moves no PHI off-portal."""
     frame: dict[str, Any] = {
         "v": 1,
         "characterId": character_id,
@@ -460,21 +465,76 @@ def speech_frame(character_id: str, seq: int, *, text: str,
             "weights": {k: float(v) for k, v in emotion["weights"].items()
                         if isinstance(v, (int, float))},
         }
+    if audio_b64:
+        # JSON (ws.send_json) can't carry raw bytes → base64; medsim_adapter's
+        # parseFrame hydrates this back into an ArrayBuffer (audioB64 → audio).
+        frame["audioB64"] = audio_b64
+        frame["audioFormat"] = audio_format or "mp3"
     return frame
 
 
 async def push_speech(scenario_id: str, character_id: str, *, text: str,
                       emotion: dict[str, Any] | None = None,
-                      end_of_utterance: bool = True) -> dict[str, Any]:
+                      end_of_utterance: bool = True,
+                      audio_b64: str | None = None,
+                      audio_format: str | None = None) -> dict[str, Any]:
     """Build the next frame for (scenario, character) and broadcast it to every
-    connected avatar. Returns {seq, delivered}. Call this in-process from the
-    MedSim runtime, or via POST /api/face/{id}/speak."""
+    connected avatar. Returns {seq, delivered, voiced}. Pass audio_b64 to voice
+    the line server-side (the avatar plays it instead of synthesizing locally).
+    Call this in-process from the MedSim runtime, or via POST /api/face/{id}/speak."""
     key = _FaceManager.key(scenario_id, character_id)
     seq = manager.next_seq(key)
     frame = speech_frame(character_id, seq, text=text, emotion=emotion,
-                         end_of_utterance=end_of_utterance)
+                         end_of_utterance=end_of_utterance,
+                         audio_b64=audio_b64, audio_format=audio_format)
     delivered = await manager.broadcast(key, frame)
-    return {"seq": seq, "delivered": delivered}
+    return {"seq": seq, "delivered": delivered, "voiced": bool(audio_b64)}
+
+
+async def _synthesize_voice(
+    sess: Any, character_id: str, text: str,
+) -> tuple[str | None, str | None]:
+    """Best-effort server-side TTS of an avatar line via ElevenLabs (ADR-0031),
+    returned as (base64-mp3, "mp3"). The voice is the one the operator assigned to
+    this persona in the control room (sess.voice_assignments[character_id]); the
+    key is the session's captured ElevenLabs key, else the process key. Returns
+    (None, None) when no voice/key is set or synthesis fails — the caller then
+    sends a text-only frame and the device speaks with its built-in voice.
+
+    Unblocks avatar speech on tablets that can't run the on-device ONNX TTS (e.g.
+    no-WebGPU hardware). PHI (ADR-0014): the *reply* is the character's scripted,
+    AI-generated words — never trainee free-text — so voicing it server-side
+    moves no trainee PHI off-portal; only audio crosses the device WS."""
+    if not text:
+        return None, None
+    voice_id = ""
+    if sess is not None:
+        assigns = getattr(sess, "voice_assignments", None) or {}
+        voice_id = str(assigns.get(character_id, "")).strip()
+    if not voice_id:
+        return None, None  # no operator-assigned voice → device built-in TTS
+
+    from . import voices  # lazy: avoid an import-time cycle (mirrors /listen)
+    if sess is not None and getattr(sess, "elevenlabs_api_key", ""):
+        api_key = sess.elevenlabs_api_key
+    else:
+        api_key = voices.get_api_key(None)
+    if not api_key:
+        return None, None
+
+    try:
+        buf = bytearray()
+        async for chunk in voices.synthesize_stream(text, voice_id, api_key):
+            buf.extend(chunk)
+        if not buf:
+            return None, None
+        import base64
+        return base64.b64encode(bytes(buf)).decode("ascii"), "mp3"
+    except Exception as exc:  # noqa: BLE001 — TTS must never fail the turn
+        import logging
+        logging.getLogger(__name__).warning(
+            "avatar TTS synth failed (%s); device will use its built-in voice", exc)
+        return None, None
 
 
 # ── Read models ───────────────────────────────────────────────────────
@@ -735,7 +795,12 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             except Exception:  # noqa: BLE001 — a logging hiccup must never fail the turn
                 pass
 
-        spoken = await push_speech(scenario_id, cid, text=reply)
+        # Voice the reply server-side in the operator-assigned ElevenLabs voice
+        # (ADR-0031) so tablets that can't run the on-device ONNX TTS still speak;
+        # falls back to a text-only frame (device built-in voice) when unset.
+        audio_b64, audio_format = await _synthesize_voice(sess, cid, reply)
+        spoken = await push_speech(scenario_id, cid, text=reply,
+                                   audio_b64=audio_b64, audio_format=audio_format)
         return JSONResponse(
             {"ok": True, "heard": text, "reply": reply, "mode": mode, **spoken})
 

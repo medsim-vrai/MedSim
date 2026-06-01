@@ -24,6 +24,25 @@ describe('medsim_adapter parseFrame', () => {
       }),
     ).toBeNull();
   });
+
+  it('hydrates base64 audio (audioB64) into an ArrayBuffer (WS path, ADR-0031)', () => {
+    // The portal ships server-synthesized mp3 as base64 over ws.send_json;
+    // 'hi' → 'aGk='. parseFrame must turn it back into the ArrayBuffer the
+    // audio_pipeline expects, while keeping text for the device fallback.
+    const f = parseFrame({
+      v: 1, characterId: 'c1', seq: 1,
+      audioB64: 'aGk=', audioFormat: 'mp3', text: 'hello',
+    });
+    expect(f?.audio).toBeInstanceOf(ArrayBuffer);
+    expect(new Uint8Array(f!.audio!)).toEqual(new Uint8Array([0x68, 0x69]));
+    expect(f?.audioFormat).toBe('mp3');
+    expect(f?.text).toBe('hello');
+  });
+
+  it('leaves a text-only frame without audio', () => {
+    const f = parseFrame({ v: 1, characterId: 'c1', seq: 1, text: 'hi' });
+    expect(f?.audio).toBeUndefined();
+  });
 });
 
 describe('medsim_adapter barrel', () => {
