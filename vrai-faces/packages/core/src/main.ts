@@ -31,6 +31,7 @@ import { mountImportControl } from './shell/import_control';
 import { mountSaveControl } from './shell/save_control';
 import { mountDeviceVoice } from './shell/device_voice';
 import { mountDebugConsole } from './shell/debug_console';
+import { isDebugEnabled } from './shell/debug';
 
 /** No-WebGPU-adapter tablets (e.g. many Android) expose `navigator.gpu` but
  *  `requestAdapter()` returns null. The ONNX runtime behind on-device STT probes
@@ -54,7 +55,7 @@ async function hideDeadWebGpu(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
-  mountDebugConsole(); // TEMP pilot aid — on-device console (🐞 button), cable-free
+  if (isDebugEnabled()) mountDebugConsole(); // 🐞 on-device console — only with ?debug
   await hideDeadWebGpu(); // must run before the renderer / transformers import
   const launch = parseLaunchUrl(window.location);
   const scenarioId  = launch?.scenarioId  ?? 'default';

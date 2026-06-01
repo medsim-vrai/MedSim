@@ -18,6 +18,7 @@ import type { MedsimAdapterModule } from '@contracts/medsim_adapter';
 import type { TtsProviderModule } from '@contracts/tts_provider';
 import type { TtsVoiceId, VRAISpeechFrame } from '@contracts/shared';
 import { diag } from '@perf/diag';
+import { dlog, dwarn, derror } from './debug';
 
 export interface SpeechConsumerDeps {
   adapter: MedsimAdapterModule;
@@ -55,9 +56,9 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
 
   async function speakText(text: string, emotion?: string): Promise<void> {
     const voice = deps.voice();
-    console.log('[speak] speakText', { voice, chars: text.length, emotion }); // TEMP pilot diag
-    if (!voice) { console.warn('[speak] no voice bound — nothing to speak'); return; }
-    if (!ttsMod) { ttsMod = await deps.loadTts(); console.log('[speak] TTS module loaded'); }
+    dlog('[speak] speakText', { voice, chars: text.length, emotion });
+    if (!voice) { dwarn('[speak] no voice bound — nothing to speak'); return; }
+    if (!ttsMod) { ttsMod = await deps.loadTts(); dlog('[speak] TTS module loaded'); }
     const req = {
       text, voice, tier: 'local' as const, source: 'scripted' as const,
       ...(emotion ? { emotion } : {}),
@@ -72,10 +73,10 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
         deps.audio.enqueueAudio(chunk.audio, chunk.audioFormat);
         if (native && chunk.visemes) deps.anim.pushVisemes(toVisemeFrames(chunk.visemes));
       }
-      console.log('[speak] done —', chunks, 'audio chunk(s) enqueued'); // TEMP pilot diag
+      dlog('[speak] done —', chunks, 'audio chunk(s) enqueued');
       if (chunks > 0) return;
     } catch (e) {
-      console.warn('[speak] local TTS failed — browser-speech fallback:', e); // TEMP pilot diag
+      dwarn('[speak] local TTS failed — browser-speech fallback:', e);
       diag.push({
         t: performance.now(), moduleId: MODULE, kind: 'warn',
         message: 'local TTS failed; using browser speech fallback',
@@ -93,7 +94,7 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
   async function speakViaBrowser(text: string): Promise<void> {
     const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
     if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
-      console.warn('[speak] no browser speechSynthesis available'); // TEMP pilot diag
+      dwarn('[speak] no browser speechSynthesis available');
       return;
     }
     await new Promise<void>((resolve) => {
@@ -119,7 +120,7 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
   }
 
   function handleFrame(f: VRAISpeechFrame): void {
-    console.log('[speak] frame', { text: f.text?.slice(0, 50), hasAudio: !!f.audio, emotion: f.emotion?.label }); // TEMP pilot diag
+    dlog('[speak] frame', { text: f.text?.slice(0, 50), hasAudio: !!f.audio, emotion: f.emotion?.label });
     if (f.emotion) deps.anim.setEmotion(f.emotion.weights, EMOTION_EASE_MS);
 
     if (f.audio) {
@@ -137,7 +138,7 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
       speaking = speaking
         .then(() => speakText(text, emoLabel))
         .catch((e: unknown) => {
-          console.error('[speak] speakText failed:', e); // TEMP pilot diag — full stack/cause in 🐞
+          derror('[speak] speakText failed:', e);
           diag.push({
             t: performance.now(), moduleId: MODULE, kind: 'error',
             message: 'speakText failed', data: e instanceof Error ? e.message : String(e),
