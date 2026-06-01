@@ -55,22 +55,27 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
 
   async function speakText(text: string, emotion?: string): Promise<void> {
     const voice = deps.voice();
-    if (!voice) return; // not bound yet — nothing to speak as
-    if (!ttsMod) ttsMod = await deps.loadTts();
+    console.log('[speak] speakText', { voice, chars: text.length, emotion }); // TEMP pilot diag
+    if (!voice) { console.warn('[speak] no voice bound — nothing to speak'); return; }
+    if (!ttsMod) { ttsMod = await deps.loadTts(); console.log('[speak] TTS module loaded'); }
     const req = {
       text, voice, tier: 'local' as const, source: 'scripted' as const,
       ...(emotion ? { emotion } : {}),
     };
+    let chunks = 0;
     for await (const chunk of ttsMod.speak(req)) {
+      chunks++;
       const native = !!chunk.visemes && chunk.visemes.length > 0;
       // ADR-0015: native provider visemes suppress the derived jawOpen bridge.
       deps.audio.setVisemeSource(native ? 'native' : 'derived');
       deps.audio.enqueueAudio(chunk.audio, chunk.audioFormat);
       if (native && chunk.visemes) deps.anim.pushVisemes(toVisemeFrames(chunk.visemes));
     }
+    console.log('[speak] done —', chunks, 'audio chunk(s) enqueued'); // TEMP pilot diag
   }
 
   function handleFrame(f: VRAISpeechFrame): void {
+    console.log('[speak] frame', { text: f.text?.slice(0, 50), hasAudio: !!f.audio, emotion: f.emotion?.label }); // TEMP pilot diag
     if (f.emotion) deps.anim.setEmotion(f.emotion.weights, EMOTION_EASE_MS);
 
     if (f.audio) {
@@ -88,6 +93,7 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
       speaking = speaking
         .then(() => speakText(text, emoLabel))
         .catch((e: unknown) => {
+          console.error('[speak] speakText failed:', e); // TEMP pilot diag — full stack/cause in 🐞
           diag.push({
             t: performance.now(), moduleId: MODULE, kind: 'error',
             message: 'speakText failed', data: e instanceof Error ? e.message : String(e),
