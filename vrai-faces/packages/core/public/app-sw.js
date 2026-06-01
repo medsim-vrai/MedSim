@@ -16,7 +16,7 @@
  * The live AI reply loop still needs the portal — caching speeds STARTUP, not the
  * encounter. Bump CACHE_VERSION on a breaking shell change; activate() drops old.
  */
-const CACHE_VERSION = 'vrai-shell-v7'; // v7: console-log the speech->TTS path for the audio pilot
+const CACHE_VERSION = 'vrai-shell-v8'; // v8: browser-speech TTS fallback when on-device Kokoro can't run
 const HF_PREFIX = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/';
 const LOCAL_BASE = '/assets/kokoro/';
 

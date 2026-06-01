@@ -62,16 +62,60 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
       text, voice, tier: 'local' as const, source: 'scripted' as const,
       ...(emotion ? { emotion } : {}),
     };
-    let chunks = 0;
-    for await (const chunk of ttsMod.speak(req)) {
-      chunks++;
-      const native = !!chunk.visemes && chunk.visemes.length > 0;
-      // ADR-0015: native provider visemes suppress the derived jawOpen bridge.
-      deps.audio.setVisemeSource(native ? 'native' : 'derived');
-      deps.audio.enqueueAudio(chunk.audio, chunk.audioFormat);
-      if (native && chunk.visemes) deps.anim.pushVisemes(toVisemeFrames(chunk.visemes));
+    try {
+      let chunks = 0;
+      for await (const chunk of ttsMod.speak(req)) {
+        chunks++;
+        const native = !!chunk.visemes && chunk.visemes.length > 0;
+        // ADR-0015: native provider visemes suppress the derived jawOpen bridge.
+        deps.audio.setVisemeSource(native ? 'native' : 'derived');
+        deps.audio.enqueueAudio(chunk.audio, chunk.audioFormat);
+        if (native && chunk.visemes) deps.anim.pushVisemes(toVisemeFrames(chunk.visemes));
+      }
+      console.log('[speak] done —', chunks, 'audio chunk(s) enqueued'); // TEMP pilot diag
+      if (chunks > 0) return;
+    } catch (e) {
+      console.warn('[speak] local TTS failed — browser-speech fallback:', e); // TEMP pilot diag
+      diag.push({
+        t: performance.now(), moduleId: MODULE, kind: 'warn',
+        message: 'local TTS failed; using browser speech fallback',
+        data: e instanceof Error ? e.message : String(e),
+      });
     }
-    console.log('[speak] done —', chunks, 'audio chunk(s) enqueued'); // TEMP pilot diag
+    // Fallback: the on-device ONNX TTS (Kokoro) can't run on this device — e.g. a
+    // no-WebGPU tablet where the ORT wasm backend won't register (same wall as the
+    // STT). Speak with the browser's built-in speechSynthesis so the avatar still
+    // talks, with a coarse jaw oscillation for rough lip-sync. Real Kokoro visemes
+    // need WebGPU-capable hardware (or a fixed on-device ONNX runtime).
+    await speakViaBrowser(text);
+  }
+
+  async function speakViaBrowser(text: string): Promise<void> {
+    const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+    if (!synth || typeof SpeechSynthesisUtterance === 'undefined') {
+      console.warn('[speak] no browser speechSynthesis available'); // TEMP pilot diag
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US';
+      let jaw: number | null = null;
+      const stop = (): void => {
+        if (jaw !== null) { clearInterval(jaw); jaw = null; }
+        deps.anim.pushVisemes([{ t: performance.now(), weights: { jawOpen: 0 } }]);
+        resolve();
+      };
+      u.onstart = (): void => {
+        deps.audio.setVisemeSource('derived');
+        jaw = window.setInterval((): void => {
+          const open = 0.12 + 0.30 * Math.abs(Math.sin(performance.now() / 80));
+          deps.anim.pushVisemes([{ t: performance.now(), weights: { jawOpen: open } }]);
+        }, 60);
+      };
+      u.onend = stop;
+      u.onerror = stop;
+      try { synth.cancel(); synth.speak(u); } catch { stop(); }
+    });
   }
 
   function handleFrame(f: VRAISpeechFrame): void {
