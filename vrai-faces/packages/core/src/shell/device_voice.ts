@@ -12,6 +12,7 @@
 
 import { diag } from '@perf/diag';
 import { createDeviceStt, type DeviceSttHandle } from './device_stt';
+import { createCloudStt } from './cloud_stt';
 
 const MODULE = 'shell.deviceVoice';
 
@@ -106,6 +107,13 @@ export function mountDeviceVoice(
   note.className = 'vrai-voice-note';
   note.textContent = 'On-device speech recognition — your audio stays on this device.';
 
+  // Cloud fallback (ADR-0025) — browser Web Speech, for tablets where on-device
+  // STT can't run. NON-PHI: audio leaves the device. Opt-in, off by default.
+  const cloudBtn = document.createElement('button');
+  cloudBtn.type = 'button';
+  cloudBtn.className = 'vrai-voice-toggle';
+  cloudBtn.textContent = '☁︎ Use cloud voice (testing · not PHI)';
+
   const pttRow = document.createElement('div');
   pttRow.className = 'vrai-voice-row';
   const pttBtn = document.createElement('button');
@@ -122,7 +130,7 @@ export function mountDeviceVoice(
   const metricsEl = document.createElement('div');
   metricsEl.className = 'vrai-voice-metrics';
 
-  controls.append(note, pttRow, status, metricsEl);
+  controls.append(note, cloudBtn, pttRow, status, metricsEl);
   panel.append(toggleRow, controls);
   container.appendChild(panel);
 
@@ -154,6 +162,8 @@ export function mountDeviceVoice(
   }
 
   let stt: DeviceSttHandle | null = null;
+  let useCloud = false; // ADR-0025 cloud fallback (non-PHI), opt-in
+  const makeStt = (): DeviceSttHandle => (useCloud ? createCloudStt() : createDeviceStt());
   let on = false;
   let busy = false;                       // transcribing a take
   let startP: Promise<void> | null = null; // in-flight start(), so stop waits for it
@@ -187,11 +197,13 @@ export function mountDeviceVoice(
 
   function setMaster(enabled: boolean): void {
     on = enabled;
-    toggleBtn.textContent = enabled ? '🎙 Push-to-talk ON (on-device)' : '🎙 Enable push-to-talk';
+    toggleBtn.textContent = enabled
+      ? (useCloud ? '🎙 Push-to-talk ON (cloud)' : '🎙 Push-to-talk ON (on-device)')
+      : '🎙 Enable push-to-talk';
     toggleBtn.classList.toggle('on', enabled);
     panel.classList.toggle('vrai-voice-open', enabled);
     if (enabled) {
-      if (!stt) stt = createDeviceStt(); // warms the model in the background
+      if (!stt) stt = makeStt(); // on-device (warms model) or cloud, per the toggle
       const s = stt;
       setStatus(s.isReady()
         ? 'On-device voice ready — hold to talk.'
@@ -224,6 +236,18 @@ export function mountDeviceVoice(
 
   // --- listeners (sync handlers; async work runs in a void IIFE) ---
   const onToggle = (): void => setMaster(!on);
+
+  const onCloudToggle = (): void => {
+    useCloud = !useCloud;
+    cloudBtn.classList.toggle('on', useCloud);
+    cloudBtn.textContent = useCloud
+      ? '☁︎ Cloud voice ON (testing · not PHI)'
+      : '☁︎ Use cloud voice (testing · not PHI)';
+    note.textContent = useCloud
+      ? '⚠︎ Cloud recognizer — audio leaves the device (Google). Testing only, NOT for PHI.'
+      : 'On-device speech recognition — your audio stays on this device.';
+    if (on) { setMaster(false); setMaster(true); } // re-create with the chosen engine
+  };
 
   const onPttDown = (ev: Event): void => {
     ev.preventDefault();
@@ -266,6 +290,7 @@ export function mountDeviceVoice(
   };
 
   toggleBtn.addEventListener('click', onToggle);
+  cloudBtn.addEventListener('click', onCloudToggle);
   pttBtn.addEventListener('pointerdown', onPttDown);
   pttBtn.addEventListener('pointerup', onPttUp);
   pttBtn.addEventListener('pointerleave', onPttUp);
@@ -274,6 +299,7 @@ export function mountDeviceVoice(
   return {
     dispose() {
       toggleBtn.removeEventListener('click', onToggle);
+      cloudBtn.removeEventListener('click', onCloudToggle);
       pttBtn.removeEventListener('pointerdown', onPttDown);
       pttBtn.removeEventListener('pointerup', onPttUp);
       pttBtn.removeEventListener('pointerleave', onPttUp);
