@@ -181,6 +181,19 @@ async function boot(): Promise<void> {
   // Perf probe for the e2e/soak harness (window.__vraiPerf). Same DEV/?diag gate.
   installPerfProbe();
 
+  // Morph-target QA panel (RB-001/ADR-0034 acceptance) — DEBUG-ONLY: loaded +
+  // mounted only with ?debug, so it never ships in the production bundle. Drives
+  // each ARKit-52 shape 0->1 on the live demo avatar to eyeball the baked rig.
+  if (isDebugEnabled()) {
+    void Promise.all([
+      import('./shell/morph_qa_panel'),
+      import('@modules/mesh_builder/impl/face_topology'),
+      import('@modules/mesh_builder/impl/morph_basis'),
+    ]).then(([qa, topo, mb]) => {
+      qa.mountMorphQaPanel(app, animationRuntime, topo.ARKIT_52, new Set(mb.BAKED_MORPHS));
+    }).catch(() => { /* non-fatal dev tool */ });
+  }
+
   diag.push({
     t: performance.now(), moduleId: 'main', kind: 'info',
     message: `VRAI Faces booted (demo${avatar ? '' : ' FAILED'}). `
