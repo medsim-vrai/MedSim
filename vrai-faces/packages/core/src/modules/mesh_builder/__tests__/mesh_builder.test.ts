@@ -152,4 +152,18 @@ describe('computeMorphBasis (procedural deltas, by region)', () => {
     const tongue = basis[ARKIT_52.indexOf('tongueOut')]!;
     expect(tongue.every((v) => v === 0)).toBe(true);
   });
+
+  // RB-001/ADR-0034: the baked ARKit rig overlays the procedural basis on the real 468 topology.
+  it('overlays the baked ARKit rig on the real 468-vertex topology', () => {
+    const M = 468;
+    const pos = new Float32Array(M * 3);
+    for (let i = 0; i < M; i++) pos[i * 3 + 1] = i / (M - 1) - 0.5; // spread Y so face height > 0
+    const basis = computeMorphBasis(pos, M, ARKIT_52);
+    const sumAbs = (a: Float32Array): number => a.reduce((s, v) => s + Math.abs(v), 0);
+    // browDownLeft is ZERO in the procedural basis, but the baked rig fills it:
+    expect(sumAbs(basis[ARKIT_52.indexOf('browDownLeft')]!)).toBeGreaterThan(0);
+    expect(sumAbs(basis[ARKIT_52.indexOf('jawOpen')]!)).toBeGreaterThan(0);
+    // tongueOut is absent from the rig → stays at the procedural (zero) delta:
+    expect(sumAbs(basis[ARKIT_52.indexOf('tongueOut')]!)).toBe(0);
+  });
 });

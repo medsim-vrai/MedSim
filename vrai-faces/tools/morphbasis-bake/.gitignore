@@ -1,0 +1,8 @@
+# RB-001 bake working tree — source assets, intermediates, and the bake venv are NOT committed.
+# Only bake_morphbasis.py + README.md ship; the OUTPUT lives in packages/core (committed there).
+_assets/
+_work/
+.venv/
+__pycache__/
+*.obj
+*.npz

@@ -1,18 +1,30 @@
 /**
- * PROCEDURAL blendshape-delta basis — an APPROXIMATION, not an ARKit rig.
+ * Blendshape-delta basis for the 468-vertex face.
  *
- * There is no off-the-shelf ARKit-52 → MediaPipe-468 deformation basis, so we
- * synthesize per-vertex deltas from the live mesh geometry using region rules
- * keyed off the face's bounding box (no hard-coded landmark indices, so it's
- * robust to the 468/478 split). Deltas are the FULL displacement at weight 1.0,
- * in the same normalized space as the geometry's positions, so they scale with
- * the face automatically.
+ * REAL ARKit-52 rig (RB-001 / ADR-0034): `face_mesh_morphbasis.json` holds per-vertex
+ * deltas baked offline by deformation-transferring USC ICT-FaceKit's MIT ARKit shapes onto
+ * MediaPipe's Apache-2.0 canonical 468 topology (+ a derived `eyesClosed`/AU43). Deltas are
+ * stored as FRACTIONS of the canonical face height, so they rescale to the live mesh.
  *
- * Coverage is intentionally PARTIAL — only shapes with a defensible geometric
- * rule are filled; the rest stay at zero (a real rig is the follow-up). The
- * highest-value shape for this product is `jawOpen` (it dominates lip-sync /
- * viseme motion). Pure + deterministic (ADR-0005 spirit); unit-tested by region.
+ * PROCEDURAL fallback: when the live mesh is NOT the baked topology (468/478) — synthetic
+ * meshes, the head-proxy, unit tests — or for any name absent from the rig (`tongueOut`), we
+ * fall back to geometry-driven region rules keyed off the bounding box (no landmark indices,
+ * so it survives the 468/478 split). The highest-value shape is `jawOpen` (lip-sync).
+ *
+ * Pure + deterministic (ADR-0005). The baked asset is generation-time only (no runtime
+ * model, nothing leaves the device — ADR-0001/0014). `avatar_exporter` bakes whatever deltas
+ * exist by name, so the rig is a drop-in: no contract change.
  */
+import basisJson from './face_mesh_morphbasis.json';
+
+interface MorphBasisDoc {
+  readonly version: number;
+  readonly vertexCount: number;
+  readonly canonicalHeight: number;
+  readonly shapes: Readonly<Record<string, ReadonlyArray<ReadonlyArray<number>>>>;
+}
+/** The baked ARKit-52 (+ eyesClosed) deformation basis. Bundled (~292 KB / ~73 KB gz). */
+const BAKED = basisJson as unknown as MorphBasisDoc;
 
 interface Bounds {
   minX: number; maxX: number; minY: number; maxY: number;
@@ -36,11 +48,8 @@ function computeBounds(positions: Float32Array, n: number): Bounds {
   };
 }
 
-/**
- * Build the 52 morph-target delta arrays (parallel to `names`), each a
- * `Float32Array(n*3)`. Unsupported shapes are returned all-zero.
- */
-export function computeMorphBasis(
+/** Procedural approximation (the pre-RB-001 basis) — fallback for non-baked meshes + tongueOut. */
+function computeProceduralBasis(
   positions: Float32Array,
   n: number,
   names: ReadonlyArray<string>,
@@ -65,18 +74,14 @@ export function computeMorphBasis(
     const x = positions[i * 3]!;
     const y = positions[i * 3 + 1]!;
 
-    // jawOpen: the lower face swings down (+ a touch forward), ramping from the
-    // vertical midline (0) to the chin (1).
     if (jawOpen && y < b.cy) {
       const t = (b.cy - y) / (b.cy - b.minY || 1);
       jawOpen[i * 3 + 1] = -0.18 * b.h * t;
       jawOpen[i * 3 + 2] = -0.03 * b.h * t;
     }
 
-    // mouthSmile L/R: vertices in the mouth band move up-and-outward, strongest
-    // mid-band and toward the sides. Split by which half of the face they're on.
     if ((smileL || smileR) && y <= mouthTop && y >= mouthBot) {
-      const v = (y - mouthBot) / (mouthTop - mouthBot || 1);      // 0..1 in band
+      const v = (y - mouthBot) / (mouthTop - mouthBot || 1);
       const corner = Math.min(1, Math.abs(x - b.cx) / (0.35 * b.w));
       const amt = corner * (1 - Math.abs(0.5 - v) * 1.2);
       if (amt > 0) {
@@ -90,16 +95,57 @@ export function computeMorphBasis(
       }
     }
 
-    // browInnerUp: the upper-center forehead/brow lifts.
     if (browInnerUp && y > b.cy + 0.22 * b.h && Math.abs(x - b.cx) < 0.18 * b.w) {
       browInnerUp[i * 3 + 1] = 0.045 * b.h;
     }
   }
-
   return basis;
 }
 
-/** Shapes `computeMorphBasis` currently fills (for docs/tests). The rest are zero. */
+/**
+ * Build the 52 morph-target delta arrays (parallel to `names`), each `Float32Array(n*3)`.
+ *
+ * On the real MediaPipe topology (n === 468 or 478) the baked ARKit-52 rig defines each shape;
+ * otherwise — and for any name not in the rig (`tongueOut`) — the procedural fallback applies.
+ */
+export function computeMorphBasis(
+  positions: Float32Array,
+  n: number,
+  names: ReadonlyArray<string>,
+): Float32Array[] {
+  const basis = computeProceduralBasis(positions, n, names);
+
+  // Overlay the baked rig only on the topology it was baked for (face verts 0..467; a 478-vertex
+  // iris mesh keeps its iris verts procedural/zero). Scale the canonical-height fractions to the
+  // live face so the rig adapts to any face size, exactly like the procedural basis does.
+  const onBakedTopology = (n === BAKED.vertexCount || n === 478) && BAKED.canonicalHeight > 0;
+  if (!onBakedTopology) return basis;
+
+  const b = computeBounds(positions, n);
+  if (!(b.h > 0)) return basis;
+  const scale = b.h / BAKED.canonicalHeight;
+
+  for (let i = 0; i < names.length; i++) {
+    const sparse = BAKED.shapes[names[i]!];
+    if (!sparse) continue;          // not in the rig (e.g. tongueOut) → keep the procedural delta
+    const arr = basis[i]!;
+    arr.fill(0);                    // the baked rig fully defines this shape
+    for (const e of sparse) {
+      const vi = e[0]!;
+      if (vi >= 0 && vi < n) {
+        arr[vi * 3] = e[1]! * scale;
+        arr[vi * 3 + 1] = e[2]! * scale;
+        arr[vi * 3 + 2] = e[3]! * scale;
+      }
+    }
+  }
+  return basis;
+}
+
+/** Names the BAKED rig defines (every ARKit-52 shape except tongueOut, + the eyesClosed supplement). */
+export const BAKED_MORPHS: ReadonlyArray<string> = Object.keys(BAKED.shapes);
+
+/** Shapes the PROCEDURAL fallback fills (used when the baked rig is unavailable). */
 export const SUPPORTED_MORPHS: ReadonlyArray<string> = [
   'jawOpen', 'mouthSmileLeft', 'mouthSmileRight', 'browInnerUp',
 ];
