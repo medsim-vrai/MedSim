@@ -15,7 +15,7 @@ ADR + a drop-in implementation. See `docs/ROADMAP.md` → "Research-driven enhan
 ## Briefs
 | ID | Title | Gates | Status |
 |----|-------|-------|--------|
-| RB-001 | Real ARKit-52 blendshape rig (MediaPipe 468 topology) | Phase 1.2 | Open |
+| RB-001 | Real ARKit-52 blendshape rig (MediaPipe 468 topology) | Phase 1.2 | ✅ Executed 2026-06-01 → ADR-0034 (CONDITIONAL GO: ICT-FaceKit MIT + MediaPipe Apache-2.0, deformation-transfer bake) |
 | RB-002 | On-device voice — name wake-word + trainee STT | Character devices (ADR-0024) | ✅ Executed 2026-05-30 → ADR-0026 (deep research, 25 claims verified) |
 
 ## Format
