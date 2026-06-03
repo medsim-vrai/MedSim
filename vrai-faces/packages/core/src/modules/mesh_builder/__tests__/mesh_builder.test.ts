@@ -17,6 +17,29 @@ describe('mesh_builder barrel', () => {
   });
 });
 
+describe('baked rig scaling (RB-001/ADR-0034 regression)', () => {
+  it('scales baked deltas to the LIVE face height (no double-division by canonicalHeight)', () => {
+    // A 468-vertex mesh spanning a height of ~9.9 units. The vertex POSITIONS only
+    // set the bounding box; baked deltas are looked up by index and scaled by height.
+    const n = 468;
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      pos[i * 3] = (i % 11) - 5;
+      pos[i * 3 + 1] = ((i * 7) % 100) / 10 - 5; // y ∈ [-5, 4.9] → height ≈ 9.9
+      pos[i * 3 + 2] = 0;
+    }
+    const basis = computeMorphBasis(pos, n, ARKIT_52);
+    const jaw = basis[ARKIT_52.indexOf('jawOpen')]!;
+    let maxAbs = 0;
+    for (let k = 0; k < jaw.length; k++) maxAbs = Math.max(maxAbs, Math.abs(jaw[k]!));
+    // jawOpen's max fraction is ~0.2 of canonical height; on a ~9.9-tall face the
+    // delta must be ~2 (visible). The old `b.h / canonicalHeight` bug yielded ~0.11
+    // (÷ ~17.7) — influences correct but the rig invisible. Assert the visible range.
+    expect(maxAbs).toBeGreaterThan(1);
+    expect(maxAbs).toBeLessThan(10);
+  });
+});
+
 // A minimal real topology: a unit quad as two triangles over 4 vertices. Enough
 // to exercise the geometry builder without the (unbundled) 468-vert asset.
 const QUAD: FaceTopology = {

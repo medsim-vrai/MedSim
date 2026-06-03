@@ -123,7 +123,11 @@ export function computeMorphBasis(
 
   const b = computeBounds(positions, n);
   if (!(b.h > 0)) return basis;
-  const scale = b.h / BAKED.canonicalHeight;
+  // The JSON deltas are FRACTIONS of the canonical face height (delta / canonicalHeight),
+  // so rescaling to the live face is a SINGLE multiply by the live height. (A prior
+  // `b.h / canonicalHeight` divided by canonicalHeight a second time, shrinking every
+  // delta ~17x — influences were correct but the rig was invisible.)
+  const scale = b.h;
 
   for (let i = 0; i < names.length; i++) {
     const sparse = BAKED.shapes[names[i]!];
