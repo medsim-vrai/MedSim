@@ -10,6 +10,18 @@
 // which are flat (e.g. tongueOut, omitted from the bake).
 
 import type { AnimationRuntimeModule } from '@contracts/animation_runtime';
+import { lookupMesh } from '@utils/resource_registry';
+
+/** Minimal shape of what the live-diagnostic reads off the attached mesh. */
+interface MeshLike {
+  geometry?: {
+    userData?: Record<string, unknown>;
+    getAttribute?(name: string): { count: number } | undefined;
+    morphAttributes?: { position?: ReadonlyArray<unknown> };
+  };
+  morphTargetInfluences?: ReadonlyArray<number>;
+  material?: { type?: string };
+}
 
 const STYLE = `
 .vrai-morphqa{position:fixed;left:12px;bottom:12px;z-index:60;width:250px;
@@ -94,7 +106,11 @@ export function mountMorphQaPanel(
   reset.style.flex = '1';
   btnRow.append(reset);
 
-  wrap.append(title, selRow, sliderRow, metaRow, btnRow);
+  const diagEl = document.createElement('div');
+  diagEl.className = 'meta';
+  diagEl.style.cssText = 'font-size:10px;margin-top:6px;opacity:.75;line-height:1.5;white-space:pre-line';
+
+  wrap.append(title, selRow, sliderRow, metaRow, btnRow, diagEl);
   host.appendChild(wrap);
 
   let idx = 0;
@@ -125,9 +141,33 @@ export function mountMorphQaPanel(
   slider.addEventListener('input', apply);
   reset.addEventListener('click', () => { slider.value = '0'; apply(); });
 
+  // Live diagnostic — localizes a "nothing moves" issue. Reads the attached mesh
+  // (snapshot().attached is the public API) and shows: is a mesh attached, is it
+  // the 468 baked topology, does the shape resolve to a morph index, and is its
+  // influence actually being written each tick. If `infl` tracks the slider but
+  // the face is still, the break is rendering — not the data path.
+  const updateDiag = (): void => {
+    const ids = anim.snapshot().attached;
+    const mesh = ids.length ? (lookupMesh(ids[0]!) as unknown as MeshLike | undefined) : undefined;
+    const name = names[idx] ?? '';
+    if (!mesh) { diagEl.textContent = `attached: ${ids.length} — no mesh resolved`; return; }
+    const vtx = mesh.geometry?.getAttribute?.('position')?.count ?? '?';
+    const morphAttrs = mesh.geometry?.morphAttributes?.position?.length ?? 0;
+    const mnames = mesh.geometry?.userData?.['morphTargetNames'];
+    const mi = Array.isArray(mnames) ? mnames.indexOf(name) : -1;
+    const infl = mesh.morphTargetInfluences;
+    const iv = mi >= 0 && infl ? (infl[mi] ?? 0).toFixed(2) : 'n/a';
+    diagEl.textContent =
+      `mesh ${vtx}v · ${morphAttrs} morphs · ${mesh.material?.type ?? '?'}\n`
+      + `"${name}" idx ${mi} · infl ${iv}`;
+  };
+  const diagTimer = window.setInterval(updateDiag, 200);
+  updateDiag();
+
   refresh();
 
   return () => {
+    window.clearInterval(diagTimer);
     anim.setEmotion({}, 0);
     wrap.remove();
   };
