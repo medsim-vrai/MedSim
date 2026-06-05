@@ -16,7 +16,7 @@
  * The live AI reply loop still needs the portal — caching speeds STARTUP, not the
  * encounter. Bump CACHE_VERSION on a breaking shell change; activate() drops old.
  */
-const CACHE_VERSION = 'vrai-shell-v9'; // v9: portal-side ElevenLabs avatar voice (ADR-0031) + mp3 frame audio
+const CACHE_VERSION = 'vrai-shell-v10'; // v10: on-device STT uses the .asyncify ORT build (webgpuInit) — iPad WebGPU STT fix
 const HF_PREFIX = 'https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX/resolve/main/';
 const LOCAL_BASE = '/assets/kokoro/';
 

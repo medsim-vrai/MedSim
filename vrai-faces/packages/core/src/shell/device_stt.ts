@@ -94,10 +94,12 @@ async function loadAsr(): Promise<AsrPipeline | null> {
           // Use the OBJECT form {wasm,mjs}: it triggers transformers' wasm pre-load
           // + backend registration. A bare string path skips that step, which leaves
           // ORT with "no available backend found" even though the files fetch fine.
-          // Pick the build variant transformers expects per browser — asyncify for
-          // non-Safari (Android Chrome), the plain threaded build for Safari.
-          const safari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-          const variant = safari ? 'ort-wasm-simd-threaded' : 'ort-wasm-simd-threaded.asyncify';
+          // The WebGPU EP + its `webgpuInit` ship ONLY in the .asyncify (and .jspi)
+          // ORT builds — the plain and .jsep builds DON'T export it, so device:'webgpu'
+          // throws "webgpuInit is not a function". The iPad pilot proved the old
+          // Safari→plain choice failed for exactly that reason. Use .asyncify for every
+          // browser: it carries the WebGPU EP *and* the wasm CPU fallback (one bundle).
+          const variant = 'ort-wasm-simd-threaded.asyncify';
           wasmFlags.wasmPaths = {
             wasm: `/assets/ort/${variant}.wasm`,
             mjs: `/assets/ort/${variant}.mjs`,
