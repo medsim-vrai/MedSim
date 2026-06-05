@@ -101,27 +101,56 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
   // Re-run on resize and whenever a mesh is attached/detached.
   function frameAvatar(): void {
     if (managed.size === 0) return;
-    const box = new THREE.Box3();
+    // Fit to the CORE face, NOT the raw bounding box. A handful of mis-detected /
+    // out-of-frame landmarks (lm.y outside [0,1]) can stretch the bbox ~2-3x past
+    // the visible face, leaving it small even at high FRAME_FILL. So take a central
+    // percentile of the vertices per axis (trim outliers), then frame that extent.
+    const xs: number[] = [];
+    const ys: number[] = [];
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    const v = new THREE.Vector3();
     for (const m of managed.values()) {
-      m.updateMatrixWorld(true);   // bake position/scale so the bbox reflects them
-      box.expandByObject(m);
+      m.updateMatrixWorld(true);
+      const pos = m.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
+      if (!pos) continue;
+      for (let i = 0; i < pos.count; i += 1) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+        xs.push(v.x);
+        ys.push(v.y);
+        if (v.z < minZ) minZ = v.z;
+        if (v.z > maxZ) maxZ = v.z;
+      }
     }
-    if (box.isEmpty()) return;
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
+    if (xs.length === 0) return;
+    xs.sort((a, b) => a - b);
+    ys.sort((a, b) => a - b);
+    const at = (arr: number[], p: number): number =>
+      arr[Math.min(arr.length - 1, Math.max(0, Math.round(p * (arr.length - 1))))]!;
+    const TRIM = 0.05; // ignore the extreme 5% of vertices per axis (outliers)
+    const minX = at(xs, TRIM);
+    const maxX = at(xs, 1 - TRIM);
+    const minY = at(ys, TRIM);
+    const maxY = at(ys, 1 - TRIM);
+    const sizeX = maxX - minX;
+    const sizeY = maxY - minY;
+    const sizeZ = Number.isFinite(maxZ - minZ) ? maxZ - minZ : 0;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const cz = (minZ + maxZ) / 2;
     const fov = (camera.fov * Math.PI) / 180;
     const tan = Math.max(Math.tan(fov / 2), 1e-3);
     const aspect = camera.aspect || 1;
-    // Distance so the face projects to FRAME_FILL of the tighter axis; the size.z
-    // term is only a floor that keeps the camera in front of the mesh (no clipping).
-    const distH = (size.y / 2) / (tan * FRAME_FILL);
-    const distW = (size.x / 2) / (tan * aspect * FRAME_FILL);
-    const dist = Math.max(distH, distW, size.z / 2 + 0.1);
+    // Distance so the CORE face projects to FRAME_FILL of the tighter axis; the z
+    // term is only a floor keeping the camera in front of the mesh (no clipping).
+    const distH = (sizeY / 2) / (tan * FRAME_FILL);
+    const distW = (sizeX / 2) / (tan * aspect * FRAME_FILL);
+    const dist = Math.max(distH, distW, sizeZ / 2 + 0.1);
     // Degenerate/NaN geometry must not poison the camera (→ blank screen).
-    if (!Number.isFinite(dist) || !Number.isFinite(center.x)
-        || !Number.isFinite(center.y) || !Number.isFinite(center.z)) return;
-    camera.position.set(center.x, center.y, center.z + Math.max(dist, 0.2));
-    camera.lookAt(center);
+    if (!Number.isFinite(dist) || !Number.isFinite(cx)
+        || !Number.isFinite(cy) || !Number.isFinite(cz)) return;
+    camera.position.set(cx, cy, cz + Math.max(dist, 0.2));
+    camera.lookAt(cx, cy, cz);
     camera.updateProjectionMatrix();
   }
 
