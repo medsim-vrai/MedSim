@@ -31,6 +31,15 @@ export const ARKIT_52: ReadonlyArray<string> = [
   'tongueOut',
 ];
 
+/**
+ * The mesh's actual morph targets: the canonical ARKit-52 + the supplemental
+ * `eyesClosed` (AU43, RB-001/ADR-0034) — sustained lid closure for clinical pain
+ * and drowsiness (distinct from the transient `eyeBlinkLeft/Right`, which idle_motion
+ * drives). The baked basis (`face_mesh_morphbasis.json`) provides its delta; the
+ * emotion_driver's pain/drowsy moods reference it.
+ */
+export const MORPH_TARGETS: ReadonlyArray<string> = [...ARKIT_52, 'eyesClosed'];
+
 /** A 3D point — the structural subset of MediaPipe's `NormalizedLandmark`. */
 export interface Landmark3 {
   x: number;
@@ -104,7 +113,7 @@ export function buildFaceGeometry(
 
   // 52 morph attributes from the procedural basis (jawOpen/smile/brow filled,
   // the rest zero), each sized to the real vertex count.
-  const basis = computeMorphBasis(pos, n, ARKIT_52);
+  const basis = computeMorphBasis(pos, n, MORPH_TARGETS);
   geo.morphAttributes.position = basis.map((arr) => new THREE.BufferAttribute(arr, 3));
   // CRITICAL: the basis arrays are DELTAS (displacement from base), and most are
   // zero (only jawOpen/smile/brow filled). Without this flag Three treats them
@@ -112,7 +121,7 @@ export function buildFaceGeometry(
   // zero-filled eye shapes — pulls every vertex toward the origin and scales the
   // whole head each frame. Relative = add the delta (zero ⇒ no movement).
   geo.morphTargetsRelative = true;
-  geo.userData['morphTargetNames'] = [...ARKIT_52];
+  geo.userData['morphTargetNames'] = [...MORPH_TARGETS];
 
   return geo;
 }

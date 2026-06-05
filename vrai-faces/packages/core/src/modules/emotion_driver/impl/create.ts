@@ -33,9 +33,13 @@ const MOODS: ReadonlyArray<Mood> = [
     label: 'pain', clinical: true,
     keywords: ['hurt', 'hurts', 'hurting', 'pain', 'painful', 'ache', 'aching',
       'sore', 'agony', 'burning', 'stabbing', 'throbbing', 'ouch', 'ow'],
+    // PSPI pain core: AU4 (browDown) + AU6 (cheekSquint) + AU7 (eyeSquint)
+    // + AU43 (eyesClosed, sustained) + a frowning/stretched grimace.
     weights: {
       browDownLeft: 0.5, browDownRight: 0.5, browInnerUp: 0.3,
       eyeSquintLeft: 0.55, eyeSquintRight: 0.55,
+      cheekSquintLeft: 0.4, cheekSquintRight: 0.4,
+      eyesClosed: 0.3,
       mouthFrownLeft: 0.4, mouthFrownRight: 0.4,
       mouthStretchLeft: 0.35, mouthStretchRight: 0.35, jawOpen: 0.1,
     },
@@ -74,8 +78,10 @@ const MOODS: ReadonlyArray<Mood> = [
     label: 'drowsy', clinical: true,
     keywords: ['dizzy', 'drowsy', 'sleepy', 'tired', 'faint', 'woozy',
       'groggy', 'lightheaded', 'exhausted'],
+    // PERCLOS drowsiness: sustained heavy lid closure (AU43, eyesClosed — not the
+    // transient eyeBlink), a tired raised inner brow, and a slack jaw.
     weights: {
-      eyeBlinkLeft: 0.35, eyeBlinkRight: 0.35, browInnerUp: 0.2,
+      eyesClosed: 0.55, browInnerUp: 0.2,
       jawOpen: 0.08, mouthFrownLeft: 0.1, mouthFrownRight: 0.1,
     },
   },

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { meshBuilder } from '../index';
 import {
   ARKIT_52,
+  MORPH_TARGETS,
   buildFaceGeometry,
   parseTopology,
   type FaceTopology,
@@ -84,14 +85,14 @@ describe('buildFaceGeometry (landmark → morph-ready geometry)', () => {
     expect(uv.getY(2)).toBeCloseTo(1.0);
   });
 
-  it('carries the index buffer, normals, and a 52-slot procedural morph basis', () => {
+  it('carries the index buffer, normals, and a 53-slot procedural morph basis (ARKit-52 + eyesClosed)', () => {
     const geo = buildFaceGeometry(QUAD_LANDMARKS, QUAD);
 
     expect(geo.getIndex()?.count).toBe(6);            // 2 triangles
     expect(geo.getAttribute('normal')).toBeDefined(); // computeVertexNormals ran
 
     const morphs = geo.morphAttributes.position;
-    expect(morphs?.length).toBe(52);
+    expect(morphs?.length).toBe(53);
     expect(morphs?.[0]?.count).toBe(4);               // sized to the topology
 
     // browDownLeft (index 0) is unsupported by the procedural basis → zero…
@@ -101,8 +102,8 @@ describe('buildFaceGeometry (landmark → morph-ready geometry)', () => {
     expect(jaw?.getY(2)).toBeLessThan(0);
 
     const names = geo.userData['morphTargetNames'] as string[];
-    expect(names).toHaveLength(52);
-    expect(names).toEqual([...ARKIT_52]);
+    expect(names).toHaveLength(53);
+    expect(names).toEqual([...MORPH_TARGETS]);
   });
 
   it('throws if there are fewer landmarks than the topology needs', () => {

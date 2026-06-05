@@ -76,6 +76,7 @@ describe('emotion_driver hybrid (ADR-0019: model mapping + clinical override)', 
     });
     // pain/drowsy are clinical → they win over the general "happy"/relieved cue.
     expect(out.label).toBe('drowsy');
-    expect(out.weights.eyeBlinkLeft ?? 0).toBeGreaterThan(0);
+    // PERCLOS drowsiness drives sustained lid closure (eyesClosed / AU43), not blink.
+    expect(out.weights.eyesClosed ?? 0).toBeGreaterThan(0);
   });
 });
