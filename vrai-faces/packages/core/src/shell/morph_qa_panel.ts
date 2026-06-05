@@ -16,7 +16,7 @@ import { lookupMesh } from '@utils/resource_registry';
 interface MeshLike {
   geometry?: {
     userData?: Record<string, unknown>;
-    getAttribute?(name: string): { count: number } | undefined;
+    getAttribute?(name: string): { count: number; array?: ArrayLike<number> } | undefined;
     morphAttributes?: { position?: ReadonlyArray<unknown> };
   };
   morphTargetInfluences?: ReadonlyArray<number>;
@@ -162,10 +162,26 @@ export function mountMorphQaPanel(
     const vrai = (window as unknown as { __vrai?: { camera?: { position?: { z?: number } } } }).__vrai;
     const camZ = vrai?.camera?.position?.z;
     const camStr = typeof camZ === 'number' ? camZ.toFixed(2) : 'n/a (need ?diag=1)';
+    // Geometry bounding box (base positions) — to compare the mesh extent against
+    // the visibly-textured face. If box >> visible face, framing the box leaves the
+    // face small even at high FRAME_FILL.
+    const pos = mesh.geometry?.getAttribute?.('position');
+    let boxStr = 'box ?';
+    if (pos?.array) {
+      let nx = Infinity, xx = -Infinity, ny = Infinity, xy = -Infinity, nz = Infinity, xz = -Infinity;
+      const a = pos.array;
+      for (let i = 0; i < pos.count; i += 1) {
+        const x = a[i * 3]!, y = a[i * 3 + 1]!, z = a[i * 3 + 2]!;
+        if (x < nx) nx = x; if (x > xx) xx = x;
+        if (y < ny) ny = y; if (y > xy) xy = y;
+        if (z < nz) nz = z; if (z > xz) xz = z;
+      }
+      boxStr = `box ${(xx - nx).toFixed(2)}x${(xy - ny).toFixed(2)}x${(xz - nz).toFixed(2)}`;
+    }
     diagEl.textContent =
       `mesh ${vtx}v · ${morphAttrs} morphs · ${mesh.material?.type ?? '?'}\n`
       + `"${name}" idx ${mi} · infl ${iv}\n`
-      + `cam z ${camStr} · win ${window.innerWidth}x${window.innerHeight}`;
+      + `cam z ${camStr} · ${boxStr} · win ${window.innerWidth}x${window.innerHeight}`;
   };
   const diagTimer = window.setInterval(updateDiag, 200);
   updateDiag();
