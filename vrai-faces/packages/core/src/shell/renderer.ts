@@ -92,8 +92,12 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
   // Track managed meshes so dispose() can free them.
   const managed = new Map<string, THREE.Mesh>();
 
-  // Dolly the camera so the avatar fits the current viewport on BOTH axes
-  // (accounting for aspect), so it never spills off a narrow/tall window.
+  // Fraction of the tighter viewport axis the avatar fills when framed. 0.8 ⇒ a
+  // large, easy-to-read face (good for QA + the bedside view) with a small margin.
+  const FRAME_FILL = 0.8;
+
+  // Dolly the camera so the avatar fills ~FRAME_FILL of the viewport on the tighter
+  // axis (accounting for aspect), so it never spills off a narrow/tall window.
   // Re-run on resize and whenever a mesh is attached/detached.
   function frameAvatar(): void {
     if (managed.size === 0) return;
@@ -108,9 +112,11 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
     const fov = (camera.fov * Math.PI) / 180;
     const tan = Math.max(Math.tan(fov / 2), 1e-3);
     const aspect = camera.aspect || 1;
-    const distH = (size.y / 2) / tan;
-    const distW = (size.x / 2) / (tan * aspect);
-    const dist = Math.max(distH, distW) * 1.3 + size.z / 2;   // 30% margin + depth
+    // Distance so the face projects to FRAME_FILL of the tighter axis; the size.z
+    // term is only a floor that keeps the camera in front of the mesh (no clipping).
+    const distH = (size.y / 2) / (tan * FRAME_FILL);
+    const distW = (size.x / 2) / (tan * aspect * FRAME_FILL);
+    const dist = Math.max(distH, distW, size.z / 2 + 0.1);
     // Degenerate/NaN geometry must not poison the camera (→ blank screen).
     if (!Number.isFinite(dist) || !Number.isFinite(center.x)
         || !Number.isFinite(center.y) || !Number.isFinite(center.z)) return;
