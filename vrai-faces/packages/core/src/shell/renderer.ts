@@ -34,6 +34,8 @@ export interface RendererHandle {
   detachMesh(meshId: string): void;
   /** Bind the same material to a different mesh later if needed. */
   swapMaterial(meshId: string, materialId: string): void;
+  /** Set how much of the viewport the framed avatar fills (0.3–1.6) + re-frame. */
+  setFrameFill(fill: number): void;
   start(): void;
   stop(): void;
   dispose(): void;
@@ -93,8 +95,8 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
   const managed = new Map<string, THREE.Mesh>();
 
   // Fraction of the tighter viewport axis the avatar fills when framed. ~0.9 ⇒ a
-  // large, nearly edge-to-edge face (good for QA + the bedside view). Tunable.
-  const FRAME_FILL = 0.9;
+  // large, nearly edge-to-edge face. Adjustable live via setFrameFill (a fit slider).
+  let frameFill = 0.9;
 
   // Dolly the camera so the avatar fills ~FRAME_FILL of the viewport on the tighter
   // axis (accounting for aspect), so it never spills off a narrow/tall window.
@@ -143,8 +145,8 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
     const aspect = camera.aspect || 1;
     // Distance so the CORE face projects to FRAME_FILL of the tighter axis; the z
     // term is only a floor keeping the camera in front of the mesh (no clipping).
-    const distH = (sizeY / 2) / (tan * FRAME_FILL);
-    const distW = (sizeX / 2) / (tan * aspect * FRAME_FILL);
+    const distH = (sizeY / 2) / (tan * frameFill);
+    const distW = (sizeX / 2) / (tan * aspect * frameFill);
     const dist = Math.max(distH, distW, sizeZ / 2 + 0.1);
     // Degenerate/NaN geometry must not poison the camera (→ blank screen).
     if (!Number.isFinite(dist) || !Number.isFinite(cx)
@@ -243,6 +245,12 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
       } else if (prev) {
         prev.dispose();
       }
+    },
+
+    setFrameFill(fill) {
+      if (!Number.isFinite(fill)) return;
+      frameFill = Math.max(0.3, Math.min(1.6, fill));
+      frameAvatar();
     },
 
     start() {

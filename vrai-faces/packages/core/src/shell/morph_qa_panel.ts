@@ -49,6 +49,7 @@ export function mountMorphQaPanel(
   anim: AnimationRuntimeModule,
   names: ReadonlyArray<string>,
   baked: ReadonlySet<string>,
+  onFit: (fill: number) => void,
 ): () => void {
   if (!document.getElementById('vrai-morphqa-style')) {
     const s = document.createElement('style');
@@ -106,11 +107,33 @@ export function mountMorphQaPanel(
   reset.style.flex = '1';
   btnRow.append(reset);
 
+  // Fit: how much of the screen the face fills (renderer.setFrameFill) — adjust live.
+  const fitRow = document.createElement('div');
+  fitRow.className = 'row';
+  const fitLabel = document.createElement('span');
+  fitLabel.textContent = 'fit';
+  fitLabel.style.cssText = 'opacity:.7;width:18px';
+  const fitSlider = document.createElement('input');
+  fitSlider.type = 'range';
+  fitSlider.min = '0.4';
+  fitSlider.max = '1.3';
+  fitSlider.step = '0.02';
+  fitSlider.value = '0.9';
+  const fitVal = document.createElement('span');
+  fitVal.style.cssText = 'width:30px;text-align:right';
+  fitVal.textContent = '0.90';
+  fitSlider.addEventListener('input', () => {
+    const f = Number(fitSlider.value);
+    fitVal.textContent = f.toFixed(2);
+    onFit(f);
+  });
+  fitRow.append(fitLabel, fitSlider, fitVal);
+
   const diagEl = document.createElement('div');
   diagEl.className = 'meta';
   diagEl.style.cssText = 'font-size:10px;margin-top:6px;opacity:.75;line-height:1.5;white-space:pre-line';
 
-  wrap.append(title, selRow, sliderRow, metaRow, btnRow, diagEl);
+  wrap.append(title, selRow, sliderRow, metaRow, btnRow, fitRow, diagEl);
   host.appendChild(wrap);
 
   let idx = 0;

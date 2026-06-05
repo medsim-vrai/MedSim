@@ -190,7 +190,8 @@ async function boot(): Promise<void> {
       import('@modules/mesh_builder/impl/face_topology'),
       import('@modules/mesh_builder/impl/morph_basis'),
     ]).then(([qa, topo, mb]) => {
-      qa.mountMorphQaPanel(app, animationRuntime, topo.ARKIT_52, new Set(mb.BAKED_MORPHS));
+      qa.mountMorphQaPanel(app, animationRuntime, topo.ARKIT_52, new Set(mb.BAKED_MORPHS),
+        (f) => renderer.setFrameFill(f));
     }).catch(() => { /* non-fatal dev tool */ });
   }
 
