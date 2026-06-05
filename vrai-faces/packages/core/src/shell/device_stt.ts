@@ -25,11 +25,23 @@ type AsrPipeline = (audio: Float32Array) => Promise<unknown>;
 
 /** Pilot metrics (ADR-0026 ship-gate): the backend actually used, the one-time
  *  model cold-load, and the last release→text latency. Nulls until measured. */
+/** Per-take latency breakdown (ms) — splits the release→text time into its phases
+ *  so the pilot can see where the ~2s goes (and confirm whisper inference is the
+ *  dominant cost) before optimizing it (ADR-0026 latency chase). */
+export interface SttStageTimings {
+  recMs: number;       // PTT release → MediaRecorder.onstop flush
+  decodeMs: number;    // decodeAudioData (compressed → PCM)
+  resampleMs: number;  // downmix + resample to 16 kHz mono
+  inferMs: number;     // whisper inference (suspected dominant cost)
+  clipMs: number;      // captured clip duration (whisper pads to 30s regardless)
+}
+
 export interface DeviceSttMetrics {
   backend: string | null;     // 'webgpu' | 'wasm'
   loadMs: number | null;      // cold-load of the model (first time)
   lastMs: number | null;      // last take's release→transcript latency
   error: string | null;       // why the model failed to load (surfaced in the UI)
+  lastStages: SttStageTimings | null; // breakdown of lastMs (null until a take runs)
 }
 
 export interface DeviceSttHandle {
@@ -70,6 +82,7 @@ let sttBackend: string | null = null;
 let sttLoadMs: number | null = null;
 let sttLastMs: number | null = null;
 let sttError: string | null = null;
+let sttLastStages: SttStageTimings | null = null;
 
 /** Lazy-load the ASR pipeline once. WebGPU first, WASM (CPU) fallback. */
 async function loadAsr(): Promise<AsrPipeline | null> {
@@ -112,13 +125,27 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         const { pipeline } = tf;
         for (const device of ['webgpu', 'wasm'] as const) {
           try {
-            const pipe = await pipeline('automatic-speech-recognition', MODEL, { device, dtype: 'q8' });
-            sttBackend = device;
+            // OPT-001 (docs/OPTIMIZATION-REGISTER.md): the fp16 *merged decoder* is an
+            // invalid ORT model — its subgraph returns `logits` from outer scope, so
+            // session creation fails ("invalid model … add an Identity node"). But the
+            // ENCODER is the 30s-window hog (~99% of PTT latency), so on WebGPU run the
+            // encoder in fp16 (GPUs run half-precision fast; there's no fast int8 WebGPU
+            // kernel) and keep the q8 merged decoder, which loads fine. WASM/CPU stays
+            // all-q8. Mixed-precision is a supported transformers.js config; all files
+            // are bundled locally (setup:assets) → offline / COEP-safe.
+            const dtag = device === 'webgpu' ? 'fp16enc·q8dec' : 'q8';
+            const pipe = await pipeline('automatic-speech-recognition', MODEL, {
+              device,
+              dtype: device === 'webgpu'
+                ? { encoder_model: 'fp16', decoder_model_merged: 'q8' }
+                : 'q8',
+            });
+            sttBackend = `${device}·${dtag}`; // surfaced in the metrics line for the pilot
             sttLoadMs = Math.round(performance.now() - t0);
             sttError = null;
             diag.push({
               t: performance.now(), moduleId: MODULE, kind: 'info',
-              message: `on-device STT ready (whisper-tiny.en, ${device}, cold-load ${sttLoadMs}ms)`,
+              message: `on-device STT ready (whisper-tiny.en, ${device}/${dtag}, cold-load ${sttLoadMs}ms)`,
             });
             return (audio: Float32Array) => pipe(audio) as Promise<unknown>;
           } catch (e) {
@@ -188,6 +215,7 @@ export function createDeviceStt(): DeviceSttHandle {
     isReady: () => ready,
     metrics: (): DeviceSttMetrics => ({
       backend: sttBackend, loadMs: sttLoadMs, lastMs: sttLastMs, error: sttError,
+      lastStages: sttLastStages,
     }),
 
     async start(): Promise<void> {
@@ -210,6 +238,7 @@ export function createDeviceStt(): DeviceSttHandle {
       stream?.getTracks().forEach((t) => t.stop());
       stream = null;
       recorder = null;
+      const tRec = performance.now(); // recorder flush complete
 
       const type = chunks[0]?.type || 'audio/webm';
       const blob = new Blob(chunks, { type });
@@ -222,9 +251,21 @@ export function createDeviceStt(): DeviceSttHandle {
       const ctx = new Ctor();
       try {
         const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+        const tDecode = performance.now();
         const audio = await to16kMono(decoded);
+        const tResample = performance.now();
         const text = textOf(await asr(audio));
-        sttLastMs = Math.round(performance.now() - t0);
+        const tInfer = performance.now();
+        sttLastMs = Math.round(tInfer - t0);
+        // Split the budget so we can see which phase dominates the ~2s warm take
+        // (ADR-0026 latency chase): recorder flush, decode, resample, inference.
+        sttLastStages = {
+          recMs: Math.round(tRec - t0),
+          decodeMs: Math.round(tDecode - tRec),
+          resampleMs: Math.round(tResample - tDecode),
+          inferMs: Math.round(tInfer - tResample),
+          clipMs: Math.round(decoded.duration * 1000),
+        };
         return text;
       } catch (e) {
         diag.push({

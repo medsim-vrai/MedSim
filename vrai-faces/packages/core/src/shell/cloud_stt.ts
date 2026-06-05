@@ -49,7 +49,7 @@ export function createCloudStt(): DeviceSttHandle {
 
   return {
     isReady: (): boolean => Ctor !== null,
-    metrics: (): DeviceSttMetrics => ({ backend: Ctor ? 'cloud' : null, loadMs: null, lastMs, error: err }),
+    metrics: (): DeviceSttMetrics => ({ backend: Ctor ? 'cloud' : null, loadMs: null, lastMs, error: err, lastStages: null }),
 
     async start(): Promise<void> {
       if (!Ctor) throw new Error(err ?? 'no Web Speech');

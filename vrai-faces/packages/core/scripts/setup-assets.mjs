@@ -97,16 +97,22 @@ console.log('✓ Kokoro → public/assets/kokoro/');
 
 // 5) Whisper STT model (ADR-0026) — local-first so on-device STT needs NO HuggingFace
 //    at runtime (works offline / PHI-contained, and loads under COEP cross-origin
-//    isolation). q8 set ≈ 41 MB. The path mirrors the HF repo so transformers.js
-//    (env.localModelPath = '/assets/models/') resolves it 1:1.
+//    isolation). Two variants are bundled (OPT-001, docs/OPTIMIZATION-REGISTER.md):
+//      • q8 (int8) ≈ 41 MB — the WASM/CPU fallback (no fast int8 kernel on WebGPU).
+//      • fp16    ≈ 76 MB — the WebGPU path; half-precision runs fast on the GPU and
+//        cuts whisper inference (the 30s-window encoder is ~99% of PTT latency).
+//    device_stt picks fp16 on webgpu, q8 on wasm. The path mirrors the HF repo so
+//    transformers.js (env.localModelPath = '/assets/models/') resolves it 1:1.
 const WHISPER_REPO = 'onnx-community/whisper-tiny.en';
 const WHISPER_BASE = `https://huggingface.co/${WHISPER_REPO}/resolve/main/`;
 const WHISPER_FILES = [
   'config.json', 'generation_config.json', 'preprocessor_config.json',
   'tokenizer.json', 'tokenizer_config.json', 'vocab.json', 'merges.txt',
   'added_tokens.json', 'normalizer.json', 'special_tokens_map.json',
-  'onnx/encoder_model_quantized.onnx',        // q8 ≈ 10 MB
-  'onnx/decoder_model_merged_quantized.onnx', // q8 ≈ 31 MB
+  'onnx/encoder_model_quantized.onnx',        // q8 ≈ 10 MB — WASM/CPU fallback
+  'onnx/decoder_model_merged_quantized.onnx', // q8 ≈ 31 MB — WASM/CPU fallback
+  'onnx/encoder_model_fp16.onnx',             // fp16 ≈ 16.5 MB — WebGPU (OPT-001)
+  'onnx/decoder_model_merged_fp16.onnx',      // fp16 ≈ 59.6 MB — WebGPU (OPT-001)
 ];
 for (const rel of WHISPER_FILES) {
   const dst = resolve(core, 'public/assets/models', WHISPER_REPO, rel);

@@ -146,7 +146,13 @@ export function mountDeviceVoice(
     if (!m.backend) { metricsEl.textContent = ''; return; }
     const cold = m.loadMs !== null ? ` · cold ${m.loadMs}ms` : '';
     const last = m.lastMs !== null ? ` · last ${m.lastMs}ms` : '';
-    metricsEl.textContent = `STT: ${m.backend}${cold}${last}`;
+    // Per-take phase split (ADR-0026 latency chase): rec flush · decode · resample
+    // · whisper inference · clip length — shows where the warm ~2s actually goes.
+    const g = m.lastStages;
+    const split = g
+      ? ` · [rec ${g.recMs} · dec ${g.decodeMs} · rs ${g.resampleMs} · asr ${g.inferMs} · clip ${g.clipMs}]`
+      : '';
+    metricsEl.textContent = `STT: ${m.backend}${cold}${last}${split}`;
   }
 
   function setStatus(msg: string, isErr = false): void {
