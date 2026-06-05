@@ -148,10 +148,13 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
     renderer.setSize(w, h, true);
     camera.aspect = w / Math.max(h, 1);
     camera.updateProjectionMatrix();
-    // NOTE: deliberately NOT re-framing here. The avatar is framed once on
-    // attach; resize only updates the buffer + aspect. Re-dollying on every
-    // resize event made the head scale/pulse if anything fired resize in a loop.
-    // Aspect changes letterbox the view — they never change the head's size.
+    // Re-frame to fill the CURRENT window. The dedup early-return above means this
+    // runs ONLY on a real size change (never a resize feedback loop), and
+    // frameAvatar() only moves the camera — it never resizes the canvas, so it
+    // can't re-trigger fitToWindow. So the face holds ~FRAME_FILL of whatever the
+    // DEVICE window is: maximizing, moving to a bigger display, or a late layout
+    // settle all re-fit, instead of staying sized for the window-at-load-time.
+    frameAvatar();
   }
   fitToWindow();
   window.addEventListener('resize', fitToWindow);
