@@ -157,9 +157,15 @@ export function mountMorphQaPanel(
     const mi = Array.isArray(mnames) ? mnames.indexOf(name) : -1;
     const infl = mesh.morphTargetInfluences;
     const iv = mi >= 0 && infl ? (infl[mi] ?? 0).toFixed(2) : 'n/a';
+    // Framing telemetry: camera distance (frameAvatar sets this — initial is 2.0)
+    // + the actual window size, to tell "frameAvatar didn't run" from "small window".
+    const vrai = (window as unknown as { __vrai?: { camera?: { position?: { z?: number } } } }).__vrai;
+    const camZ = vrai?.camera?.position?.z;
+    const camStr = typeof camZ === 'number' ? camZ.toFixed(2) : 'n/a (need ?diag=1)';
     diagEl.textContent =
       `mesh ${vtx}v · ${morphAttrs} morphs · ${mesh.material?.type ?? '?'}\n`
-      + `"${name}" idx ${mi} · infl ${iv}`;
+      + `"${name}" idx ${mi} · infl ${iv}\n`
+      + `cam z ${camStr} · win ${window.innerWidth}x${window.innerHeight}`;
   };
   const diagTimer = window.setInterval(updateDiag, 200);
   updateDiag();
