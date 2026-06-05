@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>VRAI Faces — Research Brief RB-003</title>
+<style>
+  :root { --ink:#1a1f26; --muted:#5b6675; --line:#d7dde5; --accent:#2b5fb3; --chip:#eef3fb; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font: 11.5pt/1.5 -apple-system, "Helvetica Neue", Arial, sans-serif; color: var(--ink); margin: 0; }
+  h1 { font-size: 20pt; line-height: 1.2; margin: 0 0 2pt; }
+  h1 .sub { display:block; font-size: 13pt; color: var(--muted); font-weight: 600; margin-top: 4pt; }
+  h2 { font-size: 12.5pt; color: var(--accent); margin: 20pt 0 6pt; padding-bottom: 3pt; border-bottom: 1.5px solid var(--line); }
+  p, li { margin: 4pt 0; }
+  ol, ul { margin: 4pt 0 4pt 18pt; padding: 0; }
+  code { background: var(--chip); padding: 0 3px; border-radius: 3px; font-size: 10pt; }
+  .meta { background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 8pt 12pt; margin: 12pt 0 4pt; font-size: 10pt; }
+  .meta b { color: var(--ink); } .meta span { color: var(--muted); margin-right: 14pt; display: inline-block; }
+  .lead { color: var(--muted); font-size: 11pt; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; font-size: 10pt; }
+  th, td { border: 1px solid var(--line); padding: 5pt 7pt; text-align: left; vertical-align: top; }
+  th { background: var(--chip); color: var(--ink); font-weight: 700; }
+  .mustpass { color:#9a2a2a; font-weight:700; }
+  .foot { margin-top: 22pt; padding-top: 8pt; border-top: 1px solid var(--line); color: var(--muted); font-size: 9pt; }
+  .tag { display:inline-block; background: var(--accent); color:#fff; font-size:8.5pt; font-weight:700; padding:1px 7px; border-radius: 10px; letter-spacing:.3px; }
+</style>
+</head>
+<body>
+
+<p><span class="tag">RESEARCH BRIEF · FOR CLAUDE COWORK</span></p>
+<h1>VRAI Faces — Research Brief RB-003
+  <span class="sub">Avatar Visual Fidelity: Inner-Mouth Geometry + Region Texture Handling for Expression</span>
+</h1>
+
+<div class="meta">
+  <span><b>ID:</b> RB-003</span>
+  <span><b>Created:</b> 2026-06-05</span>
+  <span><b>Status:</b> Open — not started</span>
+  <span><b>Gates:</b> Phase 7 (avatar fidelity)</span><br/>
+  <span><b>Modules:</b> mesh_builder, shader_translucent, face_ingest</span>
+  <span><b>Relates to:</b> RB-001/ADR-0034, ADR-0001, ADR-0005, ADR-0014</span>
+  <span><b>Run in:</b> Claude Cowork (deep research)</span>
+</div>
+
+<p class="lead">A follow-up to RB-001. The ARKit-52 deformation rig is accepted and correct
+(46/52 verified, zero mislabels), but per-shape QA surfaced a class of <b>texture/topology</b>
+artifacts that are inherent to morphing a single static portrait over the 468-vertex mesh.
+This brief defines the research to close them. Nothing here blocks the current build — the
+avatar renders, speaks, and emotes; this is fidelity polish.</p>
+
+<h2>1. Objective</h2>
+<p>Eliminate the visual artifacts that appear when the accepted ARKit-52 rig drives the
+photo-textured 468-vertex mesh — without breaking local-first, deterministic, PHI-safe
+delivery. Four artifact classes (RB-001 QA, 2026-06-05): (a) the open mouth has <b>no inner
+cavity</b> (teeth/tongue), so jawOpen/mouthClose stretch lip texture into the gap; (b)
+<code>tongueOut</code> has no geometry; (c) <b>mouth corners tear</b> on smile/mouthUpperUp/
+noseSneer; (d) the <b>lower eyelid smears</b> on eye-closure shapes.</p>
+
+<h2>2. Why this is gated (not done inline)</h2>
+<ul>
+  <li>Needs new <b>geometry</b> (an inner-mouth cavity with teeth/tongue) and/or <b>texture</b>
+      handling beyond the deformation basis — a larger pipeline than RB-001's bake.</li>
+  <li>Candidate teeth/tongue assets and any face-texture-synthesis tools carry <b>licensing</b>
+      review (some paid/restricted).</li>
+  <li>Must preserve local-first (ADR-0001), deterministic/auditable output (ADR-0005), and the
+      PHI posture (ADR-0014 — never gather/scrape faces; portraits stay consented + local).</li>
+</ul>
+
+<h2>3. Current state (context for the researcher)</h2>
+<ul>
+  <li><b>mesh_builder</b> builds the real 468-vertex MediaPipe mesh; <b>morph_basis</b> applies
+      the baked ARKit-52 (+ <code>eyesClosed</code>) deltas; the rig is accepted (RB-001 QA).</li>
+  <li>The mesh is textured with the <b>single consented portrait</b> (UVs = the detected landmark
+      x,y). There is <b>no inner-mouth geometry</b> and no separate eye/lip texture, so deforming
+      stretches/tears/smears the one static image at high-motion regions.</li>
+  <li><b>shader_translucent</b> is a <code>MeshPhysicalNodeMaterial</code> (TSL) under WebGPU.</li>
+</ul>
+
+<h2>4. Research questions</h2>
+<ol>
+  <li><b>Inner mouth:</b> how to add a teeth/tongue/oral-cavity that tracks <code>jawOpen</code> —
+      a secondary proxy mesh, a baked cavity in the topology, or a shader trick — that is
+      license-clean, deterministic, and small to bundle?</li>
+  <li><b>Texture at deformation extremes:</b> how to stop the corner-tear and eyelid-smear —
+      per-region textures, UV relaxation, an inpainted/synthesized skin texture, or a hybrid
+      photo + procedural-skin shader? Trade-offs vs the photoreal look.</li>
+  <li><b>tongueOut:</b> synthesize a deterministic tongue protrusion (geometry + the AU) absent
+      from ICT-FaceKit.</li>
+  <li><b>Mouth-corner topology/UV:</b> is the tear a UV seam, a triangle inversion, or pure
+      texture stretch — and what's the minimal fix?</li>
+  <li>Which of these are achievable on-device at 60 fps under WebGPU + the translucent shader?</li>
+</ol>
+
+<h2>5. Evaluation criteria</h2>
+<table>
+  <thead><tr><th>Criterion</th><th>Weight</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td>License — clinical + commercial + redistributable</td><td class="mustpass">MUST-PASS</td><td>Any teeth/tongue asset or texture tool must be bundleable in a shipped on-device app.</td></tr>
+    <tr><td>Determinism &amp; PHI safety</td><td class="mustpass">MUST-PASS</td><td>Deterministic (ADR-0005); no facial-image gathering/scraping; nothing leaves device (ADR-0014).</td></tr>
+    <tr><td>Artifact reduction (the 4 classes)</td><td>High</td><td>Inner-mouth + corner-tear + eyelid-smear + tongueOut, ranked by clinical visibility (inner-mouth shows in every open-mouth viseme — highest).</td></tr>
+    <tr><td>Runtime cost (WebGPU, 60 fps)</td><td>High</td><td>Must hold the §5 frame budget on the target tablets (ADR-0032 hardware).</td></tr>
+    <tr><td>Bundle size / local-first</td><td>Medium</td><td>Assets served from app origin (ADR-0001), never a runtime CDN.</td></tr>
+    <tr><td>Effort / maintenance</td><td>Medium</td><td>Prefer a one-time offline bake + a drop-in, like RB-001.</td></tr>
+  </tbody>
+</table>
+
+<h2>6. Deliverables (what Cowork should return)</h2>
+<ul>
+  <li>A ranked recommendation per artifact class (inner-mouth, corner-tear, eyelid-smear, tongueOut).</li>
+  <li>A concrete integration path (assets + module touches: mesh_builder / shader_translucent / a new oral-cavity piece), with bundle-size + runtime-cost estimates.</li>
+  <li>A license summary + any procurement; a clear GO / NO-GO with rough effort.</li>
+</ul>
+
+<h2>7. How the result re-enters the build</h2>
+<p>Research output → a new ADR (next number in <code>Memory_management.MD §7</code>) → implementation:
+the inner-mouth geometry / texture handling drops into <code>mesh_builder</code> + <code>shader_translucent</code>;
+the rig (RB-001) and the drive chain (speech→viseme/emotion → <code>animation_runtime</code>) are unchanged.</p>
+
+<h2>8. Hard constraints</h2>
+<ul>
+  <li><b>Local-first (ADR-0001):</b> assets served from the app origin; no runtime CDN.</li>
+  <li><b>Deterministic &amp; auditable (ADR-0005):</b> reproducible geometry/textures.</li>
+  <li><b>PHI (ADR-0014):</b> nothing leaves the device; never gather or scrape facial images;
+      portraits remain facilitator-supplied + consented.</li>
+  <li><b>Naming/contract:</b> keep the ARKit-52 + <code>eyesClosed</code> morph names; no contract change to the rig.</li>
+</ul>
+
+<div class="foot">
+  VRAI Faces (MedSim V8) · Research briefs live in <code>vrai-faces/research/</code> and follow the
+  research-driven-enhancement strategy in <code>docs/ROADMAP.md</code>. Render the PDF with
+  <code>node packages/core/scripts/render-pdf.mjs research/RB-003_avatar-visual-fidelity.html research/RB-003_avatar-visual-fidelity.pdf</code>.
+</div>
+
+</body>
+</html>

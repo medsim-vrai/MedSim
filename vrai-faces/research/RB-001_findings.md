@@ -99,3 +99,32 @@ shipped artifact is static geometry; nothing leaves the device. Both MUST-PASS h
 → Decision + consequences: **ADR-0034** (`Memory_management.MD §7`).
 → Implementation: bake `face_mesh_morphbasis.json` → swap `mesh_builder/impl/morph_basis.ts`
   to load it (fallback to the procedural basis if absent) → regenerate + verify.
+
+## QA acceptance (2026-06-05) — RIG ACCEPTED
+
+Per-shape visual QA on the live avatar (Mac, Chrome/WebGPU, `?debug` morph panel, fit ~0.6):
+**46/52 shapes correct, ZERO mislabels** — every ARKit shape performs the right facial
+action, validating both the bake and the ICT→ARKit name-map. The flagged items are all
+**texture/topology** artifacts of morphing a single static photo, NOT rig errors:
+
+- **Inner mouth** (jawOpen, mouthClose, mouthFunnel): the 468 mesh has no teeth/tongue/
+  cavity, so opening stretches lip texture into the gap (the "blurry tongue").
+- **`tongueOut`**: omitted (ICT has none) → nothing protrudes.
+- **Mouth corners** (smile, mouthUpperUp, noseSneer): texture tears at the commissure when
+  the corners pull — the photo can't cover the stretch.
+- **Lower eyelid** (eyeBlink, eyeLookDown): lid texture smears as the lid closes.
+
+These are the fidelity ceiling of photo-texture morphing — worst at weight 1.0 (the QA
+stress-test), milder at the partial/blended weights real speech+emotion use. Captured as
+**known limitations** and scoped to **RB-003 (avatar visual fidelity)**: inner-mouth
+geometry, per-region eye/lip handling, synthesized `tongueOut`.
+
+Also fixed during QA: an invisible-rig bug (deltas double-divided by canonicalHeight, ~17x
+too small) and the camera framing (frame the CORE face, not the outlier-bloated bbox; a
+tunable fit, default 0.6, slider for per-device screens).
+
+**`eyesClosed` (AU43) wired** (ADR-0034 follow-through): a dedicated sustained-closure morph
+target (`MORPH_TARGETS` = ARKit-52 + eyesClosed), driven by emotion_driver's **pain (PSPI)**
+and **drowsy (PERCLOS)** moods.
+
+**Verdict: RB-001 rig ACCEPTED.** Remaining visual polish → RB-003.
