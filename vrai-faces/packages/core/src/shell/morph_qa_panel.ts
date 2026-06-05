@@ -118,10 +118,10 @@ export function mountMorphQaPanel(
   fitSlider.min = '0.4';
   fitSlider.max = '1.3';
   fitSlider.step = '0.02';
-  fitSlider.value = '0.9';
+  fitSlider.value = '0.6';
   const fitVal = document.createElement('span');
   fitVal.style.cssText = 'width:30px;text-align:right';
-  fitVal.textContent = '0.90';
+  fitVal.textContent = '0.60';
   fitSlider.addEventListener('input', () => {
     const f = Number(fitSlider.value);
     fitVal.textContent = f.toFixed(2);

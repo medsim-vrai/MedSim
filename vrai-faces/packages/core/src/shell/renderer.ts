@@ -94,9 +94,9 @@ export async function mountRenderer(canvas: HTMLCanvasElement): Promise<Renderer
   // Track managed meshes so dispose() can free them.
   const managed = new Map<string, THREE.Mesh>();
 
-  // Fraction of the tighter viewport axis the avatar fills when framed. ~0.9 ⇒ a
-  // large, nearly edge-to-edge face. Adjustable live via setFrameFill (a fit slider).
-  let frameFill = 0.9;
+  // Default fraction of the tighter viewport axis the framed avatar fills. 0.6 reads
+  // well across screens (QA-tuned); adjustable live per-device via setFrameFill.
+  let frameFill = 0.6;
 
   // Dolly the camera so the avatar fills ~FRAME_FILL of the viewport on the tighter
   // axis (accounting for aspect), so it never spills off a narrow/tall window.
