@@ -547,33 +547,61 @@ async def _local_dev_tts(text: str) -> tuple[str | None, str | None]:
     return base64.b64encode(pcm).decode("ascii"), "pcm16-24k"
 
 
+_standalone_voice_cache: dict[str, str] = {}
+
+
+def _standalone_voice_id(character_id: str, api_key: str) -> str:
+    """Pick a character-appropriate ElevenLabs voice when no operator has assigned one
+    (standalone / device-launched, no control session). Ranked by the persona's traits;
+    cached per character so the catalog isn't re-ranked on every reply."""
+    if character_id in _standalone_voice_cache:
+        return _standalone_voice_cache[character_id]
+    from . import voices  # lazy
+    vid = ""
+    try:
+        cands = voices.candidates_for(character_id, api_key).get("candidates", [])
+        if cands:
+            vid = str(cands[0].get("voice_id") or "").strip()
+    except Exception:  # noqa: BLE001 — never fail the turn over voice selection
+        vid = ""
+    _standalone_voice_cache[character_id] = vid
+    return vid
+
+
 async def _synthesize_voice(
     sess: Any, character_id: str, text: str,
 ) -> tuple[str | None, str | None]:
     """Best-effort server-side TTS of an avatar line, returned as (base64, format).
-    Order: (1) the operator-assigned ElevenLabs voice (ADR-0031) when configured →
-    (base64-mp3, "mp3"); (2) a TEST-ONLY OS-voice placeholder (ADR-0037), opt-in via
-    VRAI_DEV_TTS, so the server-audio path is testable without a key/session →
-    (base64-pcm, "pcm16-24k"). Returns (None, None) when neither applies — the caller
-    then sends a text-only frame and the device speaks with its built-in voice.
+    Order: (1) **ElevenLabs** (ADR-0031/0037 — the chosen production voice) → (base64-mp3,
+    "mp3"): the voice is the operator's control-room assignment when a session set one, else
+    a character-appropriate candidate (standalone/device-launched); the key is the session's
+    captured key, else the process env / `~/.medsim/elevenlabs.key`. (2) a TEST-ONLY OS-voice
+    placeholder (ADR-0037), opt-in via VRAI_DEV_TTS, for when ElevenLabs is unavailable →
+    (base64-pcm, "pcm16-24k"). Returns (None, None) when neither applies — the caller then
+    sends a text-only frame and the device speaks with its built-in voice.
 
     PHI (ADR-0014): the *reply* is the character's AI-generated words — never trainee
     free-text — so voicing it server-side moves no trainee PHI off-portal; only audio
-    crosses the device WS."""
+    crosses the device WS. ElevenLabs is cloud, so the (non-PHI) reply text does leave the
+    portal — acceptable per ADR-0031; the trainee's own speech never does (on-device STT)."""
     if not text:
         return None, None
 
-    # (1) Operator-assigned ElevenLabs voice (ADR-0031), when one is configured.
-    voice_id = ""
-    if sess is not None:
-        assigns = getattr(sess, "voice_assignments", None) or {}
-        voice_id = str(assigns.get(character_id, "")).strip()
-    if voice_id:
-        from . import voices  # lazy: avoid an import-time cycle (mirrors /listen)
-        api_key = (sess.elevenlabs_api_key
-                   if sess is not None and getattr(sess, "elevenlabs_api_key", "")
-                   else voices.get_api_key(None))
-        if api_key:
+    from . import voices  # lazy: avoid an import-time cycle (mirrors /listen)
+
+    # (1) ElevenLabs — run whenever a key exists (session OR env/keyfile), not just when an
+    #     operator assigned a voice. Standalone, auto-resolve a voice from the persona traits.
+    api_key = (sess.elevenlabs_api_key
+               if sess is not None and getattr(sess, "elevenlabs_api_key", "")
+               else voices.get_api_key(None))
+    if api_key:
+        voice_id = ""
+        if sess is not None:
+            assigns = getattr(sess, "voice_assignments", None) or {}
+            voice_id = str(assigns.get(character_id, "")).strip()
+        if not voice_id:
+            voice_id = _standalone_voice_id(character_id, api_key)
+        if voice_id:
             try:
                 buf = bytearray()
                 async for chunk in voices.synthesize_stream(text, voice_id, api_key):
@@ -586,7 +614,7 @@ async def _synthesize_voice(
                 logging.getLogger(__name__).warning(
                     "avatar TTS synth failed (%s); trying dev fallback / device voice", exc)
 
-    # (2) TEST-ONLY OS-voice placeholder to validate the server-audio plumbing (ADR-0037).
+    # (2) TEST-ONLY OS-voice placeholder (ADR-0037), if ElevenLabs is unavailable + opted in.
     if os.environ.get("VRAI_DEV_TTS", "").strip().lower() in ("say", "1", "true", "on"):
         return await _local_dev_tts(text)
 

@@ -73,12 +73,17 @@ This **bypasses both WebKit blockers**: no on‑device TTS (no WebGPU OOM) and n
 envelope‑viseme bridge already exist client‑side (`speechConsumer`, `audio_pipeline`); the
 work is on the **portal** (always synthesize) plus a default flip on the client.
 
-### TTS engine — OPEN DECISION (see §6)
-- **Recommended — self‑hosted local TTS on the portal** (Kokoro / HeadTTS server‑side — the
-  voices already chosen for the local bundle — or Piper). Local‑first, $0/use, offline,
-  device‑agnostic, one consistent voice across iPad + Android.
-- **Optional — ElevenLabs** (cloud premium; already wired behind a key/session). Reply is
-  non‑PHI so permitted; keep it as a flagged premium tier, not the default.
+### TTS engine — RESOLVED 2026‑06‑06 → ElevenLabs (validated on iPad)
+- **Chosen: ElevenLabs (cloud).** Realistic voices, already wired. Standalone (no operator),
+  the portal auto‑selects a character‑appropriate voice via `voices.candidates_for(character_id)`
+  (e.g. Mr. Hayes/P‑014 → *"Bill — Wise, Mature, Balanced"*, male/old); the operator can override
+  in the control room. Key from the session, else env / `~/.medsim/elevenlabs.key`.
+- **Trade‑off (accepted):** ElevenLabs is CLOUD — the **non‑PHI reply text** leaves the portal per
+  reply (network + per‑use cost), acceptable per ADR‑0031. The trainee's own audio NEVER leaves the
+  device (on‑device STT). Each reply ≈ one short API call.
+- **Future option (not chosen now):** self‑hosted local TTS (Kokoro/HeadTTS/Piper) for a fully
+  offline, $0/use voice if the cloud dependency becomes undesirable. The server‑audio plumbing is
+  engine‑agnostic, so swapping it later is a portal‑only change.
 
 ### Client on‑device TTS (Kokoro)
 - **Disabled on the character path by default.** Crashes/OOMs on iPad WebKit (latched off
@@ -118,8 +123,8 @@ Startup cost on a character device is dominated by model downloads. The §3 deci
 
 ## 6. Open decisions (resolve before/with implementation)
 
-- [ ] **Portal TTS engine:** self‑hosted local (recommended: Kokoro/HeadTTS or Piper) vs
-  ElevenLabs cloud. Drives voice quality, setup, cost, offline behavior.
+- [x] **Portal TTS engine:** RESOLVED 2026‑06‑06 → **ElevenLabs** (cloud), with standalone
+  auto‑voice via `candidates_for`. Validated on iPad. Self‑hosted local stays a future option.
 - [ ] **Keep the optional client Kokoro path** for Chromium character devices, or remove it
   entirely for one code path everywhere?
 - [ ] **Audio transport size:** inline base64 in the WS frame (simple) vs a short‑lived
