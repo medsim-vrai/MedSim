@@ -150,4 +150,27 @@ describe('animation_runtime emotion cross-fade (integration)', () => {
 
     r.dispose();
   });
+
+  it('applies eyesClosed (the 53rd morph, index 52) — regression for the SHAPE_COUNT=52 drop (ADR-0036)', () => {
+    const r = createImpl();
+    const geom = new THREE.BufferGeometry();
+    // 53 morph targets — ARKit-52 placeholders + the supplemental `eyesClosed` at index 52.
+    const names = Array.from({ length: 53 }, (_, i) => (i === 52 ? 'eyesClosed' : `shape${i}`));
+    geom.userData['morphTargetNames'] = names;
+    const mesh = new THREE.Mesh(geom);
+    mesh.morphTargetInfluences = Array.from({ length: 53 }, () => 0);
+    registerMesh(mesh, 'eyes-mesh');
+    r.attach('eyes-mesh');
+    r.start();
+
+    r.setEmotion({ eyesClosed: 1 });   // snap (no ease window)
+    r.tick(30_000);
+
+    // Was 0 when SHAPE_COUNT was 52: index 52 fell outside the accum buffer AND the
+    // apply loop (`min(inf.length, SHAPE_COUNT)`), so eyesClosed — and every clinical
+    // pain/drowsy mood that composes it — could never close the eyes.
+    expect(mesh.morphTargetInfluences![52]).toBeCloseTo(1, 5);
+
+    r.dispose();
+  });
 });

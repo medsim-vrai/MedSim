@@ -7,7 +7,14 @@ import type { BlendshapeWeights, BootDeps } from '@contracts/shared';
 import { lookupMesh } from '@utils/resource_registry';
 import { idleMotion } from '@modules/idle_motion';
 
-const SHAPE_COUNT = 52;
+// The mesh's morph-target count: ARKit-52 + the supplemental `eyesClosed` (AU43,
+// RB-001/ADR-0035) = 53. It caps BOTH the accum buffer (size) and the per-mesh apply
+// loop (`min(inf.length, SHAPE_COUNT)`), so it MUST be ≥ the mesh's morph count.
+// BUG IT FIXES (ADR-0036 QA): this was 52, so the 53rd shape — `eyesClosed`, index 52 —
+// fell outside the `idx < SHAPE_COUNT` guard and was silently dropped; the eyes never
+// closed via the QA panel OR the clinical pain/drowsy moods that compose it. Adding any
+// further supplemental morph means bumping this (see the eyesClosed regression test).
+const SHAPE_COUNT = 53;
 
 // How often tick() surfaces frame timing to diag. ~30 frames ≈ 0.5 s at 60 fps —
 // frequent enough for a live readout, rare enough to keep the hot loop light.
