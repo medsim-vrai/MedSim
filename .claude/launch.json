@@ -16,6 +16,15 @@
         "export PATH=\"$HOME/.local/node/current/bin:$PATH\"; cd '/Users/petermarotta/Documents/Claude/Projects/Scenario structure to support character engagement/medsim_v8/vrai-faces/packages/core'; exec pnpm dev"
       ],
       "port": 5173
+    },
+    {
+      "name": "vrai-portal",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-lc",
+        "export PATH=\"$HOME/.local/node/current/bin:$PATH\" VRAI_FACES_SERVE=portal MEDSIM_HOST=0.0.0.0 MEDSIM_NO_BROWSER=1; cd '/Users/petermarotta/Documents/Claude/Projects/Scenario structure to support character engagement/medsim_v8'; exec .venv/bin/python run_portal.py"
+      ],
+      "port": 8765
     }
   ]
 }
