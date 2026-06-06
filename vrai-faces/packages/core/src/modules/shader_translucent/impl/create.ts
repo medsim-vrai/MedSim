@@ -93,9 +93,11 @@ const RIM_GAIN = 0.85;
 // elsewhere; we tint those fragments toward black by the live `jawOpen` so an open
 // jaw reads as a dark interior instead of stretched lip texture. POW concentrates the
 // effect on the membrane (mask≈1) vs the inner-lip body; STRENGTH sets how black it goes.
-const INNER_MOUTH_POW = 1.2;      // ↓ from 2.0: let the mask falloff darken too, so the void
-                                  //   extends toward the lip edges (fuller, not just mask≈1)
-const INNER_MOUTH_STRENGTH = 4.0; // ↑ from 2.5: deeper black across the opening
+const INNER_MOUTH_POW = 0.65;     // ↓ from 1.2: widen the darken's reach OFF the inner-lip ring so
+                                  //   it swallows the bright lip-EDGE facets jawOpen folds toward the
+                                  //   key light (now correctly lit post morph-normals). mask≈1 still
+                                  //   saturates fast (× STRENGTH), so the opening itself stays dark.
+const INNER_MOUTH_STRENGTH = 4.0; // deeper black across the opening
 
 // Surface-reflection gate (look tweak): the specular reflection fades to ZERO as the
 // translucency level rises 0.6 → 0.8 and stays 0 above 0.8 — so the more-opaque avatar reads
