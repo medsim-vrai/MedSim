@@ -3,7 +3,7 @@ import type { BuiltMesh, MeshBuilderModule } from '@contracts/mesh_builder';
 import type { BootDeps, BlendshapeWeights } from '@contracts/shared';
 import type { NormalizedPortrait } from '@contracts/face_ingest';
 import { registerGeometry, registerTexture } from '@utils/resource_registry';
-import { ARKIT_52, buildFaceGeometry, loadFaceTopology } from './face_topology';
+import { ARKIT_52, buildFaceGeometry, computeMorphNormals, loadFaceTopology } from './face_topology';
 import { computeMorphBasis } from './morph_basis';
 import { detectFaceLandmarks } from './face_landmarker';
 
@@ -47,6 +47,8 @@ function buildBaseGeometry(): THREE.BufferGeometry {
   // zero — the full ARKit-52 rig is RB-001 (Phase 7 B2+).
   const basis = computeMorphBasis(basePos.array as Float32Array, vertCount, ARKIT_52);
   geo.morphAttributes.position = basis.map((arr) => new THREE.BufferAttribute(arr, 3));
+  // Matching morph normals so the proxy lights correctly when it animates (see face_topology).
+  geo.morphAttributes.normal = computeMorphNormals(geo, basis);
   // Deltas, not absolute targets — see face_topology.ts. Without this the
   // morphs would be treated as absolute positions and scale/warp the head as
   // morphTargetInfluences change each frame.

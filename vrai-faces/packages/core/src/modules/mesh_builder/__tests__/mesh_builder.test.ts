@@ -106,6 +106,21 @@ describe('buildFaceGeometry (landmark → morph-ready geometry)', () => {
     expect(names).toEqual([...MORPH_TARGETS]);
   });
 
+  it('ships morph NORMALS matching the position targets (deformed shading, RB-003)', () => {
+    const geo = buildFaceGeometry(QUAD_LANDMARKS, QUAD);
+    const posMorphs = geo.morphAttributes.position;
+    const normMorphs = geo.morphAttributes.normal;
+    // One normal target per position target — without this the renderer lights a deformed
+    // mesh with its NEUTRAL-pose normals, mis-shading every expression (the dark/faceted/
+    // jagged edges on eyelids, lips, jaw). Guard the wiring; visual correctness is on-device.
+    expect(normMorphs?.length).toBe(posMorphs?.length);
+    expect(normMorphs?.length).toBe(53);
+    for (const m of normMorphs ?? []) {
+      expect(m.itemSize).toBe(3);
+      expect(m.count).toBe(4); // sized to the topology
+    }
+  });
+
   it('throws if there are fewer landmarks than the topology needs', () => {
     expect(() => buildFaceGeometry([{ x: 0, y: 0, z: 0 }], QUAD)).toThrow(/landmarks/);
   });

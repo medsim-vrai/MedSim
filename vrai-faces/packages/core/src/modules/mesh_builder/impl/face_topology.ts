@@ -134,6 +134,12 @@ export function buildFaceGeometry(
   // the rest zero), each sized to the real vertex count.
   const basis = computeMorphBasis(pos, n, MORPH_TARGETS);
   geo.morphAttributes.position = basis.map((arr) => new THREE.BufferAttribute(arr, 3));
+  // RB-003 (ADR-0036): matching morph NORMALS, so a deformed mesh lights correctly. Without
+  // these the geometry shipped position targets only — every blendshape moved vertices while
+  // the shading stayed pinned to the NEUTRAL-pose normals. The high-deformation regions
+  // (eyelids, lips, mouth, jaw) then shaded as if undeformed and read as dark, faceted, jagged
+  // edges on EVERY expression — the artifact a per-feature texture/UV patch could never fix.
+  geo.morphAttributes.normal = computeMorphNormals(geo, basis);
   // CRITICAL: the basis arrays are DELTAS (displacement from base), and most are
   // zero (only jawOpen/smile/brow filled). Without this flag Three treats them
   // as ABSOLUTE target positions, so any influence — including idle_motion's
@@ -143,6 +149,50 @@ export function buildFaceGeometry(
   geo.userData['morphTargetNames'] = [...MORPH_TARGETS];
 
   return geo;
+}
+
+/**
+ * Per-shape morph NORMALS matching `morphAttributes.position` (RB-003 / ADR-0036).
+ *
+ * For each shape we recompute SMOOTH vertex normals on the deformed positions (base + delta —
+ * the basis is in the same world units) over the shared index topology, then store the DELTA
+ * (deformed − base) so it rides the existing `morphTargetsRelative` path:
+ *   morphedNormal = baseNormal + Σ wᵢ·Δnᵢ   (re-normalized in-shader)
+ * At full influence of one shape this collapses to exactly that shape's deformed normal; a
+ * zero-displacement shape yields a zero normal delta (a true no-op). The temp geometry is
+ * CPU-only (never uploaded), so this is a few ms at build time and frees on GC.
+ *
+ * Exported + geometry-based so BOTH builders (baked face + synthetic head-proxy) share it.
+ */
+export function computeMorphNormals(
+  geo: THREE.BufferGeometry,
+  basis: ReadonlyArray<Float32Array>,
+): THREE.BufferAttribute[] {
+  const posAttr = geo.getAttribute('position') as THREE.BufferAttribute | undefined;
+  const normAttr = geo.getAttribute('normal') as THREE.BufferAttribute | undefined;
+  if (!posAttr || !normAttr) {
+    return basis.map((d) => new THREE.BufferAttribute(new Float32Array(d.length), 3));
+  }
+  const basePos = posAttr.array as Float32Array;
+  const baseNormal = normAttr.array as Float32Array;
+  const len = basePos.length;
+
+  const tmp = new THREE.BufferGeometry();
+  const deformed = new Float32Array(len);
+  const tmpPos = new THREE.BufferAttribute(deformed, 3);
+  tmp.setAttribute('position', tmpPos);
+  const index = geo.getIndex();
+  if (index) tmp.setIndex(index); // read-only share; computeVertexNormals never mutates the index
+
+  return basis.map((delta) => {
+    for (let k = 0; k < len; k++) deformed[k] = (basePos[k] ?? 0) + (delta[k] ?? 0);
+    tmpPos.needsUpdate = true;
+    tmp.computeVertexNormals();
+    const dn = (tmp.getAttribute('normal') as THREE.BufferAttribute).array as Float32Array;
+    const out = new Float32Array(len);
+    for (let k = 0; k < len; k++) out[k] = (dn[k] ?? 0) - (baseNormal[k] ?? 0);
+    return new THREE.BufferAttribute(out, 3);
+  });
 }
 
 /**

@@ -17,7 +17,7 @@ ADR + a drop-in implementation. See `docs/ROADMAP.md` → "Research-driven enhan
 |----|-------|-------|--------|
 | RB-001 | Real ARKit-52 blendshape rig (MediaPipe 468 topology) | Phase 1.2 | ✅ Executed 2026-06-01 → ADR-0034; rig **ACCEPTED** via per-shape QA 2026-06-05 (46/52, 0 mislabels). Visual artifacts → RB-003. |
 | RB-002 | On-device voice — name wake-word + trainee STT | Character devices (ADR-0024) | ✅ Executed 2026-05-30 → ADR-0026 (deep research, 25 claims verified) |
-| RB-003 | Avatar visual fidelity — inner-mouth geometry + region texture handling | Phase 7 | ✅ Executed 2026-06-05 → `RB-003_findings.md`. **GO, 3-phase, $0 assets, offline-bake + drop-in** (opaque mouth-cavity proxy + ΔUV channel + tongueOut transform; prereq: three.js r170→≥r181). → ADR pending. |
+| RB-003 | Avatar visual fidelity — inner-mouth geometry + region texture handling | Phase 7 | ✅ Executed 2026-06-05 → `RB-003_findings.md` → **ADR-0036**. SHIPPED: **inner-mouth** shader-darken by jawOpen (e2d39a2), **tongueOut** procedural tongue (0e39073), **morph NORMALS** so deformed geometry lights correctly (2026-06-06) — the last fixed the pervasive dark/faceted/jagged edges on every expression (root cause: position morphs shipped with no normal morphs). The speculative **ΔUV texture-follow was abandoned** (wrong frame — the artifact was shading, not texture stretch). Remaining (Phase-2): open-mouth interior (single-shell limit), eye/lip **corner pinches** (mesh subdivision), `mouthClose` **re-bake** (folds at full influence). |
 
 ## Format
 Each brief is authored as `RB-NNN_<slug>.html` (editable source) and rendered to
