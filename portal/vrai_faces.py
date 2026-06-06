@@ -550,16 +550,19 @@ async def _local_dev_tts(text: str) -> tuple[str | None, str | None]:
 _standalone_voice_cache: dict[str, str] = {}
 
 
-def _standalone_voice_id(character_id: str, api_key: str) -> str:
+async def _standalone_voice_id(character_id: str, api_key: str) -> str:
     """Pick a character-appropriate ElevenLabs voice when no operator has assigned one
     (standalone / device-launched, no control session). Ranked by the persona's traits;
-    cached per character so the catalog isn't re-ranked on every reply."""
+    cached per character. `candidates_for` does a BLOCKING HTTP fetch, so run it off the
+    event loop — never block the portal for voice selection."""
     if character_id in _standalone_voice_cache:
         return _standalone_voice_cache[character_id]
+    import asyncio
     from . import voices  # lazy
     vid = ""
     try:
-        cands = voices.candidates_for(character_id, api_key).get("candidates", [])
+        res = await asyncio.to_thread(voices.candidates_for, character_id, api_key)
+        cands = res.get("candidates", [])
         if cands:
             vid = str(cands[0].get("voice_id") or "").strip()
     except Exception:  # noqa: BLE001 — never fail the turn over voice selection
@@ -600,7 +603,7 @@ async def _synthesize_voice(
             assigns = getattr(sess, "voice_assignments", None) or {}
             voice_id = str(assigns.get(character_id, "")).strip()
         if not voice_id:
-            voice_id = _standalone_voice_id(character_id, api_key)
+            voice_id = await _standalone_voice_id(character_id, api_key)
         if voice_id:
             try:
                 buf = bytearray()
@@ -848,7 +851,15 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             sim = runtime.create_session_from_data(
                 scenario=scenario, characters={cid: card}, api_key=sess.api_key,
             )
-            result = runtime.take_turn(sim.id, cid, text)
+            # take_turn makes a SYNCHRONOUS, blocking Anthropic call — run it OFF the event
+            # loop, else it freezes the whole async portal (no avatar serving, no WS, no reply
+            # for ANY client). Bounded so a slow/bad key surfaces as an error reply, not a hang.
+            import asyncio
+            try:
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(runtime.take_turn, sim.id, cid, text), timeout=25.0)
+            except asyncio.TimeoutError:
+                result = {"ok": False, "error": "character timed out"}
             runtime.end_session(sim.id)
             if result.get("ok"):
                 reply = str(result.get("reply") or "").strip()
