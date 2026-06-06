@@ -97,6 +97,16 @@ const INNER_MOUTH_POW = 1.2;      // ↓ from 2.0: let the mask falloff darken t
                                   //   extends toward the lip edges (fuller, not just mask≈1)
 const INNER_MOUTH_STRENGTH = 4.0; // ↑ from 2.5: deeper black across the opening
 
+// Surface-reflection gate (look tweak): the specular reflection fades to ZERO as the
+// translucency level rises 0.6 → 0.8 and stays 0 above 0.8 — so the more-opaque avatar reads
+// MATTE (no shiny surface highlights), while the translucent end keeps its sheen. Gates the
+// specular only; the Fresnel rim is a separate ghost-edge cue (and already ~0 by the opaque end).
+function reflectionGate(level: number): number {
+  if (level <= 0.6) return 1;
+  if (level >= 0.8) return 0;
+  return (0.8 - level) / (0.8 - 0.6);
+}
+
 /**
  * Build a `MeshPhysicalNodeMaterial` per §4, with a real Fresnel rim expressed
  * in TSL — the WebGPU-native path (ADR-0009). `onBeforeCompile` is a
@@ -119,7 +129,7 @@ function buildMaterial(
     opacity: s.opacity,
     transparent: true,
     side: THREE.DoubleSide,
-    specularIntensity: s.specularIntensity,
+    specularIntensity: s.specularIntensity * reflectionGate(level),
     depthWrite: false,
   });
 
@@ -148,7 +158,7 @@ function applyLevel(rec: MatRecord, level: number): void {
   rec.level = level;
   rec.material.transmission      = s.transmission;
   rec.material.opacity           = s.opacity;
-  rec.material.specularIntensity = s.specularIntensity;
+  rec.material.specularIntensity = s.specularIntensity * reflectionGate(level);
   rec.strengthU.value            = s.fresnelStrength * RIM_GAIN;
   // Uniform + scalar writes only; we never set `needsUpdate`. (The first move
   // off fully-opaque enables transmission inside MeshPhysicalNodeMaterial, a
