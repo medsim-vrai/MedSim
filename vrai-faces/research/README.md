@@ -17,7 +17,7 @@ ADR + a drop-in implementation. See `docs/ROADMAP.md` → "Research-driven enhan
 |----|-------|-------|--------|
 | RB-001 | Real ARKit-52 blendshape rig (MediaPipe 468 topology) | Phase 1.2 | ✅ Executed 2026-06-01 → ADR-0034; rig **ACCEPTED** via per-shape QA 2026-06-05 (46/52, 0 mislabels). Visual artifacts → RB-003. |
 | RB-002 | On-device voice — name wake-word + trainee STT | Character devices (ADR-0024) | ✅ Executed 2026-05-30 → ADR-0026 (deep research, 25 claims verified) |
-| RB-003 | Avatar visual fidelity — inner-mouth geometry + region texture handling | Phase 7 | Open — opened from RB-001 QA (inner-mouth, mouth-corner tear, eyelid smear, tongueOut) |
+| RB-003 | Avatar visual fidelity — inner-mouth geometry + region texture handling | Phase 7 | ✅ Executed 2026-06-05 → `RB-003_findings.md`. **GO, 3-phase, $0 assets, offline-bake + drop-in** (opaque mouth-cavity proxy + ΔUV channel + tongueOut transform; prereq: three.js r170→≥r181). → ADR pending. |
 
 ## Format
 Each brief is authored as `RB-NNN_<slug>.html` (editable source) and rendered to
