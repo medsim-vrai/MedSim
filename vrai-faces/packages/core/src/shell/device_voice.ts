@@ -12,6 +12,7 @@
 
 import { diag } from '@perf/diag';
 import { createDeviceStt, type DeviceSttHandle } from './device_stt';
+import { primeSpeechSynthesis } from './speechUnlock';
 import { createCloudStt } from './cloud_stt';
 
 const MODULE = 'shell.deviceVoice';
@@ -258,6 +259,9 @@ export function mountDeviceVoice(
   const onPttDown = (ev: Event): void => {
     ev.preventDefault();
     if (!on || !stt || busy) return;
+    // Re-prime iOS speechSynthesis from THIS gesture so the async reply (seconds after
+    // release) can speak — iOS won't start an utterance without a recent user gesture.
+    primeSpeechSynthesis();
     pttBtn.classList.add('active');
     setStatus('Listening…');
     const s = stt;
