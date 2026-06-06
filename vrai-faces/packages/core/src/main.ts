@@ -193,6 +193,9 @@ async function boot(): Promise<void> {
       qa.mountMorphQaPanel(app, animationRuntime, topo.MORPH_TARGETS, new Set(mb.BAKED_MORPHS),
         (f) => renderer.setFrameFill(f));
     }).catch(() => { /* non-fatal dev tool */ });
+    // On-device STT thermal soak (ADR-0032 pilot gate / OPT-007) — debug-only probe.
+    void import('./shell/stt_soak').then((m) => { m.mountSttSoak(app); })
+      .catch(() => { /* non-fatal dev tool */ });
   }
 
   diag.push({

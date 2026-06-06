@@ -53,6 +53,10 @@ export interface DeviceSttHandle {
   isReady(): boolean;
   /** Pilot measurements for the on-device validation (ADR-0026). */
   metrics(): DeviceSttMetrics;
+  /** Debug-only thermal-soak probe (ADR-0032, docs/OPTIMIZATION-REGISTER.md OPT-007):
+   *  one inference on a fixed silent buffer → its latency (ms), -1 if not ready.
+   *  Constant workload, so any rise over a long run is throttling, not input variance. */
+  soakStep?(): Promise<number>;
   dispose(): void;
 }
 
@@ -232,6 +236,15 @@ export function createDeviceStt(): DeviceSttHandle {
       backend: sttBackend, loadMs: sttLoadMs, lastMs: sttLastMs, error: sttError,
       lastStages: sttLastStages,
     }),
+
+    async soakStep(): Promise<number> {
+      const a = await loadAsr();
+      if (!a) return -1;
+      const audio = new Float32Array(SAMPLE_RATE * 2); // 2 s of silence (whisper pads to 30 s)
+      const t = performance.now();
+      await a(audio);
+      return Math.round(performance.now() - t);
+    },
 
     async start(): Promise<void> {
       if (recorder && recorder.state === 'recording') return;

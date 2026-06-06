@@ -51,7 +51,7 @@ and go `Proposed → In-progress → Validated`.
 | **OPT-004** | Bundle code-splitting / lazy heavy chunks | startup/bundle | Known | Proposed | faster cold start; less to cache | −(MB to defer) | M | Low |
 | **OPT-005** | Per-capability model shipping (q8 vs fp16) | bundle-size | Likely | Watch | avoid precaching unused variant | up to −76 MB/device | M | Low |
 | **OPT-006** | Whisper decoder generation tuning | STT-latency | Exploratory | Proposed | trim decoder tokens (minor) | 0 | S | Low |
-| **OPT-007** | Sustained-session thermal headroom | thermal | Exploratory | Watch | no latency creep over 20 min | 0 | M | Med |
+| **OPT-007** | Sustained-session thermal headroom (soak harness) | thermal | Known | **✅ Validated** | no throttling: +4% over 12 min / 422 takes | 0 | M | Low |
 
 ---
 
@@ -178,12 +178,16 @@ and go `Proposed → In-progress → Validated`.
 
 ## OPT-007 — Sustained-session thermal headroom
 
-- **Area:** thermal / sustained latency · **Confidence:** Exploratory · **Status:** Watch
-- **Problem:** ADR-0032 pilot gate — confirm no GPU throttling / latency creep over a 20-min
-  session. (So far latency *fell* across the first 4 takes — promising.)
-- **Strategy:** the planned **20-min thermal soak**; if creep appears, consider duty-cycling
-  or a lower-power dtype under sustained load.
-- **Costs:** measurement only. **Effort:** M. **Risk:** Med (hardware-dependent).
+- **Area:** thermal / sustained latency · **Confidence:** Known · **Status:** ✅ **Validated** (iPad, 2026-06-05)
+- **Problem:** ADR-0032 pilot gate — confirm no GPU throttling / latency creep over a sustained session.
+- **Tool:** `src/shell/stt_soak.ts` (debug-only, `?debug`) — runs whisper back-to-back on a fixed silent
+  buffer, tracks baseline (first 2 min) vs recent median, flags creep >15% as throttling. Reusable for the
+  Galaxy Tab S9 head-to-head.
+- **Result (iPad 11th-gen, 2026-06-05):** **422 takes over 12:08 · base 716 ms → end 742 ms = +4% · ✓ no
+  throttling.** (soakStep runs on silence, so its absolute ~716 ms is below real-speech PTT ~1050 ms — the
+  decoder emits fewer tokens; the soak measures the relative thermal *creep*, which is flat.) If creep ever
+  appears on other hardware, consider duty-cycling or a lower-power dtype under sustained load.
+- **Costs:** measurement only. **Effort:** M. **Risk:** Low (validated).
 
 ---
 
