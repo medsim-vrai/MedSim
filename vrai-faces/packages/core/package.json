@@ -20,12 +20,12 @@
     "@huggingface/transformers": "^4.2.0",
     "@mediapipe/tasks-vision": "^0.10.18",
     "kokoro-js": "^1.2.1",
-    "three": "^0.170.0",
+    "three": "^0.181.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.47.0",
-    "@types/three": "^0.170.0",
+    "@types/three": "^0.181.0",
     "@typescript-eslint/eslint-plugin": "^8.5.0",
     "@typescript-eslint/parser": "^8.5.0",
     "@vitest/coverage-v8": "^2.1.0",

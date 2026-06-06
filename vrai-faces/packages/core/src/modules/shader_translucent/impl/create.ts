@@ -1,8 +1,11 @@
 import * as THREE from 'three/webgpu';
+// TSL node functions moved from 'three/webgpu' to the dedicated 'three/tsl' entry
+// (three r171+; required by the r181 bump — ADR-0036 Phase 0). The renderer +
+// node materials (THREE.*) still come from 'three/webgpu' above.
 import {
   uniform, color, dot, pow, oneMinus, saturate, mul,
   positionViewDirection, transformedNormalView,
-} from 'three/webgpu';
+} from 'three/tsl';
 import type {
   ShaderTranslucentModule,
   TranslucentMaterial,
