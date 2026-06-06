@@ -47,7 +47,7 @@ and go `Proposed → In-progress → Validated`.
 |----|--------------|------|-----------|--------|------------------|-----------|--------|------|
 | **OPT-001** | fp16 **encoder** (mixed w/ q8 decoder) on WebGPU | STT-latency | Known | **✅ Validated** | warm ASR ~1855→~1150 ms (−40%), total ~1.15 s ✓ | +16.5 MB (fp16 encoder) | S | Low |
 | **OPT-002** | Moonshine short-form ASR (no 30 s pad) | STT-latency | Likely | **Deferred** (prod scaling) | short clips likely <1 s | ~tens of MB (TBD) | L | Med |
-| **OPT-003** | STT warm-up inference at load | STT-latency | Known | Proposed | first take ~250 ms faster | 0 | S | Low |
+| **OPT-003** | STT warm-up inference at load | STT-latency | Known | **✅ Validated** | first take warm (1056 ms), no cold spike | 0 | S | Low |
 | **OPT-004** | Bundle code-splitting / lazy heavy chunks | startup/bundle | Known | Proposed | faster cold start; less to cache | −(MB to defer) | M | Low |
 | **OPT-005** | Per-capability model shipping (q8 vs fp16) | bundle-size | Likely | Watch | avoid precaching unused variant | up to −76 MB/device | M | Low |
 | **OPT-006** | Whisper decoder generation tuning | STT-latency | Exploratory | Proposed | trim decoder tokens (minor) | 0 | S | Low |
@@ -127,9 +127,14 @@ and go `Proposed → In-progress → Validated`.
 
 ## OPT-003 — STT warm-up inference at load
 
-- **Area:** STT-latency (first-take) · **Confidence:** Known · **Status:** Proposed
+- **Area:** STT-latency (first-take) · **Confidence:** Known · **Status:** ✅ **Validated** (iPad, 2026-06-05: first take **1056 ms** warm, no cold spike; then 856 / 1200 ms). Effect is modest on this GPU (it warms fast) but removes cold-spike risk.
 - **Problem / evidence:** First PTT after load measured **2152 ms** vs ~1900 ms warm — ~250 ms
   is one-time WebGPU shader/pipeline compilation on the first inference.
+- **Implemented (2026-06-05):** one silent 16 kHz inference after model load (non-fatal,
+  backgrounded). `isReady()` now flips true only *after* warm-up, so the panel showing
+  "ready" guarantees a warm first take. **Validate:** first take after a fresh reload sits in
+  the warm range (~1050–1150 ms) with no cold spike. Trade-off: "ready" appears ~1 s later
+  (the warm-up cost moves to load time, off the PTT critical path).
 - **Strategy:** after the pipeline loads (already warmed at boot), run **one dummy inference
   on a short silent buffer** so the trainee's first real take is already warm.
 - **Integration strategy:** a few lines in `device_stt.ts` `loadAsr()` post-load. No ADR.

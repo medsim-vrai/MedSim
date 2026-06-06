@@ -147,6 +147,21 @@ async function loadAsr(): Promise<AsrPipeline | null> {
               t: performance.now(), moduleId: MODULE, kind: 'info',
               message: `on-device STT ready (whisper-tiny.en, ${device}/${dtag}, cold-load ${sttLoadMs}ms)`,
             });
+            // OPT-003 (docs/OPTIMIZATION-REGISTER.md): warm-up inference. The FIRST real
+            // inference compiles the WebGPU compute pipelines (~250 ms first-take penalty
+            // measured on the iPad). Run one now on a short silent buffer so the trainee's
+            // first take is already warm. Backgrounded (loadAsr is fire-and-forget at
+            // construction) and non-fatal — a warm-up failure must never break STT.
+            try {
+              const tw = performance.now();
+              await (pipe(new Float32Array(SAMPLE_RATE)) as Promise<unknown>); // 1s silence (padded to 30s)
+              diag.push({
+                t: performance.now(), moduleId: MODULE, kind: 'info',
+                message: `STT warm-up done (${Math.round(performance.now() - tw)}ms)`,
+              });
+            } catch (e) {
+              derror('[STT] warm-up failed (non-fatal):', e);
+            }
             return (audio: Float32Array) => pipe(audio) as Promise<unknown>;
           } catch (e) {
             lastErr = e instanceof Error ? e.message : String(e);
