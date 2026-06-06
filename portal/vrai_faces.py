@@ -491,50 +491,106 @@ async def push_speech(scenario_id: str, character_id: str, *, text: str,
     return {"seq": seq, "delivered": delivered, "voiced": bool(audio_b64)}
 
 
+def _wav_pcm_data(buf: bytes) -> bytes | None:
+    """Raw PCM body from a little-endian WAV (RIFF) buffer — the bytes inside the
+    'data' chunk. Parses chunks because CoreAudio/afconvert inserts an alignment
+    'FLLR' chunk before 'data', so a fixed 44-byte header skip is wrong. None if
+    the buffer is not a parseable WAVE."""
+    if len(buf) < 12 or buf[0:4] != b"RIFF" or buf[8:12] != b"WAVE":
+        return None
+    i = 12
+    while i + 8 <= len(buf):
+        cid = buf[i:i + 4]
+        size = int.from_bytes(buf[i + 4:i + 8], "little")
+        if cid == b"data":
+            return bytes(buf[i + 8:i + 8 + size])
+        i += 8 + size + (size & 1)  # RIFF chunks are word-aligned
+    return None
+
+
+async def _local_dev_tts(text: str) -> tuple[str | None, str | None]:
+    """TEST-ONLY placeholder TTS (ADR-0037, "validate plumbing first"): synthesize the
+    reply with the portal's OS voice (macOS `say`) → raw PCM16 @ 24 kHz mono → base64,
+    tagged 'pcm16-24k' (the client's no-decode path). Lets the server-audio → AudioContext
+    → envelope-lip-sync path be validated end-to-end on devices that cannot synthesize
+    locally (the iPad), WITHOUT ElevenLabs or a session. macOS-only; returns (None, None)
+    elsewhere. NOT a production voice — see docs/BROWSER-DEPLOYMENT-STANDARD.md §6 (open
+    decision). Gated by VRAI_DEV_TTS so it never fires unless explicitly enabled."""
+    import asyncio
+    import base64
+    import shutil
+
+    say = shutil.which("say")
+    afconvert = shutil.which("afconvert")
+    if not (say and afconvert):
+        return None, None
+
+    def _render() -> bytes | None:
+        import subprocess
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            aiff = os.path.join(d, "v.aiff")
+            wav = os.path.join(d, "v.wav")
+            try:
+                subprocess.run([say, "-o", aiff, text],
+                               check=True, timeout=20, capture_output=True)
+                subprocess.run([afconvert, "-f", "WAVE", "-d", "LEI16@24000", aiff, wav],
+                               check=True, timeout=20, capture_output=True)
+                with open(wav, "rb") as fh:
+                    return _wav_pcm_data(fh.read())
+            except Exception:  # noqa: BLE001 — a placeholder must never fail the turn
+                return None
+
+    pcm = await asyncio.to_thread(_render)
+    if not pcm:
+        return None, None
+    return base64.b64encode(pcm).decode("ascii"), "pcm16-24k"
+
+
 async def _synthesize_voice(
     sess: Any, character_id: str, text: str,
 ) -> tuple[str | None, str | None]:
-    """Best-effort server-side TTS of an avatar line via ElevenLabs (ADR-0031),
-    returned as (base64-mp3, "mp3"). The voice is the one the operator assigned to
-    this persona in the control room (sess.voice_assignments[character_id]); the
-    key is the session's captured ElevenLabs key, else the process key. Returns
-    (None, None) when no voice/key is set or synthesis fails — the caller then
-    sends a text-only frame and the device speaks with its built-in voice.
+    """Best-effort server-side TTS of an avatar line, returned as (base64, format).
+    Order: (1) the operator-assigned ElevenLabs voice (ADR-0031) when configured →
+    (base64-mp3, "mp3"); (2) a TEST-ONLY OS-voice placeholder (ADR-0037), opt-in via
+    VRAI_DEV_TTS, so the server-audio path is testable without a key/session →
+    (base64-pcm, "pcm16-24k"). Returns (None, None) when neither applies — the caller
+    then sends a text-only frame and the device speaks with its built-in voice.
 
-    Unblocks avatar speech on tablets that can't run the on-device ONNX TTS (e.g.
-    no-WebGPU hardware). PHI (ADR-0014): the *reply* is the character's scripted,
-    AI-generated words — never trainee free-text — so voicing it server-side
-    moves no trainee PHI off-portal; only audio crosses the device WS."""
+    PHI (ADR-0014): the *reply* is the character's AI-generated words — never trainee
+    free-text — so voicing it server-side moves no trainee PHI off-portal; only audio
+    crosses the device WS."""
     if not text:
         return None, None
+
+    # (1) Operator-assigned ElevenLabs voice (ADR-0031), when one is configured.
     voice_id = ""
     if sess is not None:
         assigns = getattr(sess, "voice_assignments", None) or {}
         voice_id = str(assigns.get(character_id, "")).strip()
-    if not voice_id:
-        return None, None  # no operator-assigned voice → device built-in TTS
+    if voice_id:
+        from . import voices  # lazy: avoid an import-time cycle (mirrors /listen)
+        api_key = (sess.elevenlabs_api_key
+                   if sess is not None and getattr(sess, "elevenlabs_api_key", "")
+                   else voices.get_api_key(None))
+        if api_key:
+            try:
+                buf = bytearray()
+                async for chunk in voices.synthesize_stream(text, voice_id, api_key):
+                    buf.extend(chunk)
+                if buf:
+                    import base64
+                    return base64.b64encode(bytes(buf)).decode("ascii"), "mp3"
+            except Exception as exc:  # noqa: BLE001 — TTS must never fail the turn
+                import logging
+                logging.getLogger(__name__).warning(
+                    "avatar TTS synth failed (%s); trying dev fallback / device voice", exc)
 
-    from . import voices  # lazy: avoid an import-time cycle (mirrors /listen)
-    if sess is not None and getattr(sess, "elevenlabs_api_key", ""):
-        api_key = sess.elevenlabs_api_key
-    else:
-        api_key = voices.get_api_key(None)
-    if not api_key:
-        return None, None
+    # (2) TEST-ONLY OS-voice placeholder to validate the server-audio plumbing (ADR-0037).
+    if os.environ.get("VRAI_DEV_TTS", "").strip().lower() in ("say", "1", "true", "on"):
+        return await _local_dev_tts(text)
 
-    try:
-        buf = bytearray()
-        async for chunk in voices.synthesize_stream(text, voice_id, api_key):
-            buf.extend(chunk)
-        if not buf:
-            return None, None
-        import base64
-        return base64.b64encode(bytes(buf)).decode("ascii"), "mp3"
-    except Exception as exc:  # noqa: BLE001 — TTS must never fail the turn
-        import logging
-        logging.getLogger(__name__).warning(
-            "avatar TTS synth failed (%s); device will use its built-in voice", exc)
-        return None, None
+    return None, None  # no voice → text-only frame (device built-in TTS)
 
 
 # ── Read models ───────────────────────────────────────────────────────
