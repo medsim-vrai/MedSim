@@ -32,4 +32,6 @@ export interface AudioSnapshot {
   queueDepth: number;
   /** ADR-0015 viseme source; defaults to 'derived' on restore if absent. */
   visemeSource?: VisemeSource;
+  /** Diagnostic only: live AudioContext.state ('running'|'suspended'|'interrupted'|'closed'). */
+  state?: string;
 }

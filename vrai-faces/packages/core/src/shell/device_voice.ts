@@ -13,6 +13,7 @@
 import { diag } from '@perf/diag';
 import { createDeviceStt, type DeviceSttHandle } from './device_stt';
 import { primeSpeechSynthesis } from './speechUnlock';
+import { audioPipeline } from '../modules/audio_pipeline';
 import { createCloudStt } from './cloud_stt';
 
 const MODULE = 'shell.deviceVoice';
@@ -280,6 +281,10 @@ export function mountDeviceVoice(
     ev.preventDefault();
     const s = stt;
     if (!on || !s || !pttBtn.classList.contains('active')) return;
+    // The mic suspends the playback AudioContext on iOS; resume it from THIS release gesture
+    // (resume() needs a user gesture on iOS — the async one at reply time hangs) so the
+    // character's reply, arriving seconds later, plays. Pairs with the keep-alive source.
+    void audioPipeline.resume();
     pttBtn.classList.remove('active');
     busy = true;
     setStatus('Transcribing…');

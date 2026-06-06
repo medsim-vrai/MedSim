@@ -70,7 +70,12 @@ function toVisemeFrames(
  */
 export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
   // (1) Bridge energy-derived visemes → the animation runtime (one subscription).
+  let firstViseme = true;
   const offViseme = deps.audio.onViseme((v) => {
+    if (firstViseme) {
+      firstViseme = false;
+      dlog('[speak] derived viseme flowing', { id: v.id, w: Number(v.w.toFixed(2)) });
+    }
     deps.anim.pushVisemes([{ t: v.t, weights: { [v.id]: v.w } }]);
   });
 
@@ -171,10 +176,20 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
     if (f.emotion) deps.anim.setEmotion(f.emotion.weights, EMOTION_EASE_MS);
 
     if (f.audio) {
-      // Pre-synthesized audio (not the portal's text-only path, but supported).
+      // Pre-synthesized audio — the server-side voice path (ADR-0037, the iOS route).
       const native = !!f.visemes && f.visemes.length > 0;
       deps.audio.setVisemeSource(native ? 'native' : 'derived');
-      deps.audio.enqueueAudio(f.audio, f.audioFormat ?? 'pcm16-24k');
+      const snap = deps.audio.snapshot();
+      dlog('[speak] f.audio', {
+        bytes: f.audio.byteLength, fmt: f.audioFormat ?? 'pcm16-24k',
+        primed: snap.primed, state: snap.state, src: native ? 'native' : 'derived',
+      });
+      try {
+        deps.audio.enqueueAudio(f.audio, f.audioFormat ?? 'pcm16-24k');
+      } catch (e) {
+        dwarn('[speak] enqueueAudio threw — AudioContext not primed?',
+          e instanceof Error ? e.message : String(e));
+      }
       if (native && f.visemes) deps.anim.pushVisemes(toVisemeFrames(f.visemes));
       return;
     }

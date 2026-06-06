@@ -45,6 +45,10 @@ export function createImpl(): AudioPipelineModule {
   let playhead = 0;                       // next gapless start time (ctx clock, s)
   const active = new Set<AudioBufferSourceNode>();
   let rafId: number | null = null;
+  // A looping silent source kept playing so iOS never idle-suspends the context between
+  // utterances (ADR-0037): async replies arrive seconds after the priming gesture, and
+  // awaiting resume() off-gesture hangs on iOS — so we keep the graph continuously running.
+  let keepAlive: AudioBufferSourceNode | null = null;
 
   /** Decode a chunk to an AudioBuffer. PCM16-24k is raw (no container) so it is
    *  framed by hand; opus/mp3 go through the platform decoder. */
@@ -96,6 +100,9 @@ export function createImpl(): AudioPipelineModule {
   ): Promise<void> {
     const buf = await toAudioBuffer(chunk, format);
     if (!buf || !ctx || !analyser) { queueDepth = Math.max(0, queueDepth - 1); return; }
+    // Best-effort wake — NON-blocking (awaiting resume() off-gesture HANGS on iOS and would
+    // stall this whole function). The real anti-suspend guard is the keep-alive source.
+    if (ctx.state !== 'running') void ctx.resume();
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.connect(analyser);
@@ -116,6 +123,7 @@ export function createImpl(): AudioPipelineModule {
     async boot(deps) { _deps = deps; },
     dispose() {
       stopVisemeLoop();
+      if (keepAlive) { try { keepAlive.stop(); } catch { /* already stopped */ } keepAlive.disconnect(); keepAlive = null; }
       for (const s of active) { try { s.stop(); } catch { /* already stopped */ } s.disconnect(); }
       active.clear();
       if (ctx) { void ctx.close(); ctx = null; }
@@ -143,6 +151,24 @@ export function createImpl(): AudioPipelineModule {
       silent.connect(ctx.destination);
       silent.start(0);
       await ctx.resume();
+      // KEEP-ALIVE: a looping silent source so the context stays 'running' between
+      // utterances (iOS idle-suspends an idle graph; the reply then plays into silence —
+      // the "no audio, no animation" symptom). Not routed through the analyser, so it
+      // adds no energy; negligible cost. Held in `keepAlive` so it isn't GC'd.
+      try {
+        const ka = ctx.createBufferSource();
+        const kbuf = ctx.createBuffer(1, Math.max(1, Math.round(ctx.sampleRate * 0.5)), ctx.sampleRate);
+        const kd = kbuf.getChannelData(0);
+        // Inaudible noise floor (~-80 dB), NOT digital silence: iOS still idle-suspends a
+        // context whose only output is pure silence (confirmed on device — state went
+        // 'suspended' with a silent keep-alive), so give it a real-but-inaudible signal.
+        for (let i = 0; i < kd.length; i++) kd[i] = (Math.random() * 2 - 1) * 1e-4;
+        ka.buffer = kbuf;
+        ka.loop = true;
+        ka.connect(ctx.destination);
+        ka.start();
+        keepAlive = ka;
+      } catch { /* best-effort */ }
     },
 
     enqueueAudio(chunk, format) {
@@ -152,6 +178,7 @@ export function createImpl(): AudioPipelineModule {
         );
       }
       if (!ctx) return;                    // non-browser: no graph, drop silently
+      if (ctx.state !== 'running') void ctx.resume();  // wake from iOS auto-suspend ASAP
       queueDepth++;
       void decodeAndSchedule(chunk, format).catch(() => {
         queueDepth = Math.max(0, queueDepth - 1);
@@ -181,7 +208,9 @@ export function createImpl(): AudioPipelineModule {
     // --- Resumable ---
     async pause()  { stopVisemeLoop(); if (ctx) await ctx.suspend(); },
     async resume() { if (ctx) await ctx.resume(); if (active.size > 0) startVisemeLoop(); },
-    snapshot(): AudioSnapshot { return { primed, queueDepth, visemeSource }; },
+    snapshot(): AudioSnapshot {
+      return { primed, queueDepth, visemeSource, ...(ctx ? { state: ctx.state } : {}) };
+    },
     async restore(s) { primed = s.primed; queueDepth = s.queueDepth; visemeSource = s.visemeSource ?? 'derived'; },
   };
 }
