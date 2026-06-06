@@ -5603,6 +5603,7 @@ def _vrai_faces_url(
     scenario_id: str,
     opacity: float,
     lan: bool = False,
+    debug: bool = False,
 ) -> str:
     """Build the URL to the vrai-faces shell for this tablet.
 
@@ -5643,6 +5644,8 @@ def _vrai_faces_url(
     # capability the device echoes back on /listen. LAN/QR URLs only.
     if lan and vrai_faces.token_enabled():
         url += f"&token={vrai_faces.face_token(safe_scen, safe_char)}"
+    if debug:
+        url += "&debug=1"   # 🐞 on-screen console + morph-QA panel + translucency slider (RB-003)
     return url
 
 
@@ -5653,14 +5656,17 @@ async def vrai_face_qr(
     scenario: str = "default",
     opacity: float = 0.66,
     scale: int = 8,
+    debug: int = 0,
 ):
     """SVG QR code that, when scanned on a tablet, opens the full-screen
     VRAI Faces avatar bound to <character_id>. No auth — facilitators
-    print/show these on the control room screen."""
+    print/show these on the control room screen. `debug=1` opens the build
+    with the on-screen console + morph-QA panel (RB-003 QA)."""
     # lan=True: a scanned QR opens on a *different* device, so the app host +
     # the embedded portal `api` (→ bind fetch + speech WebSocket) must be the
     # LAN IP, never 127.0.0.1 (which would resolve to the tablet itself).
-    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity, lan=True)
+    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity,
+                          lan=True, debug=bool(debug))
     svg = qrgen.make_qr_svg(url, scale=scale)
     return Response(content=svg, media_type="image/svg+xml")
 
@@ -5926,6 +5932,7 @@ async def vrai_face_launcher(
     _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     scenario: str = "default",
     opacity: float = 0.66,
+    debug: int = 0,
 ):
     """Tablet-pairing page (assign-for-use): shows the resolved name/role, the
     portrait status (custom vs placeholder), and the QR + URL a tablet scans to
@@ -5939,8 +5946,19 @@ async def vrai_face_launcher(
     # lan=True: this is the tablet-pairing page — both the QR and the URL it
     # prints must be LAN-reachable (see _vrai_faces_url), so the scanned tablet
     # can reach the portal's bind + speech WebSocket rather than its own host.
-    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity, lan=True)
+    dbg = bool(debug)
+    url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity,
+                          lan=True, debug=dbg)
     qr_svg = qrgen.make_qr_svg(url, scale=10)
+    # 🐞 Debug-QR toggle (RB-003 QA): the same launch with the on-screen console + morph-QA
+    # panel + translucency slider, so the operator can hand a tablet the debug build straight
+    # from the control room (no desktop PNG) — e.g. Mr. Hayes (P-014) for fidelity/voice QA.
+    toggle_href = (f"/portal/face/launch/{_quote(character_id)}"
+                   f"?scenario={_quote(scenario, safe='')}&opacity={opacity:.2f}"
+                   f"&debug={0 if dbg else 1}")
+    toggle_label = "← Back to the normal QR" if dbg else "🐞 Debug QR (console + morph-QA panel)"
+    debug_badge = ('<div class="meta" style="color:#ffcf6b">🐞 DEBUG build — on-screen console '
+                   '+ morph-QA panel + translucency slider</div>') if dbg else ""
     name = info["name"]
     role = info["role"]
     if info["portrait_source"] == "file":
@@ -5967,9 +5985,11 @@ async def vrai_face_launcher(
   <h1>Assign avatar to a tablet — {name}</h1>
   {role_line}
   <div class="meta">Portrait: {portrait}</div>
+  {debug_badge}
   <div class="meta">Scan on the tablet to open this avatar full-screen:</div>
   <div class="qr">{qr_svg}</div>
   <div class="meta">scenario: <code>{scenario}</code> &nbsp; opacity: <code>{opacity:.2f}</code></div>
+  <div class="meta"><a href="{toggle_href}" style="color:#7fd1ff">{toggle_label}</a></div>
   <div class="meta">URL: <code>{url}</code></div>
   <div class="meta">Schema: VRAISpeechFrame v1 (Memory_management.MD §6.2)</div>
 </body></html>"""
