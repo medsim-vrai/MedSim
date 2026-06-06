@@ -53,6 +53,9 @@ function buildBaseGeometry(): THREE.BufferGeometry {
   geo.morphTargetsRelative = true;
 
   geo.userData['morphTargetNames'] = [...ARKIT_52];
+  // RB-003 (ADR-0036): the head-proxy has no inner-mouth, but shader_translucent reads
+  // an `innerMouth` attribute — provide zeros so the node is satisfied (no darkening).
+  geo.setAttribute('innerMouth', new THREE.BufferAttribute(new Float32Array(vertCount), 1));
   return geo;
 }
 

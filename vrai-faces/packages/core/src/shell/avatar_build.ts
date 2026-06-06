@@ -75,6 +75,16 @@ export async function buildAvatarFromBlob(
   const meshId = registerMesh(mesh, built.meshId);
 
   renderer.attachMesh(meshId, mesh);
+  // RB-003 Phase 1 (ADR-0036): feed the live jawOpen influence into shader_translucent's
+  // inner-mouth darkening each frame. The shader exposes its jaw uniform on the material's
+  // userData (no contract change); the inner-mouth MASK is baked per-vertex (mesh_builder),
+  // so this only supplies the open-amount. onBeforeRender keeps it self-contained.
+  const morphNames = geo.userData['morphTargetNames'];
+  const jawIdx = Array.isArray(morphNames) ? morphNames.indexOf('jawOpen') : -1;
+  const jawU = (matObj.userData as Record<string, unknown>)['vraiJawU'] as { value: number } | undefined;
+  if (jawIdx >= 0 && jawU) {
+    mesh.onBeforeRender = (): void => { jawU.value = mesh.morphTargetInfluences?.[jawIdx] ?? 0; };
+  }
   shaderTranslucent.setOpacity(material.id, clamp01(opacityLevel));
 
   return { meshId, materialId: material.id };

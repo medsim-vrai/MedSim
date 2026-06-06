@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu';
 // (three r171+; required by the r181 bump — ADR-0036 Phase 0). The renderer +
 // node materials (THREE.*) still come from 'three/webgpu' above.
 import {
-  uniform, color, dot, pow, oneMinus, saturate, mul,
+  uniform, color, dot, pow, oneMinus, saturate, mul, attribute, texture,
   positionViewDirection, transformedNormalView,
 } from 'three/tsl';
 import type {
@@ -88,6 +88,15 @@ const records = new Map<string, MatRecord>();
 const FRESNEL_POWER = 3.0;
 const RIM_GAIN = 0.85;
 
+// RB-003 inner-mouth darkening (ADR-0036). The per-vertex `innerMouth` mask
+// (mesh_builder) is ~1 across the stretched membrane spanning the open mouth and 0
+// elsewhere; we tint those fragments toward black by the live `jawOpen` so an open
+// jaw reads as a dark interior instead of stretched lip texture. POW concentrates the
+// effect on the membrane (mask≈1) vs the inner-lip body; STRENGTH sets how black it goes.
+const INNER_MOUTH_POW = 1.2;      // ↓ from 2.0: let the mask falloff darken too, so the void
+                                  //   extends toward the lip edges (fuller, not just mask≈1)
+const INNER_MOUTH_STRENGTH = 4.0; // ↑ from 2.5: deeper black across the opening
+
 /**
  * Build a `MeshPhysicalNodeMaterial` per §4, with a real Fresnel rim expressed
  * in TSL — the WebGPU-native path (ADR-0009). `onBeforeCompile` is a
@@ -120,6 +129,16 @@ function buildMaterial(
   const facing = saturate(dot(transformedNormalView, positionViewDirection));
   const rim = pow(oneMinus(facing), FRESNEL_POWER);
   material.emissiveNode = mul(mul(color(0xffffff), rim), strengthU);
+
+  // RB-003 (ADR-0036): darken the inner-mouth region by the live jawOpen. The diffuse
+  // is rebuilt as `texture(map)` so we can multiply it down where the mask × jawOpen is
+  // high (at darken=0 this equals the plain map, so the look is unchanged when closed).
+  // jawU rides on userData; avatar_build writes it per frame (no contract change).
+  const jawU = uniform(0);
+  const diffuse = map ? texture(map) : color(0xffffff);
+  const darken = saturate(mul(pow(attribute('innerMouth', 'float'), INNER_MOUTH_POW), mul(jawU, INNER_MOUTH_STRENGTH)));
+  material.colorNode = mul(diffuse, oneMinus(darken));
+  (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
 
   return { material, strengthU };
 }

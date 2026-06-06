@@ -70,6 +70,17 @@ export interface FaceTopology {
 export const FACE_TOPOLOGY_URL = '/assets/face/face_mesh_topology.json';
 
 /**
+ * MediaPipe FaceMesh INNER-LIP ring indices (the mouth-opening contour). They mark
+ * the per-vertex `innerMouth` mask (RB-003/ADR-0036) so `shader_translucent` can
+ * darken the open mouth into a dark interior. Stable across the 468/478 split (the
+ * iris verts are 468..477, lips unchanged).
+ */
+const INNER_LIP_RING: ReadonlyArray<number> = [
+  78, 95, 88, 178, 87, 14, 317, 402, 318, 324,   // lower inner
+  308, 415, 310, 311, 312, 13, 82, 81, 80, 191,  // upper inner
+];
+
+/**
  * Turn a set of MediaPipe landmarks + the canonical connectivity into a
  * morph-ready `BufferGeometry`. Pure (no GPU, no I/O) so it is unit-testable in
  * jsdom.
@@ -110,6 +121,14 @@ export function buildFaceGeometry(
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   geo.setIndex(new THREE.BufferAttribute(topo.indices, 1));
   geo.computeVertexNormals();
+
+  // RB-003 Phase 1 (ADR-0036): per-vertex inner-mouth mask — 1 on the inner-lip ring,
+  // 0 elsewhere. The stretched membrane triangles that span the open mouth connect
+  // inner-lip verts, so they interpolate to ~1; shader_translucent darkens those
+  // fragments by jawOpen → a dark interior instead of stretched lip texture.
+  const innerMouth = new Float32Array(n);
+  for (const li of INNER_LIP_RING) if (li < n) innerMouth[li] = 1;
+  geo.setAttribute('innerMouth', new THREE.BufferAttribute(innerMouth, 1));
 
   // 52 morph attributes from the procedural basis (jawOpen/smile/brow filled,
   // the rest zero), each sized to the real vertex count.
