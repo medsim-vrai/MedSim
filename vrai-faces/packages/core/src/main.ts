@@ -25,7 +25,7 @@ import { bootDemoAvatar } from './shell/demo_boot';
 import { buildAvatarFromBlob, type BuiltAvatar } from './shell/avatar_build';
 import { bindFromPortal, clearBindingCache } from './shell/portalBinding';
 import { installSpeechConsumer } from './shell/speechConsumer';
-import { lazyTts } from './shell/lazy';
+import { lazyEmotion, lazyTts } from './shell/lazy';
 import { mountTranslucencySlider } from './shell/translucency_slider';
 import { mountImportControl } from './shell/import_control';
 import { mountSaveControl } from './shell/save_control';
@@ -130,6 +130,7 @@ async function boot(): Promise<void> {
     anim: animationRuntime,
     loadTts: () => lazyTts().then((m) => m.ttsProvider),
     voice: () => medsimAdapter.currentBinding()?.voiceProfile,
+    loadEmotion: () => lazyEmotion().then((m) => m.emotionDriver),
   });
 
   // Show the demo avatar IMMEDIATELY so the screen never sits empty while the

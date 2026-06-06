@@ -14,6 +14,7 @@
 
 import type { AnimationRuntimeModule } from '@contracts/animation_runtime';
 import type { AudioPipelineModule } from '@contracts/audio_pipeline';
+import type { EmotionDriverModule } from '@contracts/emotion_driver';
 import type { MedsimAdapterModule } from '@contracts/medsim_adapter';
 import type { TtsChunk, TtsProviderModule } from '@contracts/tts_provider';
 import type { TtsVoiceId, VRAISpeechFrame } from '@contracts/shared';
@@ -28,6 +29,9 @@ export interface SpeechConsumerDeps {
   loadTts: () => Promise<TtsProviderModule>;
   /** Voice for synthesis; read per-utterance so a late bind is honored. */
   voice: () => TtsVoiceId | undefined;
+  /** Optional: lazily load the on-device emotion driver so the character emotes from its
+   *  own reply when the frame carries no explicit (operator-sent) emotion. Absent ⇒ off. */
+  loadEmotion?: () => Promise<EmotionDriverModule>;
 }
 
 const MODULE = 'shell.speechConsumer';
@@ -85,6 +89,7 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
   // Once on-device TTS fails on this device it won't start working — latch it off so
   // every later reply goes straight to the browser voice (no per-reply timeout stall).
   let kokoroBroken = false;
+  let emoMod: EmotionDriverModule | null = null;  // lazily loaded on the first reply (if wired)
 
   async function speakText(text: string, emotion?: string): Promise<void> {
     const voice = deps.voice();
@@ -171,9 +176,29 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
     });
   }
 
+  // #2 (ADR-0019): when the frame carries no operator-sent emotion, derive the character's
+  // affect from its OWN reply text on-device (clinical lexicon + local model) and ease it in,
+  // so it emotes while speaking. PHI-safe (the reply is non-PHI), $0 (no cloud). Best-effort.
+  async function autoEmote(text: string): Promise<void> {
+    if (!deps.loadEmotion) return;
+    try {
+      if (!emoMod) emoMod = await deps.loadEmotion();
+      const characterId = deps.adapter.currentBinding()?.characterId ?? '';
+      const { label, weights } = await emoMod.inferBaseline({ text, characterId });
+      dlog('[speak] auto-emote', { label });
+      deps.anim.setEmotion(weights, EMOTION_EASE_MS);
+    } catch (e) {
+      dwarn('[speak] auto-emote failed (non-fatal):', e instanceof Error ? e.message : String(e));
+    }
+  }
+
   function handleFrame(f: VRAISpeechFrame): void {
     dlog('[speak] frame', { text: f.text?.slice(0, 50), hasAudio: !!f.audio, emotion: f.emotion?.label });
-    if (f.emotion) deps.anim.setEmotion(f.emotion.weights, EMOTION_EASE_MS);
+    if (f.emotion) {
+      deps.anim.setEmotion(f.emotion.weights, EMOTION_EASE_MS);   // operator-sent emotion wins
+    } else if (f.text) {
+      void autoEmote(f.text);   // else derive the character's affect from its own reply (#2)
+    }
 
     if (f.audio) {
       // Pre-synthesized audio — the server-side voice path (ADR-0037, the iOS route).
