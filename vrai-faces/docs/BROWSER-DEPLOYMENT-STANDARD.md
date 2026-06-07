@@ -118,6 +118,13 @@ Startup cost on a character device is dominated by model downloads. The §3 deci
 - ❌ **Don't rely on `speechSynthesis`** for the character voice on iOS — gesture‑locked for
   async replies; keep it only as a last‑ditch fallback on Chromium.
 - ❌ **Don't add a third concurrent WebGPU model** to a character tablet.
+- ❌ **Don't strip the debug / diagnostics tooling in a "production cleanup."** It is gated
+  OFF by default (real sessions stay clean) and enabled **on demand**, so it costs nothing
+  to keep and stays available for field troubleshooting / a future bug tracker:
+  - `?diag=1` → the **diagnostics panel** only (fps · per‑module state · timeline; starts minimized).
+  - the **🐞 launch‑page QR toggle** (`?debug`) → the diagnostics panel **plus** the on‑device
+    console + morph/STT probes, in one scan. `localStorage['vrai:debug']='1'` makes it sticky.
+  Keep the option open to surface / expand this (e.g. wire it to the control‑room bug tracker) later.
 
 ---
 
