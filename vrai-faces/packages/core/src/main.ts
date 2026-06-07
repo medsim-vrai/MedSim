@@ -152,7 +152,8 @@ async function boot(): Promise<void> {
   let slider: ReturnType<typeof mountTranslucencySlider> | null = null;
   let currentFace: Blob | null = null;
   if (avatar) {
-    slider = mountTranslucencySlider(app, avatar.materialId, launch?.opacityLevel ?? 0.66);
+    slider = mountTranslucencySlider(app, avatar.materialId, launch?.opacityLevel ?? 0.66,
+      (f) => renderer.setFrameFill(f));
 
     // "Develop the face from an image": build the new avatar FIRST so a failed
     // import leaves the current one (and its slider) intact.
@@ -165,7 +166,8 @@ async function boot(): Promise<void> {
       slider?.dispose();
       avatar = next;
       currentFace = file;
-      slider = mountTranslucencySlider(app, avatar.materialId, opacity);
+      slider = mountTranslucencySlider(app, avatar.materialId, opacity,
+        (f) => renderer.setFrameFill(f));
     });
 
     if (launch?.apiBase) {
@@ -216,7 +218,8 @@ async function boot(): Promise<void> {
       slider?.dispose();
       avatar = bound;
       currentFace = bound.binding.sourcePhoto;
-      slider = mountTranslucencySlider(app, bound.materialId, bound.binding.opacityLevel);
+      slider = mountTranslucencySlider(app, bound.materialId, bound.binding.opacityLevel,
+        (f) => renderer.setFrameFill(f));
       diag.push({
         t: performance.now(), moduleId: 'main', kind: 'info',
         message: `bound ${bound.binding.characterId} — hot-swapped demo → portrait`,

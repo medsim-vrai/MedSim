@@ -36,6 +36,14 @@ const STYLE_CSS = `
 }
 .vrai-save button:active { background: rgba(255,255,255,0.22); }
 .vrai-save button[disabled] { opacity: 0.5; cursor: default; }
+/* Collapsed by default to a small 💾 chip; tap to reveal the label + save. */
+.vrai-save:not(.open) { padding: 6px; gap: 0; }
+.vrai-save .vrai-save-toggle {
+  height: 36px; min-width: 36px; padding: 0 8px;
+  border-radius: 12px; background: transparent; font-size: 18px; line-height: 1;
+}
+.vrai-save .vrai-save-body { display: none; align-items: center; gap: 8px; }
+.vrai-save.open .vrai-save-body { display: flex; }
 .vrai-save .vrai-save-status { font-size: 12px; opacity: 0.8; }
 .vrai-save .vrai-save-status.err { color: #ff9b9b; opacity: 1; }
 `;
@@ -66,6 +74,16 @@ export function mountSaveControl(
   panel.setAttribute('role', 'group');
   panel.setAttribute('aria-label', 'Save skin');
 
+  // Small 💾 toggle: collapsed by default, taps reveal the label + save body.
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'vrai-save-toggle';
+  toggle.textContent = '💾';
+  toggle.setAttribute('aria-label', 'Save skin');
+
+  const body = document.createElement('div');
+  body.className = 'vrai-save-body';
+
   const label = document.createElement('input');
   label.type = 'text';
   label.maxLength = 80;
@@ -74,12 +92,13 @@ export function mountSaveControl(
 
   const button = document.createElement('button');
   button.type = 'button';
-  button.textContent = '💾 Save skin';
+  button.textContent = 'Save skin';
 
   const status = document.createElement('span');
   status.className = 'vrai-save-status';
 
-  panel.append(label, button, status);
+  body.append(label, button, status);
+  panel.append(toggle, body);
   container.appendChild(panel);
 
   function setStatus(msg: string, isErr = false): void {
@@ -104,10 +123,14 @@ export function mountSaveControl(
       .catch(() => setStatus('Save failed (portal unreachable)', true))
       .finally(() => { button.disabled = false; });
   };
+  const onToggle = (): void => { panel.classList.toggle('open'); };
+
+  toggle.addEventListener('click', onToggle);
   button.addEventListener('click', onClick);
 
   return {
     dispose() {
+      toggle.removeEventListener('click', onToggle);
       button.removeEventListener('click', onClick);
       panel.remove();
     },

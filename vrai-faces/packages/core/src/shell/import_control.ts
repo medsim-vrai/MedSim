@@ -37,6 +37,15 @@ const STYLE_CSS = `
 }
 .vrai-import button:active { background: rgba(255,255,255,0.22); }
 .vrai-import button[disabled] { opacity: 0.5; cursor: default; }
+/* Collapsed by default to a small 📷 chip; tap to reveal the picker (keeps the
+   top of the screen clear during a scenario). */
+.vrai-import:not(.open) { padding: 6px; gap: 0; }
+.vrai-import .vrai-import-toggle {
+  min-height: 36px; min-width: 36px; padding: 0 8px;
+  border-radius: 12px; background: transparent; font-size: 18px; line-height: 1;
+}
+.vrai-import .vrai-import-body { display: none; align-items: center; gap: 10px; }
+.vrai-import.open .vrai-import-body { display: flex; }
 .vrai-import .vrai-import-status { font-size: 12px; opacity: 0.75; min-width: 0; }
 .vrai-import .vrai-import-status.err { color: #ff9b9b; opacity: 1; }
 `;
@@ -65,9 +74,19 @@ export function mountImportControl(
   panel.setAttribute('role', 'group');
   panel.setAttribute('aria-label', 'Import face image');
 
+  // Small 📷 toggle: collapsed by default, taps reveal the picker body.
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'vrai-import-toggle';
+  toggle.textContent = '📷';
+  toggle.setAttribute('aria-label', 'Import face image');
+
+  const body = document.createElement('div');
+  body.className = 'vrai-import-body';
+
   const button = document.createElement('button');
   button.type = 'button';
-  button.textContent = '📷 Import face';
+  button.textContent = 'Import face';
 
   const status = document.createElement('span');
   status.className = 'vrai-import-status';
@@ -77,7 +96,8 @@ export function mountImportControl(
   input.accept = 'image/*';
   input.style.display = 'none';
 
-  panel.append(button, status, input);
+  body.append(button, status, input);
+  panel.append(toggle, body);
   container.appendChild(panel);
 
   function setStatus(msg: string, isErr = false): void {
@@ -101,11 +121,15 @@ export function mountImportControl(
       .finally(() => { button.disabled = false; });
   };
 
+  const onToggle = (): void => { panel.classList.toggle('open'); };
+
+  toggle.addEventListener('click', onToggle);
   button.addEventListener('click', onClick);
   input.addEventListener('change', onChange);
 
   return {
     dispose() {
+      toggle.removeEventListener('click', onToggle);
       button.removeEventListener('click', onClick);
       input.removeEventListener('change', onChange);
       panel.remove();
