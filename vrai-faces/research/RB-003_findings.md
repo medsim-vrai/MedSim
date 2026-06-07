@@ -129,6 +129,36 @@ All three workstreams are **offline-bake + small drop-in**, matching the RB-001 
 
 ---
 
+## 8. Phase-1 implementation (2026-06-07) — shipped + Phase-2 follow-ups
+
+**Shipped (Phase-1, $0 / code-only, validated on iPad with Mr. Hayes):**
+- **Opaque cavity dome** — `shell/oral_cavity.ts`: a near-black `BackSide` + `depthWrite` concave
+  dome behind the lip ring, jawOpen-driven (scales from ~0), a child of the face mesh; lands in
+  the transmission backdrop and shows through the open mouth.
+- **Procedural `tongueOut`** — `shell/oral_tongue.ts` (already present): opaque tongue, protrusion
+  driven by the `tongueOut` influence.
+- **Inner-mouth "mucosa feather"** (chosen over the §2c ΔUV-only plan for the lit-texture problem):
+  a **2-ring `innerMouth` mask dilation** (`mesh_builder/impl/face_topology.ts`, weights 1 / 0.7 /
+  0.45) + a **facing-gated tint** in `shader_translucent/impl/create.ts` — FRONT-facing lip edge →
+  `INNER_MOUTH_LIP` (reads as a lip, covers the bright photo texture → no white), BACK-facing inner
+  surfaces + the membrane → `INNER_MOUTH_DEEP` (dark interior). `INNER_MOUTH_POW`/`STRENGTH` set the
+  coverage. This resolved the empty-void / white-under-the-upper-lip / light-interior issues.
+
+**Phase-2 follow-ups (DEFER — deeper review + cleanup, do not lose):**
+1. **Commissure thin line.** A small white line still flickers at the stretched mouth CORNERS at
+   full open. This is the **mouth-corner fold** (§2c / §7.2 — winding flip / triangle overlap), a
+   GEOMETRY issue, *not* tint coverage — the fix is the **ΔUV + triangle-fold guard**, not more
+   tint (widening coverage further just colours too much lip).
+2. **Tint-colour refinement.** `INNER_MOUTH_LIP`/`INNER_MOUTH_DEEP` are first-pass values picked
+   without a live preview; tune them on-device, and consider a depth term so rim vs deep interior
+   read distinctly without leaning only on the facing heuristic.
+3. **Real interior mesh (§2a Phase-2).** Replace the tinted-face stand-in with the decimated
+   **ICT-FaceKit teeth/tongue/socket** GLB — the proper fidelity path.
+4. **Re-evaluate `FrontSide`** (§5) once a real interior exists — sidesteps DoubleSide back-faces
+   filling the view.
+
+---
+
 ### Sources
 - [Transmission shows only opaque surfaces (donmccurdy) — three.js forum](https://discourse.threejs.org/t/objects-with-transmission-not-showing-objects-behind/47113) · [transmission pass toggling #23184](https://github.com/mrdoob/three.js/issues/23184)
 - [TSL docs — opaque-only viewport texture, depth-compare screen UV](https://threejs.org/docs/pages/TSL.html) · [MeshTransmissionNodeMaterial](https://www.threejs-blocks.com/docs/MeshTransmissionNodeMaterial) · [Drei MeshTransmissionMaterial](https://drei.docs.pmnd.rs/shaders/mesh-transmission-material)

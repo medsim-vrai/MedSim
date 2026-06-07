@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 // node materials (THREE.*) still come from 'three/webgpu' above.
 import {
   uniform, color, dot, pow, oneMinus, saturate, mul, attribute, texture,
-  positionViewDirection, transformedNormalView,
+  positionViewDirection, transformedNormalView, mix, smoothstep, frontFacing, float, max,
 } from 'three/tsl';
 import type {
   ShaderTranslucentModule,
@@ -93,11 +93,18 @@ const RIM_GAIN = 0.85;
 // elsewhere; we tint those fragments toward black by the live `jawOpen` so an open
 // jaw reads as a dark interior instead of stretched lip texture. POW concentrates the
 // effect on the membrane (mask≈1) vs the inner-lip body; STRENGTH sets how black it goes.
-const INNER_MOUTH_POW = 0.65;     // ↓ from 1.2: widen the darken's reach OFF the inner-lip ring so
-                                  //   it swallows the bright lip-EDGE facets jawOpen folds toward the
-                                  //   key light (now correctly lit post morph-normals). mask≈1 still
-                                  //   saturates fast (× STRENGTH), so the opening itself stays dark.
-const INNER_MOUTH_STRENGTH = 4.0; // deeper black across the opening
+const INNER_MOUTH_POW = 0.4;      // ↓: widen the tint COVERAGE to the very mask edge so the low-mask
+                                  //   fade band is fully tinted — no bright photo texture (white) peeks
+                                  //   at the inner-lip or the stretched corners. Lower = wider/harder edge.
+const INNER_MOUTH_STRENGTH = 7.0; // how fast the inner-mouth tint saturates (higher = covers the
+                                  // margin/corner texture fully so no white peeks at the edges)
+// RB-003 "mucosa feather": where the open jaw reveals the inner mouth, blend the lit skin toward
+// these tints instead of toward black — so the bright inner-lip photo texture is replaced by
+// believable colour. The dilated COLLAR (lip body, mask≈0.7) lands on LIP, so the bottom of the
+// upper lip SHOWS as a lip (not white, not a black void); the MEMBRANE (mask≈1) lands on DEEP,
+// the dark opening. Both tunable.
+const INNER_MOUTH_DEEP = 0x180b0b; // deep opening — dark, faint warm
+const INNER_MOUTH_LIP = 0x5a3737;  // inner-lip margin — muted flesh red (darker so the interior reads less light)
 
 // Surface-reflection gate (look tweak): the specular reflection fades to ZERO as the
 // translucency level rises 0.6 → 0.8 and stays 0 above 0.8 — so the more-opaque avatar reads
@@ -148,8 +155,14 @@ function buildMaterial(
   // jawU rides on userData; avatar_build writes it per frame (no contract change).
   const jawU = uniform(0);
   const diffuse = map ? texture(map) : color(0xffffff);
-  const darken = saturate(mul(pow(attribute('innerMouth', 'float'), INNER_MOUTH_POW), mul(jawU, INNER_MOUTH_STRENGTH)));
-  material.colorNode = mul(diffuse, oneMinus(darken));
+  const maskAttr = attribute('innerMouth', 'float');
+  const amt = saturate(mul(pow(maskAttr, INNER_MOUTH_POW), mul(jawU, INNER_MOUTH_STRENGTH)));
+  // FRONT-facing lip edge (seen straight on) → LIP, so the bottom of the upper lip reads as a lip
+  // and the bright photo texture is covered (no white). BACK-facing inner surfaces + the membrane
+  // (mask≈1) → DEEP, so the mouth INTERIOR reads dark, not lit lip-flesh. (RB-003 mucosa feather.)
+  const toDeep = max(oneMinus(float(frontFacing)), smoothstep(0.9, 1.0, maskAttr));
+  const tint = mix(color(INNER_MOUTH_LIP), color(INNER_MOUTH_DEEP), toDeep);
+  material.colorNode = mix(diffuse, tint, amt);
   (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
 
   return { material, strengthU };

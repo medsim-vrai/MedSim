@@ -128,6 +128,26 @@ export function buildFaceGeometry(
   // fragments by jawOpen → a dark interior instead of stretched lip texture.
   const innerMouth = new Float32Array(n);
   for (const li of INNER_LIP_RING) if (li < n) innerMouth[li] = 1;
+  // Dilate the mask outward over TWO triangle-rings (weights 0.7, 0.45) onto the lip BODY around
+  // the whole opening, so the inner-lip AND the stretched CORNERS (commissures) are covered when
+  // the jaw drops — shader_translucent tints this region, so no bright photo texture (white) peeks,
+  // including at the corners. The membrane (mask=1) stays darkest; the weights fall off to the lit
+  // lip. (RB-003 follow-up — clear the corner/edge white; tint colours are refined separately.)
+  const idx = topo.indices;
+  const RING_WEIGHTS = [0.7, 0.45];
+  let frontier = new Set<number>();
+  for (const li of INNER_LIP_RING) if (li < n) frontier.add(li);
+  for (const w of RING_WEIGHTS) {
+    const next = new Set<number>();
+    for (let t = 0; t + 2 < idx.length; t += 3) {
+      const a = idx[t]!, b = idx[t + 1]!, c = idx[t + 2]!;
+      if (!(frontier.has(a) || frontier.has(b) || frontier.has(c))) continue;
+      if (innerMouth[a]! === 0) { innerMouth[a] = w; next.add(a); }
+      if (innerMouth[b]! === 0) { innerMouth[b] = w; next.add(b); }
+      if (innerMouth[c]! === 0) { innerMouth[c] = w; next.add(c); }
+    }
+    frontier = next;
+  }
   geo.setAttribute('innerMouth', new THREE.BufferAttribute(innerMouth, 1));
 
   // 52 morph attributes from the procedural basis (jawOpen/smile/brow filled,

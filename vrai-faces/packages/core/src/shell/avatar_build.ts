@@ -15,6 +15,7 @@ import { shaderTranslucent } from '@modules/shader_translucent';
 import {
   lookupGeometry, lookupTexture, lookupMaterial, registerMesh,
 } from '@utils/resource_registry';
+import { mountOralCavity } from './oral_cavity';
 import { mountOralTongue } from './oral_tongue';
 import type { RendererHandle } from './renderer';
 
@@ -86,8 +87,10 @@ export async function buildAvatarFromBlob(
   if (jawIdx >= 0 && jawU) {
     mesh.onBeforeRender = (): void => { jawU.value = mesh.morphTargetInfluences?.[jawIdx] ?? 0; };
   }
-  // RB-003 Phase 1 (ADR-0036): procedural tongue for `tongueOut` (ICT-FaceKit has none).
-  // No-op on non-baked meshes; a child of the face, driven by the tongueOut influence.
+  // RB-003 Phase 1 (ADR-0036): opaque inner-mouth cavity behind the lips (findings §2a) +
+  // procedural tongue for `tongueOut` (ICT-FaceKit has none). Both no-op on non-baked meshes;
+  // children of the face, driven by the jawOpen / tongueOut influences.
+  mountOralCavity(mesh);
   mountOralTongue(mesh);
   shaderTranslucent.setOpacity(material.id, clamp01(opacityLevel));
 
