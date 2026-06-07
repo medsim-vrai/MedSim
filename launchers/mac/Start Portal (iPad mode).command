@@ -71,6 +71,13 @@ if ! python -c "import portal.server" 2>/dev/null; then
 fi
 
 export MEDSIM_HOST=0.0.0.0
+# iPad mode = ONE ORIGIN (ADR-0028): the portal serves the BUILT avatar app from
+# dist/ AND the API on the same https://<lan-ip>:8765, so the QR's page + api share
+# one origin and one cert. Without this the /face/<id> route 404s and the QR can't
+# link — the app would only load via the separate vite dev server, whose cross-origin
+# bind to the portal is fragile and strands the tablet on the demo avatar.
+# run_portal.py auto-builds dist/ on first run if it's missing.
+export VRAI_FACES_SERVE=portal
 
 # MacBook note: `caffeinate` keeps the system, display, and disk awake while
 # the portal is running. Critical in iPad mode — if the MacBook sleeps, the
