@@ -37,7 +37,9 @@ const STYLE_CSS = `
 .vrai-voice {
   position: fixed;
   left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  /* Sits ABOVE the translucency slider (bottom: 16px, ~44px tall) so the PTT +
+     transcript never overlap it. */
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: stretch; gap: 8px;
   max-width: min(92vw, 460px);
@@ -58,6 +60,7 @@ const STYLE_CSS = `
 .vrai-voice .vrai-voice-toggle.on { background: #2f7d5b; }
 .vrai-voice .vrai-voice-ptt { flex: 1; font-weight: 600; touch-action: none; }
 .vrai-voice .vrai-voice-ptt.active { background: #b5532a; }
+.vrai-voice .vrai-voice-opts { min-width: 42px; padding: 0 10px; font-size: 18px; flex: 0 0 auto; }
 .vrai-voice .vrai-voice-controls { display: none; flex-direction: column; gap: 8px; }
 .vrai-voice.vrai-voice-open .vrai-voice-controls { display: flex; }
 .vrai-voice .vrai-voice-note { font-size: 11px; color: #bfe6cf; line-height: 1.4; }
@@ -94,14 +97,26 @@ export function mountDeviceVoice(
   panel.setAttribute('role', 'group');
   panel.setAttribute('aria-label', 'Device voice (on-device push-to-talk)');
 
-  const toggleRow = document.createElement('div');
-  toggleRow.className = 'vrai-voice-row';
+  // Main row: ONE Hold-to-talk button + a small ⚙ that expands the speech options
+  // (cloud-voice toggle + pilot metrics) during testing, then collapses. `toggleBtn`
+  // is now that ⚙ — it shows/hides the options; the STT auto-enables on mount.
+  const mainRow = document.createElement('div');
+  mainRow.className = 'vrai-voice-row';
   const toggleBtn = document.createElement('button');
   toggleBtn.type = 'button';
-  toggleBtn.className = 'vrai-voice-toggle';
-  toggleBtn.textContent = '🎙 Enable push-to-talk';
-  toggleRow.append(toggleBtn);
+  toggleBtn.className = 'vrai-voice-opts';
+  toggleBtn.textContent = '⚙';
+  toggleBtn.setAttribute('aria-label', 'Speech options');
+  const pttBtn = document.createElement('button');
+  pttBtn.type = 'button';
+  pttBtn.className = 'vrai-voice-ptt';
+  pttBtn.textContent = '🎤 Hold to talk';
+  mainRow.append(toggleBtn, pttBtn);
 
+  const status = document.createElement('div');
+  status.className = 'vrai-voice-status';
+
+  // Collapsible options (behind ⚙): cloud-voice toggle + privacy note + pilot metrics.
   const controls = document.createElement('div');
   controls.className = 'vrai-voice-controls';
 
@@ -116,24 +131,15 @@ export function mountDeviceVoice(
   cloudBtn.className = 'vrai-voice-toggle';
   cloudBtn.textContent = '☁︎ Use cloud voice (testing · not PHI)';
 
-  const pttRow = document.createElement('div');
-  pttRow.className = 'vrai-voice-row';
-  const pttBtn = document.createElement('button');
-  pttBtn.type = 'button';
-  pttBtn.className = 'vrai-voice-ptt';
-  pttBtn.textContent = '🎤 Hold to talk';
-  pttRow.append(pttBtn);
-
-  const status = document.createElement('div');
-  status.className = 'vrai-voice-status';
-
   // Pilot readout (ADR-0026): backend + cold-load + last-take latency, so the
   // on-device validation produces numbers instead of impressions.
   const metricsEl = document.createElement('div');
   metricsEl.className = 'vrai-voice-metrics';
 
-  controls.append(note, cloudBtn, pttRow, status, metricsEl);
-  panel.append(toggleRow, controls);
+  controls.append(note, cloudBtn, metricsEl);
+  // Bottom-anchored column: PTT sits at the BOTTOM (just above the translucency
+  // slider), the transcript/status directly above it, options above that.
+  panel.append(controls, status, mainRow);
   container.appendChild(panel);
 
   function renderMetrics(): void {
@@ -163,7 +169,7 @@ export function mountDeviceVoice(
   }
 
   if (!micSupported()) {
-    toggleBtn.disabled = true;
+    pttBtn.disabled = true;
     panel.classList.add('vrai-voice-open');
     setStatus('Microphone capture not available in this browser.', true);
     return { dispose() { panel.remove(); } };
@@ -181,6 +187,7 @@ export function mountDeviceVoice(
     const clean = text.trim();
     if (!clean) return;
     setStatus(`Heard: “${clean}” — sending…`);
+    const t0 = performance.now();   // measure the /listen round-trip (LLM + TTS + transfer)
     const base = opts.apiBase.replace(/\/+$/, '');
     const url = `${base}/api/face/${encodeURIComponent(opts.characterId)}/listen`;
     // CORS "simple" request (no application/json header → no preflight); the
@@ -191,13 +198,14 @@ export function mountDeviceVoice(
     void fetch(url, { method: 'POST', body: JSON.stringify(payload) })
       .then(async (r) => {
         const j = (await r.json().catch(() => null)) as { ok?: boolean; mode?: string } | null;
+        const secs = ((performance.now() - t0) / 1000).toFixed(1);
         if (r.ok && j?.ok) {
           const how = j.mode === 'ai' ? 'character replied'
             : j.mode === 'echo' ? 'echoed (no running scenario)'
             : (j.mode ?? 'sent');
-          setStatus(`“${clean}” → ${how} ✓`);
+          setStatus(`“${clean}” → ${how} ✓ (${secs}s)`);
         } else {
-          setStatus('Send failed', true);
+          setStatus(`Send failed (${secs}s)`, true);
         }
       })
       .catch(() => setStatus('Send failed (portal unreachable)', true));
@@ -205,11 +213,9 @@ export function mountDeviceVoice(
 
   function setMaster(enabled: boolean): void {
     on = enabled;
-    toggleBtn.textContent = enabled
-      ? (useCloud ? '🎙 Push-to-talk ON (cloud)' : '🎙 Push-to-talk ON (on-device)')
-      : '🎙 Enable push-to-talk';
-    toggleBtn.classList.toggle('on', enabled);
-    panel.classList.toggle('vrai-voice-open', enabled);
+    // The voice warms lazily on the FIRST PTT press (see onPttDown), so the button
+    // stays pressable while off; readiness shows in the status line. The ⚙ (onToggle)
+    // drives the options panel, not this.
     if (enabled) {
       if (!stt) stt = makeStt(); // on-device (warms model) or cloud, per the toggle
       const s = stt;
@@ -243,7 +249,8 @@ export function mountDeviceVoice(
   }
 
   // --- listeners (sync handlers; async work runs in a void IIFE) ---
-  const onToggle = (): void => setMaster(!on);
+  // ⚙ toggles the collapsible speech options (cloud-voice toggle + metrics).
+  const onToggle = (): void => { panel.classList.toggle('vrai-voice-open'); };
 
   const onCloudToggle = (): void => {
     useCloud = !useCloud;
@@ -259,7 +266,11 @@ export function mountDeviceVoice(
 
   const onPttDown = (ev: Event): void => {
     ev.preventDefault();
-    if (!on || !stt || busy) return;
+    if (busy) return;
+    // Warm on first press (lazy): the first hold loads the on-device voice + shows
+    // "Loading…"; once the status reads ready, hold again to talk. No eager load at boot.
+    if (!on) { setMaster(true); return; }
+    if (!stt) return;
     // Re-prime iOS speechSynthesis from THIS gesture so the async reply (seconds after
     // release) can speak — iOS won't start an utterance without a recent user gesture.
     primeSpeechSynthesis();
