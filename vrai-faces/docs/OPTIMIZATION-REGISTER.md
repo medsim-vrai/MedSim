@@ -20,12 +20,17 @@ made with eyes open.
 |---|---|---|
 | **ADRs** (`Memory_management.MD §7`) | Architecture/product decisions (new deps, data flow, security) | An optimization that adds a dependency or changes data flow **graduates to an ADR** before shipping. |
 | **Research Briefs** (`research/RB-*`) | Gated enhancements needing investigation before a go/no-go | An optimization with real unknowns (accuracy, license, sizing) **spawns an RB** first. |
+| **Functional Register** (`FUNCTIONAL-REGISTER.md`) | Functional refinements/expansions + the testing-feedback loop | The functional sibling — *behavior* improvements live there, *performance* lives here. |
 | **This register** | The performance backlog + the rationale/costs | The cross-cutting list. Quick, low-risk wins ship straight from here; bigger ones point to an RB/ADR. |
 
 **Lifecycle of an entry:**
 `Proposed` → (if unknowns) `Researched` via RB → (if a decision) `Decided` via ADR →
 `In-progress` → `Shipped` → `Validated` (measured on-device). Low-risk wins skip RB/ADR
 and go `Proposed → In-progress → Validated`.
+
+**Planning gate:** the open `OPT-*` backlog is pulled for formal review at the post-Track-4
+planning checkpoint (`PLAN-2026-06-07-remaining-development.md`) → triaged + prioritized into
+the Track 5+ roadmap, re-run each milestone.
 
 ## Legend
 
