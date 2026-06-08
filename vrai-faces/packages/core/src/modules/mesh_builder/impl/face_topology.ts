@@ -80,6 +80,19 @@ const INNER_LIP_RING: ReadonlyArray<number> = [
   308, 415, 310, 311, 312, 13, 82, 81, 80, 191,  // upper inner
 ];
 
+// RB-003 §2c: per-shape ΔUV "image-follow" pin for high-travel MOUTH shapes — offsets the texel
+// lookup *with* the deformation so the mouth corners don't stretch the lip texture into the cheek
+// (the "tear"). Derived from the position deltas: UV.x = lm.x = pos.x+0.5 and UV.y = lm.y = 0.5−pos.y,
+// so ΔUV = (+Δpos.x, −Δpos.y) × pin. EYELID shapes are deliberately ABSENT — image-follow there keeps
+// the eye texels in place as the lid drops (the eye reads as OPEN while closing); the lid smear is
+// handled by a margin feather instead. Pins are tunable on-device.
+const DELTA_UV_PIN: Readonly<Record<string, number>> = {
+  mouthSmileLeft: 0.7, mouthSmileRight: 0.7,
+  mouthStretchLeft: 0.7, mouthStretchRight: 0.7,
+  mouthUpperUpLeft: 0.5, mouthUpperUpRight: 0.5,
+  noseSneerLeft: 0.4, noseSneerRight: 0.4,
+};
+
 /**
  * Turn a set of MediaPipe landmarks + the canonical connectivity into a
  * morph-ready `BufferGeometry`. Pure (no GPU, no I/O) so it is unit-testable in
@@ -167,6 +180,27 @@ export function buildFaceGeometry(
   // whole head each frame. Relative = add the delta (zero ⇒ no movement).
   geo.morphTargetsRelative = true;
   geo.userData['morphTargetNames'] = [...MORPH_TARGETS];
+
+  // RB-003 §2c: build a per-shape ΔUV channel (image-follow, pinned to the MOUTH shapes above).
+  // `vraiBaseUv` is the neutral UV to re-accumulate from each frame; each `vraiDeltaUv` entry is a
+  // dense vec2 delta for one pinned shape. avatar_build applies them per frame as
+  // uv = baseUv + Σ influenceₛ·ΔUVₛ, so the mouth-corner texture follows the deformation (no tear).
+  const deltaUv: Array<{ shape: number; delta: Float32Array }> = [];
+  for (let s = 0; s < MORPH_TARGETS.length; s++) {
+    const pin = DELTA_UV_PIN[MORPH_TARGETS[s]!] ?? 0;
+    if (pin === 0) continue;
+    const pd = basis[s]!;                        // position deltas for this shape (n·3)
+    const d = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      d[i * 2] = pd[i * 3]! * pin;               // ΔUV.x = +Δpos.x · pin
+      d[i * 2 + 1] = -pd[i * 3 + 1]! * pin;      // ΔUV.y = −Δpos.y · pin
+    }
+    deltaUv.push({ shape: s, delta: d });
+  }
+  if (deltaUv.length > 0) {
+    geo.userData['vraiBaseUv'] = uv.slice();
+    geo.userData['vraiDeltaUv'] = deltaUv;
+  }
 
   return geo;
 }

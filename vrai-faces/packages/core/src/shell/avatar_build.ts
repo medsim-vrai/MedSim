@@ -84,8 +84,37 @@ export async function buildAvatarFromBlob(
   const morphNames = geo.userData['morphTargetNames'];
   const jawIdx = Array.isArray(morphNames) ? morphNames.indexOf('jawOpen') : -1;
   const jawU = (matObj.userData as Record<string, unknown>)['vraiJawU'] as { value: number } | undefined;
-  if (jawIdx >= 0 && jawU) {
-    mesh.onBeforeRender = (): void => { jawU.value = mesh.morphTargetInfluences?.[jawIdx] ?? 0; };
+  // RB-003 §2c: per-frame ΔUV — re-accumulate the geometry's UV from the neutral baseUv plus each
+  // ACTIVE pinned mouth shape's ΔUV (image-follow, built in mesh_builder), so the mouth-corner
+  // texture follows the deformation (no tear). Idle frames skip the UV work entirely.
+  const baseUv = geo.userData['vraiBaseUv'] as Float32Array | undefined;
+  const deltaUv = geo.userData['vraiDeltaUv'] as Array<{ shape: number; delta: Float32Array }> | undefined;
+  const uvAttr = geo.getAttribute('uv') as THREE.BufferAttribute | undefined;
+  const hasUv = !!(baseUv && deltaUv && uvAttr);
+  if ((jawIdx >= 0 && jawU) || hasUv) {
+    let uvWasActive = false;
+    mesh.onBeforeRender = (): void => {
+      const inf = mesh.morphTargetInfluences;
+      if (jawIdx >= 0 && jawU) jawU.value = inf?.[jawIdx] ?? 0;
+      if (hasUv && inf && baseUv && deltaUv && uvAttr) {
+        let active = false;
+        for (const e of deltaUv) { if ((inf[e.shape] ?? 0) > 0.001) { active = true; break; } }
+        if (active || uvWasActive) {
+          const arr = uvAttr.array as Float32Array;
+          arr.set(baseUv);
+          if (active) {
+            for (const e of deltaUv) {
+              const w = inf[e.shape] ?? 0;
+              if (w <= 0.001) continue;
+              const d = e.delta;
+              for (let k = 0; k < arr.length; k++) arr[k] = arr[k]! + w * d[k]!;
+            }
+          }
+          uvAttr.needsUpdate = true;
+          uvWasActive = active;
+        }
+      }
+    };
   }
   // RB-003 Phase 1 (ADR-0036): opaque inner-mouth cavity behind the lips (findings §2a) +
   // procedural tongue for `tongueOut` (ICT-FaceKit has none). Both no-op on non-baked meshes;

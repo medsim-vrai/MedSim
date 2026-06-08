@@ -157,6 +157,24 @@ All three workstreams are **offline-bake + small drop-in**, matching the RB-001 
 4. **Re-evaluate `FrontSide`** (§5) once a real interior exists — sidesteps DoubleSide back-faces
    filling the view.
 
+**Morph-QA sweep (2026-06-07, iPad / Hayes) — confirms the Phase-2 cluster, NOT new per-shape tuning.**
+A full slider sweep flagged a *class* of mouth-deformation morphs that tear or reveal bright (white)
+photo texture wherever the lips part/fold and Phase-1 coverage doesn't reach (the inner-mouth tint is
+driven by `jawOpen` ONLY; ΔUV pins only the smile/stretch/upperUp/sneer cluster):
+- **`mouthClose`** — significant geometry TEARING (lips fold/overlap → jagged gaps + white). → the
+  `mouthClose` RE-BAKE (already a Phase-2 item) — geometry, not coverage.
+- **`mouthRollUpper`** + (panel #30/31/38/39 ≈ `mouthFrownL/R`, `mouthPucker`, `mouthRight` — confirm
+  exact names) — small white at the lip seam where those shapes part the lips.
+- **`jawOpen`** (#25) — open-mouth smoothing already covered by Phase-1 inner-mouth + morph-normals
+  (baseline, acceptable).
+- **`eyesClosed`** — eyelid smear (moderate), as expected (no good flat-photo ΔUV; needs feather/eye mesh).
+
+PATTERN: per-shape Phase-1 (jawOpen tint + smile-cluster ΔUV) is whack-a-mole — every *other* mouth
+morph re-exposes the same flat-photo gap. Comprehensive fixes (the Phase-2 items above): (a) the **real
+ICT interior mesh** covers ALL mouth-opening shapes uniformly; (b) **mesh subdivision / re-bake** fixes
+the `mouthClose` + corner tears (geometry). Cheap Phase-1.5 stopgap for the *lip-parting* (not folding)
+morphs only: drive the inner-mouth tint from a general "mouth-openness" signal instead of `jawOpen` alone.
+
 ---
 
 ### Sources
