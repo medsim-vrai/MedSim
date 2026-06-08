@@ -5,6 +5,7 @@ import * as THREE from 'three/webgpu';
 import {
   uniform, color, dot, pow, oneMinus, saturate, mul, attribute, texture,
   positionViewDirection, transformedNormalView, mix, smoothstep, frontFacing, float, max,
+  uv, add, vec2,
 } from 'three/tsl';
 import type {
   ShaderTranslucentModule,
@@ -172,10 +173,16 @@ function buildMaterial(
   const EYELID_STRENGTH = 6.0;
   const EYELID_SKIN = 0x6f4d3e; // darker, warmer eyelid tone — sits in the shadowed eye socket (was
                                 // 0x8a6a5e, too pale/grey against ruddy skin). v2: sample local skin.
+  const EYELID_SRC_Y = -0.04; // Tier 1: sample real skin ABOVE the eye (the lid-fold) instead of a flat
+                              // fill, so the closed lid keeps skin DETAIL (pores/wrinkles). More negative
+                              // samples higher (toward the brow; watch brow hair); flip the sign for below.
   const eyelidU = uniform(0);
   const eyelidMask = attribute('eyelid', 'float');
   const eAmt = saturate(mul(pow(eyelidMask, EYELID_POW), mul(eyelidU, EYELID_STRENGTH)));
-  material.colorNode = mix(innerResult, color(EYELID_SKIN), eAmt);
+  // sample the portrait at a UV shifted toward the lid-fold skin as the lid closes -> real skin detail
+  // (EYELID_SKIN stays the no-texture fallback).
+  const eyelidSkin = map ? texture(map, add(uv(), mul(vec2(0, EYELID_SRC_Y), eAmt))) : color(EYELID_SKIN);
+  material.colorNode = mix(innerResult, eyelidSkin, eAmt);
   (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
   (material.userData as Record<string, unknown>)['vraiEyelidU'] = eyelidU;
 
