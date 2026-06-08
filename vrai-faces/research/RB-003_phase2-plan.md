@@ -20,11 +20,18 @@ texture / a void where the lips part (`mouthFrown/Pucker/Right/RollUpper`) or th
   those items.
 
 ## Work items (sequenced)
-1. **Mouth-deformation re-bake — no download · M · START HERE.** Diagnose why `mouthClose` + the
-   lip-fold/seam shapes tear or expose white when deformation-transferred onto MediaPipe (lip-seam
-   overlap, coarse corner topology). Fix in the bake — clamp/relax high-travel deltas, weld the lip
-   seam, and/or a fold guard — then re-emit `face_mesh_morphbasis.json` (drop-in; no runtime change).
-   Re-test the flagged shapes (`mouthClose`, frown, pucker, right, rollUpper) in morph-QA.
+1. **Mouth-deformation re-bake — ✅ DONE 2026-06-07 (no download · M).** Diagnosed via probes: the
+   tear is **triangle INVERSION** at the lips — the 468 topology is only ~898 tris total, so
+   high-travel mouth shapes push lip verts past each other and faces fold over. (k-NN delta
+   resampling was tested and **REFUTED** — it does not reduce the fold; the opposing lip motion is
+   real, not a sampling error.) Fix shipped: an `inversion_guard` in `bake_morphbasis.py` attenuates
+   ONLY the verts of folding/collapsing triangles, iteratively, until none invert — then re-emits
+   `face_mesh_morphbasis.json` (drop-in, no runtime change). Result: folds → **0 on every shape**
+   (mouthClose 24→0, mouthRollUpper 24→0, mouthLeft 11→0, mouthShrugLower 14→0, eyeBlink 10/11→0 →
+   so `eyesClosed` improves too); 27 fold-free shapes stayed **bit-identical**, 25 changed (only what
+   folds). ⏳ Pending iPad morph-QA re-test.
+   **NOTE:** `mouthFrown` had **0** inversions → its seam-white is **TEXTURE, not geometry** → addressed
+   by Item 3 / a ΔUV extension, NOT this re-bake.
 2. **Corner / lip-seam subdivision — no download · M.** The commissure + inner-lip triangles are coarse,
    so high-travel deltas tear. Subdivide those regions (bake-time densification or a runtime tessellation
    of the lip ring) so deltas distribute. Pairs with #1.

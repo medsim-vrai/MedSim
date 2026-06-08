@@ -175,6 +175,22 @@ ICT interior mesh** covers ALL mouth-opening shapes uniformly; (b) **mesh subdiv
 the `mouthClose` + corner tears (geometry). Cheap Phase-1.5 stopgap for the *lip-parting* (not folding)
 morphs only: drive the inner-mouth tint from a general "mouth-openness" signal instead of `jawOpen` alone.
 
+**Phase-2 Item 1 — inversion-guard re-bake (2026-06-07, shipped, pending iPad re-test).** Probed the
+bake numerically (scratch scripts, not committed): the `mouthClose`/fold tear is **triangle INVERSION**
+— at full influence the morph folds lip triangles (the face normal flips) on the coarse 468 topology
+(~898 tris total). k-NN delta resampling was tested and **refuted** (folds 24→~24; the opposing
+upper/lower-lip motion is *real*, not a sampling artifact, so smoothing the sample does nothing). The
+shipped fix is `inversion_guard()` in `bake_morphbasis.py`: it attenuates ONLY the deltas of vertices
+belonging to a folding/collapsing triangle, iteratively, until the morph at full influence inverts
+nothing; then re-emits the basis (drop-in, no runtime change). Re-bake result — folds → **0 on every
+shape**: mouthClose 24→0, mouthRollUpper 24→0, mouthLeft 11→0, mouthShrugLower 14→0, mouthRollLower
+10→0, eyeBlink 10/11→0 (→ `eyesClosed` too), mouthRight 12→0, jawOpen 4→0. Motion retained ≥89% for
+all but the heavy folders (mouthClose 43%, mouthRollUpper 63% — a subtler press/roll instead of a tear,
+the right trade). 27 fold-free shapes stayed **bit-identical**; 25 changed (only what folds).
+**`mouthFrown` had 0 inversions** → its seam-white is **texture, not geometry** → Item 3 / a ΔUV
+extension, NOT this re-bake. The full-fidelity alternative (keep 100% motion) is lip-region
+subdivision (Item 2); the clamp is the no-topology-change fix that removes the visible tear now.
+
 ---
 
 ### Sources

@@ -58,6 +58,50 @@ def load_obj_vertices(path: Path) -> np.ndarray:
     return np.asarray(vs, dtype=np.float64)
 
 
+def load_obj_faces(path: Path) -> np.ndarray:
+    """Triangulated 0-based face indices from an OBJ (fan-triangulates any quads)."""
+    faces: list[tuple[int, int, int]] = []
+    with open(path) as f:
+        for line in f:
+            if line.startswith("f "):
+                idx = [int(tok.split("/")[0]) - 1 for tok in line.split()[1:]]
+                for k in range(1, len(idx) - 1):
+                    faces.append((idx[0], idx[k], idx[k + 1]))
+    return np.asarray(faces, dtype=np.int64)
+
+
+def _tri_normals(V: np.ndarray, faces: np.ndarray) -> np.ndarray:
+    a, b, c = V[faces[:, 0]], V[faces[:, 1]], V[faces[:, 2]]
+    return np.cross(b - a, c - a)
+
+
+def inversion_guard(delta: np.ndarray, neutral: np.ndarray, faces: np.ndarray,
+                    n0: np.ndarray, a0: np.ndarray,
+                    shrink: float = 0.7, iters: int = 30, area_frac: float = 0.08):
+    """RB-003 Phase-2 (ADR-0036): the 468 topology is brutally coarse at the lips (~898 tris total),
+    so high-travel mouth shapes (mouthClose/RollUpper/Right/Pucker) push lip vertices PAST each other
+    -> triangles fold (normal flips) or collapse -> the render TEARS. This attenuates ONLY the deltas
+    of vertices belonging to a folding/collapsing triangle, iteratively (x shrink per round), until
+    the morph at full influence induces no inverted triangle. It is LOCAL (touches only the offending
+    mouth verts) and a NO-OP for shapes that never fold (scale stays 1). Computed on the MediaPipe
+    canonical as a representative, deterministic proxy for the live portrait mesh -- the proper
+    fidelity fix (keep the full motion) is lip-region subdivision (Phase-2 Item 2), but the clamp
+    removes the visible tear now with no topology/contract change.
+    Returns (clamped_delta, scale, flips_before, flips_after)."""
+    def flips(V: np.ndarray) -> np.ndarray:
+        n1 = _tri_normals(V, faces)
+        return ((n0 * n1).sum(1) < 0) | (np.linalg.norm(n1, axis=1) < area_frac * a0)
+    before = int(flips(neutral + delta).sum())
+    scale = np.ones(neutral.shape[0])
+    for _ in range(iters):
+        bad = flips(neutral + delta * scale[:, None])
+        if not bad.any():
+            break
+        scale[np.unique(faces[bad].reshape(-1))] *= shrink
+    out = delta * scale[:, None]
+    return out, scale, before, int(flips(neutral + out).sum())
+
+
 def umeyama(src: np.ndarray, dst: np.ndarray):
     """Least-squares similarity transform (R, s, t) mapping src -> dst (Umeyama 1991).
     Returns (R, s, t) such that dst ~= s * (src @ R.T) + t."""
@@ -154,7 +198,10 @@ def main() -> int:
 
     ict_neutral = load_obj_vertices(ASSETS / "generic_neutral_mesh.obj")
     mp = load_obj_vertices(ASSETS / "canonical_face_model.obj")
-    print(f"ICT neutral: {ict_neutral.shape[0]} v   MediaPipe: {mp.shape[0]} v")
+    mp_faces = load_obj_faces(ASSETS / "canonical_face_model.obj")  # RB-003 P2: for the inversion guard
+    n0 = _tri_normals(mp, mp_faces)
+    a0 = np.linalg.norm(n0, axis=1) + 1e-12  # rest-pose 2x triangle areas
+    print(f"ICT neutral: {ict_neutral.shape[0]} v   MediaPipe: {mp.shape[0]} v / {mp_faces.shape[0]} tris")
 
     # --- build landmark correspondence + align -------------------------------
     src_lm, dst_lm = [], []
@@ -195,10 +242,13 @@ def main() -> int:
             continue
         delta_local = ev - ict_neutral                     # ICT-frame per-vertex motion
         delta_mp = s * (delta_local[nn] @ R.T)              # -> MediaPipe frame, sampled at 468
+        # RB-003 Phase-2: guard the coarse lip topology so the morph can't fold/tear triangles.
+        delta_mp, _gs, folds_b, folds_a = inversion_guard(delta_mp, mp, mp_faces, n0, a0)
         mag = np.sqrt((delta_mp ** 2).sum(1))
         moved = int((mag > 0.05).sum())
         c = mp[mag > 0.05].mean(0) if moved else np.zeros(3)
-        print(f"  {p.stem:18s} max|d|={mag.max():.3f}  mean={mag.mean():.4f}  moved>{0.05}:{moved:3d}/468  region~[{c[0]:+.1f},{c[1]:+.1f},{c[2]:+.1f}]")
+        print(f"  {p.stem:18s} max|d|={mag.max():.3f}  mean={mag.mean():.4f}  moved>{0.05}:{moved:3d}/468  "
+              f"folds {folds_b:2d}->{folds_a:1d}  region~[{c[0]:+.1f},{c[1]:+.1f},{c[2]:+.1f}]")
         results[p.stem] = delta_mp
     np.savez(WORK / "poc_deltas.npz", **{k: v.astype(np.float32) for k, v in results.items()})
     print(f"\nSaved {len(results)} delta set(s) -> {WORK / 'poc_deltas.npz'}")
