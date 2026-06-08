@@ -5,7 +5,7 @@ import * as THREE from 'three/webgpu';
 import {
   uniform, color, dot, pow, oneMinus, saturate, mul, attribute, texture,
   positionViewDirection, transformedNormalView, mix, smoothstep, frontFacing, float, max,
-  uv, add, vec2,
+  uv, add, vec2, length,
 } from 'three/tsl';
 import type {
   ShaderTranslucentModule,
@@ -189,7 +189,12 @@ function buildMaterial(
   // radial shading wants baked per-eye local coords — a follow-up.)
   const EYELID_CREASE = 0x241715;
   const eyelidLid = mix(eyelidSkin, color(EYELID_CREASE), mul(smoothstep(0.78, 1.0, eyelidMask), 0.7));
-  material.colorNode = mix(innerResult, eyelidLid, eAmt);
+  // RB-003 eyelid Tier 2 BULGE: darken toward the eye rim (|eyelidLocal| → 1) so the lid reads as domed
+  // over the eyeball; the membrane interpolates the ring coords to ~0 (bright) at the centre.
+  const EYELID_BULGE = 0.45;
+  const eyelidRim = mul(smoothstep(0.25, 1.05, length(attribute('eyelidLocal', 'vec2'))), EYELID_BULGE);
+  const eyelidLidBulged = mul(eyelidLid, oneMinus(eyelidRim));
+  material.colorNode = mix(innerResult, eyelidLidBulged, eAmt);
   (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
   (material.userData as Record<string, unknown>)['vraiEyelidU'] = eyelidU;
 

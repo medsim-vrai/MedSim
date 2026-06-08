@@ -201,6 +201,37 @@ export function buildFaceGeometry(
   }
   geo.setAttribute('eyelid', new THREE.BufferAttribute(eyelid, 1));
 
+  // RB-003 eyelid Tier 2 (BULGE): per-vertex eye-LOCAL coords — the vertex's offset from its eye centre,
+  // scaled by the eye half-size. The membrane spanning each eye interpolates the ring's coords to ~0 at
+  // the centre, so |eyelidLocal| reads ~0 at centre → ~1 at the rim; shader_translucent darkens toward
+  // the rim so the closed lid reads as draped over a round eyeball (not a flat patch). 0 outside the eye.
+  const RIGHT_EYE = EYE_RING.slice(0, 16), LEFT_EYE = EYE_RING.slice(16);
+  const eyeFrame = (ring: ReadonlyArray<number>): { cx: number; cy: number; hx: number; hy: number } | null => {
+    let cx = 0, cy = 0, m = 0;
+    for (const i of ring) { if (i >= n) continue; cx += pos[i * 3]!; cy += pos[i * 3 + 1]!; m += 1; }
+    if (m === 0) return null;
+    cx /= m; cy /= m;
+    let hx = 1e-4, hy = 1e-4;
+    for (const i of ring) {
+      if (i >= n) continue;
+      hx = Math.max(hx, Math.abs(pos[i * 3]! - cx));
+      hy = Math.max(hy, Math.abs(pos[i * 3 + 1]! - cy));
+    }
+    return { cx, cy, hx, hy };
+  };
+  const rF = eyeFrame(RIGHT_EYE), lF = eyeFrame(LEFT_EYE);
+  const eyelidLocal = new Float32Array(n * 2);
+  if (rF && lF) {
+    for (let v = 0; v < n; v++) {
+      if (eyelid[v]! <= 0) continue;
+      const x = pos[v * 3]!, y = pos[v * 3 + 1]!;
+      const f = Math.abs(x - rF.cx) < Math.abs(x - lF.cx) ? rF : lF;   // nearer eye by x
+      eyelidLocal[v * 2] = (x - f.cx) / f.hx;
+      eyelidLocal[v * 2 + 1] = (y - f.cy) / f.hy;
+    }
+  }
+  geo.setAttribute('eyelidLocal', new THREE.BufferAttribute(eyelidLocal, 2));
+
   // 52 morph attributes from the procedural basis (jawOpen/smile/brow filled,
   // the rest zero), each sized to the real vertex count.
   const basis = computeMorphBasis(pos, n, MORPH_TARGETS);
