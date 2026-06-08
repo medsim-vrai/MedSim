@@ -59,11 +59,28 @@ The inversion-guard re-bake cleared the mouth tears on-device. The re-test punch
 - **Eyelid (eyesClosed)** — the summed guard CONFIRMED it is **not** triangle inversion (folds 0→0):
   it's the flat-photo eye limitation. → Item 4 is now scoped as a **margin-feather** first (NEXT).
 
-## NEXT — Item 4 eyelid margin-feather (no download)
-Tint the upper-lid region toward eyelid-skin as `eyesClosed` rises — the eye analog of the inner-mouth
-feather (per-vertex `eyelid` mask in face_topology + a tint in shader_translucent + feed the eyesClosed
-influence in avatar_build). Covers the stretched open-eye texture so the closed lid reads as skin, no
-download. The real ICT eyeball/lid mesh stays the comprehensive upgrade.
+## Known shading limits — the tint ceiling (2026-06-07, deferred to Item 2/3)
+The procedural inner-mouth tint + cavity + tongue have TOPPED OUT after several on-device rounds;
+documented so we don't loop on micro-tuning:
+- **Lip-movement edge-white** (mouthRollUpper outer upper-lip edge; mouthFunnel/pucker seam): the
+  trade is binary — widening the tint MASK to cover the edge spreads it into a dark BLOB across the
+  lower face (3-ring tried + reverted); the 2-ring mask leaves a faint edge-white. Root cause: the
+  coarse ~898-tri lip topology stretches the flat-photo texture at the edge. FIX = **Item 2
+  subdivision** (geometry) and/or **Item 3** interior mesh. NOT more tint.
+- **jawOpen "more black"**: DEEP (0x120808) + cavity (0x0c0707) are as dark as the tint can go without
+  spreading onto the lip; a truly black DEEP interior is the real mesh (Item 3), not tint.
+- **Tongue**: flatten + matte + dark-cavity-behind is the no-download ceiling; real texture/teeth =
+  **Item 3** (gated download). True lip-PARTING for the tongue needs a `tongueOut` morph (ICT has none).
+- **eyesClosed smear**: confirmed NOT geometry (the inversion-guard was a no-op) → **Item 4** eyelid
+  feather / eye mesh.
+
+## NEXT (active) — Item 2: lip-seam subdivision (no download)
+Densify the lip-region triangles (1→4 split, interpolating position/uv/normal/innerMouth AND all 53
+morph deltas, deduping shared edge midpoints) so the rolled-edge white + corner pinches resolve
+**geometrically**, and the inversion-guard clamp can relax (restoring mouthClose travel). APPEND new
+verts (index 468+) so the original MediaPipe indices stay valid — oral_cavity/tongue's lip ring and
+avatar_build's 13↔14 openness pair must keep their meaning.
+Still queued after: **Item 4** eyelid feather; **Item 3** real interior + tongue/teeth mesh (gated).
 
 ## Constraints
 Offline bake, deterministic (ADR-0034); nothing ships at runtime beyond the JSON/GLB (ADR-0001/0014).

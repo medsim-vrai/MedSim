@@ -183,6 +183,20 @@ export function buildFaceGeometry(
   geo.morphTargetsRelative = true;
   geo.userData['morphTargetNames'] = [...MORPH_TARGETS];
 
+  // RB-003 Phase-2 Item 2: subdivide the lip region (innerMouth mask > 0) 1->4 so the flat-photo
+  // texture + the morph deltas distribute over smaller triangles -- the GEOMETRIC fix for the
+  // rolled-lip edge-white + corner pinches the tint could not reach. New verts append (indices >= n),
+  // so MediaPipe-indexed consumers (oral_cavity/tongue lip ring, avatar_build 13/14 openness) stay
+  // valid. The base normals/morph-normals above are recomputed here on the denser mesh.
+  const sub = subdivideLipRegion(pos, uv, innerMouth, basis, topo.indices, n);
+  geo.setAttribute('position', new THREE.BufferAttribute(sub.pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(sub.uv, 2));
+  geo.setAttribute('innerMouth', new THREE.BufferAttribute(sub.mask, 1));
+  geo.setIndex(new THREE.BufferAttribute(sub.index, 1));
+  geo.computeVertexNormals();
+  geo.morphAttributes.position = sub.basis.map((arr) => new THREE.BufferAttribute(arr, 3));
+  geo.morphAttributes.normal = computeMorphNormals(geo, sub.basis);
+
   // RB-003 §2c: build a per-shape ΔUV channel (image-follow, pinned to the MOUTH shapes above).
   // `vraiBaseUv` is the neutral UV to re-accumulate from each frame; each `vraiDeltaUv` entry is a
   // dense vec2 delta for one pinned shape. avatar_build applies them per frame as
@@ -191,20 +205,98 @@ export function buildFaceGeometry(
   for (let s = 0; s < MORPH_TARGETS.length; s++) {
     const pin = DELTA_UV_PIN[MORPH_TARGETS[s]!] ?? 0;
     if (pin === 0) continue;
-    const pd = basis[s]!;                        // position deltas for this shape (n·3)
-    const d = new Float32Array(n * 2);
-    for (let i = 0; i < n; i++) {
+    const pd = sub.basis[s]!;                    // subdivided position deltas (n2·3)
+    const d = new Float32Array(sub.n * 2);
+    for (let i = 0; i < sub.n; i++) {
       d[i * 2] = pd[i * 3]! * pin;               // ΔUV.x = +Δpos.x · pin
       d[i * 2 + 1] = -pd[i * 3 + 1]! * pin;      // ΔUV.y = −Δpos.y · pin
     }
     deltaUv.push({ shape: s, delta: d });
   }
   if (deltaUv.length > 0) {
-    geo.userData['vraiBaseUv'] = uv.slice();
+    geo.userData['vraiBaseUv'] = sub.uv.slice();
     geo.userData['vraiDeltaUv'] = deltaUv;
   }
 
   return geo;
+}
+
+/**
+ * RB-003 Phase-2 Item 2: 1->4 subdivide every triangle that touches the lip region (innerMouth mask
+ * > 0), appending edge-midpoint vertices DEDUPED per shared edge so the mesh stays watertight (no
+ * cracks). The denser lip topology lets the flat single-photo texture AND the morph deltas distribute
+ * over smaller triangles, resolving the rolled-lip edge-white + corner pinches GEOMETRICALLY where the
+ * tint could not. Each per-vertex channel is linearly interpolated at the midpoint: position, uv, the
+ * innerMouth mask, and every morph's position DELTA (the delta at an edge midpoint = the average of
+ * the two endpoint deltas, exactly the midpoint of the two deformed positions under
+ * morphTargetsRelative). Base + morph NORMALS are recomputed by the caller, so they are NOT
+ * interpolated here. Original vertices keep their indices (new verts append at n, n+1, ...) so
+ * MediaPipe-indexed consumers stay valid. Pure + exported for unit testing.
+ */
+export function subdivideLipRegion(
+  pos: Float32Array,
+  uv: Float32Array,
+  mask: Float32Array,
+  basis: ReadonlyArray<Float32Array>,
+  index: Uint32Array,
+  n: number,
+): {
+  pos: Float32Array;
+  uv: Float32Array;
+  mask: Float32Array;
+  basis: Float32Array[];
+  index: Uint32Array;
+  n: number;
+} {
+  const P = Array.from(pos);
+  const U = Array.from(uv);
+  const M = Array.from(mask);
+  const B = basis.map((b) => Array.from(b));
+  const out: number[] = [];
+  const edgeMid = new Map<string, number>();
+  let next = n;
+
+  const inLip = (v: number): boolean => (mask[v] ?? 0) > 0;
+
+  const mid = (a: number, b: number): number => {
+    const key = a < b ? `${a}_${b}` : `${b}_${a}`;
+    const hit = edgeMid.get(key);
+    if (hit !== undefined) return hit;
+    const m = next;
+    next += 1;
+    for (let c = 0; c < 3; c++) P[m * 3 + c] = ((P[a * 3 + c] ?? 0) + (P[b * 3 + c] ?? 0)) / 2;
+    for (let c = 0; c < 2; c++) U[m * 2 + c] = ((U[a * 2 + c] ?? 0) + (U[b * 2 + c] ?? 0)) / 2;
+    M[m] = ((M[a] ?? 0) + (M[b] ?? 0)) / 2;
+    for (let s = 0; s < B.length; s++) {
+      const bs = B[s]!;
+      for (let c = 0; c < 3; c++) bs[m * 3 + c] = ((bs[a * 3 + c] ?? 0) + (bs[b * 3 + c] ?? 0)) / 2;
+    }
+    edgeMid.set(key, m);
+    return m;
+  };
+
+  for (let t = 0; t + 2 < index.length; t += 3) {
+    const a = index[t] ?? 0;
+    const b = index[t + 1] ?? 0;
+    const c = index[t + 2] ?? 0;
+    if (inLip(a) || inLip(b) || inLip(c)) {
+      const ab = mid(a, b);
+      const bc = mid(b, c);
+      const ca = mid(c, a);
+      out.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
+    } else {
+      out.push(a, b, c);
+    }
+  }
+
+  return {
+    pos: new Float32Array(P),
+    uv: new Float32Array(U),
+    mask: new Float32Array(M),
+    basis: B.map((b) => new Float32Array(b)),
+    index: new Uint32Array(out),
+    n: next,
+  };
 }
 
 /**

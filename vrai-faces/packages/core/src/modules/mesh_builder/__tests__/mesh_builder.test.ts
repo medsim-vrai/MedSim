@@ -5,6 +5,7 @@ import {
   MORPH_TARGETS,
   buildFaceGeometry,
   parseTopology,
+  subdivideLipRegion,
   type FaceTopology,
   type Landmark3,
 } from '../impl/face_topology';
@@ -144,6 +145,40 @@ describe('parseTopology (asset validation, fail-soft)', () => {
     expect(parseTopology({ vertexCount: 3, indices: [0, 1, 9] })).toBeNull();
     // missing indices
     expect(parseTopology({ vertexCount: 3 })).toBeNull();
+  });
+});
+
+describe('subdivideLipRegion (RB-003 Phase-2 Item 2)', () => {
+  // A quad as 2 triangles sharing edge 0-2; vertex 2 is in the lip region (mask=1), so BOTH
+  // triangles subdivide and must SHARE the 0-2 edge midpoint (watertight, no crack).
+  const POS = new Float32Array([0, 0, 0,  1, 0, 0,  1, 1, 0,  0, 1, 0]);
+  const UV = new Float32Array([0, 0,  1, 0,  1, 1,  0, 1]);
+  const MASK = new Float32Array([0, 0, 1, 0]);
+  const INDEX = new Uint32Array([0, 1, 2, 0, 2, 3]);
+  const morph = new Float32Array(4 * 3); morph[2 * 3] = 2; // only vert 2 displaced (x+2)
+
+  it('subdivides lip triangles 1->4 and shares the common edge midpoint (watertight)', () => {
+    const r = subdivideLipRegion(POS, UV, MASK, [morph], INDEX, 4);
+    expect(r.n).toBe(9);             // 5 unique new midpoints (01,12,20,23,30), NOT 6 -> dedup
+    expect(r.index.length).toBe(24); // 8 triangles
+    expect(r.pos[0]!).toBe(0);       // original verts preserved
+    expect(r.pos[3]!).toBe(1);
+    expect(r.pos[4 * 3]!).toBeCloseTo(0.5); // vert 4 = mid(0,1) = (0.5,0,0)
+    expect(Array.from(r.pos).every(Number.isFinite)).toBe(true);
+    expect(Array.from(r.basis[0]!).every(Number.isFinite)).toBe(true);
+  });
+
+  it('interpolates morph deltas + mask at the midpoints (average of endpoints)', () => {
+    const r = subdivideLipRegion(POS, UV, MASK, [morph], INDEX, 4);
+    expect(r.basis[0]![5 * 3]!).toBeCloseTo(1);   // mid(1,2): (0+2)/2
+    expect(r.basis[0]![4 * 3]!).toBeCloseTo(0);   // mid(0,1): (0+0)/2
+    expect(r.mask[5]!).toBeCloseTo(0.5);          // mid(1,2): (0+1)/2
+  });
+
+  it('leaves a mesh with no lip verts untouched', () => {
+    const r = subdivideLipRegion(POS, UV, new Float32Array([0, 0, 0, 0]), [morph], INDEX, 4);
+    expect(r.n).toBe(4);
+    expect(r.index.length).toBe(6);
   });
 });
 
