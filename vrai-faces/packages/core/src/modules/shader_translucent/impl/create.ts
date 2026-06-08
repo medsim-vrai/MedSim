@@ -5,7 +5,7 @@ import * as THREE from 'three/webgpu';
 import {
   uniform, color, dot, pow, oneMinus, saturate, mul, attribute, texture,
   positionViewDirection, transformedNormalView, mix, smoothstep, frontFacing, float, max,
-  uv, add, vec2, vec3,
+  uv, add, vec2,
 } from 'three/tsl';
 import type {
   ShaderTranslucentModule,
@@ -173,19 +173,17 @@ function buildMaterial(
   const EYELID_STRENGTH = 6.0;
   const EYELID_SKIN = 0x6f4d3e; // darker, warmer eyelid tone — sits in the shadowed eye socket (was
                                 // 0x8a6a5e, too pale/grey against ruddy skin). v2: sample local skin.
-  const EYELID_SRC_Y = 0.06; // sample nearby (under-eye) skin for luminance DETAIL — far enough to clear
-                             // the iris, and +down (toward the cheek) avoids the brow hair.
-  const EYELID_DETAIL = 1.2; // how strongly the sampled wrinkle/pore luminance modulates the flat tone
+  const EYELID_SRC_Y = 0.11;   // sample DOWN (under-eye -> cheek) far enough to CLEAR the iris for the
+                               // whole eye region; a small/upward shift left the eye showing.
+  const EYELID_FLAT_MIX = 0.4; // hold this much flat EYELID_SKIN tone so the lid sits dark in the socket
   const eyelidU = uniform(0);
   const eyelidMask = attribute('eyelid', 'float');
   const eAmt = saturate(mul(pow(eyelidMask, EYELID_POW), mul(eyelidU, EYELID_STRENGTH)));
-  // Keep the flat fill's FULL COVERAGE (the lid reads CLOSED — a uniform UV shift can't clear the whole
-  // eye, so sampling colour directly left the iris showing). Instead modulate the flat EYELID_SKIN tone
-  // by the sampled skin's LUMINANCE only: the lid gains wrinkle/pore detail but never the eye's colour.
-  const eyelidBase = 1 - 0.5 * EYELID_DETAIL; // center the modulation at mid-skin (lum 0.5 -> ×1.0)
-  const sampled = map ? texture(map, add(uv(), vec2(0, EYELID_SRC_Y))) : color(EYELID_SKIN);
-  const eyelidLum = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
-  const eyelidSkin = mul(color(EYELID_SKIN), add(eyelidBase, mul(eyelidLum, EYELID_DETAIL)));
+  // Real skin TEXTURE on the closed lid: sample the portrait DOWN past the iris (under-eye -> cheek), so
+  // the lid shows actual skin (pores/wrinkles) and never the eye colour, then blend in some flat tone so
+  // it reads as a lid sitting in the shadowed socket rather than a slice of cheek.
+  const eyelidSrc = map ? texture(map, add(uv(), vec2(0, EYELID_SRC_Y))) : color(EYELID_SKIN);
+  const eyelidSkin = mix(eyelidSrc, color(EYELID_SKIN), EYELID_FLAT_MIX);
   material.colorNode = mix(innerResult, eyelidSkin, eAmt);
   (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
   (material.userData as Record<string, unknown>)['vraiEyelidU'] = eyelidU;
