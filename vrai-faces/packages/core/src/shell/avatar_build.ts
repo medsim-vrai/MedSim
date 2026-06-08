@@ -17,6 +17,7 @@ import {
 } from '@utils/resource_registry';
 import { mountOralCavity } from './oral_cavity';
 import { mountOralTongue } from './oral_tongue';
+import { mountOralEyeMesh } from './oral_eye_mesh';
 import type { RendererHandle } from './renderer';
 
 export interface BuiltAvatar {
@@ -162,6 +163,8 @@ export async function buildAvatarFromBlob(
   // children of the face, driven by the jawOpen / tongueOut influences.
   mountOralCavity(mesh);
   mountOralTongue(mesh);
+  // RB-003 Item 3: real ICT teeth/gums/tongue + eyeballs (no-op off-topology), fitted to the live mesh.
+  mountOralEyeMesh(mesh);
   shaderTranslucent.setOpacity(material.id, clamp01(opacityLevel));
 
   return { meshId, materialId: material.id };
