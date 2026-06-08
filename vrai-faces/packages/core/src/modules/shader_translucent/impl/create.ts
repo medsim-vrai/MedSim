@@ -170,7 +170,8 @@ function buildMaterial(
   // (avatar_build writes max(eyesClosed, blinkL, blinkR) per frame). TUNE on device.
   const EYELID_POW = 0.5;
   const EYELID_STRENGTH = 6.0;
-  const EYELID_SKIN = 0x8a6a5e; // mid-flesh eyelid tone (eyelid skin is fairly portrait-consistent)
+  const EYELID_SKIN = 0x6f4d3e; // darker, warmer eyelid tone — sits in the shadowed eye socket (was
+                                // 0x8a6a5e, too pale/grey against ruddy skin). v2: sample local skin.
   const eyelidU = uniform(0);
   const eyelidMask = attribute('eyelid', 'float');
   const eAmt = saturate(mul(pow(eyelidMask, EYELID_POW), mul(eyelidU, EYELID_STRENGTH)));
