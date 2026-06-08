@@ -94,8 +94,8 @@ const DELTA_UV_PIN: Readonly<Record<string, number>> = {
   // RB-003 Phase-2: a NO-GEOMETRY lever for the rolled-lip / pursed seam-white the tint can't reach.
   // Image-follow the texture WITH the roll/funnel/pucker deformation so the lip texture covers the
   // rolled edge instead of stretching to bright skin/photo (white). UV-only -> cannot regress load.
-  mouthRollUpper: 0.6, mouthRollLower: 0.6,
-  mouthFunnel: 0.5, mouthPucker: 0.5,
+  mouthRollUpper: 0.95, mouthRollLower: 0.85, // roll edge-white is stubborn (small outer-lip delta) -> near-full follow
+  mouthFunnel: 0.5, mouthPucker: 0.5,         // funnel/pucker confirmed good on-device at 0.5
 };
 
 /**
