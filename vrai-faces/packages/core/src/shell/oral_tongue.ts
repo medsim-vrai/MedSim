@@ -59,17 +59,18 @@ export function mountOralTongue(faceMesh: THREE.Mesh): OralTongueHandle | null {
   // An elongated tongue body: narrower than the mouth, LONGER than wide (not a flat disc), tipped
   // down so it droops out of the mouth. Sphere scaled long in Z; the mesh scale grows it uniformly.
   const tongueGeo = new THREE.SphereGeometry(mouthW * 0.42, 20, 14);
-  tongueGeo.scale(0.52, 0.34, 1.5); // ≈1.26×mouthW long · 0.44 wide · 0.29 tall
+  tongueGeo.scale(0.52, 0.20, 1.5); // long + narrow + FLAT (flattened per on-device review)
   // Subtle vertex-colour FORM (no texture map without a download): darken toward the protruding tip
   // and the underside so the tongue reads as a fleshy body with depth, not a flat blob. A real tongue
   // TEXTURE needs an image map (gated download) or the CC0/MIT tongue mesh — the Phase-2 upgrade.
   const tp = tongueGeo.getAttribute('position') as THREE.BufferAttribute;
   const zHalf = mouthW * 0.42 * 1.5 || 1;
+  const yHalf = mouthW * 0.42 * 0.20 || 1;
   const cols = new Float32Array(tp.count * 3);
   for (let i = 0; i < tp.count; i++) {
     const fwd = Math.max(0, tp.getZ(i) / zHalf);    // 0 at base → 1 at the tip
-    const under = Math.max(0, -tp.getY(i) / zHalf); // underside
-    const s = Math.max(0.45, 1 - 0.32 * fwd - 0.14 * under);
+    const under = Math.max(0, -tp.getY(i) / yHalf); // 0 top to 1 underside
+    const s = Math.max(0.3, 1 - 0.3 * fwd - 0.4 * under);
     cols[i * 3] = s; cols[i * 3 + 1] = s; cols[i * 3 + 2] = s;
   }
   tongueGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));

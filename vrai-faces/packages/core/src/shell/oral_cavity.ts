@@ -27,7 +27,7 @@ const INNER_LIP: ReadonlyArray<number> = [
 // Tunable knobs (× mouth WIDTH). Iterated on-device per the findings.
 const RECESS = 0.48;           // depth behind the lip plane (−Z) — keeps it hidden when closed
 const DEPTH = 0.9;             // dome z-depth (how far back the bowl goes)
-const CAVITY_COLOR = 0x070404; // near-black shadow, faintly warm (a teeth/tongue mesh is the Phase-2 upgrade)
+const CAVITY_COLOR = 0x0c0707; // dark shadow, faintly warm (a teeth/tongue mesh is the Phase-2 upgrade)
 
 export interface OralCavityHandle { dispose(): void; }
 
@@ -42,6 +42,10 @@ export function mountOralCavity(faceMesh: THREE.Mesh): OralCavityHandle | null {
   if (!pos || !Array.isArray(names)) return null;
   const jawIdx = names.indexOf('jawOpen');
   if (jawIdx < 0) return null;
+  // RB-003 Phase-2: ALSO reveal the dark interior for tongueOut, so the protruding tongue emerges
+  // from a dark mouth (no bright backdrop showing under/around it). The lips have no tongueOut morph
+  // to part, so the dark recess behind sells the "mouth open for the tongue" read.
+  const tongueIdx = names.indexOf('tongueOut');
 
   // Mouth center + width from the inner-lip ring (neutral positions).
   let cx = 0, cy = 0, cz = 0, count = 0;
@@ -75,7 +79,9 @@ export function mountOralCavity(faceMesh: THREE.Mesh): OralCavityHandle | null {
 
   const inf = faceMesh.morphTargetInfluences;
   cavity.onBeforeRender = (): void => {
-    const t = inf?.[jawIdx] ?? 0; // 0..1
+    const jaw = inf?.[jawIdx] ?? 0; // 0..1
+    const tng = tongueIdx >= 0 ? (inf?.[tongueIdx] ?? 0) : 0;
+    const t = Math.max(jaw, tng * 0.8); // jawOpen OR tongueOut reveals the dark interior
     // Do NOT toggle `visible`: three skips an invisible object's onBeforeRender, so it could
     // never turn back on. Scale from ~0 (closed) to full (open) so the dark recess grows into
     // the opening and is gone behind the closed lips at weight 0.

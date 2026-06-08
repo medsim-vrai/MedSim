@@ -96,15 +96,16 @@ const RIM_GAIN = 0.85;
 const INNER_MOUTH_POW = 0.4;      // ↓: widen the tint COVERAGE to the very mask edge so the low-mask
                                   //   fade band is fully tinted — no bright photo texture (white) peeks
                                   //   at the inner-lip or the stretched corners. Lower = wider/harder edge.
-const INNER_MOUTH_STRENGTH = 8.5; // how fast the inner-mouth tint saturates (higher = covers the
+const INNER_MOUTH_STRENGTH = 7.0; // how fast the inner-mouth tint saturates (higher = covers the
                                   // margin/corner texture fully so no white peeks at the edges)
 // RB-003 "mucosa feather": where the open jaw reveals the inner mouth, blend the lit skin toward
 // these tints instead of toward black — so the bright inner-lip photo texture is replaced by
 // believable colour. The dilated COLLAR (lip body, mask≈0.7) lands on LIP, so the bottom of the
 // upper lip SHOWS as a lip (not white, not a black void); the MEMBRANE (mask≈1) lands on DEEP,
 // the dark opening. Both tunable.
-const INNER_MOUTH_DEEP = 0x0a0505; // deep opening — near-black shadow (darkened per on-device review)
-const INNER_MOUTH_LIP = 0x4e2e2e;  // inner-lip margin — muted flesh red (darker so the interior reads less light)
+const INNER_MOUTH_DEEP = 0x120808; // deep opening — dark (a hair darker than 0x180b0b for the jawOpen
+                                   // interior, but the 2-ring mask keeps it from spreading onto the lip)
+const INNER_MOUTH_LIP = 0x5a3737;  // inner-lip margin — muted flesh red (reverted: 0x4e2e2e read as a dark blob)
 
 // Surface-reflection gate (look tweak): the specular reflection fades to ZERO as the
 // translucency level rises 0.6 → 0.8 and stays 0 above 0.8 — so the more-opaque avatar reads
