@@ -15,6 +15,7 @@ import { shaderTranslucent } from '@modules/shader_translucent';
 import {
   lookupGeometry, lookupTexture, lookupMaterial, registerMesh,
 } from '@utils/resource_registry';
+import { mountOralCavity } from './oral_cavity';
 import { mountOralTongue } from './oral_tongue';
 import { mountOralEyeMesh } from './oral_eye_mesh';
 import type { RendererHandle } from './renderer';
@@ -160,9 +161,10 @@ export async function buildAvatarFromBlob(
   // RB-003 Phase 1 (ADR-0036): opaque inner-mouth cavity behind the lips (findings §2a) +
   // procedural tongue for `tongueOut` (ICT-FaceKit has none). Both no-op on non-baked meshes;
   // children of the face, driven by the jawOpen / tongueOut influences.
+  mountOralCavity(mesh);  // RB-003: dark mouth interior — the backdrop BEHIND the real teeth
   mountOralTongue(mesh);
-  // RB-003 Item 3: real ICT teeth/gums/tongue replace the procedural cavity dome (which was occluding
-  // the recessed teeth) — the real gums/tongue ARE the dark interior now. No-op off-topology.
+  // RB-003 Item 3: real ICT teeth in FRONT of the cavity dome (gums/tongue dropped — they occluded the
+  // teeth + poked out; jaw-follow is the v2). No-op off-topology. ORAL_Z keeps them ahead of the dome.
   mountOralEyeMesh(mesh);
   shaderTranslucent.setOpacity(material.id, clamp01(opacityLevel));
 

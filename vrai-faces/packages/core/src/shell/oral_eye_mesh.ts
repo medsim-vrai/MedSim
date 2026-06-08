@@ -27,12 +27,14 @@ const MOUTH_IDX: ReadonlyArray<number> = [
   78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191,
 ];
 
-// Per-part look. EMISSIVE keeps the parts visible inside the shadowed (recessed) mouth — without it the
-// teeth render dark when behind the lips and read as "no teeth" (only the lit, poked-forward state showed).
+// Teeth ONLY. The ICT gums/tongue is a STATIC closed-mouth-config mass that occluded the teeth in the
+// open mouth (the gum/tongue front sits over them) and poked through the philtrum — a static mesh can't
+// open with the jaw. So for now: white teeth against the dark cavity dome (re-added in avatar_build).
+// Real gums + tongue need the jaw-follow (split upper/lower, drop the lower jaw by jawOpen) — a v2.
+// EMISSIVE keeps the teeth visible inside the shadowed (recessed) mouth (without it they read dark).
 const PARTS: ReadonlyArray<{ key: string; color: number; roughness: number; emissive: number }> = [
-  { key: 'gumsTongue', color: 0x8a3f3a, roughness: 0.6, emissive: 0x1c0a0a }, // dark pink-red mucosa
-  { key: 'teeth', color: 0xe8e1d0, roughness: 0.35, emissive: 0x55514a },     // enamel (self-lit so it
-];                                                                            // shows in the dark mouth)
+  { key: 'teeth', color: 0xe8e1d0, roughness: 0.35, emissive: 0x55514a }, // enamel (self-lit, shows in dark mouth)
+];
 
 // On-device LIVE tuning (no rebuild): append e.g. `&oz=0.03&os=1.1&oy=-0.02` to the URL and reload.
 function tuneNum(key: string, dflt: number): number {
