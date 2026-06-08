@@ -183,19 +183,12 @@ export function buildFaceGeometry(
   geo.morphTargetsRelative = true;
   geo.userData['morphTargetNames'] = [...MORPH_TARGETS];
 
-  // RB-003 Phase-2 Item 2: subdivide the lip region (innerMouth mask > 0) 1->4 so the flat-photo
-  // texture + the morph deltas distribute over smaller triangles -- the GEOMETRIC fix for the
-  // rolled-lip edge-white + corner pinches the tint could not reach. New verts append (indices >= n),
-  // so MediaPipe-indexed consumers (oral_cavity/tongue lip ring, avatar_build 13/14 openness) stay
-  // valid. The base normals/morph-normals above are recomputed here on the denser mesh.
-  const sub = subdivideLipRegion(pos, uv, innerMouth, basis, topo.indices, n);
-  geo.setAttribute('position', new THREE.BufferAttribute(sub.pos, 3));
-  geo.setAttribute('uv', new THREE.BufferAttribute(sub.uv, 2));
-  geo.setAttribute('innerMouth', new THREE.BufferAttribute(sub.mask, 1));
-  geo.setIndex(new THREE.BufferAttribute(sub.index, 1));
-  geo.computeVertexNormals();
-  geo.morphAttributes.position = sub.basis.map((arr) => new THREE.BufferAttribute(arr, 3));
-  geo.morphAttributes.normal = computeMorphNormals(geo, sub.basis);
+  // RB-003 Phase-2 Item 2 (lip subdivision) is TEMPORARILY DISABLED: enabling it broke avatar load
+  // on-device (the rig didn't render after the QR scan). `subdivideLipRegion()` + its unit tests stay
+  // (the synthetic tests pass), so the failure is in the real-468-topology / WebGPU-morph interaction;
+  // re-enable behind a guard once diagnosed. Until then the mesh ships at its native resolution.
+  // (To re-enable: subdivide `pos/uv/innerMouth/basis/topo.indices` and rebuild the attrs + ΔUV here.)
+  void subdivideLipRegion;
 
   // RB-003 §2c: build a per-shape ΔUV channel (image-follow, pinned to the MOUTH shapes above).
   // `vraiBaseUv` is the neutral UV to re-accumulate from each frame; each `vraiDeltaUv` entry is a
@@ -205,16 +198,16 @@ export function buildFaceGeometry(
   for (let s = 0; s < MORPH_TARGETS.length; s++) {
     const pin = DELTA_UV_PIN[MORPH_TARGETS[s]!] ?? 0;
     if (pin === 0) continue;
-    const pd = sub.basis[s]!;                    // subdivided position deltas (n2·3)
-    const d = new Float32Array(sub.n * 2);
-    for (let i = 0; i < sub.n; i++) {
+    const pd = basis[s]!;                        // position deltas for this shape (n·3)
+    const d = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
       d[i * 2] = pd[i * 3]! * pin;               // ΔUV.x = +Δpos.x · pin
       d[i * 2 + 1] = -pd[i * 3 + 1]! * pin;      // ΔUV.y = −Δpos.y · pin
     }
     deltaUv.push({ shape: s, delta: d });
   }
   if (deltaUv.length > 0) {
-    geo.userData['vraiBaseUv'] = sub.uv.slice();
+    geo.userData['vraiBaseUv'] = uv.slice();
     geo.userData['vraiDeltaUv'] = deltaUv;
   }
 
