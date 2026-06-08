@@ -5,11 +5,22 @@ Dated 2026-06-07. Scopes the COMPREHENSIVE fix for the morph-deformation artifac
 mucosa-feather tint + `tongueOut` + lip ΔUV) is **shipped**; it patches per-shape and is whack-a-mole.
 Phase-2 fixes the class at the source.
 
-> **Item 4 (eyelid margin-feather) DONE 2026-06-08 — confirmed on-device. Final form: the closed lid
-> samples the portrait's own under-eye skin (shifted past the iris), so it reads as a CLOSED lid with
-> real skin detail and auto-matches any face. RB-003 MAJOR ARTIFACTS COMPLETE.** Remaining, both GATED:
-> **Item 3** real teeth/tongue/eye mesh (needs a download — the ICT `_assets` are no longer local) /
-> **Item 2** mouthRollUpper outer-edge white (needs the on-device console error to fix the load failure).
+> **⏸ PAUSED 2026-06-08 @ `dc3cde6`. The avatar is in strong shape — every mouth shape, the eyelid
+> feather + real-skin lids + crease, and visible teeth, all from the LOCAL ICT head (no downloads).**
+>
+> **DONE:** Item 4 eyelid feather (samples portrait under-eye skin → closed lid with real detail, any
+> face) · eyelid Tier 2 CREASE/lash line (darkens the eye contour on eyesClosed) · Item 3 teeth v1
+> (extract ICT M_Teeth from the local `generic_neutral_mesh.obj` → fit canonical→live mouth → self-lit
+> crowns, roots trimmed; `oz/os/oy` URL knobs; gums/tongue + eyeballs dropped, they occluded/bulged).
+>
+> **PARKED v2s (clear, bounded — see sections below):**
+> - **Item 3 jaw-follow** — split the oral mesh upper/lower + drop the lower with jawOpen so the teeth
+>   separate + track the lip mesh (the static ICT mesh can't show open-mouth dynamics without it).
+>   Also: re-place the gums (cover the roots) without occluding the crowns; iris-match for the eyeballs.
+> - **Eyelid BULGE** — radial "draped over a round eyeball" shading; needs baked per-eye local coords.
+> - **Item 2** mouthRollUpper outer-edge white — lip subdivision done right; needs the on-device console
+>   error to fix the load failure (re-enable behind a flag to capture it).
+> - **OPT** — `oral_eye_mesh.json` (442 KB) is bundled into the index chunk; move to a fetched /assets file.
 
 ## The problem (recap)
 A flat single-photo rig (UV = neutral landmark x,y) has no mouth interior and no "deformed" pixels, so
