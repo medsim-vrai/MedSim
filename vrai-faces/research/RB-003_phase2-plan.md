@@ -74,13 +74,25 @@ documented so we don't loop on micro-tuning:
 - **eyesClosed smear**: confirmed NOT geometry (the inversion-guard was a no-op) → **Item 4** eyelid
   feather / eye mesh.
 
-## NEXT (active) — Item 2: lip-seam subdivision (no download)
-Densify the lip-region triangles (1→4 split, interpolating position/uv/normal/innerMouth AND all 53
-morph deltas, deduping shared edge midpoints) so the rolled-edge white + corner pinches resolve
-**geometrically**, and the inversion-guard clamp can relax (restoring mouthClose travel). APPEND new
-verts (index 468+) so the original MediaPipe indices stay valid — oral_cavity/tongue's lip ring and
-avatar_build's 13↔14 openness pair must keep their meaning.
-Still queued after: **Item 4** eyelid feather; **Item 3** real interior + tongue/teeth mesh (gated).
+## Item 2: lip-seam subdivision — ATTEMPTED, REVERTED, DEFERRED (2026-06-07)
+`subdivideLipRegion()` (1->4 split, interpolating position/uv/mask + all 53 morph deltas, deduped
+shared-edge midpoints) was implemented + unit-tested (watertight on the synthetic fixture) and wired
+into buildFaceGeometry. On-device it **BROKE avatar load** (the rig didn't render after the QR scan),
+so it was reverted (commit 31d4b93); `subdivideLipRegion()` + its tests stay for a guarded re-enable.
+- Offline repro on the REAL 468 topology (`/tmp/_repro_subdiv.py`): 468->685 verts, 898->1312 tris,
+  indices in range, NaN-free — BUT **20 T-JUNCTIONS** at the lip-region boundary (a subdivided triangle
+  splits an edge its non-subdivided neighbour keeps whole -> cracks). The structural mesh is valid, so
+  the LOAD failure is most likely render-time (WebGPU morph upload); needs the on-device console.
+- BEFORE re-enabling, solve BOTH: (a) the load failure — capture the console error; (b) the T-junctions
+  — selective subdivision inherently leaves them. Options: subdivide UNIFORMLY (no T-junctions, ~4x the
+  whole mesh, simplest + clean), add a transition ring, or stitch the boundary. Wrap in try/catch with a
+  base-mesh fallback regardless, so it can never block load again.
+
+## NEXT (active) — Item 4: eyelid margin-feather (no download)
+Independent of the mesh topology (a shader tint, like the inner-mouth feather), so it CANNOT regress
+load. Tint the upper-lid region toward eyelid-skin as `eyesClosed` rises: a per-vertex `eyelid` mask in
+face_topology + a tint in shader_translucent + feed the eyesClosed influence in avatar_build.
+Still queued: **Item 3** real interior + tongue/teeth mesh (gated download); **Item 2** re-enable (above).
 
 ## Constraints
 Offline bake, deterministic (ADR-0034); nothing ships at runtime beyond the JSON/GLB (ADR-0001/0014).
