@@ -67,6 +67,16 @@ groups = {
 out = {}
 for name, mats in groups.items():
     V, F = extract(mats)
+    if name == "teeth":
+        # Drop the deep tooth ROOTS: the gums are dropped at runtime (they occluded the crowns), so the
+        # roots would otherwise show as long fangs. Keep the crown band around the bite line (canonical
+        # y ~ -4.5); the open crown bottoms sit at the gum line (dark, hidden). v2 (jaw-follow) revisits.
+        keep = (V[:, 1] >= -6.0) & (V[:, 1] <= -3.2)
+        remap = -np.ones(len(V), dtype=np.int64)
+        remap[keep] = np.arange(int(keep.sum()))
+        F = np.asarray([[remap[a], remap[b], remap[c]] for a, b, c in F if keep[a] and keep[b] and keep[c]],
+                       dtype=np.int64)
+        V = V[keep]
     c = V.mean(0)
     print(f"{name:11s}: {len(V):5d} v  {len(F):5d} tris  bbox min{V.min(0).round(2)} max{V.max(0).round(2)} centroid{c.round(2)}")
     out[name] = {
