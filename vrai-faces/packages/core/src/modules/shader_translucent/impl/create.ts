@@ -184,7 +184,12 @@ function buildMaterial(
   // it reads as a lid sitting in the shadowed socket rather than a slice of cheek.
   const eyelidSrc = map ? texture(map, add(uv(), vec2(0, EYELID_SRC_Y))) : color(EYELID_SKIN);
   const eyelidSkin = mix(eyelidSrc, color(EYELID_SKIN), EYELID_FLAT_MIX);
-  material.colorNode = mix(innerResult, eyelidSkin, eAmt);
+  // RB-003 eyelid Tier 2: a CREASE / lash line — darken the eye CONTOUR (mask≈1, the lid edge) toward a
+  // dark brown so the closed lid shows the crease/lash seam instead of a flat patch. (The eyeball-BULGE
+  // radial shading wants baked per-eye local coords — a follow-up.)
+  const EYELID_CREASE = 0x241715;
+  const eyelidLid = mix(eyelidSkin, color(EYELID_CREASE), mul(smoothstep(0.78, 1.0, eyelidMask), 0.7));
+  material.colorNode = mix(innerResult, eyelidLid, eAmt);
   (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
   (material.userData as Record<string, unknown>)['vraiEyelidU'] = eyelidU;
 
