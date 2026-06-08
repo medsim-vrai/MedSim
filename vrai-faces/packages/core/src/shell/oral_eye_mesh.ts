@@ -45,7 +45,10 @@ function tuneNum(key: string, dflt: number): number {
   return Number.isFinite(n) ? n : dflt;
 }
 const ORAL_SCALE = tuneNum('os', 1.0);  // mouth-fit scale fudge (↑ bigger teeth)
-const ORAL_Z = tuneNum('oz', 0.04);     // recess behind the lip plane (× faceH); ↑ deeper into the head
+const ORAL_Z = tuneNum('oz', 0.015);    // recess behind the lip plane (× faceH). KEEP SMALL: the ICT
+                                        // teeth are already ~2.55u behind the lip in the canonical frame,
+                                        // so a big recess pushes the crowns BEHIND the cavity dome (which
+                                        // then occludes them — why they vanished at 0.04+). ↑ = deeper
 const ORAL_Y = tuneNum('oy', 0.0);      // vertical offset (× faceH); −down lowers the mesh off the philtrum
 
 export interface OralEyeHandle { dispose(): void; }
