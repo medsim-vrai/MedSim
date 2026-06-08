@@ -32,8 +32,9 @@ const PARTS: ReadonlyArray<{ key: string; color: number; roughness: number }> = 
   { key: 'gumsTongue', color: 0x8a3f3a, roughness: 0.6 },  // dark pink-red mucosa
   { key: 'teeth', color: 0xe8e1d0, roughness: 0.35 },      // off-white enamel
 ];
-const ORAL_SCALE = 1.0;  // fudge on the mouth-fit scale (↑ bigger teeth)
-const ORAL_Z = 0.0;      // extra recess back behind the lip plane (× live face height); ↑ pushes back
+const ORAL_SCALE = 1.0;   // fudge on the mouth-fit scale (↑ bigger teeth)
+const ORAL_Z = 0.08;      // recess back behind the lip plane (× live face height) so teeth/gums don't
+                          // poke through the closed lips / the philtrum; ↑ pushes further into the head
 
 export interface OralEyeHandle { dispose(): void; }
 
