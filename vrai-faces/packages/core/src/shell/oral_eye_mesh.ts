@@ -33,8 +33,8 @@ const PARTS: ReadonlyArray<{ key: string; color: number; roughness: number }> = 
   { key: 'teeth', color: 0xe8e1d0, roughness: 0.35 },      // off-white enamel
 ];
 const ORAL_SCALE = 1.0;   // fudge on the mouth-fit scale (↑ bigger teeth)
-const ORAL_Z = 0.08;      // recess back behind the lip plane (× live face height) so teeth/gums don't
-                          // poke through the closed lips / the philtrum; ↑ pushes further into the head
+const ORAL_Z = 0.05;      // recess back behind the lip plane (× live face height) so teeth/gums don't
+                          // poke through the closed lips; 0.08 hid them entirely, 0 poked through. ↑ = back
 
 export interface OralEyeHandle { dispose(): void; }
 
