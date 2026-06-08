@@ -27,7 +27,7 @@ const INNER_LIP: ReadonlyArray<number> = [
 // Tunable knobs (× mouth WIDTH). Iterated on-device per the findings.
 const RECESS = 0.48;           // depth behind the lip plane (−Z) — keeps it hidden when closed
 const DEPTH = 0.9;             // dome z-depth (how far back the bowl goes)
-const CAVITY_COLOR = 0x140a0a; // near-black, faintly warm (a teeth/tongue mesh is the Phase-2 upgrade)
+const CAVITY_COLOR = 0x070404; // near-black shadow, faintly warm (a teeth/tongue mesh is the Phase-2 upgrade)
 
 export interface OralCavityHandle { dispose(): void; }
 

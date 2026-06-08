@@ -141,13 +141,14 @@ export function buildFaceGeometry(
   // fragments by jawOpen → a dark interior instead of stretched lip texture.
   const innerMouth = new Float32Array(n);
   for (const li of INNER_LIP_RING) if (li < n) innerMouth[li] = 1;
-  // Dilate the mask outward over TWO triangle-rings (weights 0.7, 0.45) onto the lip BODY around
-  // the whole opening, so the inner-lip AND the stretched CORNERS (commissures) are covered when
-  // the jaw drops — shader_translucent tints this region, so no bright photo texture (white) peeks,
-  // including at the corners. The membrane (mask=1) stays darkest; the weights fall off to the lit
-  // lip. (RB-003 follow-up — clear the corner/edge white; tint colours are refined separately.)
+  // Dilate the mask outward over THREE triangle-rings (weights 0.7, 0.5, 0.32) onto the lip BODY
+  // around the whole opening, so the inner-lip, the stretched CORNERS (commissures) AND the outer
+  // lip EDGE are covered when the lips part — shader_translucent tints this region toward the lip/
+  // deep colours, so no bright photo texture (white) peeks, including at the rolled upper-lip edge
+  // (mouthRollUpper). The membrane (mask=1) stays darkest; the weights fall off to the lit lip, and
+  // the tint is gated by lip-openness so the resting lip is untouched. (RB-003 Phase-2 follow-up.)
   const idx = topo.indices;
-  const RING_WEIGHTS = [0.7, 0.45];
+  const RING_WEIGHTS = [0.7, 0.5, 0.32];
   let frontier = new Set<number>();
   for (const li of INNER_LIP_RING) if (li < n) frontier.add(li);
   for (const w of RING_WEIGHTS) {

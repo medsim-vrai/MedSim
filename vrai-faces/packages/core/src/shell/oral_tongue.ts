@@ -21,10 +21,11 @@ const INNER_LIP: ReadonlyArray<number> = [
 ];
 
 // Tunable knobs (× mouth WIDTH). Iterated on-device.
-const PROTRUDE = 0.5;   // forward of the lip plane at tongueOut=1
-const DROP = 0.10;      // downward travel at tongueOut=1 (rests toward the lower lip)
-const TIP_TILT = -0.25; // radians — droop the protruding tip DOWN so it doesn't read as a flat disc
-const TONGUE_COLOR = 0xb24a47; // fleshy red (lit by the scene) — a CC0/MIT tongue mesh is the Phase-2 upgrade
+const PROTRUDE = 0.5;    // forward of the lip plane at tongueOut=1
+const DROP = 0.06;       // downward travel at tongueOut=1 (the tip-tilt provides most of the droop)
+const BASE_RECESS = 0.1; // start the body BEHIND the lip plane so its base stays hidden (blends in)
+const TIP_TILT = -0.25;  // radians — droop the protruding tip DOWN so it doesn't read as a flat disc
+const TONGUE_COLOR = 0x9a3f3d; // fleshy red (lit by the scene) — a CC0/MIT tongue mesh is the Phase-2 upgrade
 
 export interface OralTongueHandle { dispose(): void; }
 
@@ -59,8 +60,22 @@ export function mountOralTongue(faceMesh: THREE.Mesh): OralTongueHandle | null {
   // down so it droops out of the mouth. Sphere scaled long in Z; the mesh scale grows it uniformly.
   const tongueGeo = new THREE.SphereGeometry(mouthW * 0.42, 20, 14);
   tongueGeo.scale(0.52, 0.34, 1.5); // ≈1.26×mouthW long · 0.44 wide · 0.29 tall
+  // Subtle vertex-colour FORM (no texture map without a download): darken toward the protruding tip
+  // and the underside so the tongue reads as a fleshy body with depth, not a flat blob. A real tongue
+  // TEXTURE needs an image map (gated download) or the CC0/MIT tongue mesh — the Phase-2 upgrade.
+  const tp = tongueGeo.getAttribute('position') as THREE.BufferAttribute;
+  const zHalf = mouthW * 0.42 * 1.5 || 1;
+  const cols = new Float32Array(tp.count * 3);
+  for (let i = 0; i < tp.count; i++) {
+    const fwd = Math.max(0, tp.getZ(i) / zHalf);    // 0 at base → 1 at the tip
+    const under = Math.max(0, -tp.getY(i) / zHalf); // underside
+    const s = Math.max(0.45, 1 - 0.32 * fwd - 0.14 * under);
+    cols[i * 3] = s; cols[i * 3 + 1] = s; cols[i * 3 + 2] = s;
+  }
+  tongueGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   const tongueMat = new THREE.MeshStandardMaterial({
-    color: TONGUE_COLOR, roughness: 0.5, metalness: 0,
+    color: TONGUE_COLOR, roughness: 0.85, metalness: 0, // matte — kills the glossy white highlight
+    vertexColors: true,  // the tip/underside form baked above
     transparent: false,  // opaque — occludes the face where it protrudes
     depthWrite: true,
   });
@@ -79,7 +94,7 @@ export function mountOralTongue(faceMesh: THREE.Mesh): OralTongueHandle | null {
     // never turn back on (the bug that kept the tongue hidden). Instead scale from ~0
     // (retracted/gone) to full as tongueOut rises, and protrude forward + down.
     tongue.scale.setScalar(Math.max(t, 1e-4));
-    tongue.position.z = cz + t * PROTRUDE * mouthW;
+    tongue.position.z = cz - BASE_RECESS * mouthW + t * PROTRUDE * mouthW; // emerge from inside
     tongue.position.y = baseY - t * DROP * mouthW;
   };
 
