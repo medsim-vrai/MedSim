@@ -163,8 +163,20 @@ function buildMaterial(
   // (mask≈1) → DEEP, so the mouth INTERIOR reads dark, not lit lip-flesh. (RB-003 mucosa feather.)
   const toDeep = max(oneMinus(float(frontFacing)), smoothstep(0.9, 1.0, maskAttr));
   const tint = mix(color(INNER_MOUTH_LIP), color(INNER_MOUTH_DEEP), toDeep);
-  material.colorNode = mix(diffuse, tint, amt);
+  const innerResult = mix(diffuse, tint, amt);
+  // RB-003 Phase-2 Item 4: eyelid margin-feather — tint the eye toward EYELID_SKIN as the lid closes,
+  // so the eyesClosed/blink smear (stretched open-eye photo texture) reads as skin. Same machinery as
+  // the inner-mouth feather; the eye + mouth masks don't overlap. eyelidU rides on userData
+  // (avatar_build writes max(eyesClosed, blinkL, blinkR) per frame). TUNE on device.
+  const EYELID_POW = 0.5;
+  const EYELID_STRENGTH = 6.0;
+  const EYELID_SKIN = 0x8a6a5e; // mid-flesh eyelid tone (eyelid skin is fairly portrait-consistent)
+  const eyelidU = uniform(0);
+  const eyelidMask = attribute('eyelid', 'float');
+  const eAmt = saturate(mul(pow(eyelidMask, EYELID_POW), mul(eyelidU, EYELID_STRENGTH)));
+  material.colorNode = mix(innerResult, color(EYELID_SKIN), eAmt);
   (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
+  (material.userData as Record<string, unknown>)['vraiEyelidU'] = eyelidU;
 
   return { material, strengthU };
 }

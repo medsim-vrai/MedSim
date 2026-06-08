@@ -80,6 +80,15 @@ const INNER_LIP_RING: ReadonlyArray<number> = [
   308, 415, 310, 311, 312, 13, 82, 81, 80, 191,  // upper inner
 ];
 
+// RB-003 Phase-2 Item 4 (ADR-0036): MediaPipe FaceMesh eye-contour rings (both eyes) — mark the
+// per-vertex `eyelid` mask so shader_translucent can tint the eye toward skin as the lid closes (the
+// eyesClosed "smear" fix: the open-eye photo texture stretches as the lid descends; confirmed NOT
+// geometry — the inversion-guard was a no-op). Upper + lower lid arcs + corners; stable across 468/478.
+const EYE_RING: ReadonlyArray<number> = [
+  33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7,    // right eye
+  362, 398, 384, 385, 386, 387, 388, 466, 263, 249, 390, 373, 374, 380, 381, 382, // left eye
+];
+
 // RB-003 §2c: per-shape ΔUV "image-follow" pin for high-travel MOUTH shapes — offsets the texel
 // lookup *with* the deformation so the mouth corners don't stretch the lip texture into the cheek
 // (the "tear"). Derived from the position deltas: UV.x = lm.x = pos.x+0.5 and UV.y = lm.y = 0.5−pos.y,
@@ -169,6 +178,28 @@ export function buildFaceGeometry(
     frontier = next;
   }
   geo.setAttribute('innerMouth', new THREE.BufferAttribute(innerMouth, 1));
+
+  // RB-003 Phase-2 Item 4 (ADR-0036): per-vertex EYELID mask — 1 on the eye ring (both eyes), dilated
+  // ONE ring inward (weight 0.6) over the eye opening. shader_translucent tints this region toward
+  // eyelid-skin by the live eyesClosed/blink amount, so a closing lid reads as skin instead of the
+  // stretched open-eye photo texture. Same BFS dilation as the inner-mouth mask; the eye + mouth masks
+  // don't overlap, so the two feathers compose cleanly. Topology-independent (a shader tint).
+  const eyelid = new Float32Array(n);
+  for (const ei of EYE_RING) if (ei < n) eyelid[ei] = 1;
+  let eyeFrontier = new Set<number>();
+  for (const ei of EYE_RING) if (ei < n) eyeFrontier.add(ei);
+  for (const w of [0.6]) {
+    const next = new Set<number>();
+    for (let t = 0; t + 2 < idx.length; t += 3) {
+      const a = idx[t]!, b = idx[t + 1]!, c = idx[t + 2]!;
+      if (!(eyeFrontier.has(a) || eyeFrontier.has(b) || eyeFrontier.has(c))) continue;
+      if (eyelid[a]! === 0) { eyelid[a] = w; next.add(a); }
+      if (eyelid[b]! === 0) { eyelid[b] = w; next.add(b); }
+      if (eyelid[c]! === 0) { eyelid[c] = w; next.add(c); }
+    }
+    eyeFrontier = next;
+  }
+  geo.setAttribute('eyelid', new THREE.BufferAttribute(eyelid, 1));
 
   // 52 morph attributes from the procedural basis (jawOpen/smile/brow filled,
   // the rest zero), each sized to the real vertex count.

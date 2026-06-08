@@ -84,6 +84,13 @@ export async function buildAvatarFromBlob(
   const morphNames = geo.userData['morphTargetNames'];
   const jawIdx = Array.isArray(morphNames) ? morphNames.indexOf('jawOpen') : -1;
   const jawU = (matObj.userData as Record<string, unknown>)['vraiJawU'] as { value: number } | undefined;
+  // RB-003 Phase-2 Item 4: feed the eyelid feather (shader) the live lid-closure amount so the eye
+  // tints to skin as the lid descends. MAX of eyesClosed + the transient blinks, so idle_motion blinks
+  // also feather (not only sustained closure). eyelidU rides on the material userData (no contract change).
+  const ecIdx = Array.isArray(morphNames) ? morphNames.indexOf('eyesClosed') : -1;
+  const blLIdx = Array.isArray(morphNames) ? morphNames.indexOf('eyeBlinkLeft') : -1;
+  const blRIdx = Array.isArray(morphNames) ? morphNames.indexOf('eyeBlinkRight') : -1;
+  const eyelidU = (matObj.userData as Record<string, unknown>)['vraiEyelidU'] as { value: number } | undefined;
   // RB-003 Phase-2 (ADR-0036): drive the inner-mouth darkening by LIP SEPARATION (MediaPipe inner-lip
   // centers — 13 upper, 14 lower), not jawOpen ALONE. Any lip-parting morph (mouthRollUpper, funnel,
   // pucker…) widens the 13↔14 gap, so the seam darkens instead of showing bright photo texture / white
@@ -105,7 +112,7 @@ export async function buildAvatarFromBlob(
   const deltaUv = geo.userData['vraiDeltaUv'] as Array<{ shape: number; delta: Float32Array }> | undefined;
   const uvAttr = geo.getAttribute('uv') as THREE.BufferAttribute | undefined;
   const hasUv = !!(baseUv && deltaUv && uvAttr);
-  if ((jawIdx >= 0 && jawU) || hasUv) {
+  if ((jawIdx >= 0 && jawU) || hasUv || eyelidU) {
     let uvWasActive = false;
     mesh.onBeforeRender = (): void => {
       const inf = mesh.morphTargetInfluences;
@@ -123,6 +130,12 @@ export async function buildAvatarFromBlob(
         } else {
           jawU.value = inf?.[jawIdx] ?? 0;
         }
+      }
+      if (eyelidU) {
+        const ec = ecIdx >= 0 ? (inf?.[ecIdx] ?? 0) : 0;
+        const bl = blLIdx >= 0 ? (inf?.[blLIdx] ?? 0) : 0;
+        const br = blRIdx >= 0 ? (inf?.[blRIdx] ?? 0) : 0;
+        eyelidU.value = Math.max(ec, bl, br);
       }
       if (hasUv && inf && baseUv && deltaUv && uvAttr) {
         let active = false;

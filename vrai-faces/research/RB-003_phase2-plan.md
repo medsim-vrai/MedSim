@@ -5,9 +5,9 @@ Dated 2026-06-07. Scopes the COMPREHENSIVE fix for the morph-deformation artifac
 mucosa-feather tint + `tongueOut` + lip ΔUV) is **shipped**; it patches per-shape and is whack-a-mole.
 Phase-2 fixes the class at the source.
 
-> **⏸ PAUSED 2026-06-07 @ `0160164`. NEXT TASK: Item 4 (eyelid margin-feather) — jump to the
-> "`>>> RESUME HERE — Item 4`" section below for the full, ready-to-execute spec.** Rig loads; mouth in
-> good shape; Item 2 subdivision reverted + deferred.
+> **Item 4 (eyelid margin-feather) IMPLEMENTED 2026-06-07 — pending on-device TUNE (EYELID_SKIN colour,
+> strength/pow in shader_translucent). NEXT: tune Item 4, then Item 2 re-enable (needs the load fix) /
+> Item 3 (gated download).** Rig loads; mouth in good shape; Item 2 subdivision reverted + deferred.
 
 ## The problem (recap)
 A flat single-photo rig (UV = neutral landmark x,y) has no mouth interior and no "deformed" pixels, so
@@ -92,11 +92,11 @@ so it was reverted (commit 31d4b93); `subdivideLipRegion()` + its tests stay for
   whole mesh, simplest + clean), add a transition ring, or stitch the boundary. Wrap in try/catch with a
   base-mesh fallback regardless, so it can never block load again.
 
-## >>> RESUME HERE — Item 4: eyelid margin-feather (full spec, no download, no load risk) <<<
-PAUSED 2026-06-07 at commit `0160164`. Rig loads (native-res 468 mesh); the mouth is in good shape
-(tears fixed via the inversion-guard re-bake; funnel/pucker fixed via ΔUV; mouthRollUpper outer-edge
-white is the residual structural holdout). Item 2 subdivision is reverted + deferred (section above).
-**Item 4 is the next task — start here.**
+## Item 4: eyelid margin-feather — IMPLEMENTED 2026-06-07 (pending on-device tune)
+Shipped (commit follows). Topology-independent (a shader tint + one mask attribute), so it CANNOT
+regress load. The spec below is the build record + the on-device TUNE reference: re-test `eyesClosed`
+on the iPad (and watch idle blinks), then adjust `EYELID_SKIN` / `EYELID_STRENGTH` / `EYELID_POW` in
+`shader_translucent/impl/create.ts` if the lid reads off (too pale/dark, over/under-covered).
 
 GOAL: the `eyesClosed` smear (the open-eye photo texture stretched as the lid descends) is NOT geometry
 (the inversion-guard was a no-op on it). Cover it the way the inner-mouth feather covers the open mouth:

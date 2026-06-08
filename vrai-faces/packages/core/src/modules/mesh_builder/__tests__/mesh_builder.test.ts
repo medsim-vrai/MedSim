@@ -91,6 +91,8 @@ describe('buildFaceGeometry (landmark → morph-ready geometry)', () => {
 
     expect(geo.getIndex()?.count).toBe(6);            // 2 triangles
     expect(geo.getAttribute('normal')).toBeDefined(); // computeVertexNormals ran
+    expect(geo.getAttribute('innerMouth')?.count).toBe(4); // per-vertex inner-mouth mask, sized to topo
+    expect(geo.getAttribute('eyelid')?.count).toBe(4);     // RB-003 Item 4 eyelid feather mask, sized to topo
 
     const morphs = geo.morphAttributes.position;
     expect(morphs?.length).toBe(53);
