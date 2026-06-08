@@ -45,9 +45,25 @@ texture / a void where the lips part (`mouthFrown/Pucker/Right/RollUpper`) or th
 5. **Cleanup.** Retire the Phase-1 tint/dome where the real interior supersedes it; re-evaluate
    `FrontSide` (§5) now that a real interior exists.
 
-## Recommended start
-**Item 1** — no download, bake env is ready, and it attacks the worst artifact (`mouthClose` tearing)
-plus the whole seam-white class **at the source (the basis)** rather than per-shape patches.
+## Refinement pass (2026-06-07, after the first iPad re-test)
+The inversion-guard re-bake cleared the mouth tears on-device. The re-test punch-list, addressed:
+- **Lip-movement seam-white** (mouthRollUpper etc. — 0 inversions, so texture not geometry): the
+  inner-mouth tint is now driven by **lip SEPARATION** (MediaPipe 13↔14 inner-lip gap) instead of
+  jawOpen-only, so ANY parting morph (rollUpper/funnel/pucker) darkens the revealed seam.
+  `avatar_build.ts`; no shader/contract change.
+- **Tongue** — reshaped from a flat disc to an elongated, downward-drooping body (`oral_tongue.ts`);
+  still procedural (the CC0/MIT tongue mesh is the fidelity upgrade).
+- **Cavity** — widened + smoothed the dome to cover the mouth corners (`oral_cavity.ts`).
+- **Bake** — defensive inversion-guard on the SUMMED shapes (eyesClosed/cheekPuff/browInnerUp); a no-op
+  today (all sums fold-free) but guards future regressions.
+- **Eyelid (eyesClosed)** — the summed guard CONFIRMED it is **not** triangle inversion (folds 0→0):
+  it's the flat-photo eye limitation. → Item 4 is now scoped as a **margin-feather** first (NEXT).
+
+## NEXT — Item 4 eyelid margin-feather (no download)
+Tint the upper-lid region toward eyelid-skin as `eyesClosed` rises — the eye analog of the inner-mouth
+feather (per-vertex `eyelid` mask in face_topology + a tint in shader_translucent + feed the eyesClosed
+influence in avatar_build). Covers the stretched open-eye texture so the closed lid reads as skin, no
+download. The real ICT eyeball/lid mesh stays the comprehensive upgrade.
 
 ## Constraints
 Offline bake, deterministic (ADR-0034); nothing ships at runtime beyond the JSON/GLB (ADR-0001/0014).

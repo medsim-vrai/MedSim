@@ -149,7 +149,8 @@ _MERGE = {"browInnerUp": ("browInnerUp_L", "browInnerUp_R"), "cheekPuff": ("chee
 OUT_JSON = HERE.parent.parent / "packages/core/src/modules/mesh_builder/impl/face_mesh_morphbasis.json"
 
 
-def emit_arkit_json(results: dict, canonical_height: float, eps: float = 0.01) -> dict:
+def emit_arkit_json(results: dict, canonical_height: float, mp: np.ndarray, faces: np.ndarray,
+                    n0: np.ndarray, a0: np.ndarray, eps: float = 0.01) -> dict:
     """Map ICT deltas -> ARKit-52 names (+ eyesClosed), normalize to canonical height,
     sparse-prune, and write face_mesh_morphbasis.json. Deltas are stored as FRACTIONS of
     the canonical face height so morph_basis.ts can rescale them to the live mesh."""
@@ -168,6 +169,14 @@ def emit_arkit_json(results: dict, canonical_height: float, eps: float = 0.01) -
     # Supplemental AU43 (ADR-0034): sustained eye closure = the eyeBlink lid geometry, both eyes.
     if "eyeBlink_L" in results and "eyeBlink_R" in results:
         arkit["eyesClosed"] = results["eyeBlink_L"] + results["eyeBlink_R"]
+
+    # RB-003 Phase-2: the SUMMED shapes (eyesClosed/cheekPuff/browInnerUp) add two ALREADY-clamped
+    # halves whose deltas overlap at the midline (eyesClosed = eyeBlink_L+_R DOUBLES at the nose
+    # bridge), which can RE-FOLD a triangle the per-input clamp never saw. Re-guard them on the sum.
+    for _sname in ("eyesClosed", "cheekPuff", "browInnerUp"):
+        if _sname in arkit:
+            arkit[_sname], _gs, _fb, _fa = inversion_guard(arkit[_sname], mp, faces, n0, a0)
+            print(f"  guard sum  {_sname:14s} folds {_fb:2d}->{_fa:1d}")
 
     shapes: dict = {}
     for name, d in sorted(arkit.items()):
@@ -256,7 +265,7 @@ def main() -> int:
     # Emit the ARKit-named basis once the full set is present (51 ICT shapes -> 51 ARKit + eyesClosed).
     if not poc and len(results) >= 51:
         canon_h = float(mp[:, 1].max() - mp[:, 1].min())
-        doc = emit_arkit_json(results, canon_h)
+        doc = emit_arkit_json(results, canon_h, mp, mp_faces, n0, a0)
         size = OUT_JSON.stat().st_size
         nz = sum(len(v) for v in doc["shapes"].values())
         print(f"\n== EMIT == {OUT_JSON.name}: {doc['shapeCount']} ARKit shapes, "

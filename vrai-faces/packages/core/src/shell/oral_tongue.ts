@@ -21,9 +21,10 @@ const INNER_LIP: ReadonlyArray<number> = [
 ];
 
 // Tunable knobs (× mouth WIDTH). Iterated on-device.
-const PROTRUDE = 0.45; // forward of the lip plane at tongueOut=1
-const DROP = 0.12;     // downward travel at tongueOut=1 (rests toward the lower lip)
-const TONGUE_COLOR = 0xc0504f; // fleshy red (lit by the scene) — a CC0/MIT tongue mesh is the Phase-2 upgrade
+const PROTRUDE = 0.5;   // forward of the lip plane at tongueOut=1
+const DROP = 0.10;      // downward travel at tongueOut=1 (rests toward the lower lip)
+const TIP_TILT = -0.25; // radians — droop the protruding tip DOWN so it doesn't read as a flat disc
+const TONGUE_COLOR = 0xb24a47; // fleshy red (lit by the scene) — a CC0/MIT tongue mesh is the Phase-2 upgrade
 
 export interface OralTongueHandle { dispose(): void; }
 
@@ -54,18 +55,20 @@ export function mountOralTongue(faceMesh: THREE.Mesh): OralTongueHandle | null {
   cx /= count; cy /= count; cz /= count;
   const mouthW = Math.max(maxX - minX, 1e-3);
 
-  // A flat, rounded tongue body: narrower than the mouth, thin, elongated forward.
-  const tongueGeo = new THREE.SphereGeometry(mouthW * 0.5, 18, 12);
-  tongueGeo.scale(0.62, 0.30, 0.95);
+  // An elongated tongue body: narrower than the mouth, LONGER than wide (not a flat disc), tipped
+  // down so it droops out of the mouth. Sphere scaled long in Z; the mesh scale grows it uniformly.
+  const tongueGeo = new THREE.SphereGeometry(mouthW * 0.42, 20, 14);
+  tongueGeo.scale(0.52, 0.34, 1.5); // ≈1.26×mouthW long · 0.44 wide · 0.29 tall
   const tongueMat = new THREE.MeshStandardMaterial({
-    color: TONGUE_COLOR, roughness: 0.7, metalness: 0,
+    color: TONGUE_COLOR, roughness: 0.5, metalness: 0,
     transparent: false,  // opaque — occludes the face where it protrudes
     depthWrite: true,
   });
   const tongue = new THREE.Mesh(tongueGeo, tongueMat);
 
-  const baseY = cy - mouthW * 0.05;
+  const baseY = cy; // emerge from the mouth centre (not floating below the lower lip)
   tongue.position.set(cx, baseY, cz);
+  tongue.rotation.x = TIP_TILT; // droop the protruding tip downward
   tongue.scale.setScalar(1e-4); // start retracted (≈gone) — grows with tongueOut
   faceMesh.add(tongue); // child of the face → inherits its transform; not framed/animated
 

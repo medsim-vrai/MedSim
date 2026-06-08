@@ -25,7 +25,7 @@ const INNER_LIP: ReadonlyArray<number> = [
 ];
 
 // Tunable knobs (× mouth WIDTH). Iterated on-device per the findings.
-const RECESS = 0.45;           // depth behind the lip plane (−Z) — keeps it hidden when closed
+const RECESS = 0.48;           // depth behind the lip plane (−Z) — keeps it hidden when closed
 const DEPTH = 0.9;             // dome z-depth (how far back the bowl goes)
 const CAVITY_COLOR = 0x140a0a; // near-black, faintly warm (a teeth/tongue mesh is the Phase-2 upgrade)
 
@@ -60,8 +60,8 @@ export function mountOralCavity(faceMesh: THREE.Mesh): OralCavityHandle | null {
 
   // A concave dark bowl: a low-poly sphere seen from inside (BackSide) — only the far interior
   // draws, so it reads as a recessed cavity and the near half can't poke through the lips.
-  const cavityGeo = new THREE.SphereGeometry(mouthW * 0.55, 16, 10); // ~300 tris
-  cavityGeo.scale(1.0, 0.7, DEPTH);                                  // oval, deeper in Z
+  const cavityGeo = new THREE.SphereGeometry(mouthW * 0.62, 24, 16); // wider + smoother (covers the corners)
+  cavityGeo.scale(1.08, 0.78, DEPTH);                                // oval, deeper in Z
   const cavityMat = new THREE.MeshStandardMaterial({
     color: CAVITY_COLOR, roughness: 1, metalness: 0,
     transparent: false,      // OPAQUE — the rule that lets it show through transmission (findings §5)

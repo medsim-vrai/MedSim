@@ -84,6 +84,20 @@ export async function buildAvatarFromBlob(
   const morphNames = geo.userData['morphTargetNames'];
   const jawIdx = Array.isArray(morphNames) ? morphNames.indexOf('jawOpen') : -1;
   const jawU = (matObj.userData as Record<string, unknown>)['vraiJawU'] as { value: number } | undefined;
+  // RB-003 Phase-2 (ADR-0036): drive the inner-mouth darkening by LIP SEPARATION (MediaPipe inner-lip
+  // centers — 13 upper, 14 lower), not jawOpen ALONE. Any lip-parting morph (mouthRollUpper, funnel,
+  // pucker…) widens the 13↔14 gap, so the seam darkens instead of showing bright photo texture / white
+  // (the morph-QA "gaps on lip movements"). Normalized by the jawOpen-full gap so jawOpen≈1 → openness
+  // 1 (the jawOpen look is unchanged); the cavity dome still tracks jawOpen on its own.
+  const posAttr = geo.getAttribute('position') as THREE.BufferAttribute | undefined;
+  const morphPos = geo.morphAttributes['position'] as THREE.BufferAttribute[] | undefined;
+  const UP_LIP = 13, LO_LIP = 14;
+  let openRef = 0;
+  if (posAttr && morphPos && jawIdx >= 0 && morphPos[jawIdx]) {
+    const jm = morphPos[jawIdx]!;
+    openRef = Math.max(jm.getY(UP_LIP) - jm.getY(LO_LIP), 1e-4); // 13↔14 gap increase at jawOpen=1
+  }
+  const hasOpen = !!(morphPos && openRef > 0);
   // RB-003 §2c: per-frame ΔUV — re-accumulate the geometry's UV from the neutral baseUv plus each
   // ACTIVE pinned mouth shape's ΔUV (image-follow, built in mesh_builder), so the mouth-corner
   // texture follows the deformation (no tear). Idle frames skip the UV work entirely.
@@ -95,7 +109,21 @@ export async function buildAvatarFromBlob(
     let uvWasActive = false;
     mesh.onBeforeRender = (): void => {
       const inf = mesh.morphTargetInfluences;
-      if (jawIdx >= 0 && jawU) jawU.value = inf?.[jawIdx] ?? 0;
+      if (jawU) {
+        if (hasOpen && inf && morphPos) {
+          let sep = 0;
+          for (let s = 0; s < morphPos.length; s++) {
+            const w = inf[s] ?? 0;
+            if (w <= 0.001) continue;
+            const ma = morphPos[s]!;
+            sep += w * (ma.getY(UP_LIP) - ma.getY(LO_LIP));
+          }
+          const o = sep / openRef;
+          jawU.value = o < 0 ? 0 : o > 1 ? 1 : o;
+        } else {
+          jawU.value = inf?.[jawIdx] ?? 0;
+        }
+      }
       if (hasUv && inf && baseUv && deltaUv && uvAttr) {
         let active = false;
         for (const e of deltaUv) { if ((inf[e.shape] ?? 0) > 0.001) { active = true; break; } }
