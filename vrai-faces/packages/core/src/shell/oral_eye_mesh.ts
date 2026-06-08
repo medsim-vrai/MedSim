@@ -27,14 +27,24 @@ const MOUTH_IDX: ReadonlyArray<number> = [
   78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191,
 ];
 
-// Per-part look + placement (tunable on-device).
-const PARTS: ReadonlyArray<{ key: string; color: number; roughness: number }> = [
-  { key: 'gumsTongue', color: 0x8a3f3a, roughness: 0.6 },  // dark pink-red mucosa
-  { key: 'teeth', color: 0xe8e1d0, roughness: 0.35 },      // off-white enamel
-];
-const ORAL_SCALE = 1.0;   // fudge on the mouth-fit scale (↑ bigger teeth)
-const ORAL_Z = 0.05;      // recess back behind the lip plane (× live face height) so teeth/gums don't
-                          // poke through the closed lips; 0.08 hid them entirely, 0 poked through. ↑ = back
+// Per-part look. EMISSIVE keeps the parts visible inside the shadowed (recessed) mouth — without it the
+// teeth render dark when behind the lips and read as "no teeth" (only the lit, poked-forward state showed).
+const PARTS: ReadonlyArray<{ key: string; color: number; roughness: number; emissive: number }> = [
+  { key: 'gumsTongue', color: 0x8a3f3a, roughness: 0.6, emissive: 0x1c0a0a }, // dark pink-red mucosa
+  { key: 'teeth', color: 0xe8e1d0, roughness: 0.35, emissive: 0x55514a },     // enamel (self-lit so it
+];                                                                            // shows in the dark mouth)
+
+// On-device LIVE tuning (no rebuild): append e.g. `&oz=0.03&os=1.1&oy=-0.02` to the URL and reload.
+function tuneNum(key: string, dflt: number): number {
+  if (typeof location === 'undefined') return dflt;
+  const m = (location.search + location.hash).match(new RegExp('[?&#]' + key + '=(-?[0-9.]+)'));
+  if (!m || !m[1]) return dflt;
+  const n = parseFloat(m[1]);
+  return Number.isFinite(n) ? n : dflt;
+}
+const ORAL_SCALE = tuneNum('os', 1.0);  // mouth-fit scale fudge (↑ bigger teeth)
+const ORAL_Z = tuneNum('oz', 0.04);     // recess behind the lip plane (× faceH); ↑ deeper into the head
+const ORAL_Y = tuneNum('oy', 0.0);      // vertical offset (× faceH); −down lowers the mesh off the philtrum
 
 export interface OralEyeHandle { dispose(): void; }
 
@@ -76,7 +86,7 @@ function buildGroupGeometry(g: Group, fit: Fit): THREE.BufferGeometry {
   const p = new Float32Array(g.vertexCount * 3);
   for (let i = 0; i < g.vertexCount; i++) {
     p[i * 3] = ((g.positions[i * 3] ?? 0) - fit.c[0]) * fit.s + fit.l[0];
-    p[i * 3 + 1] = ((g.positions[i * 3 + 1] ?? 0) - fit.c[1]) * fit.s + fit.l[1];
+    p[i * 3 + 1] = ((g.positions[i * 3 + 1] ?? 0) - fit.c[1]) * fit.s + fit.l[1] + ORAL_Y * fit.faceH;
     p[i * 3 + 2] = ((g.positions[i * 3 + 2] ?? 0) - fit.c[2]) * fit.s + fit.l[2] - zRecess;
   }
   const geo = new THREE.BufferGeometry();
@@ -103,6 +113,7 @@ export function mountOralEyeMesh(faceMesh: THREE.Mesh): OralEyeHandle | null {
     if (!g) continue;
     const mat = new THREE.MeshStandardMaterial({
       color: part.color, roughness: part.roughness, metalness: 0,
+      emissive: part.emissive,  // self-lit so the recessed mesh stays visible in the shadowed mouth
       transparent: false,  // OPAQUE — shows through the translucent face's transmission (findings §5)
       depthWrite: true,
     });
