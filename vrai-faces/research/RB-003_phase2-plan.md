@@ -5,6 +5,10 @@ Dated 2026-06-07. Scopes the COMPREHENSIVE fix for the morph-deformation artifac
 mucosa-feather tint + `tongueOut` + lip ΔUV) is **shipped**; it patches per-shape and is whack-a-mole.
 Phase-2 fixes the class at the source.
 
+> **⏸ PAUSED 2026-06-07 @ `0160164`. NEXT TASK: Item 4 (eyelid margin-feather) — jump to the
+> "`>>> RESUME HERE — Item 4`" section below for the full, ready-to-execute spec.** Rig loads; mouth in
+> good shape; Item 2 subdivision reverted + deferred.
+
 ## The problem (recap)
 A flat single-photo rig (UV = neutral landmark x,y) has no mouth interior and no "deformed" pixels, so
 high-travel mouth/eye morphs either **tear** the topology (`mouthClose`, corners) or reveal bright photo
@@ -88,11 +92,51 @@ so it was reverted (commit 31d4b93); `subdivideLipRegion()` + its tests stay for
   whole mesh, simplest + clean), add a transition ring, or stitch the boundary. Wrap in try/catch with a
   base-mesh fallback regardless, so it can never block load again.
 
-## NEXT (active) — Item 4: eyelid margin-feather (no download)
-Independent of the mesh topology (a shader tint, like the inner-mouth feather), so it CANNOT regress
-load. Tint the upper-lid region toward eyelid-skin as `eyesClosed` rises: a per-vertex `eyelid` mask in
-face_topology + a tint in shader_translucent + feed the eyesClosed influence in avatar_build.
-Still queued: **Item 3** real interior + tongue/teeth mesh (gated download); **Item 2** re-enable (above).
+## >>> RESUME HERE — Item 4: eyelid margin-feather (full spec, no download, no load risk) <<<
+PAUSED 2026-06-07 at commit `0160164`. Rig loads (native-res 468 mesh); the mouth is in good shape
+(tears fixed via the inversion-guard re-bake; funnel/pucker fixed via ΔUV; mouthRollUpper outer-edge
+white is the residual structural holdout). Item 2 subdivision is reverted + deferred (section above).
+**Item 4 is the next task — start here.**
+
+GOAL: the `eyesClosed` smear (the open-eye photo texture stretched as the lid descends) is NOT geometry
+(the inversion-guard was a no-op on it). Cover it the way the inner-mouth feather covers the open mouth:
+tint the eye region toward EYELID-SKIN as the lid closes, so the closed eye reads as skin, not a smear.
+Topology-independent (a shader tint + one per-vertex mask attribute) → it CANNOT regress avatar load.
+
+THREE files, mirroring the inner-mouth feather machinery exactly:
+
+1. `mesh_builder/impl/face_topology.ts` — add a per-vertex `eyelid` mask (copy the `innerMouth` block):
+   - Eye-ring indices (MediaPipe canonical, BOTH eyes):
+     `RIGHT = [33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7]`
+     `LEFT  = [362,398,384,385,386,387,388,466,263,249,390,373,374,380,381,382]`
+   - Set mask = 1 on those; dilate 1 ring inward (weight ~0.6) over `topo.indices` (same BFS as the
+     innerMouth dilation) so the eye OPENING is covered. `geo.setAttribute('eyelid', new
+     THREE.BufferAttribute(eyelid, 1))`. Build it on the base arrays (BEFORE any future subdivision).
+
+2. `shader_translucent/impl/create.ts` — add the eyelid feather (parallel to the inner-mouth block):
+   - Constants: `EYELID_POW = 0.5`, `EYELID_STRENGTH = 6.0`, `EYELID_SKIN = 0x8a6a5e` (mid-flesh; TUNE on
+     device like the inner-mouth colours — eyelid skin is fairly consistent across portraits).
+   - `const eyelidU = uniform(0);`  `const eyelidMask = attribute('eyelid', 'float');`
+   - `const eAmt = saturate(mul(pow(eyelidMask, EYELID_POW), mul(eyelidU, EYELID_STRENGTH)));`
+   - COMPOSE on top of the existing colorNode (currently `mix(diffuse, tint, amt)`; eye + mouth masks
+     don't overlap, so no conflict):
+       `const innerResult = mix(diffuse, tint, amt);`
+       `material.colorNode = mix(innerResult, color(EYELID_SKIN), eAmt);`
+   - Expose `(material.userData as Record<string, unknown>)['vraiEyelidU'] = eyelidU;` (like `vraiJawU`).
+
+3. `shell/avatar_build.ts` — feed the eyelid drive per frame (in the existing `onBeforeRender`):
+   - idx: `eyesClosed`, `eyeBlinkLeft`, `eyeBlinkRight` from `morphNames`.
+   - `const eyelidU = (matObj.userData as Record<string, unknown>)['vraiEyelidU'] as { value: number } | undefined;`
+   - drive by the MAX so idle_motion blinks feather too (not just sustained closure):
+       `if (eyelidU) eyelidU.value = Math.max(inf?.[ecIdx] ?? 0, inf?.[blLIdx] ?? 0, inf?.[blRIdx] ?? 0);`
+
+VERIFY: add a face_topology unit test (eyelid mask: ring verts = 1, dilated verts in (0,1], zero away
+from the eyes); then `typecheck && check:no-any && test && build`; commit; iPad re-test `eyesClosed`
+(and watch idle blinks). TUNE on device: `EYELID_SKIN` to match the portrait, `EYELID_STRENGTH/POW` for
+coverage. v2 (later): sample brow-skin texture instead of a constant; a top-down directional sweep.
+
+Still queued after Item 4: **Item 2** re-enable (uniform/transition-ring subdivision + the load fix +
+a try/catch fallback); **Item 3** real interior + tongue/teeth mesh (⚠️ gated download).
 
 ## Constraints
 Offline bake, deterministic (ADR-0034); nothing ships at runtime beyond the JSON/GLB (ADR-0001/0014).
