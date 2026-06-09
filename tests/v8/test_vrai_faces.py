@@ -203,3 +203,39 @@ def test_speak_requires_auth(client) -> None:
     r = bare.post("/api/face/patel_attending/speak",
                   json={"scenario": "sepsis_floor", "text": "hi"})
     assert r.status_code in (401, 403)
+
+
+# ── OPT-008 Cut 1: the pipelined-TTS reply splitter ──────────────────────────
+
+def test_split_reply_splits_at_first_sentence_boundary() -> None:
+    from portal.vrai_faces import _split_reply
+    first, rest = _split_reply(
+        "I have been feeling dizzy since this morning. It comes and goes in waves, "
+        "and standing up makes everything spin.")
+    assert first == "I have been feeling dizzy since this morning."
+    assert rest.startswith("It comes and goes")
+
+
+def test_split_reply_short_reply_is_single_chunk() -> None:
+    from portal.vrai_faces import _split_reply
+    first, rest = _split_reply("Yes. Fine.")
+    assert first == "Yes. Fine."
+    assert rest == ""
+
+
+def test_split_reply_never_splits_inside_a_stage_direction() -> None:
+    from portal.vrai_faces import _split_reply
+    reply = ("*eyes darting toward your voice, then away. fingers plucking at the blanket* "
+             "Yeah, I heard you fine. Where did my daughter go just now?")
+    first, rest = _split_reply(reply)
+    # The boundary must be AFTER the starred direction — the '.' inside it doesn't count.
+    assert first.endswith("Yeah, I heard you fine.")
+    assert rest == "Where did my daughter go just now?"
+
+
+def test_split_reply_unbalanced_stars_fall_back_to_single_chunk() -> None:
+    from portal.vrai_faces import _split_reply
+    reply = "*mutters something. trails off and never closes the direction so no boundary"
+    first, rest = _split_reply(reply)
+    assert first == reply
+    assert rest == ""

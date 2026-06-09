@@ -491,6 +491,35 @@ async def push_speech(scenario_id: str, character_id: str, *, text: str,
     return {"seq": seq, "delivered": delivered, "voiced": bool(audio_b64)}
 
 
+def _split_reply(reply: str, min_first: int = 25, max_scan: int = 280) -> tuple[str, str]:
+    """OPT-008 Cut 1 (pipelined TTS): split a reply into (first sentence(s), remainder) so the
+    first chunk can be voiced + pushed immediately while the tail synthesizes. The boundary is
+    the first `.`/`!`/`?` followed by whitespace, at/after `min_first` chars and NEVER inside a
+    `*stage direction*` (the persona replies open with them). Returns (reply, "") when the
+    reply is short, unbalanced, or has no usable boundary — the caller then sends today's
+    single frame, so this can only ever help."""
+    text = reply.strip()
+    if len(text) <= min_first * 2:
+        return text, ""
+    in_star = False
+    for i, ch in enumerate(text[:max_scan]):
+        if ch == "*":
+            in_star = not in_star
+            continue
+        if in_star:
+            continue
+        if ch in ".!?" and i + 1 < len(text) and text[i + 1] in " \n\t" and i + 1 >= min_first:
+            first, rest = text[: i + 1].strip(), text[i + 1:].strip()
+            if first and rest:
+                return first, rest
+            return text, ""
+    return text, ""
+
+
+# Strong refs to fire-and-forget tail-synth tasks (asyncio only weak-refs running tasks).
+_speech_tail_tasks: set[Any] = set()
+
+
 def _wav_pcm_data(buf: bytes) -> bytes | None:
     """Raw PCM body from a little-endian WAV (RIFF) buffer — the bytes inside the
     'data' chunk. Parses chunks because CoreAudio/afconvert inserts an alignment
@@ -893,6 +922,50 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         # Voice the reply server-side in the operator-assigned ElevenLabs voice
         # (ADR-0031) so tablets that can't run the on-device ONNX TTS still speak;
         # falls back to a text-only frame (device built-in voice) when unset.
+        #
+        # OPT-008 Cut 1 (pipelined TTS): nothing used to play until the WHOLE reply was
+        # synthesized. Now: split the reply at the first sentence boundary, synth + push
+        # the FIRST chunk immediately (end_of_utterance=False), ack the POST, and synth +
+        # push the remainder in a background task — the client's audio_pipeline plays
+        # back-to-back frames gapless (playhead scheduling), so the avatar starts speaking
+        # one sentence-synth after the LLM instead of after the full-reply synth. Falls
+        # back to today's single frame whenever there's no usable split or no voice.
+        first, rest = _split_reply(reply)
+        audio_b64: str | None = None
+        audio_format: str | None = None
+        if rest:
+            audio_b64, audio_format = await _synthesize_voice(sess, cid, first)
+        if rest and audio_b64:
+            spoken = await push_speech(scenario_id, cid, text=first,
+                                       audio_b64=audio_b64, audio_format=audio_format,
+                                       end_of_utterance=False)
+
+            async def _push_tail() -> None:
+                """Synth + push the remainder; on synth failure push it TEXT-ONLY so the
+                turn is never half-silent (the device's built-in voice covers the tail)."""
+                tail_b64: str | None = None
+                tail_fmt: str | None = None
+                try:
+                    tail_b64, tail_fmt = await _synthesize_voice(sess, cid, rest)
+                except Exception:  # noqa: BLE001 — fall through to the text-only frame
+                    tail_b64, tail_fmt = None, None
+                try:
+                    await push_speech(scenario_id, cid, text=rest,
+                                      audio_b64=tail_b64, audio_format=tail_fmt)
+                except Exception:  # noqa: BLE001 — never crash the loop from a bg task
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "OPT-008 tail push failed for %s", cid, exc_info=True)
+
+            import asyncio as _aio
+            t = _aio.create_task(_push_tail())
+            _speech_tail_tasks.add(t)
+            t.add_done_callback(_speech_tail_tasks.discard)
+            return JSONResponse(
+                {"ok": True, "heard": text, "reply": reply, "mode": mode,
+                 "streamed": True, **spoken})
+
+        # Single-frame path (short reply, no split, or no server voice) — unchanged.
         audio_b64, audio_format = await _synthesize_voice(sess, cid, reply)
         spoken = await push_speech(scenario_id, cid, text=reply,
                                    audio_b64=audio_b64, audio_format=audio_format)
