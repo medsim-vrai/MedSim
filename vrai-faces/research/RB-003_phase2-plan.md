@@ -5,22 +5,29 @@ Dated 2026-06-07. Scopes the COMPREHENSIVE fix for the morph-deformation artifac
 mucosa-feather tint + `tongueOut` + lip ΔUV) is **shipped**; it patches per-shape and is whack-a-mole.
 Phase-2 fixes the class at the source.
 
-> **⏸ PAUSED 2026-06-08 @ `dc3cde6`. The avatar is in strong shape — every mouth shape, the eyelid
-> feather + real-skin lids + crease, and visible teeth, all from the LOCAL ICT head (no downloads).**
+> **⏸ PAUSED 2026-06-08 @ `476025d`. Strong shape — every mouth shape, the full eyelid treatment, and
+> open-mouth teeth that split, bite-align, self-light, and track the lip mesh — all from the LOCAL ICT
+> head (no downloads).**
 >
-> **DONE:** Item 4 eyelid feather (samples portrait under-eye skin → closed lid with real detail, any
-> face) · eyelid Tier 2 CREASE/lash line (darkens the eye contour on eyesClosed) · Item 3 teeth v1
-> (extract ICT M_Teeth from the local `generic_neutral_mesh.obj` → fit canonical→live mouth → self-lit
-> crowns, roots trimmed; `oz/os/oy` URL knobs; gums/tongue + eyeballs dropped, they occluded/bulged).
+> **DONE:** Item 4 eyelid feather + Tier 2 CREASE + BULGE (radial domed-lid shading on baked per-eye
+> coords) · **Item 3 teeth jaw-follow** — whole-tooth connected-component split (16 upper / 16 lower,
+> NOT a flat y-cut which sliced crowns into blocky slabs) · auto bite→lip-centroid alignment (the ICT
+> occlusal plane lands ~0.35 below the MP lip centre → was buck overhang + hidden lower row) · CPU
+> LIP-FOLLOW (each arch tracks its inner-lip vert's live morph displacement Σ infl·delta, so the teeth
+> move with the mouth/jaw) · SELF-LIT emissive (the mouth interior is unlit — scene lights occluded by
+> the lips, ambient near-black) · open-mouth **WINDOW** (drop the membrane's `opacityNode` where it spans
+> the opening so the opaque teeth+cavity show THROUGH, vs hidden under the dark surface; lip margin stays
+> opaque = feathered rim). Knobs `tsplit/trise/tfup/tflo/tlit/os/win`. · **OPT-004 validated** (mesh
+> JSONs fetched at runtime, cold-load shell 836K→144K).
 >
-> **PARKED v2s (clear, bounded — see sections below):**
-> - **Item 3 jaw-follow** — split the oral mesh upper/lower + drop the lower with jawOpen so the teeth
->   separate + track the lip mesh (the static ICT mesh can't show open-mouth dynamics without it).
->   Also: re-place the gums (cover the roots) without occluding the crowns; iris-match for the eyeballs.
-> - **Eyelid BULGE** — radial "draped over a round eyeball" shading; needs baked per-eye local coords.
-> - **Item 2** mouthRollUpper outer-edge white — lip subdivision done right; needs the on-device console
->   error to fix the load failure (re-enable behind a flag to capture it).
-> - **OPT** — `oral_eye_mesh.json` (442 KB) is bundled into the index chunk; move to a fetched /assets file.
+> **REMAINING tune (on-device, next pass — the geometry/visibility are right, these are taste/polish):**
+> teeth size + brightness · WIDER upper/lower separation if wanted — the baked jawOpen drops both lips
+> ~equally (v13 −0.0082 / v14 −0.0083 live), so a small explicit jaw-hinge drop on the lower arch would
+> open the gap more than the lip-follow alone · the central-incisor midline gap reads as a seam.
+>
+> **STILL PARKED:**
+> - **Item 2** mouthRollUpper outer-edge white — lip subdivision; needs the on-device console error to fix the load failure.
+> - **Gums / eyeballs** — re-place gums to cover the tooth roots without occluding the crowns; iris-match eyeballs.
 
 ## The problem (recap)
 A flat single-photo rig (UV = neutral landmark x,y) has no mouth interior and no "deformed" pixels, so
