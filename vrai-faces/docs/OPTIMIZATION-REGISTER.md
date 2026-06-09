@@ -57,6 +57,7 @@ the Track 5+ roadmap, re-run each milestone.
 | **OPT-005** | Per-capability model shipping (q8 vs fp16) | bundle-size | Likely | Watch | avoid precaching unused variant | up to −76 MB/device | M | Low |
 | **OPT-006** | Whisper decoder generation tuning | STT-latency | Exploratory | Proposed | trim decoder tokens (minor) | 0 | S | Low |
 | **OPT-007** | Sustained-session thermal headroom (soak harness) | thermal | Known | **✅ Validated** | no throttling: +4% over 12 min / 422 takes | 0 | M | Low |
+| **OPT-008** | Stream the reply (first-sentence TTS) | AI-turn/TTS | Known | Proposed | perceived turn ~3.5–5s → ~1–2s to first words | 0 | L | Med |
 
 ---
 
@@ -211,6 +212,29 @@ the Track 5+ roadmap, re-run each milestone.
   decoder emits fewer tokens; the soak measures the relative thermal *creep*, which is flat.) If creep ever
   appears on other hardware, consider duty-cycling or a lower-power dtype under sustained load.
 - **Costs:** measurement only. **Effort:** M. **Risk:** Low (validated).
+
+## OPT-008 — Stream the reply (first-sentence TTS) to cut perceived turn latency
+
+- **Area:** AI-turn / TTS-latency · **Confidence:** Known (profiled) · **Status:** Proposed
+- **Problem / evidence (profiled iPad, 2026-06-09 — `src/perf/turn_latency.ts`):** the perceived turn
+  (PTT release → first audio) is **~3.5–5.2 s** warm. Breakdown: **STT ~1.1–1.5 s** (stable; OPT-001/003)
+  + the **server turn ~2.4–4.1 s** (the portal's LLM reply + ElevenLabs TTS — this iPad is on the
+  server-voice route ADR-0037, so on-device `tts` ≈ 0 and the mp3 is enqueued on arrival). The server
+  turn is the **dominant + variable** link (grows with reply length): nothing plays until the FULL reply
+  is generated AND fully synthesized.
+- **Strategy:** STREAM. On `/listen`, generate the reply incrementally and synth the FIRST sentence/clause
+  as soon as it's ready, pushing that audio chunk while the rest generates — so the avatar starts speaking
+  in ~1–2 s (first words) regardless of total reply length, and the variability disappears. The app
+  already serializes multi-chunk speech frames (`speechConsumer`); the work is portal-side (the `/listen`
+  handler + the speech transport pushing partial frames). Pairs with the "streaming/partial STT"
+  exploration at the front of the loop.
+- **Integration strategy:** portal `/listen` (incremental LLM + sentence-chunked ElevenLabs) + speech
+  transport (partial frames). No new dependency → likely no ADR; touches portal data flow → re-confirm
+  the ADR-0014 message-only / PHI boundary holds for partial frames.
+- **Documentation plan:** this entry → `Validated` with the new release→first-audio number once shipped.
+- **Smaller levers:** faster LLM / shorter system-prompted replies; a faster ElevenLabs voice/model.
+- **Costs:** **Runtime:** none added (re-orders existing work). **Effort:** L (portal + transport).
+  **Risk:** Med (streaming TTS + partial-frame ordering). Perceived-latency win is high.
 
 ---
 
