@@ -53,6 +53,13 @@ export default defineConfig({
   build: {
     target: 'esnext',
     sourcemap: true,
+    // OPT-004: after moving the two mesh JSONs (oral_eye_mesh, morph basis) out to fetched
+    // /assets/face/ files, the cold-load `index` shell is ~144 KB (was 836 KB). The remaining large
+    // chunks are vendor: `three` (~748 KB, render-critical + eager) sits just under this limit; `kokoro`
+    // (~2.1 MB TTS) and `transformers` (STT) are DYNAMICALLY imported, off the cold path — kokoro is the
+    // one chunk that still trips the warning, an accepted lazy exception. Limit set so any NEW eager
+    // bloat (e.g. something re-inlined into the shell) re-warns.
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
         manualChunks: {
