@@ -5,25 +5,27 @@ Dated 2026-06-07. Scopes the COMPREHENSIVE fix for the morph-deformation artifac
 mucosa-feather tint + `tongueOut` + lip ΔUV) is **shipped**; it patches per-shape and is whack-a-mole.
 Phase-2 fixes the class at the source.
 
-> **⏸ PAUSED 2026-06-08 @ `476025d`. Strong shape — every mouth shape, the full eyelid treatment, and
-> open-mouth teeth that split, bite-align, self-light, and track the lip mesh — all from the LOCAL ICT
-> head (no downloads).**
+> **⏸ PAUSED 2026-06-09 @ `e80c1f5`. Strong shape — every mouth shape, the full eyelid treatment, and
+> open-mouth teeth (full upper + lower rows that drop with the jaw and tuck away at rest) — all from the
+> LOCAL ICT head (no downloads).**
 >
-> **DONE:** Item 4 eyelid feather + Tier 2 CREASE + BULGE (radial domed-lid shading on baked per-eye
-> coords) · **Item 3 teeth jaw-follow** — whole-tooth connected-component split (16 upper / 16 lower,
-> NOT a flat y-cut which sliced crowns into blocky slabs) · auto bite→lip-centroid alignment (the ICT
-> occlusal plane lands ~0.35 below the MP lip centre → was buck overhang + hidden lower row) · CPU
-> LIP-FOLLOW (each arch tracks its inner-lip vert's live morph displacement Σ infl·delta, so the teeth
-> move with the mouth/jaw) · SELF-LIT emissive (the mouth interior is unlit — scene lights occluded by
-> the lips, ambient near-black) · open-mouth **WINDOW** (drop the membrane's `opacityNode` where it spans
-> the opening so the opaque teeth+cavity show THROUGH, vs hidden under the dark surface; lip margin stays
-> opaque = feathered rim). Knobs `tsplit/trise/tfup/tflo/tlit/os/win`. · **OPT-004 validated** (mesh
-> JSONs fetched at runtime, cold-load shell 836K→144K).
+> **DONE:** Item 4 eyelid feather + Tier 2 CREASE + BULGE · **Item 3 teeth jaw-follow** — whole-tooth
+> connected-component split (16 upper / 16 lower, NOT a flat y-cut which sliced crowns into slabs) · auto
+> bite→lip-centroid alignment · **lower arch INDEPENDENTLY placed** (buildGroupGeometry {rise,zFwd,yOff,
+> scale}; knobs tlz/tly/tls) · **jaw-follow on v17** (the lower arch rides the lower-OUTER lip / jaw,
+> which drops ~14× more on jawOpen than the inner lip v14 — the inner lip barely moves; THIS made the
+> lower row finally drop INTO the opening) · resting tuck (tly −0.7 / tlz −0.6 → ≤25% peeks at rest, no
+> tusks) · open-mouth **WINDOW** widened (shader `winlo` 0.4 → the opacity window opens over the lip
+> MARGIN, revealing the SIDE lower teeth; gated by jawU so rest is unaffected) · **matte enamel** (trough
+> 0.85, kills leak-light specular spots). Knobs `tsplit/trise/tfup/tflo/tlit/trough/os/win/winlo/tlz/tly/
+> tls`. · **OPT-004 validated** (mesh JSONs fetched, cold-load shell 836K→144K).
 >
-> **REMAINING tune (on-device, next pass — the geometry/visibility are right, these are taste/polish):**
-> teeth size + brightness · WIDER upper/lower separation if wanted — the baked jawOpen drops both lips
-> ~equally (v13 −0.0082 / v14 −0.0083 live), so a small explicit jaw-hinge drop on the lower arch would
-> open the gap more than the lip-follow alone · the central-incisor midline gap reads as a seam.
+> **REMAINING — SHADING (next pass; geometry + visibility are RIGHT, this is the last polish):** the
+> forward lower crowns still read a touch hot/uneven. Root cause: the translucent-face *transmission*
+> attenuates deeper crowns (front bright → back dim), plus the only real light inside the mouth is the
+> teeth's own emissive + a little leak-light. Levers to try: a dedicated dim **mouth fill light** so the
+> interior lights evenly (instead of emissive + leak), a depth-compensated emissive, or just `tlit`/
+> `trough`. Also minor: teeth size to taste; the central-incisor midline gap reads as a seam.
 >
 > **STILL PARKED:**
 > - **Item 2** mouthRollUpper outer-edge white — lip subdivision; needs the on-device console error to fix the load failure.
