@@ -108,6 +108,19 @@ const INNER_MOUTH_DEEP = 0x120808; // deep opening — dark (a hair darker than 
                                    // interior, but the 2-ring mask keeps it from spreading onto the lip)
 const INNER_MOUTH_LIP = 0x5a3737;  // inner-lip margin — muted flesh red (reverted: 0x4e2e2e read as a dark blob)
 
+// RB-003: live URL tuning (append e.g. &win=0.96 and reload). Read at module load → baked into the
+// node graph at material build (not a per-frame uniform).
+function tuneNum(key: string, dflt: number): number {
+  if (typeof location === 'undefined') return dflt;
+  const m = (location.search + location.hash).match(new RegExp('[?&#]' + key + '=(-?[0-9.]+)'));
+  if (!m || !m[1]) return dflt;
+  const v = parseFloat(m[1]);
+  return Number.isFinite(v) ? v : dflt;
+}
+// Open-mouth WINDOW strength: how transparent the membrane goes where the mouth opens, so the real
+// teeth + cavity behind it show THROUGH it instead of being hidden under the opaque dark surface.
+const WINDOW_OPEN = tuneNum('win', 0.92);
+
 // Surface-reflection gate (look tweak): the specular reflection fades to ZERO as the
 // translucency level rises 0.6 → 0.8 and stays 0 above 0.8 — so the more-opaque avatar reads
 // MATTE (no shiny surface highlights), while the translucent end keeps its sheen. Gates the
@@ -195,6 +208,12 @@ function buildMaterial(
   const eyelidRim = mul(smoothstep(0.25, 1.05, length(attribute('eyelidLocal', 'vec2'))), EYELID_BULGE);
   const eyelidLidBulged = mul(eyelidLid, oneMinus(eyelidRim));
   material.colorNode = mix(innerResult, eyelidLidBulged, eAmt);
+  // RB-003 open-mouth WINDOW (fix for "the mask covers the teeth"): where the membrane spans the opening
+  // (mask≈1) and the jaw is open, drop the face's OPACITY so it becomes a transparent hole revealing the
+  // opaque teeth + cavity drawn behind it — instead of an opaque dark surface OVER them. The lip MARGIN
+  // (mask 0.45–0.7, below the 0.8 threshold) keeps full opacity + the LIP tint, feathering the opening.
+  const windowAmt = mul(jawU, smoothstep(0.8, 1.0, maskAttr));
+  material.opacityNode = mul(float(s.opacity), oneMinus(mul(windowAmt, WINDOW_OPEN)));
   (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
   (material.userData as Record<string, unknown>)['vraiEyelidU'] = eyelidU;
 
