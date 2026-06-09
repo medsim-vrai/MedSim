@@ -16,11 +16,31 @@
 // with jawOpen.
 
 import * as THREE from 'three/webgpu';
-import meshData from './oral_eye_mesh.json';
 
 interface Group { vertexCount: number; positions: number[]; indices: number[]; }
 interface OralEyeData { canonicalHeight: number; canonical468: number[]; groups: Record<string, Group>; }
-const DATA = meshData as unknown as OralEyeData;
+
+// OPT-004: the ~444 KB mesh JSON is FETCHED at runtime (served from public/assets/face/) instead of
+// `import`ed into the JS bundle — it was ~half the cold-load `index` chunk and parses slower as a JS
+// object literal than as fetched JSON. Mirrors loadFaceTopology(); memoized so re-pairs reuse the parse.
+const ORAL_EYE_MESH_URL = '/assets/face/oral_eye_mesh.json';
+let _dataPromise: Promise<OralEyeData | null> | null = null;
+function loadOralEyeData(): Promise<OralEyeData | null> {
+  if (_dataPromise) return _dataPromise;
+  _dataPromise = (async (): Promise<OralEyeData | null> => {
+    try {
+      if (typeof fetch !== 'function') return null;
+      const res = await fetch(ORAL_EYE_MESH_URL);
+      if (!res.ok) return null;
+      const raw = (await res.json()) as Partial<OralEyeData> | null;
+      if (!raw || !raw.groups || !Array.isArray(raw.canonical468)) return null;
+      return raw as OralEyeData;
+    } catch {
+      return null;
+    }
+  })();
+  return _dataPromise;
+}
 
 // MediaPipe inner-lip ring — the mouth anchor for the canonical→live fit (matches oral_cavity).
 const MOUTH_IDX: ReadonlyArray<number> = [
@@ -105,9 +125,11 @@ function buildGroupGeometry(g: Group, fit: Fit): THREE.BufferGeometry {
  * Attach the real oral mesh to a baked face mesh. Returns null (no-op) for a non-baked mesh
  * (head proxy / synthetic — no 468 topology) or a malformed asset.
  */
-export function mountOralEyeMesh(faceMesh: THREE.Mesh): OralEyeHandle | null {
+export async function mountOralEyeMesh(faceMesh: THREE.Mesh): Promise<OralEyeHandle | null> {
   const pos = faceMesh.geometry.getAttribute('position') as THREE.BufferAttribute | undefined;
   if (!pos) return null;
+  const DATA = await loadOralEyeData();   // fetched + memoized (OPT-004); null on absence/error → no-op
+  if (!DATA) return null;
   const fit = fitMouth(DATA.canonical468, pos);
   if (!fit) return null;
 

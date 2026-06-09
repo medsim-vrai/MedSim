@@ -165,7 +165,9 @@ export async function buildAvatarFromBlob(
   mountOralTongue(mesh);
   // RB-003 Item 3: real ICT teeth in FRONT of the cavity dome (gums/tongue dropped — they occluded the
   // teeth + poked out; jaw-follow is the v2). No-op off-topology. ORAL_Z keeps them ahead of the dome.
-  mountOralEyeMesh(mesh);
+  // OPT-004: the mesh JSON now fetches at runtime → fire-and-forget so the face paints first + the teeth
+  // stream in a beat later (decorative children; loader swallows absence/errors → no-op).
+  void mountOralEyeMesh(mesh).catch(() => undefined);
   shaderTranslucent.setOpacity(material.id, clamp01(opacityLevel));
 
   return { meshId, materialId: material.id };
