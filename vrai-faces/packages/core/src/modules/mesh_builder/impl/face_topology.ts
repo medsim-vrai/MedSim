@@ -188,7 +188,7 @@ export function buildFaceGeometry(
   for (const ei of EYE_RING) if (ei < n) eyelid[ei] = 1;
   let eyeFrontier = new Set<number>();
   for (const ei of EYE_RING) if (ei < n) eyeFrontier.add(ei);
-  for (const w of [0.6]) {
+  for (const w of [0.7, 0.45, 0.22]) {   // soft 3-ring falloff so the feather blends into the skin
     const next = new Set<number>();
     for (let t = 0; t + 2 < idx.length; t += 3) {
       const a = idx[t]!, b = idx[t + 1]!, c = idx[t + 2]!;

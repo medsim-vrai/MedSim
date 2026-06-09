@@ -169,8 +169,8 @@ function buildMaterial(
   // so the eyesClosed/blink smear (stretched open-eye photo texture) reads as skin. Same machinery as
   // the inner-mouth feather; the eye + mouth masks don't overlap. eyelidU rides on userData
   // (avatar_build writes max(eyesClosed, blinkL, blinkR) per frame). TUNE on device.
-  const EYELID_POW = 0.5;
-  const EYELID_STRENGTH = 6.0;
+  const EYELID_POW = 2.0;      // ↑ pow + ↓ strength = the feather FADES with the soft mask falloff at
+  const EYELID_STRENGTH = 2.5; // the eyelid edge, blending into the surrounding skin (no hard cut-off)
   const EYELID_SKIN = 0x6f4d3e; // darker, warmer eyelid tone — sits in the shadowed eye socket (was
                                 // 0x8a6a5e, too pale/grey against ruddy skin). v2: sample local skin.
   const EYELID_SRC_Y = 0.11;   // sample DOWN (under-eye -> cheek) far enough to CLEAR the iris for the
