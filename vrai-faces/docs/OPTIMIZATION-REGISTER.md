@@ -53,7 +53,7 @@ the Track 5+ roadmap, re-run each milestone.
 | **OPT-001** | fp16 **encoder** (mixed w/ q8 decoder) on WebGPU | STT-latency | Known | **✅ Validated** | warm ASR ~1855→~1150 ms (−40%), total ~1.15 s ✓ | +16.5 MB (fp16 encoder) | S | Low |
 | **OPT-002** | Moonshine short-form ASR (no 30 s pad) | STT-latency | Likely | **Deferred** (prod scaling) | short clips likely <1 s | ~tens of MB (TBD) | L | Med |
 | **OPT-003** | STT warm-up inference at load | STT-latency | Known | **✅ Validated** | first take warm (1056 ms), no cold spike | 0 | S | Low |
-| **OPT-004** | Bundle code-splitting / lazy heavy chunks | startup/bundle | Known | **In-progress** | cold-load shell 836K→144K (−83%) | −0.7 MB off shell | M | Low |
+| **OPT-004** | Bundle code-splitting / lazy heavy chunks | startup/bundle | Known | **✅ Validated** | cold-load shell 836K→144K (−83%) | −0.7 MB off shell | M | Low |
 | **OPT-005** | Per-capability model shipping (q8 vs fp16) | bundle-size | Likely | Watch | avoid precaching unused variant | up to −76 MB/device | M | Low |
 | **OPT-006** | Whisper decoder generation tuning | STT-latency | Exploratory | Proposed | trim decoder tokens (minor) | 0 | S | Low |
 | **OPT-007** | Sustained-session thermal headroom (soak harness) | thermal | Known | **✅ Validated** | no throttling: +4% over 12 min / 422 takes | 0 | M | Low |
@@ -150,8 +150,8 @@ the Track 5+ roadmap, re-run each milestone.
 
 ## OPT-004 — Bundle code-splitting / lazy heavy chunks
 
-- **Area:** startup / bundle-size · **Confidence:** Known (build warns) · **Status:** **In-progress**
-  (code 2026-06-08; on-device *Validated* pending)
+- **Area:** startup / bundle-size · **Confidence:** Known (build warns) · **Status:** ✅ **Validated**
+  (iPad, 2026-06-08)
 - **Problem / evidence:** `pnpm build` warns chunks >500 kB: **kokoro 2.2 MB**, three 545 kB,
   transformers 546 kB. Kokoro (TTS) is only needed when the avatar *speaks*. **Bigger find:** the
   cold-load `index` shell was **836 KB** — ~700 KB of which was two mesh JSONs (`oral_eye_mesh.json`
@@ -174,8 +174,10 @@ the Track 5+ roadmap, re-run each milestone.
   dev-only import, not in the prod bundle). `chunkSizeWarningLimit` set to 800 (three ~748 KB is the
   largest eager chunk; kokoro/transformers stay lazy). **Measured: `index` chunk 836 KB → 144 KB
   (−83%); the JSONs are now ~768 KB of separately-cached `/assets/face/` files off the JS parse path.**
-  *Remaining → Validated:* confirm on-device the rig still loads (`rig=baked`), the teeth stream in, and
-  cold-load feels faster.
+  **Validated (iPad, 2026-06-08):** reload came up clean — the morph-QA panel shows the **baked** rig
+  (468v · 53 morphs), jawOpen/eyes/teeth all load + animate, nothing regressed. (The pre-existing
+  open-mouth teeth/shadow issues are unchanged — correctly; OPT-004 is footprint-only. They're tracked
+  separately under RB-003 teeth jaw-follow.)
 
 ## OPT-005 — Per-capability model shipping (q8 vs fp16)
 
