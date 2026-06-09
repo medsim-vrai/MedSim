@@ -120,6 +120,10 @@ function tuneNum(key: string, dflt: number): number {
 // Open-mouth WINDOW strength: how transparent the membrane goes where the mouth opens, so the real
 // teeth + cavity behind it show THROUGH it instead of being hidden under the opaque dark surface.
 const WINDOW_OPEN = tuneNum('win', 0.92);
+// Lower edge of the window's mask ramp. The membrane centre is mask≈1; the inner-lip MARGIN (the dilation
+// rings) is ~0.45–0.7. Lowering this opens the window OUT over the margin too, so the side teeth (which sit
+// behind the margin, not the centre) are revealed — not just the front teeth. Gated by jawU, so rest is unaffected.
+const WINDOW_LO = tuneNum('winlo', 0.4);
 
 // Surface-reflection gate (look tweak): the specular reflection fades to ZERO as the
 // translucency level rises 0.6 → 0.8 and stays 0 above 0.8 — so the more-opaque avatar reads
@@ -212,7 +216,7 @@ function buildMaterial(
   // (mask≈1) and the jaw is open, drop the face's OPACITY so it becomes a transparent hole revealing the
   // opaque teeth + cavity drawn behind it — instead of an opaque dark surface OVER them. The lip MARGIN
   // (mask 0.45–0.7, below the 0.8 threshold) keeps full opacity + the LIP tint, feathering the opening.
-  const windowAmt = mul(jawU, smoothstep(0.8, 1.0, maskAttr));
+  const windowAmt = mul(jawU, smoothstep(WINDOW_LO, 1.0, maskAttr));
   material.opacityNode = mul(float(s.opacity), oneMinus(mul(windowAmt, WINDOW_OPEN)));
   (material.userData as Record<string, unknown>)['vraiJawU'] = jawU;
   (material.userData as Record<string, unknown>)['vraiEyelidU'] = eyelidU;

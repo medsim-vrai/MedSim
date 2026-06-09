@@ -73,9 +73,16 @@ const ORAL_Y = tuneNum('oy', 0.0);      // vertical offset (× faceH); −down l
 const TEETH_SPLIT = tuneNum('tsplit', -4.45); // classify a WHOLE tooth: upper if its centroid y ≥ this, else lower
 const TEETH_RISE = tuneNum('trise', 0.0);    // manual nudge (canonical) on top of the auto bite→lip-centroid alignment
 const TEETH_FOLLOW_UP = tuneNum('tfup', 1.0); // how much the UPPER teeth track the upper-lip morph displacement
-const TEETH_FOLLOW_LO = tuneNum('tflo', 1.0); // how much the LOWER teeth track the lower-lip (jaw) morph displacement
+const TEETH_FOLLOW_LO = tuneNum('tflo', 0.4); // how much the LOWER teeth follow the JAW drop (v17); ↑ = drop lower
 const TEETH_LIT = tuneNum('tlit', 1.0);      // teeth self-illumination — scene lights don't reach inside the mouth,
                                              // so without this only the 2 frontmost crowns (catching leak-light) read
+const TEETH_ROUGH = tuneNum('trough', 0.85); // enamel roughness — ↑ = MATTE; kills the specular bright spots the
+                                             // leak-light makes on glossy crowns (real enamel ~0.35 was too shiny here)
+const LOWER_FWD = tuneNum('tlz', -0.6);  // lower teeth INDEPENDENT z (canonical), +fwd / −back: set BACK so the
+                                         // resting teeth sit behind the lip plane and don't poke through closed lips
+const LOWER_Y = tuneNum('tly', -0.7);    // lower teeth INDEPENDENT y (canonical), −down: drop the resting teeth so
+                                         // only ≤25% peeks above the lower-lip line at rest (the rest tuck behind it)
+const LOWER_SCALE = tuneNum('tls', 1.0); // lower teeth INDEPENDENT scale (1 = same as the upper arch)
 
 export interface OralEyeHandle { dispose(): void; }
 
@@ -112,13 +119,22 @@ function fitMouth(canon: number[], pos: THREE.BufferAttribute): Fit | null {
   return { c: [cx, cy, cz], l: [lx, ly, lz], s, faceH: yMax - yMin };
 }
 
-function buildGroupGeometry(g: Group, fit: Fit, yRiseCanon = 0): THREE.BufferGeometry {
+// Per-arch placement: rise (canonical Y, the bite→lip alignment) + INDEPENDENT zFwd / yOff / scale, so
+// the lower arch can be pulled forward / positioned / sized SEPARATELY from the upper (RB-003: "separate
+// the two and position the lower independently"). Offsets are canonical units, × fit.s → live.
+interface PlaceOpts { rise?: number; zFwd?: number; yOff?: number; scale?: number; }
+
+function buildGroupGeometry(g: Group, fit: Fit, opts: PlaceOpts = {}): THREE.BufferGeometry {
+  const rise = opts.rise ?? 0;
+  const scl = (opts.scale ?? 1) * fit.s;
+  const zFwd = (opts.zFwd ?? 0) * fit.s;  // +z = toward the lips/camera
+  const yOff = (opts.yOff ?? 0) * fit.s;
   const zRecess = ORAL_Z * fit.faceH;
   const p = new Float32Array(g.vertexCount * 3);
   for (let i = 0; i < g.vertexCount; i++) {
-    p[i * 3] = ((g.positions[i * 3] ?? 0) - fit.c[0]) * fit.s + fit.l[0];
-    p[i * 3 + 1] = ((g.positions[i * 3 + 1] ?? 0) + yRiseCanon - fit.c[1]) * fit.s + fit.l[1] + ORAL_Y * fit.faceH;
-    p[i * 3 + 2] = ((g.positions[i * 3 + 2] ?? 0) - fit.c[2]) * fit.s + fit.l[2] - zRecess;
+    p[i * 3] = ((g.positions[i * 3] ?? 0) - fit.c[0]) * scl + fit.l[0];
+    p[i * 3 + 1] = ((g.positions[i * 3 + 1] ?? 0) + rise - fit.c[1]) * scl + fit.l[1] + ORAL_Y * fit.faceH + yOff;
+    p[i * 3 + 2] = ((g.positions[i * 3 + 2] ?? 0) - fit.c[2]) * scl + fit.l[2] - zRecess + zFwd;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(p, 3));
@@ -198,9 +214,9 @@ export async function mountOralEyeMesh(faceMesh: THREE.Mesh): Promise<OralEyeHan
   const teeth = DATA.groups['teeth'];
   const enamel = PARTS[0];
   if (teeth && enamel) {
-    const makeTeeth = (g: Group, rise: number): THREE.Mesh => {
+    const makeTeeth = (g: Group, opts: PlaceOpts): THREE.Mesh => {
       const mat = new THREE.MeshStandardMaterial({
-        color: enamel.color, roughness: enamel.roughness, metalness: 0,
+        color: enamel.color, roughness: TEETH_ROUGH, metalness: 0,
         // The 3 directional scene lights are occluded by the lips and the ambient is near-black, so the
         // mouth interior is unlit — only the 2 frontmost crowns catch leak-light. The teeth must light
         // THEMSELVES to read as a full arch through the dark cavity + translucent face. enamel.emissive
@@ -210,7 +226,7 @@ export async function mountOralEyeMesh(faceMesh: THREE.Mesh): Promise<OralEyeHan
         transparent: false,  // OPAQUE — shows through the translucent face's transmission (findings §5)
         depthWrite: true,
       });
-      const m = new THREE.Mesh(buildGroupGeometry(g, fit, rise), mat);
+      const m = new THREE.Mesh(buildGroupGeometry(g, fit, opts), mat);
       faceMesh.add(m);  // child of the face → inherits its transform
       meshes.push(m);
       mats.push(mat);
@@ -228,16 +244,22 @@ export async function mountOralEyeMesh(faceMesh: THREE.Mesh): Promise<OralEyeHan
     for (let i = 0; i < lower.vertexCount; i++) { const y = lower.positions[i * 3 + 1] ?? 0; if (y > lMaxY) lMaxY = y; }
     const occlusionY = Number.isFinite(uMinY) && Number.isFinite(lMaxY) ? (uMinY + lMaxY) / 2 : fit.c[1];
     const riseCanon = (fit.c[1] - occlusionY) + TEETH_RISE;
-    const upperMesh = makeTeeth(upper, riseCanon); // maxilla — rides the upper inner lip
-    const lowerMesh = makeTeeth(lower, riseCanon); // mandible — rides the lower inner lip (drops with jaw)
+    const upperMesh = makeTeeth(upper, { rise: riseCanon }); // maxilla — shared fit, rides the upper inner lip
+    const lowerMesh = makeTeeth(lower, { rise: riseCanon, zFwd: LOWER_FWD, yOff: LOWER_Y, scale: LOWER_SCALE }); // mandible — INDEPENDENTLY placed, rides the lower inner lip
     // RB-003: the teeth FOLLOW THE LIP MESH (the user's request) rather than a fixed drop — the upper arch
     // rides the upper inner lip, the lower arch rides the lower inner lip, so they move with the mouth +
     // jaw. Each frame we recompute the lip vert's MORPHED displacement on the CPU (Σ influence·delta — the
     // same sum the vertex shader runs; with relative morphs, displacement-from-neutral IS that sum) and
     // offset the arch by it (face-local). The lower lip drops with jawOpen → the lower teeth drop with it.
-    const UPPER_INNER_LIP = 13, LOWER_INNER_LIP = 14; // MediaPipe inner-lip centre verts (upper / lower)
+    // The teeth track the deforming mesh. KEY (probed): the inner-lip verts (v13/v14) barely move on
+    // jawOpen (≈ −0.25 canon — the lips stay nearly sealed at the inner edge), while the JAW (lower-outer
+    // lip v17 / chin) drops ~14× more (≈ −3.6). So the UPPER arch rides the upper inner lip (v13, ≈fixed —
+    // correct for the maxilla) and the LOWER arch rides the JAW (v17) → it drops INTO the opening with the
+    // jaw instead of clustering by the upper. Lower tracks X+Y only (skip the jaw's backward Z so it drops
+    // DOWN without receding out of view; its depth is held by LOWER_FWD). Displacement = Σ influence·delta.
+    const UPPER_LIP = 13, LOWER_JAW = 17;
     const morphs = faceMesh.geometry.morphAttributes['position'] as THREE.BufferAttribute[] | undefined;
-    const lipFollow = (mesh: THREE.Mesh, vi: number, gain: number): void => {
+    const follow = (mesh: THREE.Mesh, vi: number, gain: number, trackZ: boolean): void => {
       mesh.onBeforeRender = (): void => {
         const infl = faceMesh.morphTargetInfluences;
         let dx = 0, dy = 0, dz = 0;
@@ -246,14 +268,14 @@ export async function mountOralEyeMesh(faceMesh: THREE.Mesh): Promise<OralEyeHan
             const w = infl[m] ?? 0;
             if (w === 0) continue;
             const d = morphs[m]!;
-            dx += w * d.getX(vi); dy += w * d.getY(vi); dz += w * d.getZ(vi);
+            dx += w * d.getX(vi); dy += w * d.getY(vi); if (trackZ) dz += w * d.getZ(vi);
           }
         }
         mesh.position.set(dx * gain, dy * gain, dz * gain);
       };
     };
-    lipFollow(upperMesh, UPPER_INNER_LIP, TEETH_FOLLOW_UP);
-    lipFollow(lowerMesh, LOWER_INNER_LIP, TEETH_FOLLOW_LO);
+    follow(upperMesh, UPPER_LIP, TEETH_FOLLOW_UP, true);   // maxilla — rides the (barely-moving) upper lip
+    follow(lowerMesh, LOWER_JAW, TEETH_FOLLOW_LO, false);  // mandible — drops with the JAW, depth held forward
   }
 
   return {
