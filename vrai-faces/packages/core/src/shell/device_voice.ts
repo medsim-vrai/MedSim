@@ -11,6 +11,7 @@
 // rolling on-device STT buffer, behind this same UI. PTT-first, name-trigger-next.
 
 import { diag } from '@perf/diag';
+import { turnBegin, turnMark, onTurnComplete } from '@perf/turn_latency';
 import { createDeviceStt, type DeviceSttHandle } from './device_stt';
 import { primeSpeechSynthesis } from './speechUnlock';
 import { audioPipeline } from '../modules/audio_pipeline';
@@ -136,11 +137,21 @@ export function mountDeviceVoice(
   const metricsEl = document.createElement('div');
   metricsEl.className = 'vrai-voice-metrics';
 
-  controls.append(note, cloudBtn, metricsEl);
+  // Loop-latency readout (Track 2): release → first audio, with the stage breakdown.
+  const loopEl = document.createElement('div');
+  loopEl.className = 'vrai-voice-metrics';
+
+  controls.append(note, cloudBtn, metricsEl, loopEl);
   // Bottom-anchored column: PTT sits at the BOTTOM (just above the translucency
   // slider), the transcript/status directly above it, options above that.
   panel.append(controls, status, mainRow);
   container.appendChild(panel);
+
+  // Loop-latency profile (Track 2): render the release→audio breakdown when a turn completes + log it.
+  const offTurn = onTurnComplete((sLat) => {
+    loopEl.textContent = sLat.line;
+    diag.push({ t: performance.now(), moduleId: MODULE, kind: 'info', message: sLat.line });
+  });
 
   function renderMetrics(): void {
     const m = stt?.metrics();
@@ -188,6 +199,7 @@ export function mountDeviceVoice(
     if (!clean) return;
     setStatus(`Heard: “${clean}” — sending…`);
     const t0 = performance.now();   // measure the /listen round-trip (LLM + TTS + transfer)
+    turnMark('listenSent');         // loop-latency: POST /listen
     const base = opts.apiBase.replace(/\/+$/, '');
     const url = `${base}/api/face/${encodeURIComponent(opts.characterId)}/listen`;
     // CORS "simple" request (no application/json header → no preflight); the
@@ -197,6 +209,7 @@ export function mountDeviceVoice(
     if (opts.token) payload.token = opts.token; // ADR-0027 capability (when enforced)
     void fetch(url, { method: 'POST', body: JSON.stringify(payload) })
       .then(async (r) => {
+        turnMark('listenResp');     // loop-latency: portal acked the AI turn
         const j = (await r.json().catch(() => null)) as { ok?: boolean; mode?: string } | null;
         const secs = ((performance.now() - t0) / 1000).toFixed(1);
         if (r.ok && j?.ok) {
@@ -298,11 +311,13 @@ export function mountDeviceVoice(
     void audioPipeline.resume();
     pttBtn.classList.remove('active');
     busy = true;
+    turnBegin();                          // t0 for the loop-latency profile (release → first audio)
     setStatus('Transcribing…');
     void (async () => {
       try {
         await startP;                       // ensure recording actually began
         const text = await s.stopAndTranscribe();
+        turnMark('stt');                    // transcript ready (release → here = STT)
         renderMetrics();                    // surface backend + latency for the pilot
         if (text) sendUtterance(text);
         else setStatus('(no speech detected)');
@@ -324,6 +339,7 @@ export function mountDeviceVoice(
 
   return {
     dispose() {
+      offTurn();
       toggleBtn.removeEventListener('click', onToggle);
       cloudBtn.removeEventListener('click', onCloudToggle);
       pttBtn.removeEventListener('pointerdown', onPttDown);

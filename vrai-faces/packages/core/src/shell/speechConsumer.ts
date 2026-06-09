@@ -19,6 +19,7 @@ import type { MedsimAdapterModule } from '@contracts/medsim_adapter';
 import type { TtsChunk, TtsProviderModule } from '@contracts/tts_provider';
 import type { TtsVoiceId, VRAISpeechFrame } from '@contracts/shared';
 import { diag } from '@perf/diag';
+import { turnMark } from '@perf/turn_latency';
 import { dlog, dwarn, derror } from './debug';
 
 export interface SpeechConsumerDeps {
@@ -112,6 +113,7 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
             const native = !!chunk.visemes && chunk.visemes.length > 0;
             // ADR-0015: native provider visemes suppress the derived jawOpen bridge.
             deps.audio.setVisemeSource(native ? 'native' : 'derived');
+            turnMark('audio');   // loop-latency: first on-device synth chunk enqueued (frame → here = TTS)
             deps.audio.enqueueAudio(chunk.audio, chunk.audioFormat);
             if (native && chunk.visemes) deps.anim.pushVisemes(toVisemeFrames(chunk.visemes));
           }
@@ -193,6 +195,7 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
   }
 
   function handleFrame(f: VRAISpeechFrame): void {
+    turnMark('frame');   // loop-latency: VRAISpeechFrame arrived (release → here covers STT + AI turn + delivery)
     dlog('[speak] frame', { text: f.text?.slice(0, 50), hasAudio: !!f.audio, emotion: f.emotion?.label });
     if (f.emotion) {
       deps.anim.setEmotion(f.emotion.weights, EMOTION_EASE_MS);   // operator-sent emotion wins
@@ -210,6 +213,7 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
         primed: snap.primed, state: snap.state, src: native ? 'native' : 'derived',
       });
       try {
+        turnMark('audio');   // loop-latency: first audio enqueued (portal pre-synth path → tts ≈ 0)
         deps.audio.enqueueAudio(f.audio, f.audioFormat ?? 'pcm16-24k');
       } catch (e) {
         dwarn('[speak] enqueueAudio threw — AudioContext not primed?',
