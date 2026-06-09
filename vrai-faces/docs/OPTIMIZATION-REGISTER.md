@@ -57,7 +57,7 @@ the Track 5+ roadmap, re-run each milestone.
 | **OPT-005** | Per-capability model shipping (q8 vs fp16) | bundle-size | Likely | Watch | avoid precaching unused variant | up to −76 MB/device | M | Low |
 | **OPT-006** | Whisper decoder generation tuning | STT-latency | Exploratory | Proposed | trim decoder tokens (minor) | 0 | S | Low |
 | **OPT-007** | Sustained-session thermal headroom (soak harness) | thermal | Known | **✅ Validated** | no throttling: +4% over 12 min / 422 takes | 0 | M | Low |
-| **OPT-008** | Stream the reply (first-sentence TTS) | AI-turn/TTS | Known | Proposed | perceived turn ~3.5–5s → ~1–2s to first words | 0 | L | Med |
+| **OPT-008** | Stream the reply (first-sentence TTS) | AI-turn/TTS | Known | **In-progress** (Cut 1 shipped) | perceived turn ~3.5–5s → ~1–2s to first words | 0 | L | Med |
 
 ---
 
@@ -215,7 +215,11 @@ the Track 5+ roadmap, re-run each milestone.
 
 ## OPT-008 — Stream the reply (first-sentence TTS) to cut perceived turn latency
 
-- **Area:** AI-turn / TTS-latency · **Confidence:** Known (profiled) · **Status:** Proposed
+- **Area:** AI-turn / TTS-latency · **Confidence:** Known (profiled) · **Status:** **In-progress** —
+  **Cut 1 SHIPPED 2026-06-09 (`c894579`), on-device validation pending**; Cut 2 (LLM streaming) next.
+  ⏸ Paused awaiting an on-device take: scenario running → multi-sentence reply → the ⚙ `loop` total
+  should drop vs the 3.5–5.2 s baseline, with a seamless chunk seam. Portal is up on
+  `https://192.168.60.116:8765` (cert re-minted for the 192.168.60.x network, old IPs kept in SAN).
 - **Problem / evidence (profiled iPad, 2026-06-09 — `src/perf/turn_latency.ts`):** the perceived turn
   (PTT release → first audio) is **~3.5–5.2 s** warm. Breakdown: **STT ~1.1–1.5 s** (stable; OPT-001/003)
   + the **server turn ~2.4–4.1 s** (the portal's LLM reply + ElevenLabs TTS — this iPad is on the
