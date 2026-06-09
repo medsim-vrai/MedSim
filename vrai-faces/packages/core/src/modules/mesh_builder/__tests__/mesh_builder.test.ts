@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { meshBuilder } from '../index';
 import {
   ARKIT_52,
@@ -9,7 +9,15 @@ import {
   type FaceTopology,
   type Landmark3,
 } from '../impl/face_topology';
-import { computeMorphBasis, SUPPORTED_MORPHS } from '../impl/morph_basis';
+import { computeMorphBasis, SUPPORTED_MORPHS, setMorphBasis, type MorphBasisDoc } from '../impl/morph_basis';
+// OPT-004: the rig JSON moved to public/assets/face/ (fetched at runtime in the app). Tests import it
+// directly (dev-only — NOT in the prod bundle) and inject it synchronously, since computeMorphBasis's
+// baked path needs it without a fetch under jsdom.
+import morphBasisDoc from '../../../../public/assets/face/face_mesh_morphbasis.json';
+
+// Inject the baked rig once for the whole file so the N=468 baked-rig regression tests below see it
+// (procedural-path tests at N=5 are unaffected — they never enter the baked branch).
+beforeAll(() => { setMorphBasis(morphBasisDoc as unknown as MorphBasisDoc); });
 
 describe('mesh_builder barrel', () => {
   it('exposes the expected surface', () => {

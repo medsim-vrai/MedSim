@@ -15,16 +15,43 @@
  * model, nothing leaves the device — ADR-0001/0014). `avatar_exporter` bakes whatever deltas
  * exist by name, so the rig is a drop-in: no contract change.
  */
-import basisJson from './face_mesh_morphbasis.json';
-
-interface MorphBasisDoc {
+// OPT-004: the ~292 KB ARKit-52 basis is FETCHED at runtime (served from public/assets/face/) rather
+// than `import`ed into the JS bundle — it was the other big slice of the cold-load `index` chunk and
+// parses faster as JSON than as an inlined object literal. `BAKED` stays null until loadMorphBasis()
+// resolves; computeMorphBasis falls back to the PROCEDURAL rig while null (graceful, matches the
+// no-asset philosophy). The mesh build awaits the load before the real-path geometry build (create.ts),
+// so the rig is present in practice. Mirrors loadFaceTopology().
+export interface MorphBasisDoc {
   readonly version: number;
   readonly vertexCount: number;
   readonly canonicalHeight: number;
   readonly shapes: Readonly<Record<string, ReadonlyArray<ReadonlyArray<number>>>>;
 }
-/** The baked ARKit-52 (+ eyesClosed) deformation basis. Bundled (~292 KB / ~73 KB gz). */
-const BAKED = basisJson as unknown as MorphBasisDoc;
+const MORPH_BASIS_URL = '/assets/face/face_mesh_morphbasis.json';
+let BAKED: MorphBasisDoc | null = null;
+let _basisPromise: Promise<void> | null = null;
+
+/** Inject the baked basis directly. The loader uses it; tests inject the JSON synchronously. */
+export function setMorphBasis(doc: MorphBasisDoc | null): void {
+  BAKED = doc;
+}
+
+/** Fetch + parse the baked ARKit rig once (memoized). No-op → procedural fallback on absence/error. */
+export function loadMorphBasis(): Promise<void> {
+  if (_basisPromise) return _basisPromise;
+  _basisPromise = (async (): Promise<void> => {
+    try {
+      if (typeof fetch !== 'function') return;
+      const res = await fetch(MORPH_BASIS_URL);
+      if (!res.ok) return;
+      const raw = (await res.json()) as Partial<MorphBasisDoc> | null;
+      if (raw && raw.shapes && typeof raw.canonicalHeight === 'number') BAKED = raw as MorphBasisDoc;
+    } catch {
+      // leave BAKED null → procedural rig
+    }
+  })();
+  return _basisPromise;
+}
 
 interface Bounds {
   minX: number; maxX: number; minY: number; maxY: number;
@@ -118,7 +145,9 @@ export function computeMorphBasis(
   // Overlay the baked rig only on the topology it was baked for (face verts 0..467; a 478-vertex
   // iris mesh keeps its iris verts procedural/zero). Scale the canonical-height fractions to the
   // live face so the rig adapts to any face size, exactly like the procedural basis does.
-  const onBakedTopology = (n === BAKED.vertexCount || n === 478) && BAKED.canonicalHeight > 0;
+  const baked = BAKED;                       // OPT-004: null until loadMorphBasis() → procedural fallback
+  if (!baked) return basis;
+  const onBakedTopology = (n === baked.vertexCount || n === 478) && baked.canonicalHeight > 0;
   if (!onBakedTopology) return basis;
 
   const b = computeBounds(positions, n);
@@ -130,7 +159,7 @@ export function computeMorphBasis(
   const scale = b.h;
 
   for (let i = 0; i < names.length; i++) {
-    const sparse = BAKED.shapes[names[i]!];
+    const sparse = baked.shapes[names[i]!];
     if (!sparse) continue;          // not in the rig (e.g. tongueOut) → keep the procedural delta
     const arr = basis[i]!;
     arr.fill(0);                    // the baked rig fully defines this shape
@@ -146,8 +175,11 @@ export function computeMorphBasis(
   return basis;
 }
 
-/** Names the BAKED rig defines (every ARKit-52 shape except tongueOut, + the eyesClosed supplement). */
-export const BAKED_MORPHS: ReadonlyArray<string> = Object.keys(BAKED.shapes);
+/** Names the BAKED rig defines (every ARKit-52 shape except tongueOut, + the eyesClosed supplement).
+ *  A function now (was a const) because the basis loads asynchronously (OPT-004) — empty until loaded. */
+export function bakedMorphNames(): ReadonlyArray<string> {
+  return BAKED ? Object.keys(BAKED.shapes) : [];
+}
 
 /** Shapes the PROCEDURAL fallback fills (used when the baked rig is unavailable). */
 export const SUPPORTED_MORPHS: ReadonlyArray<string> = [

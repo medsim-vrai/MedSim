@@ -4,7 +4,7 @@ import type { BootDeps, BlendshapeWeights } from '@contracts/shared';
 import type { NormalizedPortrait } from '@contracts/face_ingest';
 import { registerGeometry, registerTexture } from '@utils/resource_registry';
 import { ARKIT_52, buildFaceGeometry, computeMorphNormals, loadFaceTopology } from './face_topology';
-import { computeMorphBasis } from './morph_basis';
+import { computeMorphBasis, loadMorphBasis, bakedMorphNames } from './morph_basis';
 import { detectFaceLandmarks } from './face_landmarker';
 
 /**
@@ -105,7 +105,9 @@ export function createImpl(): MeshBuilderModule {
 
       // Real path needs BOTH the canonical topology asset AND a successful
       // landmark detection. Skip detection entirely if the topology is absent.
-      const topo = await loadFaceTopology();
+      // OPT-004: fetch the ARKit basis in parallel with the topology so computeMorphBasis has the real
+      // rig before the geometry build — otherwise the face would build with the crude procedural rig.
+      const [topo] = await Promise.all([loadFaceTopology(), loadMorphBasis()]);
       const detection = topo ? await detectFaceLandmarks(portrait.png) : null;
 
       let geo: THREE.BufferGeometry;
@@ -126,7 +128,7 @@ export function createImpl(): MeshBuilderModule {
         kind: topo && detection ? 'info' : 'warn',
         message:
           topo && detection
-            ? `real mesh: ${detection.landmarks.length} landmarks, ${((geo.getIndex()?.count ?? 0) / 3) | 0} tris`
+            ? `real mesh: ${detection.landmarks.length} landmarks, ${((geo.getIndex()?.count ?? 0) / 3) | 0} tris, rig=${bakedMorphNames().length ? 'baked' : 'procedural'}`
             : `fallback head-proxy (topology=${topo ? 'ok' : 'absent'}, detection=${detection ? 'ok' : 'none'})`,
       });
 

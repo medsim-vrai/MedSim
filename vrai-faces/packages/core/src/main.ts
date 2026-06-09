@@ -193,7 +193,7 @@ async function boot(): Promise<void> {
       import('@modules/mesh_builder/impl/face_topology'),
       import('@modules/mesh_builder/impl/morph_basis'),
     ]).then(([qa, topo, mb]) => {
-      qa.mountMorphQaPanel(app, animationRuntime, topo.MORPH_TARGETS, new Set(mb.BAKED_MORPHS),
+      qa.mountMorphQaPanel(app, animationRuntime, topo.MORPH_TARGETS, new Set(mb.bakedMorphNames()),
         (f) => renderer.setFrameFill(f));
     }).catch(() => { /* non-fatal dev tool */ });
     // On-device STT thermal soak (ADR-0032 pilot gate / OPT-007) — debug-only probe.
