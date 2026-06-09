@@ -235,6 +235,34 @@ the Track 5+ roadmap, re-run each milestone.
 - **Smaller levers:** faster LLM / shorter system-prompted replies; a faster ElevenLabs voice/model.
 - **Costs:** **Runtime:** none added (re-orders existing work). **Effort:** L (portal + transport).
   **Risk:** Med (streaming TTS + partial-frame ordering). Perceived-latency win is high.
+- **Scoping (2026-06-09 — code-read of the portal + client):**
+  - **Today's serial chain** (all inside `POST /listen`, `portal/vrai_faces.py:789`):
+    `runtime.take_turn` (BLOCKING `messages.create`, full reply) → `_synthesize_voice` (ElevenLabs
+    `voices.synthesize_stream` — already the **/stream endpoint with `optimize_streaming_latency`** —
+    but **fully buffered** into one base64 mp3) → ONE `push_speech` frame → only then the POST ack.
+    Both stages buffer; the streaming TTS primitive already exists.
+  - **Transport is ready:** `push_speech` already takes **`end_of_utterance`** and stamps a per-frame
+    **`seq`** (`manager.next_seq`); frames broadcast over one WS in await-order → ordering is free. The
+    client schema parses `endOfUtterance` (`medsim_adapter/parse.ts`).
+  - **Client is ready (zero changes):** `audio_pipeline.decodeAndSchedule` schedules each chunk at
+    `max(ctx.currentTime, playhead)` and advances `playhead` → back-to-back mp3 frames play **gapless,
+    in order**; derived (energy) visemes work per chunk; `turn_latency` marks first-audio on the first
+    chunk — exactly the perceived number.
+  - **Plan — two cuts:**
+    1. **Cut 1 · TTS-pipelined (S–M, portal-only, low risk):** keep `take_turn` as-is; split the reply
+       into [first sentence, remainder]; synth + `push_speech` the first sentence immediately
+       (`end_of_utterance=False`), then synth + push the remainder; ack the POST after the FIRST frame
+       (tail pushes continue as an asyncio task). First audio = LLM + synth(S1) — saves the tail's synth
+       time (~0.5–1.5 s on multi-sentence replies).
+    2. **Cut 2 · LLM-streamed (M–L, the full win):** add `runtime.take_turn_stream` using the Anthropic
+       SDK's `messages.stream()` (text deltas); synth + push at the FIRST sentence boundary while the
+       rest streams; append the TurnRecord/log_turn with the full reply at end. First audio ≈
+       first-sentence tokens + synth(S1) ≈ **~1–1.5 s** regardless of reply length.
+  - **PHI (ADR-0014) unchanged:** streaming re-orders the same flows — the reply (character speech,
+    non-PHI) to ElevenLabs as today; trainee text to Anthropic exactly as today; nothing new leaves.
+  - **Watch-outs:** echo/no-key path stays a single text-only frame; sentence splitter must respect the
+    stage-direction `*…*` style + merge tiny fragments; mid-stream synth failure → fall back to a
+    text-only frame for the remainder (never a half-silent turn).
 
 ---
 
