@@ -57,7 +57,7 @@ the Track 5+ roadmap, re-run each milestone.
 | **OPT-005** | Per-capability model shipping (q8 vs fp16) | bundle-size | Likely | Watch | avoid precaching unused variant | up to −76 MB/device | M | Low |
 | **OPT-006** | Whisper decoder generation tuning | STT-latency | Exploratory | Proposed | trim decoder tokens (minor) | 0 | S | Low |
 | **OPT-007** | Sustained-session thermal headroom (soak harness) | thermal | Known | **✅ Validated** | no throttling: +4% over 12 min / 422 takes | 0 | M | Low |
-| **OPT-008** | Stream the reply (first-sentence TTS) | AI-turn/TTS | Known | **In-progress** (Cut 1 shipped) | perceived turn ~3.5–5s → ~1–2s to first words | 0 | L | Med |
+| **OPT-008** | Stream the reply (LLM + first-sentence TTS) | AI-turn/TTS | Known | **✅ Validated** | perceived turn 3.5–5.2s → **2.3–2.9s** (5 takes) | 0 | L | Med |
 
 ---
 
@@ -215,12 +215,18 @@ the Track 5+ roadmap, re-run each milestone.
 
 ## OPT-008 — Stream the reply (first-sentence TTS) to cut perceived turn latency
 
-- **Area:** AI-turn / TTS-latency · **Confidence:** Known (profiled) · **Status:** **Cut 1 ✅ Validated**
-  (iPad, 2026-06-09 night): live AI turn returned `streamed: True · voiced: True`, audio played on
-  device, reply ack **3.3 s** (with Cut 1 the first-sentence audio is already pushed by then), warm
-  `stt 1125 ms`, `tts 2 ms` (server-voice mp3 → enqueue, no device synth). Remaining: a clean numeric
-  A/B vs the 3.5–5.2 s baseline in a NORMAL tab (the validation ran in a private tab — model re-streams
-  each session, `cold 62 s`), then **Cut 2** (LLM streaming → first words ~1–1.5 s).
+- **Area:** AI-turn / TTS-latency · **Confidence:** Known (profiled) · **Status:** ✅ **Validated**
+  (iPad, 2026-06-09 night, BOTH cuts live — `streamed: 'llm'`):
+  **5 warm takes: loop 2263 / 2560 / 2739 / 2884 / 2937 ms vs the 3.5–5.2 s baseline** — ~40% faster,
+  the worst case fell 5.2 s → 2.9 s, the reply-length variability is gone, and the POST ack hit
+  **1.8 s**. STT (~0.9–1.2 s) is now the largest remaining share of the perceived turn. Cut 1 = split
+  the finished reply, push the first sentence, tail in background. Cut 2 = stream the LLM
+  (`runtime.take_turn_stream`) and synth/push at the FIRST sentence boundary while the rest generates;
+  ack immediately; rest-of-stream → tail synth → operator log → cleanup all in a background task;
+  falls back to the blocking turn only if the stream fails before anything is pushed.
+  **Remaining (minor):** next-lever if more speed is wanted = the STT share (streaming/partial STT
+  exploration) and TTFT on the LLM; also re-measure once the iPad's normal-tab Private-Relay issue is
+  fixed (this run was a private tab — irrelevant to warm-take numbers).
 - **Problem / evidence (profiled iPad, 2026-06-09 — `src/perf/turn_latency.ts`):** the perceived turn
   (PTT release → first audio) is **~3.5–5.2 s** warm. Breakdown: **STT ~1.1–1.5 s** (stable; OPT-001/003)
   + the **server turn ~2.4–4.1 s** (the portal's LLM reply + ElevenLabs TTS — this iPad is on the
