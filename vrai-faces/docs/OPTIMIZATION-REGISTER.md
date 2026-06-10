@@ -215,11 +215,12 @@ the Track 5+ roadmap, re-run each milestone.
 
 ## OPT-008 — Stream the reply (first-sentence TTS) to cut perceived turn latency
 
-- **Area:** AI-turn / TTS-latency · **Confidence:** Known (profiled) · **Status:** **In-progress** —
-  **Cut 1 SHIPPED 2026-06-09 (`c894579`), on-device validation pending**; Cut 2 (LLM streaming) next.
-  ⏸ Paused awaiting an on-device take: scenario running → multi-sentence reply → the ⚙ `loop` total
-  should drop vs the 3.5–5.2 s baseline, with a seamless chunk seam. Portal is up on
-  `https://192.168.60.116:8765` (cert re-minted for the 192.168.60.x network, old IPs kept in SAN).
+- **Area:** AI-turn / TTS-latency · **Confidence:** Known (profiled) · **Status:** **Cut 1 ✅ Validated**
+  (iPad, 2026-06-09 night): live AI turn returned `streamed: True · voiced: True`, audio played on
+  device, reply ack **3.3 s** (with Cut 1 the first-sentence audio is already pushed by then), warm
+  `stt 1125 ms`, `tts 2 ms` (server-voice mp3 → enqueue, no device synth). Remaining: a clean numeric
+  A/B vs the 3.5–5.2 s baseline in a NORMAL tab (the validation ran in a private tab — model re-streams
+  each session, `cold 62 s`), then **Cut 2** (LLM streaming → first words ~1–1.5 s).
 - **Problem / evidence (profiled iPad, 2026-06-09 — `src/perf/turn_latency.ts`):** the perceived turn
   (PTT release → first audio) is **~3.5–5.2 s** warm. Breakdown: **STT ~1.1–1.5 s** (stable; OPT-001/003)
   + the **server turn ~2.4–4.1 s** (the portal's LLM reply + ElevenLabs TTS — this iPad is on the
