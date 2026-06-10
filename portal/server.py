@@ -1371,6 +1371,12 @@ async def _control_stage_page(
             "default_device_patient_id": default_device_patient,
             "embed_mode": bool(embed),
             "stage": stage,
+            # FR-005: personas not yet in the session — the Setup page's
+            # "+ Add character" picker (e.g. add the pharmacist mid-stream).
+            "addable_personas": [
+                p for p in library.list_personas()
+                if str(p.get("id") or "") not in set(sess.selected_personas)
+            ],
         },
     )
 
@@ -1518,6 +1524,32 @@ async def api_control_seed_meds_toggle(
     seed["medications"] = meds
     ehr_db.update_seed(sess.id, seed)
     return JSONResponse({"ok": True, "med_id": med_id, "included": included})
+
+
+@app.post("/api/control/personas/add")
+async def api_control_add_persona(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-005 — add a library persona (e.g. the pharmacist) to the ACTIVE session
+    without relaunching. Selection only gates UI surfaces (PTT chips, QR cells,
+    say-as picker); the speak/listen plumbing already works for any persona."""
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"ok": False, "error": "no running scenario"},
+                            status_code=409)
+    body = await request.json()
+    pid = str((body or {}).get("persona_id") or "").strip()
+    persona = library.get_persona(pid)
+    if persona is None:
+        return JSONResponse({"ok": False, "error": "unknown persona"},
+                            status_code=404)
+    if pid not in sess.selected_personas:
+        sess.selected_personas.append(pid)
+    if bool((body or {}).get("avatar")) and pid not in (sess.avatar_personas or []):
+        sess.avatar_personas.append(pid)
+    return JSONResponse({"ok": True, "persona_id": pid,
+                         "name": persona.get("name") or pid})
 
 
 @app.post("/api/control/state")

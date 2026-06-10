@@ -26,7 +26,39 @@
   🛠 <strong>Scenario Setup</strong> — configure the medication board, devices, skins and voices below.
   When ready, press <strong>▶ START</strong> (top right): the scenario goes live and
   <strong>Live Operations opens in a new window</strong>.
+  <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <label class="small" style="font-weight:600;">Add character to this session:</label>
+    <select id="addchar-pick" style="max-width:240px;">
+      {% for p in addable_personas %}
+      <option value="{{ p.id }}">{{ p.name }} — {{ p.role }}</option>
+      {% endfor %}
+    </select>
+    <label class="small"><input type="checkbox" id="addchar-avatar"> avatar tablet</label>
+    <button type="button" id="addchar-go">＋ Add</button>
+    <span id="addchar-status" class="small"></span>
+  </div>
 </div>
+<script>
+(function () {
+  var go = document.getElementById('addchar-go');
+  if (!go) return;
+  go.addEventListener('click', function () {
+    var pid = document.getElementById('addchar-pick').value;
+    if (!pid) return;
+    go.disabled = true;
+    fetch('/api/control/personas/add', { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persona_id: pid,
+                             avatar: document.getElementById('addchar-avatar').checked }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.ok) { document.getElementById('addchar-status').textContent = '✓ ' + j.name + ' added'; location.reload(); }
+        else { document.getElementById('addchar-status').textContent = j.error || 'failed'; go.disabled = false; }
+      })
+      .catch(function () { document.getElementById('addchar-status').textContent = 'failed'; go.disabled = false; });
+  });
+})();
+</script>
 <script>
 (function () {
   var b = document.getElementById('hdr-btn-start');

@@ -65,3 +65,15 @@ def test_setup_page_reachable_while_running(client) -> None:
     r = client.get("/portal/control/setup")
     assert r.status_code == 200
     assert 'id="stage-banner"' in r.text
+
+
+def test_add_persona_to_active_session(client) -> None:
+    """FR-005 — add the pharmacist to a session without relaunching."""
+    r = client.post("/api/control/personas/add",
+                    json={"persona_id": "P-006", "avatar": False})
+    assert r.status_code == 200 and r.json()["ok"] is True
+    assert "Pharmacist" in r.json()["name"]
+    page = client.get("/portal/control/setup")
+    assert "Pharmacist Lee" in page.text          # now in the persona surfaces
+    r2 = client.post("/api/control/personas/add", json={"persona_id": "NOPE"})
+    assert r2.status_code == 404
