@@ -84,3 +84,17 @@ def test_prompt_block_for_routes_by_role() -> None:
     assert "MEDICATION ORDERS" in doc_block and "EXACTLY" in doc_block
     assert "PHARMACY STOCK BOARD" in ph_block
     assert none_block == ""
+
+
+def test_doctor_block_orders_decisively_with_full_dose() -> None:
+    """Field fix 2026-06-10: the doctor PLACES the order (complete, with dose) — never
+    asks what's available, never offers menus."""
+    med_orders.init_session("s1", "delirium")
+    rec = med_orders.recommend_for_doctor("s1", [])
+    block = med_orders.doctor_prompt_block("s1", [])
+    assert "PLACE THE ORDER YOURSELF" in block
+    assert "I'm ordering" in block
+    # the complete order string (drug + dose + route + frequency) is spelled out
+    assert f"{rec['drug']} {rec['dose']}" in block
+    assert "PROHIBITED" in block and "available or in stock" in block
+    assert "approve it decisively" in block

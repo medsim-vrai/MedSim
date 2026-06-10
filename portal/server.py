@@ -1282,15 +1282,19 @@ async def control_end(
     return RedirectResponse("/portal/debrief", status_code=303)
 
 
-@app.get("/portal/control/ops", response_class=HTMLResponse)
-async def control_ops(
+async def _control_stage_page(
     request: Request,
-    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
-    join: str | None = None,
-    patient_persona_id: str | None = None,
-    embed: int | None = None,
+    join: str | None,
+    patient_persona_id: str | None,
+    embed: int | None,
+    stage: str,
 ):
-    """M42 — Multi-patient-aware ops view.
+    """M42 — Multi-patient-aware ops view. FR-005: ONE template, TWO stages —
+    `/portal/control/setup` (stage="setup": pre-start configuration — devices,
+    medication board, skins/voices — ending in ▶ Start scenario) and
+    `/portal/control/ops` (stage="live": running the encounter — transcript, PTT,
+    say-as-character, device ops). Sections show/hide by stage; element ids stay in
+    the DOM either way so every existing card script keeps working unchanged.
 
     Query params:
       - `join` — when set, looks up the session/encounter by join code
@@ -1313,6 +1317,12 @@ async def control_ops(
         sess = control_session.get_active()
     if sess is None:
         return RedirectResponse("/portal/control", status_code=303)
+    # FR-005 stage routing: a freshly-configured session lands on Setup; once
+    # running, the ops URL is the live page. (Setup stays reachable while
+    # running — for level-2 mid-scenario changes — via its own URL.)
+    if stage == "live" and not embed and getattr(sess, "state", "") == "configured":
+        q = f"?join={join}" if join else ""
+        return RedirectResponse(f"/portal/control/setup{q}", status_code=303)
     # Hydrate personas with their resolved voice profile so the operator's
     # PTT panel can speak the response in the right voice without a second fetch.
     personas_in_use = []
@@ -1360,8 +1370,33 @@ async def control_ops(
             "lan_ip": _lan_ip(),
             "default_device_patient_id": default_device_patient,
             "embed_mode": bool(embed),
+            "stage": stage,
         },
     )
+
+
+@app.get("/portal/control/ops", response_class=HTMLResponse)
+async def control_ops(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    join: str | None = None,
+    patient_persona_id: str | None = None,
+    embed: int | None = None,
+):
+    """FR-005 — Live Operations (stage 2): running the encounter."""
+    return await _control_stage_page(request, join, patient_persona_id, embed, "live")
+
+
+@app.get("/portal/control/setup", response_class=HTMLResponse)
+async def control_setup(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    join: str | None = None,
+    patient_persona_id: str | None = None,
+):
+    """FR-005 — Scenario Setup (stage 1): devices, medications, skins/voices →
+    ▶ Start scenario (opens Live Operations in a new window)."""
+    return await _control_stage_page(request, join, patient_persona_id, None, "setup")
 
 
 @app.get("/api/control/state")

@@ -175,15 +175,20 @@ def doctor_prompt_block(session_id: str, active_meds: list[str]) -> str:
     if active_meds:
         lines.append("Patient is already on: " + ", ".join(sorted(set(active_meds))[:12]) + ".")
     if rec is not None:
+        order = f"{rec['drug']} {rec['dose']} {rec['route']} {rec['frequency']}".strip()
         lines += [
-            f"If the trainee asks you to order/recommend medication for this condition, "
-            f"recommend EXACTLY this order and nothing else: {_fmt(rec)}.",
-            "State the drug, dose, route, and frequency as written. You may explain the",
-            "rationale briefly in character. NEVER name, suggest, or dose any other",
-            "medication. If the trainee proposes a different drug, redirect to this order",
-            "or tell them to consult the pharmacist about alternatives.",
-            "If the trainee returns saying THIS drug is unavailable and relays a pharmacy",
-            "alternative from the authored list, you may approve that alternative.",
+            "YOU are the prescriber. When the trainee asks what to give, asks for orders,",
+            "or describes this indication, you PLACE THE ORDER YOURSELF, DECISIVELY, in",
+            f"that same utterance — say it complete: \"I'm ordering {order}.\" plus at",
+            "most one short line of rationale, in your own voice.",
+            "PROHIBITED: asking the trainee (or anyone) what is available or in stock —",
+            "supply is the pharmacy's job, not yours; offering a menu of options; asking",
+            "clarifying questions instead of ordering; naming, suggesting, or dosing ANY",
+            "medication other than the order above.",
+            "EXCEPTION — approval turn: if the trainee returns saying YOUR ordered drug is",
+            "unavailable and relays the pharmacy's alternative (from the authored list),",
+            "approve it decisively and restate that alternative's full dose, route, and",
+            "frequency exactly as the trainee relayed it.",
         ]
     else:
         lines += [

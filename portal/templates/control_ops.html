@@ -20,6 +20,37 @@
   </div>
 </header>
 
+{% if stage == 'setup' %}
+<!-- FR-005 stage 1 — Scenario Setup -->
+<div id="stage-banner" style="margin:10px 16px 0;padding:10px 14px;border-radius:8px;background:#eef3ff;border:1px solid #b9c9f0;color:#143b8a;font-size:14px;">
+  🛠 <strong>Scenario Setup</strong> — configure the medication board, devices, skins and voices below.
+  When ready, press <strong>▶ START</strong> (top right): the scenario goes live and
+  <strong>Live Operations opens in a new window</strong>.
+</div>
+<script>
+(function () {
+  var b = document.getElementById('hdr-btn-start');
+  if (!b) return;
+  b.addEventListener('click', function (ev) {
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    // popup-safe: open synchronously on the click, navigate after the state flips
+    var w = window.open('about:blank', 'medsim_ops');
+    var fd = new FormData();
+    fd.append('state', 'running');
+    fetch('/api/control/state', { method: 'POST', body: fd }).finally(function () {
+      if (w) { w.location = '/portal/control/ops'; }
+      else { window.location = '/portal/control/ops'; }   // popup blocked → same tab
+    });
+  }, true);
+})();
+</script>
+{% elif stage == 'live' %}
+<div class="muted small" style="margin:8px 16px 0;">
+  ⚙ Pre-start configuration lives on the <a href="/portal/control/setup" target="medsim_setup">Scenario Setup page</a>.
+</div>
+{% endif %}
+
 <div class="ops-grid">
 
   <!-- TOP-LEFT — Invite stations (QR) -->
@@ -40,7 +71,7 @@
     <div id="med-checklist" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:8px"></div>
   </section>
 
-  <section class="check-card">
+  <section class="check-card"{% if stage == 'live' %} style="display:none"{% endif %}>
     <h2>Invite stations</h2>
     <p class="muted small">Two QR codes — one per device role. <strong>Chat</strong> = verbal encounter (1 station per persona). <strong>EHR</strong> = chart documentation (any device).</p>
 
@@ -86,7 +117,7 @@
   </section>
 
   <!-- TOP-MIDDLE — Connected stations -->
-  <section class="check-card">
+  <section class="check-card"{% if stage == 'setup' %} style="display:none"{% endif %}>
     <h2>Connected stations <span class="muted small" id="station-count">(0)</span></h2>
     <p class="muted small">Live roster. Refresh every 3s. <span id="online-count" class="muted small"></span></p>
     <div id="station-grid" class="station-grid">
@@ -178,7 +209,7 @@
     </div>
 
     <!-- FR-001/002 — the medication board (collapsible; doctor/pharmacist teaching loop) -->
-    <div id="meds-card" style="margin-top:12px;padding:10px 12px;border:1px solid #dde2ee;border-radius:8px;background:#fff;">
+    <div id="meds-card" data-stage="{{ stage|default('live') }}" style="margin-top:12px;padding:10px 12px;border:1px solid #dde2ee;border-radius:8px;background:#fff;">
       <button type="button" id="meds-toggle" class="primary-action" style="width:100%;text-align:left;">
         💊 Medications <span id="meds-summary" class="muted small"></span>
         <span style="float:right;" id="meds-caret">▸</span>
@@ -272,6 +303,10 @@
         fetch('/api/control/meds/condition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ condition: e.target.value }) })
           .then(function (r) { return r.json(); }).then(function (j) { if (j.ok) render(j); else status.textContent = j.error || 'failed'; });
       });
+      // FR-005: the Setup stage opens the board expanded (level-1 configuration).
+      if (document.getElementById('meds-card').dataset.stage === 'setup') {
+        document.getElementById('meds-toggle').click();
+      }
       document.getElementById('madd-go').addEventListener('click', function () {
         fetch('/api/control/meds/add', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -352,7 +387,7 @@
   </section>
 
   <!-- BOTTOM-LEFT — Operator PTT panel (engage a character) -->
-  <section class="check-card op-ptt-card">
+  <section class="check-card op-ptt-card"{% if stage == 'setup' %} style="display:none"{% endif %}>
     <h2>Engage a character (operator)</h2>
     <p class="muted small">Tap a persona below, then hold the talk button and speak. The character will reply in their voice and the exchange will appear in the transcript.</p>
     <div class="op-persona-chips" id="op-persona-chips">
@@ -376,7 +411,7 @@
   </section>
 
   <!-- BOTTOM-MIDDLE+RIGHT — Live transcript -->
-  <section class="check-card transcript-card">
+  <section class="check-card transcript-card"{% if stage == 'setup' %} style="display:none"{% endif %}>
     <h2>Live transcript <span class="muted small" id="t-count">(0 turns)</span></h2>
     <p class="muted small">All turns from every station + operator, time-ordered.</p>
     <div id="transcript" class="transcript">
@@ -385,7 +420,7 @@
   </section>
 
   <!-- V4 — Character voices (ElevenLabs) -->
-  <section class="check-card" style="grid-column: 1 / -1;">
+  <section class="check-card" style="grid-column: 1 / -1;{% if stage == 'live' %}display:none{% endif %}">
     <h2>Character voices <span class="muted small">(V4 · ElevenLabs)</span>
       <span class="muted small" id="voice-health" style="float:right;">checking…</span>
     </h2>
@@ -412,7 +447,7 @@
 
   {% if session.ehr_id %}
   <!-- V3 — EHR station roster + charting controls -->
-  <section class="check-card" style="grid-column: 1 / -1;">
+  <section class="check-card" style="grid-column: 1 / -1;{% if stage == 'setup' %}display:none{% endif %}">
     <h2>EHR stations <span class="muted small" id="ehr-station-count">(0)</span>
       <span class="muted small" style="margin-left:8px;">— {{ session.ehr_id }}</span>
       <span class="muted small" id="ehr-event-count" style="float:right;">0 events</span>
