@@ -644,6 +644,32 @@
   }
 </style>
 {% endif %}
+{% if stage == 'live' %}
+<script>
+/* FR-005 field feedback (2026-06-10): on the Live-Operations window the auto-populated
+   "Medication checklist" card must open MINIMIZED — header only, click to expand.
+   (Its populate script keeps writing into the hidden content; ids untouched.) */
+(function () {
+  var card = document.getElementById('med-checklist-card');
+  if (!card) return;
+  var h2 = card.querySelector('h2');
+  if (!h2) return;
+  var kids = Array.prototype.slice.call(card.children).filter(function (el) { return el !== h2; });
+  var caret = document.createElement('span');
+  caret.style.cssText = 'float:right;margin-left:8px;';
+  h2.style.cursor = 'pointer';
+  h2.title = 'Click to expand / collapse';
+  h2.appendChild(caret);
+  var open = false;
+  function apply() {
+    kids.forEach(function (el) { el.style.display = open ? '' : 'none'; });
+    caret.textContent = open ? '▾' : '▸';
+  }
+  h2.addEventListener('click', function () { open = !open; apply(); });
+  apply();
+})();
+</script>
+{% endif %}
 <script src="{{ static_v('tts_client.js') }}"></script>
 <script src="{{ static_v('control_ops.js') }}"></script>
 <script src="{{ static_v('control_ops_ehr.js') }}"></script>
