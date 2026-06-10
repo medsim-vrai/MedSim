@@ -78,7 +78,7 @@ ADR → `In-progress` → `Shipped` → `Validated` (confirmed in a test session
 |----|------------------------|------|--------|-----|--------|----------|
 | **FR-001** | Best-practice med ordering (doctor) — random primary, min-dose, escalate to secondary | clinical-logic | instructor | P2 | Proposed | runtime(core) · portal · data |
 | **FR-002** | Pharmacist availability + alternatives; instructor "not available" flag | clinical-logic · instructor-tools | instructor | P2 | Proposed | control-room · portal · runtime(core) · data |
-| **FR-003** | Instructor character prompting — speak in-context (emotion / mental status / role) | instructor-tools · character-interaction | instructor | P2 | Proposed | control-room · portal · avatar |
+| **FR-003** | Instructor character prompting — speak in-context (emotion / mental status / role) | instructor-tools · character-interaction | instructor | P2 | **✅ Validated** (2026-06-10) | control-room · portal · avatar |
 | **FR-004** | Zero-config wireless device pairing for production venues | UX · scenario | testing | P1 | Proposed | portal · avatar · kit/ops (+ADR) |
 
 ---
@@ -156,7 +156,18 @@ The "not available" flag is an instructor teaching lever, not a clinical claim.
 ## FR-003 — Instructor character prompting (in-context)
 
 **Area:** instructor-tools · character-interaction · **Source:** instructor · **Priority:** P2 ·
-**Status:** Proposed · **Effort:** M · **Lands in:** control-room + portal + avatar
+**Status:** ✅ **Validated** (2026-06-10, in a test session) · **Effort:** M · **Lands in:** control-room + portal + avatar
+
+**Shipped as (2026-06-10, `fe823b1`):** the Ops page's "🎤 Say as character" card → upgraded
+`POST /api/face/{id}/speak` (auth'd). **Verbatim** is the default (exact words — predictable, no
+LLM cost); **In character** runs `runtime.take_instructor_line` (the instructor's INTENT framed as
+stage direction through the persona's full system prompt incl. `altered_state` → one in-character
+utterance; requires the running scenario, 409 otherwise). Lines are voiced server-side (ElevenLabs,
+first-sentence pipelined — the OPT-008 path) and logged to the operator transcript as instructor
+lines. Open-questions resolved: default = verbatim; delivery affect = persona prompt (in-character)
++ device auto-emote (verbatim); endpoint = the existing /speak extended; encounter-memory note: the
+device voice loop is currently stateless per turn — instructor lines enter the transcript but not a
+persistent AI memory (none exists yet; file separately if needed).
 
 **Goal.** Let the instructor put words in a character's mouth — delivered on **that
 character's device**, **in the character's context** (emotion, mental status, professional
