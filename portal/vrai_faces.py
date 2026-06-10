@@ -491,33 +491,179 @@ async def push_speech(scenario_id: str, character_id: str, *, text: str,
     return {"seq": seq, "delivered": delivered, "voiced": bool(audio_b64)}
 
 
-def _split_reply(reply: str, min_first: int = 25, max_scan: int = 280) -> tuple[str, str]:
-    """OPT-008 Cut 1 (pipelined TTS): split a reply into (first sentence(s), remainder) so the
-    first chunk can be voiced + pushed immediately while the tail synthesizes. The boundary is
-    the first `.`/`!`/`?` followed by whitespace, at/after `min_first` chars and NEVER inside a
-    `*stage direction*` (the persona replies open with them). Returns (reply, "") when the
-    reply is short, unbalanced, or has no usable boundary — the caller then sends today's
-    single frame, so this can only ever help."""
-    text = reply.strip()
-    if len(text) <= min_first * 2:
-        return text, ""
+def _first_sentence_cut(buf: str, min_first: int = 25, max_scan: int = 280) -> int | None:
+    """Index just AFTER the first sentence boundary (`.`/`!`/`?` followed by whitespace), at/after
+    `min_first` chars and NEVER inside a `*stage direction*` (persona replies open with them).
+    None when no usable boundary (yet) — safe to call incrementally on a growing buffer (OPT-008
+    Cut 2 streams deltas through it until a boundary appears)."""
     in_star = False
-    for i, ch in enumerate(text[:max_scan]):
+    for i, ch in enumerate(buf[:max_scan]):
         if ch == "*":
             in_star = not in_star
             continue
         if in_star:
             continue
-        if ch in ".!?" and i + 1 < len(text) and text[i + 1] in " \n\t" and i + 1 >= min_first:
-            first, rest = text[: i + 1].strip(), text[i + 1:].strip()
-            if first and rest:
-                return first, rest
-            return text, ""
+        if ch in ".!?" and i + 1 < len(buf) and buf[i + 1] in " \n\t" and i + 1 >= min_first:
+            return i + 1
+    return None
+
+
+def _split_reply(reply: str, min_first: int = 25, max_scan: int = 280) -> tuple[str, str]:
+    """OPT-008 Cut 1 (pipelined TTS): split a COMPLETE reply into (first sentence(s), remainder)
+    so the first chunk can be voiced + pushed immediately while the tail synthesizes. Returns
+    (reply, "") when the reply is short, unbalanced, or has no usable boundary — the caller then
+    sends today's single frame, so this can only ever help."""
+    text = reply.strip()
+    if len(text) <= min_first * 2:
+        return text, ""
+    cut = _first_sentence_cut(text, min_first, max_scan)
+    if cut is None:
+        return text, ""
+    first, rest = text[:cut].strip(), text[cut:].strip()
+    if first and rest:
+        return first, rest
     return text, ""
 
 
 # Strong refs to fire-and-forget tail-synth tasks (asyncio only weak-refs running tasks).
 _speech_tail_tasks: set[Any] = set()
+
+
+async def _stream_reply_turn(
+    sess: Any, sim_id: str, cid: str, scenario_id: str, user_text: str,
+    persona_name: str,
+) -> dict[str, Any] | None:
+    """OPT-008 Cut 2: run the character turn STREAMED — voice + push the FIRST sentence the
+    moment the LLM produces it (while the rest is still generating), ACK immediately, and
+    finish everything else (rest of stream → tail synth+push → operator log → session cleanup)
+    in a background task. Returns the ack dict, or None if the stream failed BEFORE anything
+    was pushed (the caller then falls back to the blocking turn — never a double reply)."""
+    import asyncio
+    from . import runtime
+
+    try:
+        gen = runtime.take_turn_stream(sim_id, cid, user_text)
+    except Exception:  # noqa: BLE001 — validation failure → blocking fallback
+        return None
+
+    loop = asyncio.get_running_loop()
+    q: asyncio.Queue = asyncio.Queue()
+
+    def _pump() -> None:
+        """Drain the sync Anthropic stream on a worker thread → the async queue."""
+        err: Exception | None = None
+        try:
+            for delta in gen:
+                loop.call_soon_threadsafe(q.put_nowait, ("delta", delta))
+        except Exception as exc:  # noqa: BLE001 — surfaced to the async side
+            err = exc
+        loop.call_soon_threadsafe(q.put_nowait, ("end", err))
+
+    loop.run_in_executor(None, _pump)
+
+    buf = ""
+    cut_at: int | None = None
+    first: str | None = None
+    spoken: dict[str, Any] = {}
+    deadline = loop.time() + 30.0
+    stream_done = False
+    stream_err: Exception | None = None
+
+    # Phase 1 (the latency-critical part): consume deltas just until the first sentence
+    # boundary, then synth + push it. Everything after is off the perceived-latency path.
+    while not stream_done and first is None:
+        timeout = deadline - loop.time()
+        if timeout <= 0:
+            return None        # nothing pushed yet → safe blocking fallback
+        try:
+            kind, val = await asyncio.wait_for(q.get(), timeout)
+        except asyncio.TimeoutError:
+            return None
+        if kind == "delta":
+            buf += val
+            cut_at = _first_sentence_cut(buf)
+            if cut_at is not None:
+                first = buf[:cut_at].strip()
+                b64, fmt = await _synthesize_voice(sess, cid, first)
+                spoken = await push_speech(scenario_id, cid, text=first,
+                                           audio_b64=b64, audio_format=fmt,
+                                           end_of_utterance=False)
+        else:
+            stream_done = True
+            stream_err = val
+
+    if first is None:
+        # Stream ended with no usable boundary. Errors → fallback; a clean short reply →
+        # behave exactly like the single-frame path (synth the whole thing now, ack after).
+        if stream_err is not None or not buf.strip():
+            return None
+        reply = buf.strip()
+        b64, fmt = await _synthesize_voice(sess, cid, reply)
+        spoken = await push_speech(scenario_id, cid, text=reply,
+                                   audio_b64=b64, audio_format=fmt)
+        _finish_streamed_turn(sess, sim_id, cid, persona_name, user_text, reply, None)
+        return {"ok": True, "heard": user_text, "reply": reply, "mode": "ai",
+                "streamed": "llm", **spoken}
+
+    # First sentence is already speaking on the device. Finish the rest in the background.
+    tail_from = cut_at or 0
+
+    async def _finish() -> None:
+        nonlocal buf
+        try:
+            done = stream_done
+            while not done:
+                kind, val = await asyncio.wait_for(q.get(), 60.0)  # generous: off the hot path
+                if kind == "delta":
+                    buf += val
+                else:
+                    done = True
+        except Exception:  # noqa: BLE001 — speak whatever arrived before the stall
+            pass
+        rest = buf[tail_from:].strip()
+        if rest:
+            tail_b64: str | None = None
+            tail_fmt: str | None = None
+            try:
+                tail_b64, tail_fmt = await _synthesize_voice(sess, cid, rest)
+            except Exception:  # noqa: BLE001 — text-only frame keeps the turn audible
+                tail_b64, tail_fmt = None, None
+            try:
+                await push_speech(scenario_id, cid, text=rest,
+                                  audio_b64=tail_b64, audio_format=tail_fmt)
+            except Exception:  # noqa: BLE001 — never crash the loop from a bg task
+                import logging
+                logging.getLogger(__name__).warning(
+                    "OPT-008 streamed tail push failed for %s", cid, exc_info=True)
+        _finish_streamed_turn(sess, sim_id, cid, persona_name, user_text, buf.strip(), None)
+
+    t = asyncio.get_running_loop().create_task(_finish())
+    _speech_tail_tasks.add(t)
+    t.add_done_callback(_speech_tail_tasks.discard)
+    return {"ok": True, "heard": user_text, "reply": first, "mode": "ai",
+            "streamed": "llm", **spoken}
+
+
+def _finish_streamed_turn(
+    sess: Any, sim_id: str, cid: str, persona_name: str,
+    user_text: str, reply: str, _unused: Any,
+) -> None:
+    """Operator-transcript log + throwaway-session cleanup for a streamed turn (the blocking
+    path does both inline; streamed turns do them once the FULL reply text is known)."""
+    from . import runtime
+    if sess is not None and reply:
+        try:
+            sess.log_turn(
+                source=f"device:{cid}",
+                source_label=f"{persona_name} · device voice",
+                persona_id=cid,
+                persona_name=persona_name,
+                student_text=user_text,
+                character_text=reply,
+            )
+        except Exception:  # noqa: BLE001 — a logging hiccup must never fail the turn
+            pass
+    runtime.end_session(sim_id)
 
 
 def _wav_pcm_data(buf: bytes) -> bytes | None:
@@ -868,6 +1014,7 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         # No active session (device opened standalone) → echo, so the avatar
         # still speaks and the voice→avatar pipeline can be exercised live.
         sess = control_session.get_active()
+        persona_name = str(card.get("name") or cid)
         reply = ""
         mode = "echo"
         if sess is not None and getattr(sess, "api_key", ""):
@@ -880,6 +1027,14 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             sim = runtime.create_session_from_data(
                 scenario=scenario, characters={cid: card}, api_key=sess.api_key,
             )
+            # OPT-008 Cut 2: STREAM the turn — the avatar starts speaking at the first
+            # sentence boundary while the rest of the reply is still generating; the rest
+            # (tail synth, operator log, cleanup) finishes in the background. Falls through
+            # to the blocking turn below ONLY if streaming failed before anything was pushed.
+            streamed = await _stream_reply_turn(
+                sess, sim.id, cid, scenario_id, text, persona_name)
+            if streamed is not None:
+                return JSONResponse(streamed)
             # take_turn makes a SYNCHRONOUS, blocking Anthropic call — run it OFF the event
             # loop, else it freezes the whole async portal (no avatar serving, no WS, no reply
             # for ANY client). Bounded so a slow/bad key surfaces as an error reply, not a hang.
@@ -906,7 +1061,6 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         # sees device-voice input/replies. log_turn appends the student utterance +
         # the character reply (two entries) that /api/control/transcript serves.
         if sess is not None:
-            persona_name = str(card.get("name") or cid)
             try:
                 sess.log_turn(
                     source=f"device:{cid}",

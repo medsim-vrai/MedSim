@@ -7,7 +7,9 @@ implements only the conversational core:
   - Per-session in-memory state (scenario + characters + history)
   - One Claude (Haiku 4.5) call per student turn
   - Character card → system prompt
-  - No RAG, no filler manager, no validators, no streaming, no debrief log
+  - No RAG, no filler manager, no validators, no debrief log
+  - Streaming: `take_turn_stream` yields the reply as text deltas (OPT-008 Cut 2,
+    so the avatar can start speaking at the first sentence boundary)
 
 When B5/B6/B7/B8/B9/B10/B11/B12 land per the PDF, this file becomes the
 "local mode" fallback and the proper orchestrator takes over the Launch
@@ -146,6 +148,48 @@ def take_turn(session_id: str, addressee: str, message: str) -> dict[str, Any]:
         "character_name": character.get("name", addressee),
         "reply": reply,
     }
+
+
+def take_turn_stream(session_id: str, addressee: str, message: str):
+    """OPT-008 Cut 2: the same character turn as `take_turn`, but STREAMED — returns a sync
+    generator of text deltas so the caller can voice the first sentence while the rest is
+    still generating. Validation errors raise ValueError up front (no generator); a transport
+    error mid-stream raises from the generator. On clean completion the TurnRecord is appended
+    exactly as the blocking path does."""
+    session = _sessions.get(session_id)
+    if session is None:
+        raise ValueError("Session not found (it may have expired).")
+    if addressee not in session.characters:
+        raise ValueError(f"No character with ID '{addressee}' in this scenario.")
+    if not message.strip():
+        raise ValueError("Empty message.")
+
+    character = session.characters[addressee]
+    system_prompt = _build_system_prompt(character, session.scenario)
+    messages = _build_messages(session, addressee, message)
+
+    def _gen():
+        from anthropic import Anthropic
+        client = Anthropic(api_key=session.api_key)
+        parts: list[str] = []
+        with client.messages.stream(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            system=system_prompt,
+            messages=messages,
+        ) as stream:
+            for delta in stream.text_stream:
+                parts.append(delta)
+                yield delta
+        reply = "".join(parts).strip() or "(no response)"
+        session.history.append(TurnRecord(
+            addressee=addressee,
+            student_utterance=message.strip(),
+            character_response=reply,
+            timestamp=time.time(),
+        ))
+
+    return _gen()
 
 
 # ---------------------------------------------------------------------------

@@ -239,3 +239,24 @@ def test_split_reply_unbalanced_stars_fall_back_to_single_chunk() -> None:
     first, rest = _split_reply(reply)
     assert first == reply
     assert rest == ""
+
+
+# ── OPT-008 Cut 2: the incremental first-sentence boundary finder ────────────
+
+def test_first_sentence_cut_incremental_streaming() -> None:
+    from portal.vrai_faces import _first_sentence_cut
+    # Simulates deltas growing the buffer: no boundary until the sentence completes.
+    partial = "I have been feeling dizzy and weak all"
+    assert _first_sentence_cut(partial) is None          # mid-stream: no boundary yet
+    full = partial + " morning. It comes and goes in waves."
+    cut = _first_sentence_cut(full)
+    assert cut is not None
+    assert full[:cut].strip() == "I have been feeling dizzy and weak all morning."
+
+
+def test_first_sentence_cut_ignores_stage_direction_periods() -> None:
+    from portal.vrai_faces import _first_sentence_cut
+    buf = "*looks around. confused, plucking at lines* Where is everyone? They said lunch."
+    cut = _first_sentence_cut(buf)
+    assert cut is not None
+    assert buf[:cut].strip().endswith("Where is everyone?")
