@@ -177,6 +177,121 @@
       {% endfor %}
     </div>
 
+    <!-- FR-001/002 — the medication board (collapsible; doctor/pharmacist teaching loop) -->
+    <div id="meds-card" style="margin-top:12px;padding:10px 12px;border:1px solid #dde2ee;border-radius:8px;background:#fff;">
+      <button type="button" id="meds-toggle" class="primary-action" style="width:100%;text-align:left;">
+        💊 Medications <span id="meds-summary" class="muted small"></span>
+        <span style="float:right;" id="meds-caret">▸</span>
+      </button>
+      <div id="meds-body" style="display:none;margin-top:8px;">
+        <p class="muted small" style="margin:0 0 6px;">
+          Best-practice options for the scenario's condition (NCLEX-aligned <strong>draft — review before teaching</strong>).
+          Check what the <em>cart</em> holds and what the <em>pharmacy</em> stocks; uncheck <em>Available</em> to create the
+          supply problem — the doctor still orders by best practice, the <em>pharmacist</em> offers the alternative,
+          and the student carries it back for approval.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+          <label class="small">Condition:</label>
+          <select id="meds-condition" style="max-width:240px;"></select>
+          <span class="muted small">(switching re-initializes the board)</span>
+        </div>
+        <table class="small" style="width:100%;border-collapse:collapse;" id="meds-table">
+          <thead><tr style="text-align:left;color:#41495a;">
+            <th style="padding:3px 6px;">Medication</th><th>Dose · route · freq</th><th>Tier</th>
+            <th>Cart</th><th>Pharmacy</th><th>Available</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+          <strong class="small">Add:</strong>
+          <input id="madd-drug" placeholder="drug" style="width:130px;">
+          <input id="madd-dose" placeholder="dose" style="width:90px;">
+          <input id="madd-route" placeholder="route" style="width:70px;">
+          <input id="madd-freq" placeholder="frequency" style="width:110px;">
+          <select id="madd-tier"><option value="primary">primary</option><option value="alternative" selected>alternative</option></select>
+          <label class="small"><input type="checkbox" id="madd-cart"> cart</label>
+          <label class="small"><input type="checkbox" id="madd-pharm" checked> pharmacy</label>
+          <label class="small"><input type="checkbox" id="madd-avail" checked> available</label>
+          <button type="button" id="madd-go">Add</button>
+        </div>
+        <div id="meds-status" class="small" style="min-height:14px;margin-top:4px;"></div>
+      </div>
+    </div>
+    <script>
+    (function () {
+      var body = document.getElementById('meds-body');
+      var caret = document.getElementById('meds-caret');
+      var status = document.getElementById('meds-status');
+      var loaded = false;
+      function render(j) {
+        document.getElementById('meds-summary').textContent =
+          ' — ' + (j.display || j.condition || '') + ' · ' + (j.items || []).length + ' options';
+        var sel = document.getElementById('meds-condition');
+        sel.innerHTML = '';
+        (j.conditions || []).forEach(function (c) {
+          var o = document.createElement('option');
+          o.value = c.id; o.textContent = c.display;
+          if (c.id === j.condition) o.selected = true;
+          sel.appendChild(o);
+        });
+        var tb = document.querySelector('#meds-table tbody');
+        tb.innerHTML = '';
+        (j.items || []).forEach(function (it) {
+          var tr = document.createElement('tr');
+          tr.style.borderTop = '1px solid #eef1f7';
+          function cell(html) { var td = document.createElement('td'); td.style.padding = '3px 6px'; td.innerHTML = html; return td; }
+          tr.appendChild(cell('<strong>' + it.drug + '</strong>' + (it.custom ? ' <span class="muted small">(added)</span>' : '') + (it.note ? '<div class="muted small">' + it.note + '</div>' : '')));
+          tr.appendChild(cell(it.dose + ' · ' + it.route + ' · ' + it.frequency));
+          tr.appendChild(cell(it.tier));
+          ['in_cart', 'in_pharmacy', 'available'].forEach(function (k) {
+            var td = document.createElement('td');
+            var cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.checked = !!it[k];
+            cb.addEventListener('change', function () {
+              var payload = { id: it.id }; payload[k] = cb.checked;
+              fetch('/api/control/meds/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                .then(function (r) { return r.json(); }).then(function (jj) { if (jj.ok) render(jj); else status.textContent = jj.error || 'failed'; });
+            });
+            td.appendChild(cb); tr.appendChild(td);
+          });
+          tb.appendChild(tr);
+        });
+      }
+      function load() {
+        fetch('/api/control/meds').then(function (r) { return r.json(); }).then(function (j) {
+          if (j.ok) { render(j); loaded = true; }
+          else { status.textContent = j.error || 'no running scenario'; }
+        }).catch(function () { status.textContent = 'failed to load'; });
+      }
+      document.getElementById('meds-toggle').addEventListener('click', function () {
+        var open = body.style.display !== 'none';
+        body.style.display = open ? 'none' : 'block';
+        caret.textContent = open ? '▸' : '▾';
+        if (!open && !loaded) load();
+      });
+      document.getElementById('meds-condition').addEventListener('change', function (e) {
+        fetch('/api/control/meds/condition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ condition: e.target.value }) })
+          .then(function (r) { return r.json(); }).then(function (j) { if (j.ok) render(j); else status.textContent = j.error || 'failed'; });
+      });
+      document.getElementById('madd-go').addEventListener('click', function () {
+        fetch('/api/control/meds/add', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            drug: document.getElementById('madd-drug').value,
+            dose: document.getElementById('madd-dose').value,
+            route: document.getElementById('madd-route').value,
+            frequency: document.getElementById('madd-freq').value,
+            tier: document.getElementById('madd-tier').value,
+            in_cart: document.getElementById('madd-cart').checked,
+            in_pharmacy: document.getElementById('madd-pharm').checked,
+            available: document.getElementById('madd-avail').checked,
+          }) })
+          .then(function (r) { return r.json(); }).then(function (j) {
+            if (j.ok) { render(j); document.getElementById('madd-drug').value = ''; status.textContent = '✓ added'; }
+            else { status.textContent = j.error || 'failed'; }
+          });
+      });
+    })();
+    </script>
+
     <!-- FR-003 — instructor speaks through a character, on its tablet -->
     <div id="say-as-card" style="margin-top:12px;padding:10px 12px;border:1px solid #dde2ee;border-radius:8px;background:#fff;">
       <strong style="font-size:13px;">🎤 Say as character</strong>

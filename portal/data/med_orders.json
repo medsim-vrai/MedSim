@@ -1,0 +1,283 @@
+{
+  "_meta": {
+    "version": 1,
+    "status": "DRAFT — REQUIRES INSTRUCTOR CLINICAL REVIEW BEFORE TEACHING USE (FR-001)",
+    "description": "Condition → best-practice medication options for the doctor/pharmacist teaching loop. Drugs drawn from the NCLEX-familiar core formulary; doses are CONSERVATIVE ADULT LOWER-LIMIT STARTING doses (peds entries weight-based) — the simulated doctor recommends exactly one entry (seeded-random primary, escalating to alternatives), the simulated pharmacist applies instructor-set availability. Edit freely: this file is the single source of truth; the AI never invents a drug or dose beyond it.",
+    "tiers": "primary = first-line per common adult best practice · alternative = acceptable substitute when a primary is unavailable/contraindicated/already on board",
+    "fields": "drug · dose (conservative start) · route · frequency · note (caution/teaching point)"
+  },
+  "delirium": {
+    "display": "Hyperactive delirium",
+    "primary": [
+      {"drug": "Haloperidol", "dose": "0.5 mg", "route": "PO", "frequency": "q6h PRN agitation", "note": "check QTc; avoid in Parkinson's / Lewy body"},
+      {"drug": "Risperidone", "dose": "0.25 mg", "route": "PO", "frequency": "BID PRN", "note": "atypical; lower EPS than haloperidol"}
+    ],
+    "alternative": [
+      {"drug": "Quetiapine", "dose": "12.5 mg", "route": "PO", "frequency": "HS PRN", "note": "sedating; preferred if Parkinsonism"},
+      {"drug": "Olanzapine", "dose": "2.5 mg", "route": "PO", "frequency": "daily PRN", "note": "avoid IM with benzodiazepines"}
+    ]
+  },
+  "alcohol_withdrawal": {
+    "display": "Alcohol withdrawal",
+    "primary": [
+      {"drug": "Lorazepam", "dose": "1 mg", "route": "PO/IV", "frequency": "q4h PRN per CIWA", "note": "symptom-triggered per CIWA-Ar"},
+      {"drug": "Chlordiazepoxide", "dose": "25 mg", "route": "PO", "frequency": "q6h PRN per CIWA", "note": "avoid in hepatic impairment"}
+    ],
+    "alternative": [
+      {"drug": "Diazepam", "dose": "5 mg", "route": "PO/IV", "frequency": "q6h PRN per CIWA", "note": "long-acting; hepatic caution"},
+      {"drug": "Phenobarbital", "dose": "65 mg", "route": "IV", "frequency": "q30min PRN refractory", "note": "escalation pathway; monitor airway"}
+    ],
+    "adjunct_note": "Thiamine 100 mg IV before glucose; folate + multivitamin per protocol."
+  },
+  "sepsis": {
+    "display": "Sepsis (floor)",
+    "primary": [
+      {"drug": "Ceftriaxone", "dose": "1 g", "route": "IV", "frequency": "daily", "note": "community coverage; draw cultures first"},
+      {"drug": "Piperacillin-tazobactam", "dose": "3.375 g", "route": "IV", "frequency": "q8h", "note": "broad/HAI coverage"}
+    ],
+    "alternative": [
+      {"drug": "Cefepime", "dose": "1 g", "route": "IV", "frequency": "q12h", "note": "pseudomonal coverage"},
+      {"drug": "Levofloxacin", "dose": "500 mg", "route": "IV/PO", "frequency": "daily", "note": "beta-lactam allergy option; QTc caution"}
+    ],
+    "adjunct_note": "30 mL/kg balanced crystalloid for hypotension/lactate ≥4 per bundle."
+  },
+  "septic_shock": {
+    "display": "Septic shock",
+    "primary": [
+      {"drug": "Norepinephrine", "dose": "0.05 mcg/kg/min", "route": "IV infusion (central preferred)", "frequency": "titrate to MAP ≥65", "note": "first-line vasopressor"},
+      {"drug": "Piperacillin-tazobactam", "dose": "4.5 g", "route": "IV", "frequency": "q8h (extended infusion)", "note": "within 1 h of recognition"}
+    ],
+    "alternative": [
+      {"drug": "Vasopressin", "dose": "0.03 units/min", "route": "IV infusion", "frequency": "fixed adjunct", "note": "add-on to norepinephrine"},
+      {"drug": "Meropenem", "dose": "1 g", "route": "IV", "frequency": "q8h", "note": "ESBL risk / beta-lactam escalation"}
+    ]
+  },
+  "chf_exacerbation": {
+    "display": "CHF exacerbation",
+    "primary": [
+      {"drug": "Furosemide", "dose": "20 mg", "route": "IV", "frequency": "BID", "note": "naive patient start; double home PO dose as IV otherwise"}
+    ],
+    "alternative": [
+      {"drug": "Bumetanide", "dose": "0.5 mg", "route": "IV", "frequency": "BID", "note": "loop alternative"},
+      {"drug": "Metolazone", "dose": "2.5 mg", "route": "PO", "frequency": "daily (30 min pre-loop)", "note": "sequential nephron blockade; watch K+"}
+    ]
+  },
+  "mi_stemi": {
+    "display": "Acute MI / STEMI",
+    "primary": [
+      {"drug": "Aspirin", "dose": "324 mg (chewed)", "route": "PO", "frequency": "once, then 81 mg daily", "note": "immediate unless allergy"},
+      {"drug": "Heparin", "dose": "60 units/kg bolus (max 4000)", "route": "IV", "frequency": "then 12 units/kg/h", "note": "per ACS protocol"}
+    ],
+    "alternative": [
+      {"drug": "Clopidogrel", "dose": "300 mg load", "route": "PO", "frequency": "once, then 75 mg daily", "note": "if ticagrelor unavailable"},
+      {"drug": "Nitroglycerin", "dose": "0.4 mg", "route": "SL", "frequency": "q5min ×3 PRN chest pain", "note": "hold if SBP <90 or recent PDE5i"}
+    ]
+  },
+  "stroke_ischemic": {
+    "display": "Ischemic stroke",
+    "primary": [
+      {"drug": "Alteplase", "dose": "0.9 mg/kg (max 90 mg; 10% bolus)", "route": "IV", "frequency": "once within window", "note": "strict inclusion/exclusion criteria"},
+      {"drug": "Aspirin", "dose": "162 mg", "route": "PO", "frequency": "daily (≥24 h post-lytic)", "note": "swallow screen first"}
+    ],
+    "alternative": [
+      {"drug": "Tenecteplase", "dose": "0.25 mg/kg (max 25 mg)", "route": "IV", "frequency": "once", "note": "institution-dependent lytic alternative"}
+    ]
+  },
+  "gi_bleed_upper": {
+    "display": "Upper GI bleed",
+    "primary": [
+      {"drug": "Pantoprazole", "dose": "40 mg", "route": "IV", "frequency": "BID", "note": "PPI first-line"}
+    ],
+    "alternative": [
+      {"drug": "Esomeprazole", "dose": "40 mg", "route": "IV", "frequency": "daily", "note": "PPI alternative"},
+      {"drug": "Octreotide", "dose": "50 mcg bolus", "route": "IV", "frequency": "then 50 mcg/h", "note": "variceal suspicion"}
+    ]
+  },
+  "pneumonia": {
+    "display": "Community-acquired pneumonia",
+    "primary": [
+      {"drug": "Ceftriaxone", "dose": "1 g", "route": "IV", "frequency": "daily", "note": "pair with atypical coverage"},
+      {"drug": "Azithromycin", "dose": "500 mg", "route": "IV/PO", "frequency": "daily", "note": "atypical coverage; QTc caution"}
+    ],
+    "alternative": [
+      {"drug": "Levofloxacin", "dose": "750 mg", "route": "IV/PO", "frequency": "daily", "note": "monotherapy option; beta-lactam allergy"},
+      {"drug": "Doxycycline", "dose": "100 mg", "route": "PO", "frequency": "BID", "note": "atypical alternative"}
+    ]
+  },
+  "pe_pulmonary_embolism": {
+    "display": "Pulmonary embolism",
+    "primary": [
+      {"drug": "Enoxaparin", "dose": "1 mg/kg", "route": "SubQ", "frequency": "q12h", "note": "renal dose if CrCl <30"},
+      {"drug": "Heparin", "dose": "80 units/kg bolus", "route": "IV", "frequency": "then 18 units/kg/h", "note": "preferred if reperfusion possible / renal failure"}
+    ],
+    "alternative": [
+      {"drug": "Apixaban", "dose": "10 mg", "route": "PO", "frequency": "BID ×7 d, then 5 mg BID", "note": "DOAC pathway"},
+      {"drug": "Alteplase", "dose": "100 mg over 2 h", "route": "IV", "frequency": "once", "note": "massive PE with instability only"}
+    ]
+  },
+  "copd_exacerbation": {
+    "display": "COPD exacerbation",
+    "primary": [
+      {"drug": "Albuterol-ipratropium", "dose": "3 mL (2.5 mg/0.5 mg)", "route": "Nebulized", "frequency": "q4h PRN", "note": "duoneb first-line"},
+      {"drug": "Prednisone", "dose": "40 mg", "route": "PO", "frequency": "daily ×5 days", "note": "short burst, no taper needed"}
+    ],
+    "alternative": [
+      {"drug": "Methylprednisolone", "dose": "40 mg", "route": "IV", "frequency": "daily", "note": "if unable to take PO"},
+      {"drug": "Azithromycin", "dose": "500 mg", "route": "PO", "frequency": "daily ×3 days", "note": "if purulence/infective trigger"}
+    ]
+  },
+  "asthma_exacerbation": {
+    "display": "Asthma exacerbation",
+    "primary": [
+      {"drug": "Albuterol", "dose": "2.5 mg", "route": "Nebulized", "frequency": "q20min ×3 then q1-4h PRN", "note": "first-line bronchodilator"},
+      {"drug": "Prednisone", "dose": "40 mg", "route": "PO", "frequency": "daily ×5 days", "note": "early systemic steroid"}
+    ],
+    "alternative": [
+      {"drug": "Ipratropium", "dose": "0.5 mg", "route": "Nebulized", "frequency": "q20min ×3 (with albuterol)", "note": "moderate-severe adjunct"},
+      {"drug": "Magnesium sulfate", "dose": "2 g over 20 min", "route": "IV", "frequency": "once", "note": "severe refractory"}
+    ]
+  },
+  "dka": {
+    "display": "Diabetic ketoacidosis",
+    "primary": [
+      {"drug": "Regular insulin", "dose": "0.1 units/kg/h", "route": "IV infusion", "frequency": "continuous", "note": "verify K+ ≥3.3 before starting"},
+      {"drug": "Sodium chloride 0.9%", "dose": "1 L", "route": "IV", "frequency": "first hour, then per protocol", "note": "fluids before insulin"}
+    ],
+    "alternative": [
+      {"drug": "Potassium chloride", "dose": "20 mEq/h", "route": "IV", "frequency": "per protocol when K+ <5.2", "note": "replace before/with insulin"},
+      {"drug": "Dextrose 5% in 0.45% NS", "dose": "150 mL/h", "route": "IV", "frequency": "when glucose <250", "note": "prevent hypoglycemia while closing gap"}
+    ]
+  },
+  "hyperkalemia": {
+    "display": "Hyperkalemia",
+    "primary": [
+      {"drug": "Calcium gluconate", "dose": "1 g over 5 min", "route": "IV", "frequency": "once, repeat ×1 PRN ECG changes", "note": "membrane stabilization first"},
+      {"drug": "Regular insulin + D50", "dose": "5 units + 25 g dextrose", "route": "IV", "frequency": "once", "note": "shift; monitor glucose hourly"}
+    ],
+    "alternative": [
+      {"drug": "Albuterol", "dose": "10 mg", "route": "Nebulized", "frequency": "once", "note": "adjunct shift (high-dose)"},
+      {"drug": "Sodium zirconium cyclosilicate", "dose": "10 g", "route": "PO", "frequency": "TID ×48 h", "note": "elimination; modern exchange agent"}
+    ]
+  },
+  "aki": {
+    "display": "Acute kidney injury",
+    "primary": [
+      {"drug": "Sodium chloride 0.9%", "dose": "500 mL bolus", "route": "IV", "frequency": "once, reassess", "note": "pre-renal trial; hold nephrotoxins"}
+    ],
+    "alternative": [
+      {"drug": "Lactated Ringer's", "dose": "500 mL bolus", "route": "IV", "frequency": "once, reassess", "note": "balanced alternative; caution in hyperkalemia"}
+    ],
+    "adjunct_note": "Primary teaching point is STOPPING nephrotoxins (NSAIDs, ACEI/ARB, contrast) + renal dosing."
+  },
+  "anaphylaxis": {
+    "display": "Anaphylaxis",
+    "primary": [
+      {"drug": "Epinephrine", "dose": "0.3 mg (1 mg/mL)", "route": "IM (mid-outer thigh)", "frequency": "q5-15min PRN", "note": "FIRST-LINE — never delay for IV/antihistamines"}
+    ],
+    "alternative": [
+      {"drug": "Diphenhydramine", "dose": "25 mg", "route": "IV", "frequency": "once", "note": "adjunct only, after epinephrine"},
+      {"drug": "Methylprednisolone", "dose": "125 mg", "route": "IV", "frequency": "once", "note": "adjunct; biphasic-reaction mitigation"}
+    ]
+  },
+  "opioid_overdose": {
+    "display": "Opioid overdose",
+    "primary": [
+      {"drug": "Naloxone", "dose": "0.4 mg", "route": "IV/IM/IN", "frequency": "q2-3min PRN to adequate ventilation", "note": "titrate to respirations, not full arousal"}
+    ],
+    "alternative": [
+      {"drug": "Naloxone infusion", "dose": "2/3 of effective wake-up dose per hour", "route": "IV infusion", "frequency": "continuous", "note": "long-acting opioid exposure"}
+    ]
+  },
+  "stimulant_intoxication": {
+    "display": "Sympathomimetic toxicity",
+    "primary": [
+      {"drug": "Lorazepam", "dose": "2 mg", "route": "IV", "frequency": "q5-10min PRN agitation", "note": "benzodiazepines first-line; cooling for hyperthermia"},
+      {"drug": "Diazepam", "dose": "5 mg", "route": "IV", "frequency": "q5-10min PRN", "note": "alternative benzodiazepine"}
+    ],
+    "alternative": [
+      {"drug": "Phentolamine", "dose": "5 mg", "route": "IV", "frequency": "PRN refractory hypertension", "note": "avoid pure beta-blockade (unopposed alpha)"}
+    ]
+  },
+  "hypoglycemia": {
+    "display": "Hypoglycemia",
+    "primary": [
+      {"drug": "Dextrose 50%", "dose": "25 g (50 mL)", "route": "IV", "frequency": "once, recheck in 15 min", "note": "conscious + PO able → 15 g fast carbs instead"},
+      {"drug": "Glucagon", "dose": "1 mg", "route": "IM", "frequency": "once PRN no IV access", "note": "may repeat ×1; position lateral (emesis)"}
+    ],
+    "alternative": [
+      {"drug": "Dextrose 10% infusion", "dose": "100 mL/h", "route": "IV", "frequency": "continuous PRN recurrent", "note": "sulfonylurea/long-acting insulin cases"}
+    ]
+  },
+  "hyperglycemia_hhs": {
+    "display": "Hyperosmolar hyperglycemic state",
+    "primary": [
+      {"drug": "Sodium chloride 0.9%", "dose": "1 L", "route": "IV", "frequency": "first hour, then per corrected Na", "note": "fluids are the cornerstone"},
+      {"drug": "Regular insulin", "dose": "0.05 units/kg/h", "route": "IV infusion", "frequency": "continuous after fluids + K+ check", "note": "gentler than DKA dosing"}
+    ],
+    "alternative": [
+      {"drug": "Potassium chloride", "dose": "20 mEq/h", "route": "IV", "frequency": "per protocol", "note": "replace when K+ <5.2 and urine output adequate"}
+    ]
+  },
+  "trauma_blunt": {
+    "display": "Blunt trauma",
+    "primary": [
+      {"drug": "Tranexamic acid", "dose": "1 g over 10 min", "route": "IV", "frequency": "once (then 1 g over 8 h)", "note": "within 3 h of injury with hemorrhage"},
+      {"drug": "Fentanyl", "dose": "25 mcg", "route": "IV", "frequency": "q10min PRN severe pain", "note": "hemodynamic-friendly analgesia"}
+    ],
+    "alternative": [
+      {"drug": "Ketamine", "dose": "0.1 mg/kg", "route": "IV", "frequency": "PRN analgesia", "note": "sub-dissociative; preserves pressure"}
+    ]
+  },
+  "ob_postpartum_hemorrhage": {
+    "display": "Postpartum hemorrhage",
+    "primary": [
+      {"drug": "Oxytocin", "dose": "10 units", "route": "IM (or 20-40 units/L IV infusion)", "frequency": "once / titrate", "note": "first-line uterotonic + fundal massage"}
+    ],
+    "alternative": [
+      {"drug": "Methylergonovine", "dose": "0.2 mg", "route": "IM", "frequency": "q2-4h PRN", "note": "AVOID in hypertension/preeclampsia"},
+      {"drug": "Carboprost", "dose": "250 mcg", "route": "IM", "frequency": "q15-90min (max 8 doses)", "note": "AVOID in asthma"},
+      {"drug": "Tranexamic acid", "dose": "1 g over 10 min", "route": "IV", "frequency": "once, may repeat ×1", "note": "within 3 h of delivery"}
+    ]
+  },
+  "peds_dehydration": {
+    "display": "Pediatric dehydration",
+    "primary": [
+      {"drug": "Oral rehydration solution", "dose": "50 mL/kg over 4 h", "route": "PO", "frequency": "mild-moderate", "note": "small frequent volumes; first-line when tolerated"},
+      {"drug": "Sodium chloride 0.9%", "dose": "20 mL/kg bolus", "route": "IV", "frequency": "once, reassess", "note": "moderate-severe / PO failure"}
+    ],
+    "alternative": [
+      {"drug": "Ondansetron", "dose": "0.15 mg/kg (max 8 mg)", "route": "PO/IV", "frequency": "once", "note": "enables PO rehydration; QTc caution"}
+    ]
+  },
+  "psychosis_acute": {
+    "display": "Acute psychosis",
+    "primary": [
+      {"drug": "Risperidone", "dose": "1 mg", "route": "PO", "frequency": "BID", "note": "first-episode start low"},
+      {"drug": "Olanzapine", "dose": "5 mg", "route": "PO", "frequency": "daily", "note": "alternative atypical; metabolic counseling"}
+    ],
+    "alternative": [
+      {"drug": "Haloperidol", "dose": "2 mg", "route": "PO/IM", "frequency": "q4h PRN severe agitation", "note": "pair IM with lorazepam per protocol; EPS watch"},
+      {"drug": "Lorazepam", "dose": "1 mg", "route": "PO/IM", "frequency": "q4h PRN agitation", "note": "adjunct for agitation"}
+    ]
+  },
+  "stable_baseline": {
+    "display": "Stable baseline / comfort",
+    "primary": [
+      {"drug": "Acetaminophen", "dose": "650 mg", "route": "PO", "frequency": "q6h PRN pain/fever (max 3 g/day)", "note": "hepatic caution"}
+    ],
+    "alternative": [
+      {"drug": "Ibuprofen", "dose": "400 mg", "route": "PO", "frequency": "q6h PRN (with food)", "note": "avoid in AKI/GI bleed/anticoagulation"}
+    ]
+  },
+  "post_op_stable": {
+    "display": "Post-operative (stable)",
+    "primary": [
+      {"drug": "Acetaminophen", "dose": "650 mg", "route": "PO", "frequency": "q6h scheduled", "note": "multimodal base"},
+      {"drug": "Oxycodone", "dose": "5 mg", "route": "PO", "frequency": "q4h PRN moderate-severe pain", "note": "lowest effective; bowel regimen alongside"}
+    ],
+    "alternative": [
+      {"drug": "Tramadol", "dose": "50 mg", "route": "PO", "frequency": "q6h PRN", "note": "seizure threshold / serotonergic caution"},
+      {"drug": "Docusate", "dose": "100 mg", "route": "PO", "frequency": "BID", "note": "opioid bowel regimen"}
+    ]
+  }
+}

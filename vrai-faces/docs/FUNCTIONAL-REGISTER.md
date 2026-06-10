@@ -76,8 +76,8 @@ ADR → `In-progress` → `Shipped` → `Validated` (confirmed in a test session
 
 | ID | Refinement / expansion | Area | Source | Pri | Status | Lands in |
 |----|------------------------|------|--------|-----|--------|----------|
-| **FR-001** | Best-practice med ordering (doctor) — random primary, min-dose, escalate to secondary | clinical-logic | instructor | P2 | Proposed | runtime(core) · portal · data |
-| **FR-002** | Pharmacist availability + alternatives; instructor "not available" flag | clinical-logic · instructor-tools | instructor | P2 | Proposed | control-room · portal · runtime(core) · data |
+| **FR-001** | Best-practice med ordering (doctor) — random primary, min-dose, escalate to secondary | clinical-logic | instructor | P2 | **Shipped** (2026-06-10, draft data pending review) | runtime(core) · portal · data |
+| **FR-002** | Pharmacist availability + alternatives; instructor "not available" flag | clinical-logic · instructor-tools | instructor | P2 | **Shipped** (2026-06-10) | control-room · portal · runtime(core) · data |
 | **FR-003** | Instructor character prompting — speak in-context (emotion / mental status / role) | instructor-tools · character-interaction | instructor | P2 | **✅ Validated** (2026-06-10) | control-room · portal · avatar |
 | **FR-004** | Zero-config wireless device pairing for production venues | UX · scenario | testing | P1 | Proposed | portal · avatar · kit/ops (+ADR) |
 

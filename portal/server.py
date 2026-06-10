@@ -163,6 +163,10 @@ _device_routes.attach(app, templates)
 # portal/vrai_faces.py; attached here like the device subsystem.
 vrai_faces.attach(app, templates)
 
+# FR-001/002 — the instructor's medication board (doctor/pharmacist teaching loop).
+from . import med_routes as _med_routes  # noqa: E402
+_med_routes.attach(app)
+
 
 # V7 — Activity catalog seed. Idempotent — only inserts rows missing
 # from the DB. Runs on every server boot; safe.

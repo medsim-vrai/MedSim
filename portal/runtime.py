@@ -326,6 +326,13 @@ def _build_system_prompt(character: dict[str, Any], scenario: dict[str, Any]) ->
         lines.append("Do not name these touchpoints to the student. Behave in")
         lines.append("character; let the student work the problem.")
 
+    # FR-001/002 — callers may inject role-specific context (e.g. the medication
+    # board for doctor/pharmacist personas) without touching the card schema.
+    extra = character.get("_extra_context")
+    if extra:
+        lines.append("")
+        lines.append(str(extra))
+
     lines.append("")
     lines.append("Respond with one short, in-character utterance. No stage directions.")
     return "\n".join(lines)

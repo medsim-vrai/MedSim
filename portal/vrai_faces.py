@@ -1033,8 +1033,12 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                 "patient": ({"history": sess.scenario_text}
                             if getattr(sess, "scenario_text", "") else {}),
             }
+            # FR-001/002: same med-board injection as /listen (doctor/pharmacist only).
+            from . import med_orders
+            _med_ctx = med_orders.prompt_block_for(sess.id, card)
+            ic_card = {**card, "_extra_context": _med_ctx} if _med_ctx else card
             sim = runtime.create_session_from_data(
-                scenario=scenario_doc, characters={cid: card}, api_key=sess.api_key)
+                scenario=scenario_doc, characters={cid: ic_card}, api_key=sess.api_key)
             import asyncio
             try:
                 result = await asyncio.wait_for(
@@ -1130,8 +1134,14 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                 "patient": ({"history": sess.scenario_text}
                             if getattr(sess, "scenario_text", "") else {}),
             }
+            # FR-001/002: doctor/pharmacist personas get the session's medication
+            # board injected into their system prompt (authored data; code-selected
+            # recommendation — the model never invents drugs/doses). No-op otherwise.
+            from . import med_orders
+            _med_ctx = med_orders.prompt_block_for(sess.id, card)
+            turn_card = {**card, "_extra_context": _med_ctx} if _med_ctx else card
             sim = runtime.create_session_from_data(
-                scenario=scenario, characters={cid: card}, api_key=sess.api_key,
+                scenario=scenario, characters={cid: turn_card}, api_key=sess.api_key,
             )
             # OPT-008 Cut 2: STREAM the turn — the avatar starts speaking at the first
             # sentence boundary while the rest of the reply is still generating; the rest
