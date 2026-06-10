@@ -38,19 +38,49 @@ The preflight regenerates the QR for the current network (Desktop + Preview). **
 nothing** — no new profile, no toggles, no warnings — because the new leaf chains to the CA they
 already trust.
 
-## 3 · New-device onboarding (one time per iPad)
+## 3 · New-device onboarding (one time per tablet — Apple AND Android)
 
-1. **Install the CA:** Safari → `https://<mac-ip>:8765/rootca.pem` → Allow → Settings →
-   **Profile Downloaded → Install** (passcode → Install again).
-   ⚠️ Use the **portal's https route**, never a plain-`http://` link — Safari's HTTPS-First
-   silently upgrades http links and the download dies with "couldn't establish a secure
-   connection".
+**The easy path (2026-06-10): the portal runs an onboarding helper on plain HTTP at
+`http://<mac-ip>:8766`** — open that on any new tablet. It serves per-platform step-by-step
+instructions + the CA download, with no certificate chicken-and-egg (plain http needs no trust).
+The portal banner + `preflight.sh` print this URL. Manual steps, for reference:
+
+**Apple (iPad / Safari):**
+1. **Install the CA:** download `rootca.pem` (from the onboarding page, or
+   `https://<mac-ip>:8765/rootca.pem` if this tablet can already reach the portal) → Allow →
+   Settings → **Profile Downloaded → Install** (passcode → Install again).
+   ⚠️ Never hand-type a plain-`http://` download link into Safari — HTTPS-First upgrades it and
+   the download dies. The :8766 onboarding page's buttons carry explicit schemes and work.
 2. **Trust it fully:** Settings → General → About → **Certificate Trust Settings** → toggle
    **MedSim Dev Local CA → ON**. (The toggle only appears AFTER the profile is installed.)
 3. **Network identity:** Settings → Wi-Fi → ⓘ on the dev network → **Private Wi-Fi Address →
    Off** (→ Rejoin). A randomized/rotating MAC made the Tenda router silently drop ALL
    device↔device traffic (2026-06-09) — and some routers key device policies to the MAC.
-4. Scan the QR. Done — this device now survives every future cert re-mint and router change.
+
+**Android (tablet / Chrome):**
+1. Download `rootca.pem` from the onboarding page (`http://<mac-ip>:8766`).
+2. Settings → search "**CA certificate**" (usually Security & privacy → More security →
+   Encryption & credentials → **Install a certificate → CA certificate**) → tap **Install
+   anyway** → pick the downloaded file.
+3. **Chrome on Android trusts user-installed CAs immediately** — pages load with no warning.
+   (Native Android *apps* would need a network-security-config; the browser does not.)
+
+Then scan the QR. Done — the device now survives every future cert re-mint and router change.
+
+## 3b · Simulated-device pages (monitors/pumps) on tablets — fixed 2026-06-10
+
+The device-skin QR flow historically failed on tablets with a "security conflict". TWO stacked
+causes, both fixed/handled:
+1. **The `/d` QR redirector dated from the portal's pre-TLS era**: it bounced tablets to
+   hard-coded `http://` targets (dead against the https-only port on EVERY platform) and
+   force-opened Chrome via `googlechrome://` (errors on iPads without Chrome). It is now a plain
+   **same-origin 307 redirect** — scheme/host preserved by construction, opens in the platform's
+   default browser. The skins were audited (2026-06-10): plain same-origin web pages, **no
+   Chrome-only APIs** — Safari (iPadOS) and Chrome (Android) both render them.
+   (`MEDSIM_QR_OPEN_IN=ios` still exists for the legacy Chrome-handoff QR encoding; default
+   "smart" mode needs nothing.)
+2. **Missing CA trust on the tablet** — §3 above. Any tablet that skips onboarding sees the
+   interstitial on ALL portal pages, devices included.
 
 ## 4 · Failure signatures (what each missing piece looks like)
 

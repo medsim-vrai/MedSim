@@ -51,8 +51,11 @@ fi
 echo "── 4 · Tablet identity reminder ───────────────────────────"
 echo "      Router/IP changed, or a tablet misbehaving? READ THE RUNBOOK: docs/CERTIFICATES-AND-NETWORK-CHANGES.md"
 echo "      The 3 rules: (1) NEVER re-mint the CA (REMINT_CA) — leaf-only re-mints keep every device trusted;"
-echo "      (2) each iPad needs the CA installed + FULL TRUST ON once (portal /rootca.pem, https NOT http);"
-echo "      (3) Private Wi-Fi Address OFF on dev routers (randomized MACs get dropped/quarantined)."
+echo "      (2) every tablet (Apple AND Android) trusts the CA once — send NEW tablets to the onboarding"
+echo "          page below; (3) Private Wi-Fi Address OFF on dev routers (randomized MACs get dropped)."
+OB="$(curl -so /dev/null -w '%{http_code}' --connect-timeout 2 "http://$IP:$((PORT+1))/" 2>/dev/null)"
+if [ "$OB" = "200" ]; then ok "Onboarding helper up: http://$IP:$((PORT+1))  ← new tablets start here"
+else echo "      (onboarding helper not detected on :$((PORT+1)) — older portal build?)"; fi
 if [ -n "$TABLET_IP" ]; then
   if ping -c 2 -t 3 -q "$TABLET_IP" >/dev/null 2>&1; then ok "Tablet $TABLET_IP answers ping"
   else bad "Tablet $TABLET_IP does NOT answer ping — wrong network, private-MAC identity, or router isolation"; fi

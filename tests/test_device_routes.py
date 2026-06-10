@@ -192,3 +192,23 @@ def test_assignment_reflected_in_roster(client):
     stations = client.get("/api/device/roster").json()["stations"]
     me = next(s for s in stations if s["station_id"] == sid)
     assert me["character_id"] == "P-002"
+
+
+# ── /d QR redirector (rewritten 2026-06-10: same-scheme redirect, no Chrome bounce) ──
+
+def test_qr_redirector_redirects_same_origin_relative(client):
+    """The V6 version bounced to a hard-coded http:// URL (dead on the https-only portal)
+    via a googlechrome:// handoff (dead on iPads without Chrome). It must now be a plain
+    RELATIVE redirect — scheme/host/port preserved by construction on any platform."""
+    r = client.get("/d?c=ABC123&s=station-1", follow_redirects=False)
+    assert r.status_code == 307
+    loc = r.headers["location"]
+    assert loc == "/device/join?code=ABC123&station=station-1"
+    assert "googlechrome" not in loc and "http://" not in loc
+
+
+def test_qr_redirector_sanitizes_inputs(client):
+    r = client.get("/d?c=AB%20<x>&s=st/../etc", follow_redirects=False)
+    assert r.status_code == 307
+    loc = r.headers["location"]
+    assert "<" not in loc and ".." not in loc and "/etc" not in loc

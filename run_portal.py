@@ -99,6 +99,96 @@ def _lan_ip() -> str:
     return ip
 
 
+ONBOARD_PORT = int(os.environ.get("MEDSIM_ONBOARD_PORT", str(PORT + 1)))
+
+
+def _onboard_server() -> None:
+    """Tablet-onboarding helper on PLAIN HTTP (docs/CERTIFICATES-AND-NETWORK-CHANGES.md).
+
+    Solves the trust chicken-and-egg: a brand-new tablet cannot cleanly download the root
+    CA from the https portal (the untrusted-cert interstitial blocks it, and Safari/Chrome
+    HTTPS-First breaks hand-typed plain-http links to ad-hoc servers). This tiny locked-down
+    server speaks plain HTTP on PORT+1 and serves EXACTLY two paths: per-platform CA-install
+    instructions ("/") and the public root CA ("/rootca.pem"). The CA certificate is public
+    material, so http is fine; nothing else is exposed (no portal data, no directory)."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    ca_path = _CERT_DIR / "rootCA.pem"
+    if not ca_path.is_file():
+        return
+
+    def _page(host_hdr: str) -> bytes:
+        host = (host_hdr or "").split(":")[0] or _lan_ip()
+        portal = f"https://{host}:{PORT}"
+        ca_url = f"http://{host}:{ONBOARD_PORT}/rootca.pem"
+        return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MedSim — connect this tablet</title>
+<style>body{{font-family:-apple-system,Roboto,Helvetica,Arial,sans-serif;background:#0a234f;
+color:#fff;margin:0;padding:28px 20px;line-height:1.5}}h1{{font-size:22px;margin:0 0 4px}}
+.sub{{color:#a8c0f0;font-size:14px;margin-bottom:18px}}.card{{background:#102f6b;border-radius:12px;
+padding:16px 18px;margin:14px 0}}h2{{font-size:16px;margin:0 0 8px}}ol{{margin:0;padding-left:20px}}
+li{{margin:7px 0;font-size:15px}}a.btn{{display:inline-block;background:#2f7d5b;color:#fff;
+text-decoration:none;padding:13px 22px;border-radius:9px;font-weight:700;margin:10px 0}}
+a.go{{background:#143b8a}}code{{background:#0a234f;padding:1px 6px;border-radius:5px;font-size:13px}}
+.note{{font-size:13px;color:#a8c0f0}}</style></head><body>
+<h1>Connect this tablet to MedSim</h1>
+<p class="sub">One-time setup: install the simulation's local security certificate, then open
+the portal. After this, QR codes and device pages open with no warnings — in this and every
+future session.</p>
+<div class="card"><h2>Step 1 — Download the certificate</h2>
+<a class="btn" href="{ca_url}">Download MedSim certificate</a>
+<p class="note">If asked, allow the download.</p></div>
+<div class="card" id="apple"><h2>Step 2 — Apple iPad</h2><ol>
+<li>Open <b>Settings</b> → tap <b>Profile Downloaded</b> (top of the left column)</li>
+<li>Tap <b>Install</b> → enter passcode → <b>Install</b> again → Done</li>
+<li><b>Settings → General → About → Certificate Trust Settings</b> →
+turn <b>ON</b> “MedSim Dev Local CA” → Continue</li>
+<li>Also (dev networks): <b>Settings → Wi-Fi → ⓘ → Private Wi-Fi Address → Off</b> → Rejoin</li>
+</ol></div>
+<div class="card" id="android"><h2>Step 2 — Android tablet</h2><ol>
+<li>Open <b>Settings</b> → search “<b>CA certificate</b>” (usually Security &amp; privacy →
+More security → Encryption &amp; credentials → <b>Install a certificate → CA certificate</b>)</li>
+<li>Tap <b>Install anyway</b> → choose the downloaded <code>rootca.pem</code></li>
+<li>Chrome trusts it immediately — no restart needed</li>
+</ol></div>
+<div class="card"><h2>Step 3 — Open the simulation</h2>
+<a class="btn go" href="{portal}">Open the portal ({portal})</a>
+<p class="note">It must load with <b>no security warning</b>. Then scan the session QR as usual.</p></div>
+<p class="note">This helper page serves only these instructions and the public certificate.</p>
+<script>(function(){{var ua=navigator.userAgent||"";
+var apple=/iPad|iPhone|Macintosh/.test(ua)&&navigator.maxTouchPoints>0;
+document.getElementById(apple?"android":"apple").style.opacity="0.45";}})();</script>
+</body></html>""".encode()
+
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_a: object) -> None:  # keep the console quiet
+            pass
+
+        def do_GET(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler API
+            path = self.path.split("?", 1)[0]
+            if path in ("/", "/onboard", "/index.html"):
+                body, ctype = _page(self.headers.get("Host", "")), "text/html; charset=utf-8"
+            elif path == "/rootca.pem":
+                body, ctype = ca_path.read_bytes(), "application/x-x509-ca-cert"
+            else:
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    bind = "0.0.0.0" if HOST in ("0.0.0.0", "::") else HOST
+    try:
+        server = ThreadingHTTPServer((bind, ONBOARD_PORT), _Handler)
+    except OSError:
+        return  # port in use — the helper is best-effort, never fatal
+    server.serve_forever()
+
+
 def _open_in_chrome(url: str) -> bool:
     """Open URL specifically in Chrome (or Chromium). Returns True on success.
 
@@ -215,6 +305,9 @@ def main() -> None:
     if HOST in ("0.0.0.0", "::"):
         lan = _lan_ip()
         lines.append(f"  LAN/iPad:  {scheme}://{lan}:{PORT}")
+        if tls:
+            lines.append(f"  Onboard:   http://{lan}:{ONBOARD_PORT}  ← NEW tablets start here "
+                         "(CA install, Apple + Android)")
         lines.append("")
         lines.append("  On iPad/iPhone: open the LAN URL in Safari,")
         lines.append("  then Share → Add to Home Screen for an app-like shortcut.")
@@ -226,6 +319,10 @@ def main() -> None:
     print("\n".join(lines))
 
     threading.Thread(target=_open_browser, daemon=True).start()
+    # Tablet-onboarding helper (plain http, PORT+1) — only meaningful when TLS is on
+    # (its whole job is distributing the CA that makes the https portal trusted).
+    if tls:
+        threading.Thread(target=_onboard_server, daemon=True).start()
     tls = _tls_files()
     ssl_kwargs = {"ssl_certfile": tls[0], "ssl_keyfile": tls[1]} if tls else {}
     try:

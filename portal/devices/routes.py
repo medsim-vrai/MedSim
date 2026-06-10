@@ -18,7 +18,7 @@ import secrets
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from portal import auth, control_room, control_session, credentials, ehr_db, qrgen
@@ -91,59 +91,29 @@ def attach(app: Any, jinja: Jinja2Templates) -> None:
 # Public — device station HTML shell + join landing
 # ──────────────────────────────────────────────────────────────────────
 
-@router.get("/d", response_class=HTMLResponse)
+@router.get("/d")
 async def device_qr_redirector(request: Request, c: str = "", s: str = ""):
-    """V6 — cross-platform QR redirector. The QR encodes a plain http://
-    URL pointing here (every scanner handles plain http), then this page
-    detects the platform and bounces to Chrome:
-      - iOS Safari → googlechrome://... (then plain http fallback after 1.5s)
-      - Android    → already in default browser (usually Chrome) → /device/join
-      - desktop    → /device/join directly
-    Querystring uses short names (c, s) to keep the QR small + scannable.
+    """Cross-platform QR redirector (rewritten 2026-06-10, was V6). The QR encodes this
+    tiny /d URL (short → scannable); we redirect to the join page on the SAME ORIGIN AND
+    SCHEME the request arrived on, in whatever browser the tablet's camera opened.
+
+    The V6 version hard-coded `http://` targets and force-bounced iOS into Chrome via
+    `googlechrome://` — both written in the portal's pre-TLS era. With the portal now
+    HTTPS-only (ADR-0028), the http bounce hit the TLS port as plaintext and DIED on every
+    platform (the field "security conflict", 2026-06-09), and the Chrome handoff errored on
+    iPads without Chrome. The device skins are plain same-origin web pages (no Chrome-only
+    APIs — audited 2026-06-10), so the platform default browser is correct everywhere:
+    Safari on iPadOS, Chrome on Android. A relative server-side redirect preserves
+    scheme/host/port by construction and needs no UA sniffing.
+
+    Tablets must trust the MedSim dev root CA first (one-time) — see
+    docs/CERTIFICATES-AND-NETWORK-CHANGES.md; without it the browser shows the
+    untrusted-cert interstitial before this redirect can even run.
     """
     safe_c = re.sub(r"[^A-Za-z0-9_-]", "", (c or ""))[:32]
     safe_s = re.sub(r"[^A-Za-z0-9_-]", "", (s or ""))[:64]
-    target_path = f"/device/join?code={safe_c}&station={safe_s}"
-    host = request.url.hostname or ""
-    port = request.url.port
-    netloc = f"{host}:{port}" if port else host
-    plain_target  = f"http://{netloc}{target_path}"
-    chrome_target = f"googlechrome://{netloc}{target_path}"
-    body = (
-      "<!DOCTYPE html><html><head>"
-      "<meta charset='utf-8'>"
-      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-      "<title>Opening device…</title>"
-      "<style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;"
-      "background:#0a234f;color:#fff;margin:0;padding:32px;text-align:center;"
-      "display:flex;flex-direction:column;align-items:center;justify-content:center;"
-      "min-height:100vh}h1{font-size:18px;margin:0 0 8px}.muted{color:#a8c0f0;"
-      "font-size:13px;line-height:1.5;max-width:340px}a.btn{display:inline-block;"
-      "background:#143b8a;color:#fff;text-decoration:none;padding:14px 24px;"
-      "border-radius:8px;font-weight:700;margin-top:18px}</style>"
-      "</head><body>"
-      "<h1>Opening device…</h1>"
-      "<p class='muted'>If nothing happens, tap the button below.</p>"
-      f"<a class='btn' id='open' href='{plain_target}'>Open device</a>"
-      "<script>(function(){"
-      f"var plain='{plain_target}';var chrome='{chrome_target}';"
-      "var ua=navigator.userAgent||'';"
-      "var isIOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);"
-      "var inChrome=/CriOS|Chrome/i.test(ua);"
-      "if(isIOS&&!inChrome){"
-      # iOS Safari path — try Chrome scheme, fall back to plain http
-      # after 1.5s if Chrome isn't installed (the page will still be on
-      # this redirector after the attempted handoff so the timeout
-      # fires and we navigate to plain).
-      "window.location=chrome;"
-      "setTimeout(function(){window.location=plain;},1500);"
-      "}else{"
-      # Android / desktop / already-in-Chrome iOS — just go.
-      "window.location=plain;"
-      "}"
-      "})();</script></body></html>"
-    )
-    return HTMLResponse(body)
+    return RedirectResponse(
+        url=f"/device/join?code={safe_c}&station={safe_s}", status_code=307)
 
 
 @router.get("/device/join", response_class=HTMLResponse)
