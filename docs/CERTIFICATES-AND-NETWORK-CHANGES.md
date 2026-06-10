@@ -82,6 +82,9 @@ causes, both fixed/handled:
 2. **Missing CA trust on the tablet** — §3 above. Any tablet that skips onboarding sees the
    interstitial on ALL portal pages, devices included.
 
+**Validated on tablet 2026-06-10:** IV pump (alaris) minted from the Ops page, scanned, loaded
+and functioned on the tablet — no security warning, no Chrome hand-off.
+
 ## 4 · Failure signatures (what each missing piece looks like)
 
 | Symptom on the iPad | Actual cause | Fix |
