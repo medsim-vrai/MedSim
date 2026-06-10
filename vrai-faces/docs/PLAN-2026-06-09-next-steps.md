@@ -46,6 +46,14 @@ voice → synced lip-sync + emotion, served one-origin. **Since 2026-06-07:**
 - Bundle whisper-tiny.en local-first (`setup:assets`) · **Capacitor** native `.ipa`/`.apk` (needs Mac/SDK)
   · fleet hardening (`MEDSIM_PUBLIC_HOST` stable name + per-iPad CA trust) · **name-gated voice
   activation** (wake word, deferred ADR-0026) · nightly e2e/soak on real hardware.
+- **Field evidence (2026-06-09, priority ↑):** a venue/network change broke the whole pairing chain —
+  the QR + cert are pinned to the Mac's LAN IP, and each network adds its own failure (the new home
+  mesh **isolates clients** → iPad packets never reach the portal; a carrier hotspot was **IPv6-only**
+  (CLAT 192.0.0.2) → no shared IPv4 at all). Tablet pairing must stop depending on venue networking:
+  **(a)** short-term roaming kit = **Mac↔iPad USB link via Internet Sharing** (stable 192.168.2.x,
+  router-free, one cert/QR forever); **(b)** durable = stable name (mDNS `.local` works over the USB
+  link / Bonjour) + `MEDSIM_PUBLIC_HOST` in the cert SAN so the QR is network-independent; **(c)**
+  diagnosis tip — the portal access log is decisive (zero requests = the network, not the stack).
 - **OPT-005 · capability-gated model precache** (before offline-install; avoid precaching both whisper
   variants). **M.**
 
