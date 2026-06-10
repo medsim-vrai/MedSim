@@ -79,6 +79,7 @@ ADR → `In-progress` → `Shipped` → `Validated` (confirmed in a test session
 | **FR-001** | Best-practice med ordering (doctor) — random primary, min-dose, escalate to secondary | clinical-logic | instructor | P2 | Proposed | runtime(core) · portal · data |
 | **FR-002** | Pharmacist availability + alternatives; instructor "not available" flag | clinical-logic · instructor-tools | instructor | P2 | Proposed | control-room · portal · runtime(core) · data |
 | **FR-003** | Instructor character prompting — speak in-context (emotion / mental status / role) | instructor-tools · character-interaction | instructor | P2 | Proposed | control-room · portal · avatar |
+| **FR-004** | Zero-config wireless device pairing for production venues | UX · scenario | testing | P1 | Proposed | portal · avatar · kit/ops (+ADR) |
 
 ---
 
@@ -192,7 +193,61 @@ like the AI reply — so the cloud-voice path is allowed (ADR-0037); no trainee 
 
 ---
 
-## Intake — turning a test observation into an entry
+## FR-004 — Zero-config wireless device pairing for production venues
+
+**Area:** UX · scenario-ops · **Source:** testing (2026-06-09 field session) · **Priority:** P1 ·
+**Status:** Proposed · **Effort:** M (kit) / L (relay, +ADR) · **Lands in:** portal + avatar + kit/ops
+
+**Goal.** A facilitator at ANY venue gets the bedside loop running wirelessly with no IT work:
+power on the kit → iPads connect → scan the QR → the avatar appears. No cables, no router
+settings, no per-venue certificates, no IP addresses.
+
+**Problem (field-proven, 2026-06-09).** Pairing is pinned to the portal Mac's LAN IP (QR URL +
+TLS-cert SAN), and venue networks actively fight device-to-device traffic: the new home mesh
+**isolates clients** (iPad packets never reach the portal — confirmed via the portal access log);
+a carrier phone hotspot was **IPv6-only/CLAT** (no shared IPv4 at all). Institutional Wi-Fi
+(hospital / university / conference) has client isolation on **by default**, so per-venue Wi-Fi
+will fail at most real sites. A USB tether works on the bench but is not a product answer —
+end users expect wireless.
+
+**Options (trade-offs):**
+1. **Kit travel router (recommended short-term, production-credible).** A pocket router in the
+   demo kit broadcasts a fixed SSID (e.g. `MedSimNet`); the Mac + iPads join it once and never
+   re-pair. Stable subnet + stable portal hostname → **one cert, one QR, forever**; isolation is
+   under our control (off); venue internet (for AI/voice) arrives via the router's WAN (ethernet,
+   venue Wi-Fi as WWAN, or a phone). Local-first preserved (PHI stays on the kit LAN, ADR-0001).
+   ~$40–100 hardware, zero per-venue config, no code changes beyond pinning
+   `MEDSIM_PUBLIC_HOST` + cert SAN to the kit hostname.
+2. **Portal-hosted Wi-Fi (Mac as AP).** Zero extra hardware, but macOS Internet Sharing can't
+   share Wi-Fi→Wi-Fi (needs ethernet upstream for internet) and is the least reliable macOS
+   feature in the chain — acceptable fallback, not the plan.
+3. **Cloud relay (the strategic fork — needs an ADR).** Portal (or a thin frame-relay) in the
+   cloud; devices connect OUTBOUND over any internet (venue Wi-Fi, cellular) — isolation becomes
+   irrelevant, pairing is a URL. This is the "SaaS-grade easy wireless" answer, but it moves the
+   trainee-utterance path (PHI, ADR-0014) and the speech transport through the cloud →
+   BAA-covered posture + encryption design required (fail-closed). File as the ADR alongside the
+   Track-3 transport decisions; pairs naturally with the Capacitor native app (Track 4).
+4. **Managed VPN overlay (Tailscale/MDM).** Works across any network with the PHI posture intact
+   (still your-devices-only), at the cost of fleet enrollment overhead — viable for a managed
+   institutional fleet, not for ad-hoc venue kits.
+
+**Recommendation.** Ship **(1) the kit router** for pilots/demos now (+ stable hostname in cert
+SAN so the QR never changes), and ratify **(3) cloud relay** as an ADR for the production scale-
+out decision — they're complementary (on-prem kit vs SaaS deployment).
+
+**Acceptance criteria.**
+- A facilitator with no IT involvement gets an iPad paired at a *new* venue in under 2 minutes,
+  wirelessly.
+- The QR/launch URL is **identical across venues** (no IP in it; stable hostname).
+- A network change (venue → venue) requires **zero** cert/QR regeneration.
+- Trainee-utterance PHI posture re-verified for whichever transport ships (ADR-0014 fail-closed).
+
+**Clinical safety / PHI.** Options 1/2/4 keep today's local-first posture. Option 3 moves PHI
+transit into the cloud → explicit ADR + BAA/encryption review BEFORE build (fail-closed default).
+
+**Open questions.** Router model/standardization for the kit · does the kit need to double as the
+portal host (router + compute stick) · relay architecture (full portal vs thin WS frame relay) ·
+how the stable hostname interacts with per-iPad CA trust at fleet scale (Track-4 hardening).
 
 During a session, capture the minimum and triage later: **title + Source + one-line
 behavior**. Attach objective signals where useful — the 🐞 debug overlay (`?debug`), the
