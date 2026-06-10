@@ -31,7 +31,29 @@ zero packets means the connection died below the page layer.
 white screen / slow take doesn't say WHY. The app must self-report: storage mode, service-worker
 state, model-cache hit/miss, origin.
 
-## Phase A — Pin L1 with a 10-minute isolation matrix (next session, iPad in hand)
+## ✅ Phase A — RESOLVED 2026-06-09 23:21 (root cause ≠ the suspect)
+
+**Confirmed root cause: certificate trust, not Private Relay.** Step 2 (clear Website Data) surfaced
+the truth: the fresh normal tab showed Safari's **"This Connection Is Not Private"** interstitial —
+meaning connections had been reaching the portal ALL ALONG. Two compounding mistakes had hidden it:
+1. **The access log only records requests AFTER TLS succeeds** — cert-rejected handshakes are
+   invisible, which I had misread as "zero packets / transport block". (Lesson: absence from the
+   uvicorn access log ≠ absence of traffic; only a packet capture proves transport.)
+2. **Per-cert "visit this website" exceptions + the SW's offline ghost masked the failures
+   inconsistently** — each cert re-mint today silently invalidated the previous tap-through, and
+   depending on cache state the failure looked like a white screen, a ghost app (SW shell, no face),
+   or "only works in private". Private Relay / Limit IP Address Tracking: **exonerated**.
+
+After tapping "visit this website": the full avatar runs in a NORMAL tab (478-landmark mesh, webgpu,
+voice turn in flight) and the whisper model is downloading into PERSISTENT cache.
+
+**Permanent fix (kills the interstitial + survives future cert re-mints):** install + fully trust the
+dev **root CA** on the iPad — leaf re-mints (new venue IPs) then chain silently to the trusted CA, no
+per-cert exceptions to re-tap: Safari → `http://<mac-ip>:9000/rootCA.pem` (or the portal's CA route) →
+install the profile → **Settings → General → About → Certificate Trust Settings → full trust ON**.
+Added to the preflight checklist.
+
+### (superseded) the original isolation matrix
 
 One variable at a time, normal tab, retry `https://<ip>:8765` after each step; record which step
 flips it green — that becomes the documented fix in the preflight + facilitator notes:

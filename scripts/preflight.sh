@@ -51,8 +51,10 @@ fi
 echo "── 4 · Tablet identity reminder ───────────────────────────"
 echo "      iPad: Settings → Wi-Fi → ⓘ → Private Wi-Fi Address must be OFF on dev routers"
 echo "      (a randomized MAC made the router silently drop all device↔device traffic, 2026-06-09)"
-echo "      iPad: Wi-Fi ⓘ → Limit IP Address Tracking OFF (+ iCloud Private Relay off for this net) —"
-echo "      otherwise NORMAL Safari tabs silently fail to local IPs while PRIVATE tabs work (2026-06-09)"
+echo "      iPad: the root CA must be installed + FULL TRUST ON (Settings → General → About →"
+echo "      Certificate Trust Settings). Per-cert 'visit this website' taps DIE on every cert re-mint —"
+echo "      that was the real 'normal tabs won't load' all along (2026-06-09; access log is blind to"
+echo "      TLS-rejected handshakes, so it LOOKED like a transport block)."
 if [ -n "$TABLET_IP" ]; then
   if ping -c 2 -t 3 -q "$TABLET_IP" >/dev/null 2>&1; then ok "Tablet $TABLET_IP answers ping"
   else bad "Tablet $TABLET_IP does NOT answer ping — wrong network, private-MAC identity, or router isolation"; fi
