@@ -89,7 +89,20 @@ warm-ups; keep filing FR-*/OPT-* rows from testing; refresh `ROADMAP.md` / `BUIL
 reality. Re-run this gate at each milestone.
 
 ## Immediate next action
-**OPT-008** or **FR-003**. Recommend starting with an **OPT-008 scoping pass** (the portal `/listen`
-handler + the speech transport — confirm where to chunk the LLM + ElevenLabs and how partial frames ride
-the transport), since it gates the loop's feel and the FRs ride the same speak path. FR-003 is the
-fastest standalone win if a functional feature is preferred first.
+~~OPT-008 scoping~~ → **DONE 2026-06-09 night: OPT-008 Cut 1 shipped AND validated on the iPad**
+(`streamed:True · voiced:True`, audio playing, reply ack 3.3 s with the first-sentence audio already
+pushed; warm STT 1.1 s). Also new: **FR-004 (P1)** zero-config wireless pairing filed after the network
+field session; `scripts/preflight.sh` is now the standard session-start check.
+
+**Next session, in order:**
+1. **2-min iPad fix → clean A/B.** Turn OFF "Limit IP Address Tracking" (+ Private Relay for this
+   network) so NORMAL tabs reach the portal → the speech model finally caches (no 62 s private-tab
+   cold load) → run 3 warm takes and record the Cut-1 loop numbers vs the 3.5–5.2 s baseline.
+2. **OPT-008 Cut 2** — stream the LLM (`take_turn_stream`, Anthropic `messages.stream()`), synth at the
+   first sentence boundary → first words ~1–1.5 s regardless of reply length.
+3. **FR-003 instructor prompting** — the fastest functional win (reuses the speak path).
+4. **FR-004 kit hardware** — order the travel router (user purchase); then pin the stable hostname into
+   the cert/QR so venue changes stop mattering. Draft the cloud-relay ADR alongside.
+Opportunistic smalls: emotion-model 404s (bundle or disable auto-emote) · morph-QA panel overlaps the
+voice ⚙ panel (debug-only) · `transformedNormalView` deprecation · the pre-existing portal binding-test
+failure · teeth open-mouth shading (both already chipped).
