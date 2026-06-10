@@ -54,6 +54,9 @@ Certificate Trust Settings. Result: the avatar loads in a normal tab **with no w
 fetched **zero assets and zero model files** — the SW shell cache + the whisper model persistent cache
 both held. The 60 s private-tab first take is dead; future leaf re-mints chain silently. Added to the
 preflight checklist. (Also corrected: the dev router is a **Tenda**, not TP-Link.)
+**Canonical reference:** the full trust model, the router-change procedure, per-device onboarding,
+and the failure-signature table now live in **`docs/CERTIFICATES-AND-NETWORK-CHANGES.md`** (repo
+root) — read that before any network/venue change; the preflight points to it.
 
 ### (superseded) the original isolation matrix
 

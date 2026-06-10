@@ -49,12 +49,10 @@ else
 fi
 
 echo "── 4 · Tablet identity reminder ───────────────────────────"
-echo "      iPad: Settings → Wi-Fi → ⓘ → Private Wi-Fi Address must be OFF on dev routers"
-echo "      (a randomized MAC made the router silently drop all device↔device traffic, 2026-06-09)"
-echo "      iPad: the root CA must be installed + FULL TRUST ON (Settings → General → About →"
-echo "      Certificate Trust Settings). Per-cert 'visit this website' taps DIE on every cert re-mint —"
-echo "      that was the real 'normal tabs won't load' all along (2026-06-09; access log is blind to"
-echo "      TLS-rejected handshakes, so it LOOKED like a transport block)."
+echo "      Router/IP changed, or a tablet misbehaving? READ THE RUNBOOK: docs/CERTIFICATES-AND-NETWORK-CHANGES.md"
+echo "      The 3 rules: (1) NEVER re-mint the CA (REMINT_CA) — leaf-only re-mints keep every device trusted;"
+echo "      (2) each iPad needs the CA installed + FULL TRUST ON once (portal /rootca.pem, https NOT http);"
+echo "      (3) Private Wi-Fi Address OFF on dev routers (randomized MACs get dropped/quarantined)."
 if [ -n "$TABLET_IP" ]; then
   if ping -c 2 -t 3 -q "$TABLET_IP" >/dev/null 2>&1; then ok "Tablet $TABLET_IP answers ping"
   else bad "Tablet $TABLET_IP does NOT answer ping — wrong network, private-MAC identity, or router isolation"; fi
