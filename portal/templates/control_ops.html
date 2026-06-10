@@ -176,6 +176,64 @@
       </div>
       {% endfor %}
     </div>
+
+    <!-- FR-003 — instructor speaks through a character, on its tablet -->
+    <div id="say-as-card" style="margin-top:12px;padding:10px 12px;border:1px solid #dde2ee;border-radius:8px;background:#fff;">
+      <strong style="font-size:13px;">🎤 Say as character</strong>
+      <p class="muted small" style="margin:4px 0 6px;">
+        Type a line — it plays on that character's tablet in their voice.
+        Check <em>In character</em> to have the AI rephrase your intent through the persona
+        (current mental status applied) instead of speaking your exact words.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select id="say-persona" style="max-width:180px;">
+          {% for p in personas_in_use %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+        </select>
+        <input id="say-text" type="text" maxlength="500"
+               placeholder='e.g. "Where did my daughter go?"  or, in character: "ask the student when lunch is"'
+               style="flex:1;min-width:240px;">
+        <label class="small" style="white-space:nowrap;">
+          <input type="checkbox" id="say-incharacter"> In character
+        </label>
+        <button type="button" id="say-send" class="primary-action">Speak</button>
+      </div>
+      <div id="say-status" class="small" style="min-height:15px;margin-top:4px;"></div>
+    </div>
+    <script>
+    (function () {
+      var btn = document.getElementById('say-send');
+      if (!btn) return;
+      var status = document.getElementById('say-status');
+      function send() {
+        var pid = document.getElementById('say-persona').value;
+        var txt = (document.getElementById('say-text').value || '').trim();
+        var inchar = document.getElementById('say-incharacter').checked;
+        if (!txt) { status.textContent = 'Type something first.'; return; }
+        btn.disabled = true;
+        status.textContent = inchar ? 'Rephrasing in character…' : 'Speaking…';
+        fetch('/api/face/' + encodeURIComponent(pid) + '/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: txt, scenario: '{{ session.id }}',
+                                 mode: inchar ? 'in_character' : 'verbatim' }),
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          if (j.ok) {
+            var said = (j.reply || txt);
+            status.textContent = '✓ ' + (said.length > 90 ? said.slice(0, 90) + '…' : said)
+              + (j.delivered ? '' : '   (no tablet connected on this session)');
+            document.getElementById('say-text').value = '';
+          } else {
+            status.textContent = 'Failed: ' + (j.error || 'unknown');
+          }
+        }).catch(function () { status.textContent = 'Failed (network)'; })
+          .finally(function () { btn.disabled = false; });
+      }
+      btn.addEventListener('click', send);
+      document.getElementById('say-text').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); send(); }
+      });
+    })();
+    </script>
   </section>
 
   <!-- BOTTOM-LEFT — Operator PTT panel (engage a character) -->

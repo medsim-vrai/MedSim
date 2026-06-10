@@ -260,3 +260,24 @@ def test_first_sentence_cut_ignores_stage_direction_periods() -> None:
     cut = _first_sentence_cut(buf)
     assert cut is not None
     assert buf[:cut].strip().endswith("Where is everyone?")
+
+
+# ── FR-003: instructor speaks through the character (/speak upgrade) ─────────
+
+def test_speak_verbatim_reports_mode_and_reply(client) -> None:
+    r = client.post("/api/face/patel_attending/speak",
+                    json={"scenario": "sepsis_floor", "text": "The labs are back."})
+    assert r.status_code == 200
+    j = r.json()
+    assert j["ok"] is True
+    assert j["mode"] == "verbatim"
+    assert j["reply"] == "The labs are back."
+    assert "streamed" in j
+
+
+def test_speak_in_character_without_session_is_409(client) -> None:
+    r = client.post("/api/face/patel_attending/speak",
+                    json={"scenario": "sepsis_floor", "text": "ask about pain",
+                          "mode": "in_character"})
+    assert r.status_code == 409
+    assert "running scenario" in r.json()["error"]

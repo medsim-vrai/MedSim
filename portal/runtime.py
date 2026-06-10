@@ -150,6 +150,55 @@ def take_turn(session_id: str, addressee: str, message: str) -> dict[str, Any]:
     }
 
 
+def take_instructor_line(session_id: str, addressee: str, intent: str) -> dict[str, Any]:
+    """FR-003 "in character" mode: the INSTRUCTOR directs the character to convey something,
+    and the model rephrases that intent through the persona — voice, knowledge boundary,
+    scene contract, and current altered_state all apply via the same system prompt as a
+    normal turn. Unlike `take_turn`, the user message is framed as STAGE DIRECTION (the
+    trainee said nothing), so the reply is the character addressing the trainee."""
+    session = _sessions.get(session_id)
+    if session is None:
+        return {"ok": False, "error": "Session not found (it may have expired)."}
+    if addressee not in session.characters:
+        return {"ok": False, "error": f"No character with ID '{addressee}' in this scenario."}
+    if not intent.strip():
+        return {"ok": False, "error": "Empty direction."}
+
+    character = session.characters[addressee]
+    system_prompt = _build_system_prompt(character, session.scenario)
+    name = character.get("name", addressee)
+    direction = (
+        "[INSTRUCTOR STAGE DIRECTION — the trainee did NOT say anything. Convey the "
+        f"following to the trainee, speaking as {name} in your current state, as ONE "
+        f"natural in-character utterance:]\n{intent.strip()}"
+    )
+    messages = _build_messages(session, addressee, direction)
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=session.api_key)
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            system=system_prompt,
+            messages=messages,
+        )
+        reply = "".join(
+            block.text for block in response.content
+            if getattr(block, "type", None) == "text"
+        ).strip() or "(no response)"
+    except Exception as exc:  # noqa: BLE001
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+    session.history.append(TurnRecord(
+        addressee=addressee,
+        student_utterance=f"[instructor direction] {intent.strip()}",
+        character_response=reply,
+        timestamp=time.time(),
+    ))
+    return {"ok": True, "character_id": addressee,
+            "character_name": name, "reply": reply}
+
+
 def take_turn_stream(session_id: str, addressee: str, message: str):
     """OPT-008 Cut 2: the same character turn as `take_turn`, but STREAMED — returns a sync
     generator of text deltas so the caller can voice the first sentence while the rest is

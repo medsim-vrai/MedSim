@@ -529,6 +529,49 @@ def _split_reply(reply: str, min_first: int = 25, max_scan: int = 280) -> tuple[
 _speech_tail_tasks: set[Any] = set()
 
 
+async def _voice_and_push_line(
+    sess: Any, cid: str, scenario_id: str, line: str,
+    emotion: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Voice a COMPLETE line server-side and push it to the avatar, first-sentence
+    pipelined (the OPT-008 Cut-1 shape, shared by FR-003 instructor lines): synth + push
+    the first sentence immediately, finish the tail in a background task (text-only frame
+    on synth failure so a line is never half-silent). Falls back to a single frame for
+    short lines or when no server voice is available (device speaks it locally)."""
+    first, rest = _split_reply(line)
+    if rest:
+        b64, fmt = await _synthesize_voice(sess, cid, first)
+        if b64:
+            spoken = await push_speech(scenario_id, cid, text=first, emotion=emotion,
+                                       audio_b64=b64, audio_format=fmt,
+                                       end_of_utterance=False)
+
+            async def _tail() -> None:
+                tail_b64: str | None = None
+                tail_fmt: str | None = None
+                try:
+                    tail_b64, tail_fmt = await _synthesize_voice(sess, cid, rest)
+                except Exception:  # noqa: BLE001 — text-only keeps the line audible
+                    tail_b64, tail_fmt = None, None
+                try:
+                    await push_speech(scenario_id, cid, text=rest, emotion=emotion,
+                                      audio_b64=tail_b64, audio_format=tail_fmt)
+                except Exception:  # noqa: BLE001 — never crash from a bg task
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "voiced-line tail push failed for %s", cid, exc_info=True)
+
+            import asyncio as _aio
+            t = _aio.create_task(_tail())
+            _speech_tail_tasks.add(t)
+            t.add_done_callback(_speech_tail_tasks.discard)
+            return {"streamed": True, **spoken}
+    b64, fmt = await _synthesize_voice(sess, cid, line)
+    spoken = await push_speech(scenario_id, cid, text=line, emotion=emotion,
+                               audio_b64=b64, audio_format=fmt)
+    return {"streamed": False, **spoken}
+
+
 async def _stream_reply_turn(
     sess: Any, sim_id: str, cid: str, scenario_id: str, user_text: str,
     persona_name: str,
@@ -941,8 +984,20 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         character_id: str,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        """Push one spoken line (text + optional emotion) to every avatar bound
-        to (scenario, character). The tablet synthesizes the audio locally."""
+        """FR-003 — instructor speaks through the character. Push one line to every
+        avatar bound to (scenario, character), voiced server-side (ElevenLabs, same
+        path as AI replies, first-sentence pipelined; device speaks locally when no
+        voice is available).
+
+        Modes (body.mode):
+          "verbatim" (default) — speak the instructor's exact words, colored by the
+              character's voice + current affect (the device's auto-emote applies).
+          "in_character" — the AI rephrases the instructor's INTENT through the
+              persona (voice, knowledge boundary, altered_state) via the same system
+              prompt as a normal turn. Requires a running scenario (its API key).
+
+        The line is character speech (non-PHI → cloud voice OK, ADR-0037) and is
+        logged to the operator transcript like any character turn."""
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001
@@ -955,11 +1010,62 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                                 status_code=400)
         scenario = str(body.get("scenario") or "default")
         emotion = body.get("emotion")
-        result = await push_speech(
-            scenario, character_id, text=text,
-            emotion=emotion if isinstance(emotion, dict) else None,
-        )
-        return JSONResponse({"ok": True, **result})
+        emo = emotion if isinstance(emotion, dict) else None
+        mode = str(body.get("mode") or "verbatim").strip().lower()
+
+        from . import control_session, runtime
+        sess = control_session.get_active()
+        card = resolve_card(character_id)
+        cid = str((card or {}).get("id") or character_id)
+        persona_name = str((card or {}).get("name") or cid)
+
+        line = text
+        if mode in ("in_character", "incharacter", "ai"):
+            mode = "in_character"
+            if sess is None or not getattr(sess, "api_key", "") or card is None:
+                return JSONResponse(
+                    {"ok": False,
+                     "error": "in-character mode needs a running scenario"},
+                    status_code=409)
+            scenario_doc = {
+                "id": sess.id,
+                "name": getattr(sess, "scenario_name", "") or scenario,
+                "patient": ({"history": sess.scenario_text}
+                            if getattr(sess, "scenario_text", "") else {}),
+            }
+            sim = runtime.create_session_from_data(
+                scenario=scenario_doc, characters={cid: card}, api_key=sess.api_key)
+            import asyncio
+            try:
+                result = await asyncio.wait_for(
+                    asyncio.to_thread(runtime.take_instructor_line, sim.id, cid, text),
+                    timeout=25.0)
+            except asyncio.TimeoutError:
+                result = {"ok": False, "error": "character timed out"}
+            runtime.end_session(sim.id)
+            if not result.get("ok"):
+                return JSONResponse(
+                    {"ok": False, "error": str(result.get("error"))}, status_code=502)
+            line = str(result.get("reply") or "").strip() or text
+        else:
+            mode = "verbatim"
+
+        # Surface the instructor line in the operator transcript like any turn.
+        if sess is not None:
+            try:
+                sess.log_turn(
+                    source=f"instructor:{cid}",
+                    source_label=f"{persona_name} · instructor line",
+                    persona_id=cid,
+                    persona_name=persona_name,
+                    student_text=f"[instructor → {persona_name}, {mode}] {text}",
+                    character_text=line,
+                )
+            except Exception:  # noqa: BLE001 — logging must never fail the line
+                pass
+
+        spoken = await _voice_and_push_line(sess, cid, scenario, line, emotion=emo)
+        return JSONResponse({"ok": True, "mode": mode, "reply": line, **spoken})
 
     @app.post("/api/face/{character_id}/listen")
     async def api_face_listen(  # noqa: ANN202
