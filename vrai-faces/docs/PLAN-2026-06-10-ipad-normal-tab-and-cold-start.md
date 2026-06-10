@@ -47,11 +47,13 @@ meaning connections had been reaching the portal ALL ALONG. Two compounding mist
 After tapping "visit this website": the full avatar runs in a NORMAL tab (478-landmark mesh, webgpu,
 voice turn in flight) and the whisper model is downloading into PERSISTENT cache.
 
-**Permanent fix (kills the interstitial + survives future cert re-mints):** install + fully trust the
-dev **root CA** on the iPad — leaf re-mints (new venue IPs) then chain silently to the trusted CA, no
-per-cert exceptions to re-tap: Safari → `http://<mac-ip>:9000/rootCA.pem` (or the portal's CA route) →
-install the profile → **Settings → General → About → Certificate Trust Settings → full trust ON**.
-Added to the preflight checklist.
+**Permanent fix — APPLIED + VERIFIED 2026-06-09 23:35:** the **MedSim Dev Local CA** profile was
+installed on the iPad (download from the portal itself: `https://<mac-ip>:8765/rootca.pem` — NOTE:
+Safari's HTTPS-First breaks plain-http download links, use the portal route) + **full trust ON** in
+Certificate Trust Settings. Result: the avatar loads in a normal tab **with no warning**, and a reload
+fetched **zero assets and zero model files** — the SW shell cache + the whisper model persistent cache
+both held. The 60 s private-tab first take is dead; future leaf re-mints chain silently. Added to the
+preflight checklist. (Also corrected: the dev router is a **Tenda**, not TP-Link.)
 
 ### (superseded) the original isolation matrix
 
