@@ -1552,6 +1552,32 @@ async def api_control_add_persona(
                          "name": persona.get("name") or pid})
 
 
+@app.post("/api/control/personas/avatar")
+async def api_control_persona_avatar(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-006 — flip a session character between 🪞 Avatar (3D face tablet) and
+    🔊 Audio-only (flat portrait + voice; low-cost tablets, no WebGPU). The choice
+    drives the label AND the minted QR (`mode=audio`)."""
+    sess = control_session.get_active()
+    if sess is None:
+        return JSONResponse({"ok": False, "error": "no running scenario"},
+                            status_code=409)
+    body = await request.json()
+    pid = str((body or {}).get("persona_id") or "").strip()
+    if pid not in sess.selected_personas:
+        return JSONResponse({"ok": False, "error": "persona not in session"},
+                            status_code=404)
+    want = bool((body or {}).get("avatar"))
+    have = pid in (sess.avatar_personas or [])
+    if want and not have:
+        sess.avatar_personas.append(pid)
+    elif not want and have:
+        sess.avatar_personas.remove(pid)
+    return JSONResponse({"ok": True, "persona_id": pid, "avatar": want})
+
+
 @app.post("/api/control/state")
 async def api_control_set_state(
     state: Annotated[str, Form()],
@@ -5675,6 +5701,7 @@ def _vrai_faces_url(
     opacity: float,
     lan: bool = False,
     debug: bool = False,
+    mode: str = "",
 ) -> str:
     """Build the URL to the vrai-faces shell for this tablet.
 
@@ -5717,6 +5744,11 @@ def _vrai_faces_url(
         url += f"&token={vrai_faces.face_token(safe_scen, safe_char)}"
     if debug:
         url += "&debug=1"   # 🐞 on-screen console + morph-QA panel + translucency slider (RB-003)
+    if mode == "audio":
+        # FR-006 — audio-only station (low-cost tablets): the app shows a flat static
+        # portrait + voice loop, no 3D rig / WebGPU. (Inert until the lite mode ships;
+        # QRs minted now stay correct.)
+        url += "&mode=audio"
     return url
 
 
@@ -5728,16 +5760,19 @@ async def vrai_face_qr(
     opacity: float = 0.66,
     scale: int = 8,
     debug: int = 0,
+    mode: str = "",
 ):
     """SVG QR code that, when scanned on a tablet, opens the full-screen
     VRAI Faces avatar bound to <character_id>. No auth — facilitators
     print/show these on the control room screen. `debug=1` opens the build
-    with the on-screen console + morph-QA panel (RB-003 QA)."""
+    with the on-screen console + morph-QA panel (RB-003 QA). `mode=audio`
+    (FR-006) marks an audio-only station — flat portrait + voice, no 3D rig."""
     # lan=True: a scanned QR opens on a *different* device, so the app host +
     # the embedded portal `api` (→ bind fetch + speech WebSocket) must be the
     # LAN IP, never 127.0.0.1 (which would resolve to the tablet itself).
     url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity,
-                          lan=True, debug=bool(debug))
+                          lan=True, debug=bool(debug),
+                          mode=("audio" if mode == "audio" else ""))
     svg = qrgen.make_qr_svg(url, scale=scale)
     return Response(content=svg, media_type="image/svg+xml")
 

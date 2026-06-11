@@ -212,10 +212,12 @@
     <div style="display:flex;flex-wrap:wrap;gap:12px;margin:6px 0 2px;">
       {% for p in personas_in_use %}
       <div class="vrai-dev-cell" style="width:132px;border:1px solid #dde2ee;border-radius:8px;padding:8px;text-align:center;background:#fff;">
-        <div style="font-size:11px;font-weight:600;color:#41495a;margin-bottom:4px;line-height:1.25;">
-          {% if p.avatar_enabled %}🪞 Avatar{% else %}🔊 Audio-only{% endif %} · {{ p.name }}
-        </div>
-        <img src="/qr/face/{{ p.id }}.svg?scenario={{ session.id }}&scale=4"
+        <button type="button" class="mode-flip" data-persona="{{ p.id }}" data-avatar="{{ 1 if p.avatar_enabled else 0 }}"
+                title="Tap to switch this character between Avatar (3D face tablet) and Audio-only (flat portrait + voice — works on low-cost tablets, no 3D)"
+                style="font-size:11px;font-weight:600;color:#41495a;margin-bottom:4px;line-height:1.25;background:none;border:1px dashed #c5cde0;border-radius:6px;padding:2px 6px;cursor:pointer;width:100%;">
+          {% if p.avatar_enabled %}🪞 Avatar{% else %}🔊 Audio-only{% endif %} · {{ p.name }} ⇄
+        </button>
+        <img src="/qr/face/{{ p.id }}.svg?scenario={{ session.id }}&scale=4{% if not p.avatar_enabled %}&mode=audio{% endif %}"
              alt="Device QR for {{ p.name }}"
              style="width:112px;height:112px;display:block;margin:0 auto;">
         <code style="display:block;font-size:10px;color:#7a8194;margin-top:3px;">{{ p.id }}</code>
@@ -355,6 +357,25 @@
             if (j.ok) { render(j); document.getElementById('madd-drug').value = ''; status.textContent = '✓ added'; }
             else { status.textContent = j.error || 'failed'; }
           });
+      });
+    })();
+    </script>
+
+    <script>
+    /* FR-006 — clear per-character choice: tap the cell heading to flip Avatar ⇄ Audio-only.
+       Audio-only QRs mint with mode=audio (flat portrait + voice; no 3D rig on the tablet). */
+    (function () {
+      document.querySelectorAll('.mode-flip').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var want = btn.dataset.avatar !== '1';
+          btn.disabled = true;
+          fetch('/api/control/personas/avatar', { method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ persona_id: btn.dataset.persona, avatar: want }) })
+            .then(function (r) { return r.json(); })
+            .then(function (j) { if (j.ok) { location.reload(); } else { btn.disabled = false; } })
+            .catch(function () { btn.disabled = false; });
+        });
       });
     })();
     </script>

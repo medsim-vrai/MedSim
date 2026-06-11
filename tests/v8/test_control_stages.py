@@ -77,3 +77,19 @@ def test_add_persona_to_active_session(client) -> None:
     assert "Pharmacist Lee" in page.text          # now in the persona surfaces
     r2 = client.post("/api/control/personas/add", json={"persona_id": "NOPE"})
     assert r2.status_code == 404
+
+
+def test_avatar_audio_mode_flip_and_qr(client) -> None:
+    """FR-006 — clear per-character choice: flip to audio-only; the cell QR mints
+    with mode=audio; flip back restores the avatar QR."""
+    r = client.post("/api/control/personas/avatar",
+                    json={"persona_id": "P-001", "avatar": False})
+    assert r.status_code == 200 and r.json()["avatar"] is False
+    page = client.get("/portal/control/setup")
+    assert "🔊 Audio-only · Dr. Reyes" in page.text
+    assert "&amp;mode=audio" in page.text or "&mode=audio" in page.text
+    r2 = client.post("/api/control/personas/avatar",
+                     json={"persona_id": "P-001", "avatar": True})
+    assert r2.json()["avatar"] is True
+    page2 = client.get("/portal/control/setup")
+    assert "🪞 Avatar · Dr. Reyes" in page2.text
