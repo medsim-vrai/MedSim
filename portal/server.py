@@ -6053,8 +6053,19 @@ async def vrai_face_launcher(
     # prints must be LAN-reachable (see _vrai_faces_url), so the scanned tablet
     # can reach the portal's bind + speech WebSocket rather than its own host.
     dbg = bool(debug)
+    # FR-006 — the launcher must honor the character's station mode. Resolve it from
+    # the active session's avatar opt-ins; with no session (standalone launch), the
+    # policy default applies: Patient personas → avatar, everyone else → audio-only.
+    sess = control_session.get_active()
+    if sess is not None and character_id in (sess.selected_personas or []):
+        is_avatar = character_id in (sess.avatar_personas or [])
+    else:
+        _persona = library.get_persona(character_id)
+        is_avatar = ((_persona or {}).get("roleGroup") == "Patient"
+                     if _persona is not None else True)
+    station_mode = "" if is_avatar else "audio"
     url = _vrai_faces_url(request, character_id, scenario_id=scenario, opacity=opacity,
-                          lan=True, debug=dbg)
+                          lan=True, debug=dbg, mode=station_mode)
     qr_svg = qrgen.make_qr_svg(url, scale=10)
     # 🐞 Debug-QR toggle (RB-003 QA): the same launch with the on-screen console + morph-QA
     # panel + translucency slider, so the operator can hand a tablet the debug build straight
@@ -6088,7 +6099,8 @@ async def vrai_face_launcher(
           font-size: 13px; word-break: break-all; }}
   .meta {{ margin-top: 14px; font-size: 14px; color: #b5bccd; }}
 </style></head><body>
-  <h1>Assign avatar to a tablet — {name}</h1>
+  <h1>{('Assign avatar to a tablet — ' + name) if is_avatar else ('Assign 🔊 AUDIO station to a tablet — ' + name)}</h1>
+  {'' if is_avatar else '<div class="meta" style="color:#9fb3d9">Audio-only: flat portrait + voice + push-to-talk — no 3D rig (low-cost tablets OK)</div>'}
   {role_line}
   <div class="meta">Portrait: {portrait}</div>
   {debug_badge}
