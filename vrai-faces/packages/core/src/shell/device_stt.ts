@@ -123,7 +123,18 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         // first when an adapter exists. Falls back to CDN/HF if the bundles are absent.
         const wasmFlags = tf.env?.backends?.onnx?.wasm;
         if (wasmFlags) {
-          wasmFlags.numThreads = 1;
+          // FR-006 Android perf: numThreads=1 was a pre-validation conservatism — the
+          // threaded build + COI (verified true on the field tablet) support real
+          // multi-threading, and whisper's 30s-padded encoder is embarrassingly
+          // parallel. Use the device's cores (capped — hyperthread oversubscription
+          // hurts on small tablets). Override for A/B: &sttthreads=N.
+          let threads = Math.max(1, Math.min(4,
+            (typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 1) || 1));
+          if (typeof location !== 'undefined') {
+            const tm = (location.search + location.hash).match(/[?&#]sttthreads=(\d+)/);
+            if (tm && tm[1]) threads = Math.max(1, Math.min(8, parseInt(tm[1], 10)));
+          }
+          wasmFlags.numThreads = threads;
           wasmFlags.proxy = false;
         }
         tf.env.allowLocalModels = true;          // default false in-browser; enables the bundled model
