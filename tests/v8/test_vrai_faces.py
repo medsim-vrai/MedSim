@@ -116,7 +116,8 @@ def test_binding_attaches_placeholder_portrait_and_maps_voice(client) -> None:
     b = r.json()
     assert b["characterId"] == "patel_attending"
     # Portrait attached here — the card carries none. Placeholder when no file.
-    assert b["sourcePhoto"].startswith("data:image/svg+xml;base64,")
+    # PNG by design: createImageBitmap() cannot decode SVG in Chromium.
+    assert b["sourcePhoto"].startswith("data:image/png;base64,")
     assert b["portraitSource"] == "placeholder"
     # voice_profile → gender-encoded id (matches medsim_adapter).
     assert b["voiceProfile"] == "female:Samantha"

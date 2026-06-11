@@ -5804,6 +5804,42 @@ async def vrai_rootca():  # noqa: ANN202
     )
 
 
+@app.get("/onboard")
+async def vrai_onboard(request: Request):  # noqa: ANN202
+    """HTTPS tablet-onboarding page (runbook §3b). The plain-HTTP helper on :8766
+    is unreachable from Android Chrome (HTTPS-First upgrades hand-typed http://
+    URLs), so Androids land HERE instead: scan the QR → proceed past the one-time
+    cert warning → /onboard → download the CA → install. No auth — instructions
+    + the public CA only."""
+    host = (request.headers.get("host") or "").split(":")[0] or "localhost"
+    portal = f"https://{host}:{request.url.port or 8765}"
+    html = f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MedSim — connect this tablet</title>
+<style>body{{font-family:-apple-system,Roboto,Helvetica,Arial,sans-serif;background:#0a234f;
+color:#fff;margin:0;padding:28px 20px;line-height:1.5}}h1{{font-size:22px;margin:0 0 4px}}
+.sub{{color:#a8c0f0;font-size:14px;margin-bottom:18px}}.card{{background:#102f6b;border-radius:12px;
+padding:16px 18px;margin:14px 0}}h2{{font-size:16px;margin:0 0 8px}}ol{{margin:0;padding-left:20px}}
+li{{margin:7px 0;font-size:15px}}a.btn{{display:inline-block;background:#2f7d5b;color:#fff;
+text-decoration:none;padding:13px 22px;border-radius:9px;font-weight:700;margin:10px 0}}
+.note{{font-size:13px;color:#a8c0f0}}</style></head><body>
+<h1>Connect this tablet to MedSim</h1>
+<div class="sub">One-time setup: trust the room's certificate, then every scan just works.</div>
+<div class="card"><h2>1 · Download the certificate</h2>
+<a class="btn" href="/rootca.pem">⬇ Download room certificate</a>
+<div class="note">If a warning appears, choose Download/Keep — this is the room's own certificate.</div></div>
+<div class="card"><h2>2 · Install it</h2><ol>
+<li><b>Android:</b> Settings → Security &amp; privacy → More security → Encryption &amp; credentials →
+<b>Install a certificate → CA certificate</b> → choose the downloaded file.</li>
+<li><b>iPad:</b> Settings → <b>Profile Downloaded</b> → Install; then Settings → General → About →
+Certificate Trust Settings → switch the MedSim certificate <b>on</b>.</li></ol></div>
+<div class="card"><h2>3 · Done — open MedSim</h2>
+<a class="btn" style="background:#143b8a" href="{portal}">Open MedSim</a>
+<div class="note">Or just re-scan the QR the instructor shows you.</div></div>
+</body></html>"""
+    return HTMLResponse(content=html)
+
+
 def _vrai_app_reachable(url: str, timeout: float = 0.4) -> bool:
     """Quick TCP probe of the VRAI Faces app host:port. A local refused
     connection returns at once; only a truly unreachable remote host waits out

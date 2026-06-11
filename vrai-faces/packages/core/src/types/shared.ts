@@ -74,6 +74,9 @@ export interface VRAISpeechFrame {
 /** The contract bound when a MedSim scenario opens a character on the tablet. */
 export interface VraiAvatarBinding {
   characterId: string;
+  /** Human display name from the portal payload (e.g. "Pharmacist Lee") — UI
+   *  surfaces show THIS, never the internal id (plain-English rule). */
+  displayName?: string;
   sourcePhoto: Blob;
   voiceProfile: TtsVoiceId;
   baselineMood: BlendshapeWeights;

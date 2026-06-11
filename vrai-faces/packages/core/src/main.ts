@@ -113,7 +113,10 @@ async function boot(): Promise<void> {
     });
     const binding = await bindForAudio(launch, medsimAdapter);
     if (binding) {
-      station.setCharacter({ name: binding.characterId, portrait: binding.sourcePhoto });
+      station.setCharacter({
+        name: binding.displayName ?? binding.characterId,
+        portrait: binding.sourcePhoto,
+      });
     } else {
       diag.push({
         t: performance.now(), moduleId: 'main', kind: 'warn',

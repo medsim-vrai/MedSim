@@ -103,11 +103,13 @@ function parseCharacter(raw: unknown): VraiAvatarBinding {
   const exportPath = str(o, 'exportPath');
   const ghostColor = str(o, 'ghostColor', 'baseColor');
   const speechWsUrl = str(o, 'speechWsUrl');
+  const displayName = str(o, 'name', 'displayName'); // portal payload: persona display name
 
   const binding: VraiAvatarBinding = {
     characterId, sourcePhoto, voiceProfile, baselineMood, opacityLevel,
   };
   // exactOptionalPropertyTypes: only set optional keys when present.
+  if (displayName !== undefined) binding.displayName = displayName;
   if (exportPath !== undefined) binding.exportPath = exportPath;
   if (ghostColor !== undefined) binding.ghostColor = ghostColor;
   if (speechWsUrl !== undefined) binding.speechWsUrl = speechWsUrl;

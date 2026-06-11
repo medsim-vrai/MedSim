@@ -27,6 +27,7 @@ class _FakeEngine:
     def transcribe(self, audio, **kwargs):
         self.calls += 1
         self.last_samples = len(audio)
+        self.last_kwargs = kwargs
         return [_FakeSegment(t) for t in self._texts], None
 
 
@@ -76,6 +77,58 @@ def test_engine_failure_is_503_not_crash(client, monkeypatch) -> None:
     r = client.post("/api/face/stt", content=_pcm(1.0))
     assert r.status_code == 503
     assert "unavailable" in r.json()["error"]
+
+
+def test_session_drug_names_reach_the_engine_as_hotwords(client, monkeypatch) -> None:
+    """ADR-0038 accuracy lever: with an active session, the med board's drug
+    names ride along as recognizer hints (A/B-proven: 'seftriaxone' →
+    'ceftriaxone'). Without a session, no hints."""
+    monkeypatch.setattr(room_stt, "session_vocab", lambda: "Ampicillin, Ceftriaxone")
+    assert client.post("/api/face/stt", content=_pcm(1.0)).status_code == 200
+    assert client.fake_engine.last_kwargs["hotwords"] == "Ampicillin, Ceftriaxone"
+
+    monkeypatch.setattr(room_stt, "session_vocab", lambda: None)
+    assert client.post("/api/face/stt", content=_pcm(1.0)).status_code == 200
+    assert client.fake_engine.last_kwargs["hotwords"] is None
+
+
+def test_session_vocab_collects_board_and_mar_names(monkeypatch) -> None:
+    from portal import control_session, med_orders
+
+    class _Sess:
+        id = "s-vocab-test"
+
+    monkeypatch.setattr(control_session, "get_active", lambda: _Sess())
+    monkeypatch.setattr(med_orders, "active_med_names",
+                        lambda sid: ["Acetaminophen", "ampicillin"])  # dup, case-insensitive
+    condition = next(k for k in med_orders.catalog() if not k.startswith("_"))
+    med_orders.init_session("s-vocab-test", condition)
+    try:
+        vocab = room_stt.session_vocab()
+        assert vocab is not None
+        board_drugs = [it["drug"] for it in med_orders.get_state("s-vocab-test")["items"]]
+        assert board_drugs[0] in vocab          # the board is represented
+        assert "Acetaminophen" in vocab         # the MAR is represented
+        assert vocab.lower().count("ampicillin") <= 1  # dedupe holds either way
+        # Doses/availability must NOT leak into the recognizer hints.
+        assert "mg" not in vocab.lower()
+    finally:
+        med_orders._SESSION_MEDS.pop("s-vocab-test", None)
+
+
+def test_session_vocab_is_none_without_a_session(monkeypatch) -> None:
+    from portal import control_session
+    monkeypatch.setattr(control_session, "get_active", lambda: None)
+    assert room_stt.session_vocab() is None
+
+
+def test_onboard_page_serves_over_https_route(client) -> None:
+    """Runbook §3b: Android HTTPS-First can't reach the :8766 helper — the same
+    instructions must exist ON the portal origin. No auth; links the CA."""
+    r = client.get("/onboard")
+    assert r.status_code == 200
+    assert "/rootca.pem" in r.text
+    assert "CA certificate" in r.text
 
 
 def test_device_token_enforced_when_enabled(client, monkeypatch) -> None:

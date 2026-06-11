@@ -57,7 +57,35 @@ def _load_engine() -> Any:
         return _engine
 
 
-def _transcribe(pcm: bytes) -> str:
+def session_vocab() -> str | None:
+    """Vocabulary hints from the ACTIVE control session: the med board's drug
+    names — exactly the words a trainee says that generic whisper fumbles
+    (field case: "AMPASIL" for ampicillin). None when no session/meds. Names
+    only, never doses/notes — this hints the recognizer, it must not leak the
+    board's availability state into transcription."""
+    try:
+        from . import control_session, med_orders
+        sess = control_session.get_active()
+        if sess is None:
+            return None
+        words: list[str] = []
+        state = med_orders.get_state(sess.id)
+        if state:
+            words += [str(it.get("drug") or "") for it in state.get("items") or []]
+        words += med_orders.active_med_names(sess.id)  # MAR — what's already running
+        seen: set[str] = set()
+        out: list[str] = []
+        for w in words:
+            w = w.strip()
+            if w and w.lower() not in seen:
+                seen.add(w.lower())
+                out.append(w)
+        return ", ".join(out[:40]) or None   # cap well under whisper's prompt window
+    except Exception:  # noqa: BLE001 — hints are best-effort, never block a take
+        return None
+
+
+def _transcribe(pcm: bytes, vocab: str | None = None) -> str:
     """Blocking transcription of raw 16 kHz mono float32 PCM (call off the event loop)."""
     engine = _load_engine()
     if engine is None:
@@ -70,6 +98,7 @@ def _transcribe(pcm: bytes) -> str:
         beam_size=1,                       # PTT clips are short — greedy is plenty
         vad_filter=True,                   # trim leading/trailing button-press silence
         condition_on_previous_text=False,  # takes are independent utterances
+        hotwords=vocab,                    # session drug names (ADR-0038 accuracy lever)
     )
     return " ".join(seg.text.strip() for seg in segments).strip()
 
@@ -109,7 +138,7 @@ def attach(app: FastAPI) -> None:
 
         t0 = time.perf_counter()
         try:
-            text = await asyncio.to_thread(_transcribe, bytes(body))
+            text = await asyncio.to_thread(_transcribe, bytes(body), session_vocab())
         except RuntimeError as e:
             return JSONResponse({"ok": False, "error": f"STT engine unavailable: {e}"},
                                 status_code=503)
