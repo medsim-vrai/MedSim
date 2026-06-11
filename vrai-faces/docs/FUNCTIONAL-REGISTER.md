@@ -81,7 +81,7 @@ ADR → `In-progress` → `Shipped` → `Validated` (confirmed in a test session
 | **FR-003** | Instructor character prompting — speak in-context (emotion / mental status / role) | instructor-tools · character-interaction | instructor | P2 | **✅ Validated** (2026-06-10) | control-room · portal · avatar |
 | **FR-004** | Zero-config wireless device pairing for production venues | UX · scenario | testing | P1 | Proposed | portal · avatar · kit/ops (+ADR) |
 | **FR-005** | Two-stage control room — Setup page → Live-Operations window | instructor-tools · UX | instructor | P2 | **Shipped** (2026-06-10; live validation pending) | control-room · portal |
-| **FR-006** | Per-character Avatar vs Audio-only stations — clear choice + flat-portrait lite app for low-cost tablets | instructor-tools · UX · avatar | instructor | P2 | **Shipped** (2026-06-10: toggle+QR+lite app+patient-default; tablet validation pending) | control-room · portal · avatar |
+| **FR-006** | Per-character Avatar vs Audio-only stations — clear choice + flat-portrait lite app for low-cost tablets | instructor-tools · UX · avatar | instructor | P2 | **Shipped — OPEN ISSUE:** voice take fails on Android Chrome (see entry) | control-room · portal · avatar |
 | **FR-007** | Unit-level shared staff characters — one tablet serves multiple patients; student must IDENTIFY the patient | character-interaction · clinical-logic · scenario | instructor | P2 | Proposed (investigate) | portal · runtime(core) · control-room · avatar |
 
 ---
@@ -267,6 +267,41 @@ During a session, capture the minimum and triage later: **title + Source + one-l
 behavior**. Attach objective signals where useful — the 🐞 debug overlay (`?debug`), the
 diagnostics panel (`?diag=1`), and the transcript's `/listen` round-trip timer give numbers.
 Don't lose feedback to "we'll remember it" — **file the row**, even terse.
+
+## FR-006 — OPEN ISSUE (2026-06-10 night): voice loop fails on the Android lite station
+
+**Status of validation.** The lite station itself works on the Android tablet (Chrome): flat
+portrait + name + talk button render, fast load, no 3D — the FR-006 visual/UX goals hold. But the
+VOICE side fails: push-to-talk takes end "(no speech detected)" / no audio. ⚠️ Context that
+reframes the hunt: **every successful voice test so far was the iPad** — this is the FIRST run of
+the on-device voice loop on Android Chrome at all (RB-002 always flagged Android tablets as the
+unpiloted primary target), so this is likely an Android-platform issue, not a lite-mode issue.
+
+**Wrong-turn record (so it isn't repeated).** The first fix attempt assumed the iPadOS
+Camera-app QR-handoff muted-mic quirk; the test device turned out to be Android. (The muted-track
+wait + the hardening are still correct and kept.)
+
+**What IS now in place (shipped `7239a12`, live):** every empty take names its cause on the
+status line + ⚙ metrics — `recorder produced no audio` / `clip too short` / `mic captured
+SILENCE (RMS≈0)` / `whisper heard no words (level ok)` / `speech model not ready` — computed from
+blob size, clip duration, and RMS. **Next session starts by reading that line.**
+
+**Next-session diagnostic sequence (in order):**
+1. One deliberate take on the Android lite station → read the status/⚙ line → the named reason
+   forks the investigation (capture vs silence vs model).
+2. Split capture from playback: from the control room, send Lee a **Say-as-character** line — if
+   the tablet SPEAKS it, playback is fine and the issue is capture-side only (and vice versa).
+3. Same tablet, **avatar page** (any 🪞 character): does PTT work there? Isolates lite-mode vs
+   Android-platform.
+4. ⚙ line basics on that tablet: backend (`webgpu` vs `wasm`) + cold-load time; the 🐞 debug QR
+   (launcher toggle — carries mode=audio now) for console errors; Chrome mic permission for the
+   portal origin; crossOriginIsolated (COI=true shows in the debug console header).
+5. Record the tablet model + Chrome version in this entry when known.
+
+**Hypotheses ranked for Android Chrome:** (a) the threaded-WASM / WebGPU ASR path failing
+quietly on this hardware (model loads but inference yields empty), (b) MediaRecorder
+codec/decodeAudioData mismatch on this Chrome build, (c) mic permission/route to the wrong input,
+(d) playback-side autoplay gating (if step 2 is also silent).
 
 ## FR-007 — Unit-level shared staff characters (one tablet, many patients)
 

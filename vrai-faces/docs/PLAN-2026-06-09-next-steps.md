@@ -94,6 +94,11 @@ reality. Re-run this gate at each milestone.
 pushed; warm STT 1.1 s). Also new: **FR-004 (P1)** zero-config wireless pairing filed after the network
 field session; `scripts/preflight.sh` is now the standard session-start check.
 
+**⏸ RESUME POINT (2026-06-10 night):** FR-006 Android voice — the lite station renders on the
+Android tablet but PTT yields no speech/audio; the named-empty-reason build is LIVE, so the first
+action is ONE take + read the status line (full sequence: FUNCTIONAL-REGISTER → FR-006 OPEN
+ISSUE). Then resume the FR-001/002 loop validation (decisive doctor → pharmacist → approval).
+
 **Next session, in order:**
 1. **2-min iPad fix → clean A/B.** Turn OFF "Limit IP Address Tracking" (+ Private Relay for this
    network) so NORMAL tabs reach the portal → the speech model finally caches (no 62 s private-tab
