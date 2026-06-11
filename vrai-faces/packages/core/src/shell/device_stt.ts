@@ -129,26 +129,39 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         tf.env.allowLocalModels = true;          // default false in-browser; enables the bundled model
         tf.env.localModelPath = '/assets/models/';
         const { pipeline } = tf;
-        for (const device of backendOrder()) {
-          // PER-DEVICE ORT build (FR-006 Android fix, 2026-06-11). Use the OBJECT form
-          // {wasm,mjs}: it triggers transformers' wasm pre-load + backend registration
-          // (a bare string path leaves ORT with "no available backend found").
-          //  • webgpu → the .asyncify build: the WebGPU EP + `webgpuInit` ship ONLY in
-          //    .asyncify/.jspi (plain/.jsep throw "webgpuInit is not a function" — the
-          //    iPad pilot hit exactly that).
-          //  • wasm   → the PLAIN threaded build: the canonical CPU path. On a
-          //    no-WebGPU Android Chrome tablet the .asyncify build's CPU EP failed to
-          //    register ("no available backend found", COI+SAB both true — field
-          //    diagnosed 2026-06-11), while plain is the supported everywhere build.
-          if (wasmFlags) {
-            const variant = device === 'webgpu'
-              ? 'ort-wasm-simd-threaded.asyncify'
-              : 'ort-wasm-simd-threaded';
-            wasmFlags.wasmPaths = {
-              wasm: `/assets/ort/${variant}.wasm`,
-              mjs: `/assets/ort/${variant}.mjs`,
-            };
-          }
+        // FR-006 Android fix (2026-06-11, v2). Two field-learned constraints shape this:
+        //  (1) ORT consumes wasmPaths ONCE at its first initialization — per-attempt
+        //      re-pointing is ignored, so the build variant must be committed BEFORE
+        //      any pipeline() call.
+        //  (2) The variants differ by capability: .asyncify is REQUIRED for the WebGPU
+        //      EP (`webgpuInit` — iPad), but its CPU EP failed to register on a
+        //      no-WebGPU Android Chrome ("no available backend found", COI+SAB true);
+        //      the PLAIN threaded build is the canonical CPU path.
+        // So: detect WebGPU availability UP FRONT (navigator.gpu), skip the webgpu
+        // attempt entirely when the API is absent, and pick the ORT build for the
+        // first (= deciding) attempt. Use the OBJECT form {wasm,mjs} — it triggers
+        // transformers' wasm pre-load + backend registration.
+        const hasWebGpu = typeof navigator !== 'undefined'
+          && !!(navigator as unknown as { gpu?: unknown }).gpu;
+        const requested = backendOrder();
+        const order = requested.filter((d) => d === 'wasm' || hasWebGpu);
+        const effective: ReadonlyArray<'webgpu' | 'wasm'> =
+          order.length > 0 ? order : ['wasm'];
+        if (wasmFlags) {
+          const variant = effective[0] === 'webgpu'
+            ? 'ort-wasm-simd-threaded.asyncify'
+            : 'ort-wasm-simd-threaded';
+          wasmFlags.wasmPaths = {
+            wasm: `/assets/ort/${variant}.wasm`,
+            mjs: `/assets/ort/${variant}.mjs`,
+          };
+          diag.push({
+            t: performance.now(), moduleId: MODULE, kind: 'info',
+            message: `STT init v2: webgpu=${hasWebGpu ? 'present' : 'ABSENT (skipped)'} `
+              + `order=[${effective.join(',')}] build=${variant}`,
+          });
+        }
+        for (const device of effective) {
           try {
             // OPT-001 (docs/OPTIMIZATION-REGISTER.md): the fp16 *merged decoder* is an
             // invalid ORT model — its subgraph returns `logits` from outer scope, so
