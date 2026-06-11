@@ -319,6 +319,15 @@ wasm path only (skips the extended QDQ rewrite; iPad/WebGPU keeps full optimizat
 Awaiting the post-③ tablet take. Lesson: dev-build ORT on the unpiloted platform = three stacked
 failures, each only visible after the previous one fell.
 
+**FIELD RESULT (2026-06-11): the Android loop WORKS end-to-end** — model loads, takes
+transcribe, character answers with server voice. Remaining: **CPU transcription is far too slow**
+(single-threaded wasm). Shipped same-day: multi-threaded inference (numThreads = min(4, cores),
+`&sttthreads=N` A/B knob) — awaiting timed retest. If still slow, the decision menu (instructor
+to ratify): Moonshine CPU model (OPT-002, designed for short clips, no 30s padding) · room-local
+STT on the portal Mac (audio crosses the LAN to the instructor's machine only — no third party;
+needs a small ADR) · cloud Web Speech as designated-station primary (trainee audio → Google;
+contradicts the fail-closed PHI posture, ADR-0014/0025 — instructor sign-off + ADR required).
+
 **Hypotheses ranked for Android Chrome:** (a) the threaded-WASM / WebGPU ASR path failing
 quietly on this hardware (model loads but inference yields empty), (b) MediaRecorder
 codec/decodeAudioData mismatch on this Chrome build, (c) mic permission/route to the wrong input,
