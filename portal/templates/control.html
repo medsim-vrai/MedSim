@@ -207,6 +207,7 @@
         <label class="persona-card safety-{{ p.safetyClass }}" data-role-group="{{ p.roleGroup }}">
           <input type="checkbox" name="personas" value="{{ p.id }}">
           <div class="persona-card-body">
+            <span class="include-cap">☐ tick (top-right) or tap the card to INCLUDE in scenario</span>
             <header>
               <strong>{{ p.name }}</strong>
               <code class="muted">{{ p.id }}</code>
@@ -222,7 +223,7 @@
             <div class="avatar-opt" onclick="event.stopPropagation()">
               <input type="checkbox" name="avatar_personas" value="{{ p.id }}"
                      onclick="event.stopPropagation()">
-              <span class="muted small">🪞 Use VRAI Faces avatar</span>
+              <span class="muted small">🪞 3D avatar tablet — leave unchecked for 🔊 audio-only (low-cost tablet)</span>
             </div>
             {% if avatar_skins %}
             <div class="avatar-skins" onclick="event.stopPropagation()">

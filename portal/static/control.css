@@ -93,9 +93,19 @@
 }
 .persona-card.display-only { cursor: default; }
 .persona-card:hover:not(.display-only) { border-color: #1d6dd1; }
-.persona-card input[type=checkbox] {
+.persona-card > input[type=checkbox] {
+  /* the SELECTION checkbox only (direct child). The old `.persona-card input` rule
+     also absolutely-positioned the avatar checkbox onto the SAME corner — two stacked
+     checkboxes, the avatar one swallowing clicks meant for selection (field bug,
+     2026-06-10). */
   position: absolute; top: 8px; right: 8px;
   width: 18px; height: 18px;
+}
+.persona-card .avatar-opt input[type=checkbox],
+.persona-card .include-cap { position: static; width: auto; height: auto; }
+.persona-card .include-cap {
+  display: block; font-size: 11px; font-weight: 700; color: #1d6dd1;
+  margin: 0 0 4px; padding-right: 26px;
 }
 .persona-card:has(input:checked) { border-color: #1d6dd1; background: #eaf2fc; }
 .persona-card-body { padding: 12px 14px; }
