@@ -541,6 +541,16 @@ def prompt_block_for(session_id: str, card: dict[str, Any]) -> str:
     """The staged-error context for THIS character's turn ('' for everyone but
     the ordering character). Active while armed OR delivered-but-unresolved —
     repeat-backs must stay consistent; resolve() retires it."""
+    # S4: the PATIENT shows triggered (unstabilized, unresolved) impacts.
+    if _is_patient(card):
+        blocks = [
+            _impact_block(rec)
+            for rec in _bucket(session_id)["errors"]
+            if rec.get("impact_state")
+            and not rec["impact_state"].get("stabilized_at")
+            and rec["status"] != "resolved"
+        ]
+        return "\n\n".join(b for b in blocks if b)
     try:
         from . import med_orders
         role = med_orders.role_kind(str(card.get("role") or ""))
@@ -615,6 +625,209 @@ def vocab_extras(session_id: str) -> list[str]:
     return [w for w in out if w]
 
 
+# ── S4: patient impact — the consequence arm ──────────────────────────────────
+#
+# Curated profiles × severity tiers (catalog `impacts`); applied via two
+# EXISTING levers, nothing new invented (design rule 6):
+#   • a vitals.record chart event — the EHR vitals tab shows the deterioration
+#     when anyone checks vitals (v8 sessions have no bedside-monitor device;
+#     the M7 room mode's telemetry reads the same event type, so this composes);
+#   • the PATIENT character's prompt context — symptoms + behavior, the primary
+#     live signal in a character-driven sim.
+# Triggers are explicit, never timed (rule 7): the instructor's button, or
+# per-error opt-in auto-trigger when the staged med is ADMINISTERED. Severe
+# tier double-confirms (at trigger for manual; at arm for auto). stabilize()
+# walks vitals back to the captured baseline and retires the symptom script.
+
+IMPACT_TRIGGERS = ("manual", "on_administer")
+SEVERITIES = ("mild", "moderate", "severe")
+
+_IMPACT_STATION = "instructor-impact"   # station_id stamped on staged vitals events
+
+
+def _impact_catalog() -> dict[str, Any]:
+    return catalog().get("impacts") or {}
+
+
+def allowed_profiles(err_type: str, payload: dict[str, Any]) -> list[str]:
+    """Profile ids this error may cause, per the curated mapping (wrong_dose by
+    direction, interaction by risk label, admin by kind)."""
+    allowed = _impact_catalog().get("allowed") or {}
+    if err_type == "wrong_dose":
+        by_dir = allowed.get("wrong_dose") or {}
+        return list(by_dir.get(str(payload.get("direction") or "")) or [])
+    if err_type == "interaction":
+        by_risk = allowed.get("interaction_by_risk") or {}
+        return list(by_risk.get(str(payload.get("risk") or "")) or [])
+    if err_type == "admin":
+        by_kind = allowed.get("admin") or {}
+        return list(by_kind.get(str(payload.get("kind") or "")) or [])
+    return list(allowed.get(err_type) or [])
+
+
+def impact_options(session_id: str, error_id: str) -> list[dict[str, Any]]:
+    """The S5 wizard's step-5 menu: profiles this armed error may cause, with
+    per-tier symptom/vitals previews (plain-English review material)."""
+    rec = get(session_id, error_id)
+    if rec is None:
+        return []
+    profiles = _impact_catalog().get("profiles") or {}
+    out = []
+    for pid in allowed_profiles(rec["type"], rec["payload"]):
+        prof = profiles.get(pid)
+        if prof:
+            out.append({"profile": pid, "display": str(prof.get("display") or pid),
+                        "tiers": prof.get("tiers") or {}})
+    return out
+
+
+def _validate_impact(err_type: str, payload: dict[str, Any],
+                     impact: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(impact, dict):
+        raise ValueError("impact must be a dict {profile, severity, trigger}")
+    profile = str(impact.get("profile") or "")
+    severity = str(impact.get("severity") or "")
+    trigger = str(impact.get("trigger") or "manual")
+    if profile not in allowed_profiles(err_type, payload):
+        raise ValueError(f"impact profile {profile!r} is not in the curated set "
+                         f"for this error (allowed: "
+                         f"{', '.join(allowed_profiles(err_type, payload)) or 'none'})")
+    tiers = ((_impact_catalog().get("profiles") or {}).get(profile) or {}).get("tiers") or {}
+    if severity not in SEVERITIES or severity not in tiers:
+        raise ValueError(f"severity must be one of {', '.join(SEVERITIES)}")
+    if trigger not in IMPACT_TRIGGERS:
+        raise ValueError(f"trigger must be one of {', '.join(IMPACT_TRIGGERS)}")
+    confirmed = bool(impact.get("confirmed"))
+    if severity == "severe" and trigger == "on_administer" and not confirmed:
+        raise ValueError("a SEVERE auto-triggered impact requires explicit "
+                         "confirmation at arm time (confirmed: true)")
+    return {"profile": profile, "severity": severity, "trigger": trigger,
+            "confirmed": confirmed}
+
+
+def _tier(rec: dict[str, Any]) -> dict[str, Any]:
+    imp = rec.get("impact") or {}
+    prof = (_impact_catalog().get("profiles") or {}).get(imp.get("profile")) or {}
+    return (prof.get("tiers") or {}).get(imp.get("severity")) or {}
+
+
+def _latest_baseline_vitals(session_id: str,
+                            keys: list[str]) -> dict[str, str]:
+    """The most recent seeded vitals row, restricted to the keys the impact
+    will change — captured at trigger time so stabilize() has a target."""
+    try:
+        from . import ehr_db
+        rows = (ehr_db.seed(session_id) or {}).get("vitals_baseline") or []
+        last = rows[-1] if rows else {}
+        return {k: str(last[k]) for k in keys if k in last}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def trigger_impact(session_id: str, error_id: str, *,
+                   confirm_severe: bool = False) -> dict[str, Any]:
+    """Fire the configured consequence NOW (the instructor's button — or the
+    administration hook, which passes confirm_severe=True because severe+auto
+    was already explicitly confirmed at arm time)."""
+    rec = get(session_id, error_id)
+    if rec is None:
+        raise ValueError(f"no staged error {error_id!r}")
+    imp = rec.get("impact")
+    if not imp:
+        raise ValueError("this staged error has no patient impact configured")
+    if rec["status"] == "resolved":
+        raise ValueError("error already resolved — impact can no longer fire")
+    if rec.get("impact_state"):
+        raise ValueError("impact already triggered")
+    if imp["severity"] == "severe" and not confirm_severe:
+        raise ValueError("severe impact: confirm explicitly (second click)")
+
+    tier = _tier(rec)
+    vitals: dict[str, Any] = dict(tier.get("vitals") or {})
+    baseline = _latest_baseline_vitals(session_id, list(vitals.keys()))
+    now = time.time()
+    rec["impact_state"] = {
+        "profile": imp["profile"], "severity": imp["severity"],
+        "applied_vitals": vitals, "baseline_vitals": baseline,
+        "triggered_at": now, "stabilized_at": None,
+    }
+    rec["triggered_at"] = now
+    try:
+        from . import ehr_db
+        ehr_db.append_event(
+            session_id, _IMPACT_STATION,
+            type="vitals.record", surface="impact",
+            payload={"time": "now", **vitals, "source": "staged-impact"},
+        )
+    except Exception:  # noqa: BLE001 — the symptom script still carries the impact
+        pass
+    return rec
+
+
+def stabilize(session_id: str, error_id: str) -> dict[str, Any]:
+    """Walk the patient back: vitals toward the captured baseline, symptom
+    script retired. The chart keeps both records — an honest timeline."""
+    rec = get(session_id, error_id)
+    if rec is None:
+        raise ValueError(f"no staged error {error_id!r}")
+    state = rec.get("impact_state")
+    if not state:
+        raise ValueError("impact has not been triggered")
+    if state.get("stabilized_at"):
+        raise ValueError("already stabilized")
+    state["stabilized_at"] = time.time()
+    try:
+        from . import ehr_db
+        ehr_db.append_event(
+            session_id, _IMPACT_STATION,
+            type="vitals.record", surface="impact",
+            payload={"time": "now", **(state.get("baseline_vitals") or {}),
+                     "source": "stabilized"},
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return rec
+
+
+def note_med_administered(session_id: str, med_text: str) -> None:
+    """Administration hook (device event path): if a staged error with an
+    auto-trigger impact matches the administered med, fire the consequence.
+    Severe was confirmed at arm time. Best-effort — never raises."""
+    try:
+        low = (med_text or "").lower()
+        if not low:
+            return
+        for rec in list(_bucket(session_id)["errors"]):
+            imp = rec.get("impact")
+            if (not imp or imp.get("trigger") != "on_administer"
+                    or rec.get("impact_state") or rec["status"] == "resolved"):
+                continue
+            marker = _verbal_marker(rec)
+            if marker and marker.lower() in low:
+                trigger_impact(session_id, rec["id"], confirm_severe=True)
+    except Exception:  # noqa: BLE001 — must never break a device event
+        return
+
+
+def _is_patient(card: dict[str, Any]) -> bool:
+    blob = f"{card.get('role') or ''} {card.get('roleGroup') or ''}".lower()
+    return "patient" in blob
+
+
+def _impact_block(rec: dict[str, Any]) -> str:
+    tier = _tier(rec)
+    return (
+        f"PATIENT STATE CHANGE (instructor-staged): you are NOW experiencing "
+        f"{tier.get('symptoms') or 'feeling distinctly unwell'}. Show it the "
+        f"way a real patient would — "
+        f"{tier.get('behavior') or 'let it color your voice and answers'}. "
+        f"Answer questions about how you feel honestly and in your own words. "
+        f"Do NOT name a diagnosis, do NOT speculate about causes or "
+        f"medications unless asked directly, and NEVER hint that this is "
+        f"staged. If you feel very unwell, say so plainly."
+    )
+
+
 # ── lifecycle ──────────────────────────────────────────────────────────────────
 
 def _validate_axes(err_type: str, vector: str, encounter: str) -> None:
@@ -635,20 +848,21 @@ def _bucket(session_id: str) -> dict[str, Any]:
 def arm(session_id: str, *, err_type: str, vector: str, encounter: str,
         payload: dict[str, Any], impact: dict[str, Any] | None = None,
         note: str = "") -> dict[str, Any]:
-    """Stage an error. S1: records only (application lands in S2/S3); `impact`
-    must stay None until the S4 consequence catalog exists — bounded means no
-    free-form impact can be smuggled in early."""
+    """Stage an error. `impact` (optional) = {profile, severity, trigger
+    manual|on_administer, confirmed} — validated against the CURATED consequence
+    catalog (severe + auto-trigger demands confirmed=true at arm time)."""
     _validate_axes(err_type, vector, encounter)
-    if impact is not None:
-        raise ValueError("patient impact arrives in S4 — not yet armable")
     if not isinstance(payload, dict) or not payload.get("display"):
         raise ValueError("payload must be a suggestion dict (with display)")
+    if impact is not None:
+        impact = _validate_impact(err_type, payload, impact)
     b = _bucket(session_id)
     b["seq"] += 1
     rec: dict[str, Any] = {
         "id": f"e{b['seq']}",
         "type": err_type, "vector": vector, "encounter": encounter,
-        "payload": dict(payload), "impact": None, "note": str(note or ""),
+        "payload": dict(payload), "impact": impact, "note": str(note or ""),
+        "impact_state": None,
         "status": "armed", "outcome": None,
         "armed_at": time.time(), "delivered_at": None,
         "triggered_at": None, "resolved_at": None,

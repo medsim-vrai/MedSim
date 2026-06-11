@@ -402,6 +402,135 @@ def test_session_vocab_merges_staged_error_names(doc_session, monkeypatch) -> No
     assert rec["payload"]["wrong_drug"] in vocab
 
 
+# ── S4: patient impact ─────────────────────────────────────────────────────────
+
+@pytest.fixture
+def impact_session(doc_session, monkeypatch):
+    """doc_session + captured vitals events + a seeded vitals baseline."""
+    from portal import ehr_db
+    sid, store = doc_session
+    store["seed"]["vitals_baseline"] = [
+        {"time": "t-4h", "hr": "82", "rr": "16", "spo2": "97",
+         "bp": "118/74", "pain": "2", "t": "37.0"},
+    ]
+    events = []
+    monkeypatch.setattr(
+        ehr_db, "append_event",
+        lambda sid_, station, *, type, surface, payload:
+            events.append({"station": station, "type": type,
+                           "surface": surface, "payload": payload}) or 1)
+    return sid, store, events
+
+
+def _arm_allergy_with_impact(sid: str, severity: str = "moderate",
+                             trigger: str = "manual", **kw) -> dict:
+    cand = med_errors.suggest(sid, "allergy", "verbal", "med_pass")[0]
+    return med_errors.arm(
+        sid, err_type="allergy", vector="verbal", encounter="med_pass",
+        payload=cand,
+        impact={"profile": "anaphylaxis", "severity": severity,
+                "trigger": trigger, **kw})
+
+
+def test_impact_options_follow_the_curated_mapping(doc_session) -> None:
+    sid, _ = doc_session
+    a = _arm_verbal(sid, "wrong_dose")          # board doses → direction varies
+    opts = med_errors.impact_options(sid, a["id"])
+    allowed = med_errors.allowed_profiles("wrong_dose", a["payload"])
+    assert [o["profile"] for o in opts] == allowed
+    if a["payload"]["direction"] == "low":
+        assert allowed == ["subtherapeutic"]
+    else:
+        assert "subtherapeutic" not in allowed
+    # Allergy errors map to the anaphylaxis spectrum only.
+    assert med_errors.allowed_profiles("allergy", {}) == ["anaphylaxis"]
+    # Interaction maps by risk label.
+    assert med_errors.allowed_profiles(
+        "interaction", {"risk": "respiratory depression"}) == ["respiratory_depression"]
+
+
+def test_arm_validates_impact_config(doc_session) -> None:
+    sid, _ = doc_session
+    cand = med_errors.suggest(sid, "allergy", "verbal", "med_pass")[0]
+    with pytest.raises(ValueError):     # profile outside the curated set
+        med_errors.arm(sid, err_type="allergy", vector="verbal",
+                       encounter="med_pass", payload=cand,
+                       impact={"profile": "bleeding", "severity": "mild",
+                               "trigger": "manual"})
+    with pytest.raises(ValueError):     # severe + auto needs confirmed=True
+        med_errors.arm(sid, err_type="allergy", vector="verbal",
+                       encounter="med_pass", payload=cand,
+                       impact={"profile": "anaphylaxis", "severity": "severe",
+                               "trigger": "on_administer"})
+    rec = med_errors.arm(sid, err_type="allergy", vector="verbal",
+                         encounter="med_pass", payload=cand,
+                         impact={"profile": "anaphylaxis", "severity": "severe",
+                                 "trigger": "on_administer", "confirmed": True})
+    assert rec["impact"]["confirmed"] is True
+
+
+def test_trigger_applies_vitals_and_patient_block(impact_session) -> None:
+    sid, _, events = impact_session
+    rec = _arm_allergy_with_impact(sid)
+    assert med_errors.prompt_block_for(sid, PATIENT) == ""   # not yet triggered
+    med_errors.trigger_impact(sid, rec["id"])
+    assert len(events) == 1
+    ev = events[0]
+    assert ev["type"] == "vitals.record" and ev["payload"]["source"] == "staged-impact"
+    assert ev["payload"]["hr"] == "112"                      # moderate anaphylaxis
+    block = med_errors.prompt_block_for(sid, PATIENT)
+    assert "PATIENT STATE CHANGE" in block and "hives" in block
+    assert "Do NOT name a diagnosis" in block
+    assert med_errors.prompt_block_for(sid, PHARMACIST) == ""
+    with pytest.raises(ValueError):                          # no double trigger
+        med_errors.trigger_impact(sid, rec["id"])
+
+
+def test_severe_manual_trigger_demands_second_confirmation(impact_session) -> None:
+    sid, _, events = impact_session
+    rec = _arm_allergy_with_impact(sid, severity="severe")
+    with pytest.raises(ValueError):
+        med_errors.trigger_impact(sid, rec["id"])
+    med_errors.trigger_impact(sid, rec["id"], confirm_severe=True)
+    assert events[0]["payload"]["bp"] == "78/44"
+
+
+def test_stabilize_restores_baseline_and_retires_the_script(impact_session) -> None:
+    sid, _, events = impact_session
+    rec = _arm_allergy_with_impact(sid)
+    med_errors.trigger_impact(sid, rec["id"])
+    med_errors.stabilize(sid, rec["id"])
+    assert len(events) == 2
+    back = events[1]["payload"]
+    assert back["source"] == "stabilized"
+    assert back["hr"] == "82" and back["bp"] == "118/74"     # captured baseline
+    assert med_errors.prompt_block_for(sid, PATIENT) == ""
+    with pytest.raises(ValueError):
+        med_errors.stabilize(sid, rec["id"])                 # once
+
+
+def test_administration_hook_fires_only_matching_auto_errors(impact_session) -> None:
+    sid, _, events = impact_session
+    manual = _arm_allergy_with_impact(sid, trigger="manual")
+    auto = _arm_allergy_with_impact(sid, trigger="on_administer")
+    drug = auto["payload"]["drug"]
+    med_errors.note_med_administered(sid, "Acetaminophen 650 mg PO")
+    assert events == [] and auto.get("impact_state") is None
+    med_errors.note_med_administered(sid, f"{drug} 3.375 g IV")
+    assert auto["impact_state"] is not None                  # auto fired
+    assert manual.get("impact_state") is None                # manual untouched
+    assert len(events) == 1
+
+
+def test_resolved_error_cannot_fire_its_impact(impact_session) -> None:
+    sid, _, events = impact_session
+    rec = _arm_allergy_with_impact(sid)
+    med_errors.resolve(sid, rec["id"], "caught")
+    with pytest.raises(ValueError):
+        med_errors.trigger_impact(sid, rec["id"])
+    assert events == []
+
+
 def test_failed_apply_stages_nothing(doc_session) -> None:
     sid, store = doc_session
     # An admin error whose drug is NOT on the MAR can't be planted — atomic.

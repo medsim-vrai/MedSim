@@ -8,53 +8,545 @@
       "dose_transforms": "{id, display, op:mul|unit_swap, factor?, from?, to?, direction, note}",
       "interaction_pairs": "{a, b, risk, note} — fires when one member is on the MAR/board and the other is orderable in the session",
       "allergy_map": "{allergen, meds[], note} — fires only when the allergen is DOCUMENTED on the chart and a mapped med is orderable",
-      "admin_error_templates": "{kind, display, detail_template} — grounded in an actual MAR row at suggest time"
+      "admin_error_templates": "{kind, display, detail_template} — grounded in an actual MAR row at suggest time",
+      "impacts": "profiles: {id: {display, tiers: {mild|moderate|severe: {symptoms, behavior, vitals{absolute staged values}}}}}; allowed: per error type (wrong_dose by direction, interaction by risk label, admin by kind)"
     }
   },
   "sound_alike_pairs": [
-    {"a": "Alteplase", "b": "Tenecteplase", "note": "both thrombolytics, both in the formulary — wrong agent/dose protocol"},
-    {"a": "Tramadol", "b": "Trazodone", "note": "ISMP classic"},
-    {"a": "Lorazepam", "b": "Alprazolam", "note": "ISMP classic"},
-    {"a": "Diazepam", "b": "Diltiazem", "note": "ISMP classic"},
-    {"a": "Metoprolol", "b": "Misoprostol", "note": "ISMP classic"},
-    {"a": "Epinephrine", "b": "Ephedrine", "note": "ISMP classic; high-alert"},
-    {"a": "Risperidone", "b": "Ropinirole", "note": "ISMP classic"},
-    {"a": "Phenobarbital", "b": "Pentobarbital", "note": "ISMP classic"},
-    {"a": "Ceftriaxone", "b": "Cefotaxime", "note": "cephalosporin sound-alike"},
-    {"a": "Heparin", "b": "Hespan", "note": "ISMP classic; high-alert anticoagulant"},
-    {"a": "Clonidine", "b": "Clonazepam", "note": "ISMP classic"},
-    {"a": "Hydroxyzine", "b": "Hydralazine", "note": "ISMP classic"}
+    {
+      "a": "Alteplase",
+      "b": "Tenecteplase",
+      "note": "both thrombolytics, both in the formulary — wrong agent/dose protocol"
+    },
+    {
+      "a": "Tramadol",
+      "b": "Trazodone",
+      "note": "ISMP classic"
+    },
+    {
+      "a": "Lorazepam",
+      "b": "Alprazolam",
+      "note": "ISMP classic"
+    },
+    {
+      "a": "Diazepam",
+      "b": "Diltiazem",
+      "note": "ISMP classic"
+    },
+    {
+      "a": "Metoprolol",
+      "b": "Misoprostol",
+      "note": "ISMP classic"
+    },
+    {
+      "a": "Epinephrine",
+      "b": "Ephedrine",
+      "note": "ISMP classic; high-alert"
+    },
+    {
+      "a": "Risperidone",
+      "b": "Ropinirole",
+      "note": "ISMP classic"
+    },
+    {
+      "a": "Phenobarbital",
+      "b": "Pentobarbital",
+      "note": "ISMP classic"
+    },
+    {
+      "a": "Ceftriaxone",
+      "b": "Cefotaxime",
+      "note": "cephalosporin sound-alike"
+    },
+    {
+      "a": "Heparin",
+      "b": "Hespan",
+      "note": "ISMP classic; high-alert anticoagulant"
+    },
+    {
+      "a": "Clonidine",
+      "b": "Clonazepam",
+      "note": "ISMP classic"
+    },
+    {
+      "a": "Hydroxyzine",
+      "b": "Hydralazine",
+      "note": "ISMP classic"
+    }
   ],
   "dose_transforms": [
-    {"id": "tenfold_high", "display": "10× overdose (decimal-point slip)", "op": "mul", "factor": 10, "direction": "high", "note": "classic trailing-zero / missed-decimal error"},
-    {"id": "tenfold_low", "display": "10× underdose (decimal-point slip)", "op": "mul", "factor": 0.1, "direction": "low", "note": "leading-decimal error; therapy silently subtherapeutic"},
-    {"id": "double_dose", "display": "Double dose (verbal repeat / unit confusion)", "op": "mul", "factor": 2, "direction": "high", "note": "common phone-order readback failure"},
-    {"id": "half_dose", "display": "Half dose (misheard)", "op": "mul", "factor": 0.5, "direction": "low", "note": "subtherapeutic; easy to miss"},
-    {"id": "mg_for_mcg", "display": "mg written for mcg (1000× overdose)", "op": "unit_swap", "from": "mcg", "to": "mg", "direction": "high", "note": "high-alert with fentanyl-class meds"},
-    {"id": "mcg_for_mg", "display": "mcg written for mg (1000× underdose)", "op": "unit_swap", "from": "mg", "to": "mcg", "direction": "low", "note": "therapy effectively absent"}
+    {
+      "id": "tenfold_high",
+      "display": "10× overdose (decimal-point slip)",
+      "op": "mul",
+      "factor": 10,
+      "direction": "high",
+      "note": "classic trailing-zero / missed-decimal error"
+    },
+    {
+      "id": "tenfold_low",
+      "display": "10× underdose (decimal-point slip)",
+      "op": "mul",
+      "factor": 0.1,
+      "direction": "low",
+      "note": "leading-decimal error; therapy silently subtherapeutic"
+    },
+    {
+      "id": "double_dose",
+      "display": "Double dose (verbal repeat / unit confusion)",
+      "op": "mul",
+      "factor": 2,
+      "direction": "high",
+      "note": "common phone-order readback failure"
+    },
+    {
+      "id": "half_dose",
+      "display": "Half dose (misheard)",
+      "op": "mul",
+      "factor": 0.5,
+      "direction": "low",
+      "note": "subtherapeutic; easy to miss"
+    },
+    {
+      "id": "mg_for_mcg",
+      "display": "mg written for mcg (1000× overdose)",
+      "op": "unit_swap",
+      "from": "mcg",
+      "to": "mg",
+      "direction": "high",
+      "note": "high-alert with fentanyl-class meds"
+    },
+    {
+      "id": "mcg_for_mg",
+      "display": "mcg written for mg (1000× underdose)",
+      "op": "unit_swap",
+      "from": "mg",
+      "to": "mcg",
+      "direction": "low",
+      "note": "therapy effectively absent"
+    }
   ],
   "interaction_pairs": [
-    {"a": "Heparin", "b": "Ibuprofen", "risk": "bleeding", "note": "anticoagulant + NSAID"},
-    {"a": "Enoxaparin", "b": "Ibuprofen", "risk": "bleeding", "note": "anticoagulant + NSAID"},
-    {"a": "Apixaban", "b": "Ibuprofen", "risk": "bleeding", "note": "DOAC + NSAID"},
-    {"a": "Heparin", "b": "Enoxaparin", "risk": "duplicate anticoagulation", "note": "two anticoagulants concurrently"},
-    {"a": "Aspirin", "b": "Heparin", "risk": "bleeding", "note": "antiplatelet + anticoagulant (often intended — the CONTEXT note must contradict it)"},
-    {"a": "Haloperidol", "b": "Ondansetron", "risk": "QT prolongation", "note": "additive QTc; teaching classic"},
-    {"a": "Lorazepam", "b": "Fentanyl", "risk": "respiratory depression", "note": "benzo + opioid"},
-    {"a": "Lorazepam", "b": "Oxycodone", "risk": "respiratory depression", "note": "benzo + opioid"},
-    {"a": "Furosemide", "b": "Bumetanide", "risk": "duplicate loop diuresis", "note": "duplicate-class order"},
-    {"a": "Tramadol", "b": "Ondansetron", "risk": "serotonergic load / seizure threshold", "note": "conservative teaching point"}
+    {
+      "a": "Heparin",
+      "b": "Ibuprofen",
+      "risk": "bleeding",
+      "note": "anticoagulant + NSAID"
+    },
+    {
+      "a": "Enoxaparin",
+      "b": "Ibuprofen",
+      "risk": "bleeding",
+      "note": "anticoagulant + NSAID"
+    },
+    {
+      "a": "Apixaban",
+      "b": "Ibuprofen",
+      "risk": "bleeding",
+      "note": "DOAC + NSAID"
+    },
+    {
+      "a": "Heparin",
+      "b": "Enoxaparin",
+      "risk": "duplicate anticoagulation",
+      "note": "two anticoagulants concurrently"
+    },
+    {
+      "a": "Aspirin",
+      "b": "Heparin",
+      "risk": "bleeding",
+      "note": "antiplatelet + anticoagulant (often intended — the CONTEXT note must contradict it)"
+    },
+    {
+      "a": "Haloperidol",
+      "b": "Ondansetron",
+      "risk": "QT prolongation",
+      "note": "additive QTc; teaching classic"
+    },
+    {
+      "a": "Lorazepam",
+      "b": "Fentanyl",
+      "risk": "respiratory depression",
+      "note": "benzo + opioid"
+    },
+    {
+      "a": "Lorazepam",
+      "b": "Oxycodone",
+      "risk": "respiratory depression",
+      "note": "benzo + opioid"
+    },
+    {
+      "a": "Furosemide",
+      "b": "Bumetanide",
+      "risk": "duplicate loop diuresis",
+      "note": "duplicate-class order"
+    },
+    {
+      "a": "Tramadol",
+      "b": "Ondansetron",
+      "risk": "serotonergic load / seizure threshold",
+      "note": "conservative teaching point"
+    }
   ],
   "allergy_map": [
-    {"allergen": "Penicillin", "meds": ["Piperacillin-tazobactam"], "note": "same class — direct contraindication"},
-    {"allergen": "Penicillin", "meds": ["Cefepime", "Ceftriaxone"], "note": "cephalosporin cross-reactivity — LOW risk in modern practice; the teaching point is checking and documenting, not absolute avoidance"},
-    {"allergen": "Amoxicillin", "meds": ["Piperacillin-tazobactam"], "note": "penicillin class"},
-    {"allergen": "NSAIDs", "meds": ["Ibuprofen", "Aspirin"], "note": "documented NSAID allergy/intolerance"}
+    {
+      "allergen": "Penicillin",
+      "meds": [
+        "Piperacillin-tazobactam"
+      ],
+      "note": "same class — direct contraindication"
+    },
+    {
+      "allergen": "Penicillin",
+      "meds": [
+        "Cefepime",
+        "Ceftriaxone"
+      ],
+      "note": "cephalosporin cross-reactivity — LOW risk in modern practice; the teaching point is checking and documenting, not absolute avoidance"
+    },
+    {
+      "allergen": "Amoxicillin",
+      "meds": [
+        "Piperacillin-tazobactam"
+      ],
+      "note": "penicillin class"
+    },
+    {
+      "allergen": "NSAIDs",
+      "meds": [
+        "Ibuprofen",
+        "Aspirin"
+      ],
+      "note": "documented NSAID allergy/intolerance"
+    }
   ],
   "admin_error_templates": [
-    {"kind": "expired", "display": "Medication out of date", "detail_template": "the {drug} in the cart/fridge shows an expiry {days} days ago"},
-    {"kind": "wrong_time", "display": "Wrong time", "detail_template": "MAR shows {drug} due {hours} hours off the ordered schedule"},
-    {"kind": "wrong_dose", "display": "Wrong dose prepared", "detail_template": "prepared dose of {drug} differs from the MAR ({wrong} vs {right})"},
-    {"kind": "wrong_med", "display": "Wrong medication stocked", "detail_template": "cart slot for {drug} holds {other} (look-alike packaging)"}
-  ]
+    {
+      "kind": "expired",
+      "display": "Medication out of date",
+      "detail_template": "the {drug} in the cart/fridge shows an expiry {days} days ago"
+    },
+    {
+      "kind": "wrong_time",
+      "display": "Wrong time",
+      "detail_template": "MAR shows {drug} due {hours} hours off the ordered schedule"
+    },
+    {
+      "kind": "wrong_dose",
+      "display": "Wrong dose prepared",
+      "detail_template": "prepared dose of {drug} differs from the MAR ({wrong} vs {right})"
+    },
+    {
+      "kind": "wrong_med",
+      "display": "Wrong medication stocked",
+      "detail_template": "cart slot for {drug} holds {other} (look-alike packaging)"
+    }
+  ],
+  "impacts": {
+    "profiles": {
+      "anaphylaxis": {
+        "display": "Allergic reaction → anaphylaxis spectrum",
+        "tiers": {
+          "mild": {
+            "symptoms": "itching and a spreading raised rash, feeling flushed and uneasy",
+            "behavior": "scratch at your arms, shift around, mention the itching unprompted once",
+            "vitals": {
+              "hr": "98",
+              "rr": "18",
+              "spo2": "96",
+              "bp": "112/70"
+            }
+          },
+          "moderate": {
+            "symptoms": "hives, chest tightness, a little wheezy, lips feel odd",
+            "behavior": "audibly short of breath mid-sentence, anxious, ask if something is wrong",
+            "vitals": {
+              "hr": "112",
+              "rr": "22",
+              "spo2": "93",
+              "bp": "98/60"
+            }
+          },
+          "severe": {
+            "symptoms": "throat tightening, hard to swallow, dizzy, frightened, breathing is work",
+            "behavior": "broken short phrases, audible stridor-like effort, visibly panicked",
+            "vitals": {
+              "hr": "128",
+              "rr": "28",
+              "spo2": "88",
+              "bp": "78/44"
+            }
+          }
+        }
+      },
+      "bleeding": {
+        "display": "Bleeding (anticoagulant burden)",
+        "tiers": {
+          "mild": {
+            "symptoms": "oozing from the IV site and new bruising on your forearm",
+            "behavior": "show the bruise if anyone looks, mention the oozing only if asked",
+            "vitals": {
+              "hr": "96",
+              "bp": "110/68"
+            }
+          },
+          "moderate": {
+            "symptoms": "gums bled when you drank water, lightheaded when sitting up",
+            "behavior": "move cautiously, mention the dizziness when you sit up",
+            "vitals": {
+              "hr": "112",
+              "bp": "96/58"
+            }
+          },
+          "severe": {
+            "symptoms": "blood in your urine, very lightheaded, cold and clammy",
+            "behavior": "weak voice, frightened, ask for help promptly",
+            "vitals": {
+              "hr": "132",
+              "rr": "24",
+              "spo2": "94",
+              "bp": "80/46"
+            }
+          }
+        }
+      },
+      "respiratory_depression": {
+        "display": "Respiratory depression (opioid/benzo burden)",
+        "tiers": {
+          "mild": {
+            "symptoms": "very sleepy, heavy eyelids, slow to answer",
+            "behavior": "long pauses before answering, yawn, drift mid-sentence once",
+            "vitals": {
+              "rr": "10",
+              "spo2": "94"
+            }
+          },
+          "moderate": {
+            "symptoms": "can barely stay awake, words slurring",
+            "behavior": "one-word answers, slurred, need questions repeated",
+            "vitals": {
+              "rr": "7",
+              "spo2": "90",
+              "hr": "64"
+            }
+          },
+          "severe": {
+            "symptoms": "nearly unrousable, breathing feels far away",
+            "behavior": "respond only to your name and only with fragments, eyes closed",
+            "vitals": {
+              "rr": "4",
+              "spo2": "82",
+              "hr": "58"
+            }
+          }
+        }
+      },
+      "hypotension": {
+        "display": "Hypotension (vasodilation / volume)",
+        "tiers": {
+          "mild": {
+            "symptoms": "lightheaded when you sit up, a bit washed out",
+            "behavior": "steady yourself on the rail when moving, mention it if asked",
+            "vitals": {
+              "bp": "96/60",
+              "hr": "92"
+            }
+          },
+          "moderate": {
+            "symptoms": "dizzy even lying down, vision sparkles when you move",
+            "behavior": "decline to sit up, ask for water, sound subdued",
+            "vitals": {
+              "bp": "84/52",
+              "hr": "104"
+            }
+          },
+          "severe": {
+            "symptoms": "the room spins, nearly blacked out, nauseated and grey",
+            "behavior": "eyes shut, brief answers, say you feel like you might pass out",
+            "vitals": {
+              "bp": "70/40",
+              "hr": "118",
+              "rr": "20"
+            }
+          }
+        }
+      },
+      "sedation": {
+        "display": "Over-sedation (without airway compromise)",
+        "tiers": {
+          "mild": {
+            "symptoms": "pleasantly drowsy, hard to focus",
+            "behavior": "slow answers, lose your train of thought once",
+            "vitals": {
+              "hr": "72"
+            }
+          },
+          "moderate": {
+            "symptoms": "very groggy, words running together",
+            "behavior": "slur mildly, ask people to repeat questions",
+            "vitals": {
+              "rr": "11",
+              "hr": "66"
+            }
+          },
+          "severe": {
+            "symptoms": "can't keep your eyes open, conversation exhausts you",
+            "behavior": "fragments only, long silences, drift off unless re-engaged",
+            "vitals": {
+              "rr": "8",
+              "spo2": "93",
+              "hr": "60"
+            }
+          }
+        }
+      },
+      "subtherapeutic": {
+        "display": "Under-treatment — symptoms return",
+        "tiers": {
+          "mild": {
+            "symptoms": "the symptoms you came in with are creeping back",
+            "behavior": "mention that you 'don't feel as good as this morning' once",
+            "vitals": {
+              "pain": "6"
+            }
+          },
+          "moderate": {
+            "symptoms": "clearly worse: the original problem is back in force",
+            "behavior": "ask whether the medicine is working, visibly uncomfortable",
+            "vitals": {
+              "pain": "8",
+              "hr": "100"
+            }
+          },
+          "severe": {
+            "symptoms": "as bad as before treatment started, scared it's getting worse",
+            "behavior": "distressed, ask for the nurse/doctor directly",
+            "vitals": {
+              "pain": "9",
+              "hr": "110",
+              "bp": "142/88"
+            }
+          }
+        }
+      },
+      "agitation": {
+        "display": "Agitation / serotonergic-type restlessness",
+        "tiers": {
+          "mild": {
+            "symptoms": "restless, jittery, can't get comfortable",
+            "behavior": "fidget, readjust constantly, talk a little fast",
+            "vitals": {
+              "hr": "100"
+            }
+          },
+          "moderate": {
+            "symptoms": "sweaty, trembling, heart racing",
+            "behavior": "speak quickly, startle easily, hands visibly unsteady",
+            "vitals": {
+              "hr": "112",
+              "t": "37.8"
+            }
+          },
+          "severe": {
+            "symptoms": "confused and frightened, drenched in sweat, heart pounding",
+            "behavior": "disoriented answers, mix up details you knew earlier",
+            "vitals": {
+              "hr": "126",
+              "t": "38.4",
+              "rr": "22"
+            }
+          }
+        }
+      },
+      "arrhythmia_warning": {
+        "display": "Palpitations / rhythm warning (QT burden)",
+        "tiers": {
+          "mild": {
+            "symptoms": "occasional skipped-beat flutters",
+            "behavior": "press your hand to your chest once, mention it only if asked",
+            "vitals": {
+              "hr": "104"
+            }
+          },
+          "moderate": {
+            "symptoms": "runs of racing heartbeat with brief lightheadedness",
+            "behavior": "pause mid-sentence when it races, look uneasy",
+            "vitals": {
+              "hr": "118"
+            }
+          },
+          "severe": {
+            "symptoms": "pounding irregular heartbeat, chest discomfort, dizzy",
+            "behavior": "frightened, ask if your heart is okay",
+            "vitals": {
+              "hr": "138",
+              "bp": "98/64"
+            }
+          }
+        }
+      }
+    },
+    "allowed": {
+      "allergy": [
+        "anaphylaxis"
+      ],
+      "wrong_dose": {
+        "high": [
+          "hypotension",
+          "respiratory_depression",
+          "sedation"
+        ],
+        "low": [
+          "subtherapeutic"
+        ]
+      },
+      "interaction_by_risk": {
+        "bleeding": [
+          "bleeding"
+        ],
+        "duplicate anticoagulation": [
+          "bleeding"
+        ],
+        "respiratory depression": [
+          "respiratory_depression"
+        ],
+        "QT prolongation": [
+          "arrhythmia_warning"
+        ],
+        "duplicate loop diuresis": [
+          "hypotension"
+        ],
+        "serotonergic load / seizure threshold": [
+          "agitation"
+        ]
+      },
+      "transcription": [
+        "hypotension",
+        "sedation",
+        "anaphylaxis",
+        "agitation",
+        "subtherapeutic"
+      ],
+      "admin": {
+        "expired": [
+          "subtherapeutic"
+        ],
+        "wrong_time": [
+          "subtherapeutic"
+        ],
+        "wrong_dose": [
+          "hypotension",
+          "respiratory_depression",
+          "sedation",
+          "subtherapeutic"
+        ],
+        "wrong_med": [
+          "hypotension",
+          "sedation",
+          "anaphylaxis",
+          "agitation"
+        ]
+      }
+    }
+  }
 }

@@ -349,6 +349,18 @@ async def api_device_event(station_id: str, request: Request):
                          device_kind=station["device_kind"],
                          device_model=station["device_model"])
     state = engine.handle(type=ev_type, surface="device", payload=payload)
+    # FR-008 S4: administering the staged med fires its configured patient
+    # impact (per-error opt-in, severe pre-confirmed at arm). Best-effort —
+    # must never break a device event.
+    if ev_type in ("cabinet.administer", "med.administer"):
+        try:
+            from portal import med_errors as _me
+            _me.note_med_administered(
+                sess.id,
+                str(payload.get("med_name") or payload.get("medication")
+                    or payload.get("name") or ""))
+        except Exception:  # noqa: BLE001
+            pass
     ehr_db.touch_device_station(station_id)
     if station_id in sess.device_stations:
         sess.device_stations[station_id].touch()
