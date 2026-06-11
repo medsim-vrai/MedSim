@@ -62,10 +62,15 @@ authored error stays bounded; the builder lives on its OWN page reached from the
 
 | Encounter | Mutated artifact (in the session seed) |
 |-----------|------------------------------------------|
-| Report | `seed_report` — one handoff line carries the discrepancy |
-| Charting | `notes_recent` — a note contradicting the active order |
-| Preparing for med pass | med board cart/pharmacy state (+ optional `expired`/lot tag on a cart item) or an order row |
-| During med pass | the due MAR row (`meds`) — wrong time/dose/med/expired |
+| Report | `notes_recent` + one "Shift Handoff (SBAR)" note (off-going RN) — *S2 correction: `seed_report` turned out to be the operator QA card, not the handoff; the handoff is realistically a note* |
+| Charting | `notes_recent` + one progress/clarification note contradicting the MAR |
+| Preparing for med pass | `medications` — ONE row's preparation fields (dose, expired-lot tag, stocked-with tag) |
+| During med pass | `medications` — ONE row's administration fields (dose/time + due-now tag; interaction/allergy plant the new row) |
+
+*S2 field note:* the student chart = event fold + stored seed (`projection["seed"]`), so
+`update_seed` is exactly the student-visible path. S2 also surfaced and fixed a latent FR-001
+bug: `active_med_names` read chart key `meds` but ChartSeed stores `medications` — the doctor's
+already-on exclusions were silently empty from the seeded MAR.
 
 Vector a (verbal/phone): the ordering character (doctor/charge nurse per encounter) speaks the
 staged order via the existing `_extra_context` prompt machinery (FR-001/002) and the FR-003

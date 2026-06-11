@@ -167,3 +167,162 @@ def test_arm_rejects_impact_until_s4_and_bad_outcomes(session) -> None:
 
 def test_unarmed_sessions_have_empty_state() -> None:
     assert med_errors.state("never-touched")["errors"] == []
+
+
+# ── S2: document vector ────────────────────────────────────────────────────────
+
+import copy
+import json as _json
+
+
+@pytest.fixture
+def doc_session(monkeypatch):
+    """Grounded session with an IN-MEMORY chart store standing in for ehr_db:
+    seed() hands out deep copies (like the DB), update_seed() commits + counts."""
+    from portal import ehr_db
+    cond = _condition_with_parseable_doses()
+    med_orders.init_session(SID, cond)
+    store = {
+        "seed": {
+            "allergies": [{"substance": "Penicillin", "reaction": "rash"}],
+            "medications": [
+                {"name": "Heparin gtt", "dose": "see order", "route": "IV",
+                 "frequency": "cont", "status": "active"},
+                {"name": "Aspirin", "dose": "81 mg", "route": "PO",
+                 "frequency": "daily", "status": "active"},
+            ],
+            "notes_recent": [
+                {"note_id": "n_admit_hp", "note_type": "Admission H&P",
+                 "author": "Admitting provider", "ts": "T-12h",
+                 "body": "Admitted overnight.", "signed": True},
+            ],
+            "vitals_baseline": [{"hr": "80"}],
+        },
+        "writes": 0,
+    }
+    monkeypatch.setattr(ehr_db, "seed",
+                        lambda sid: copy.deepcopy(store["seed"]) if sid == SID else {})
+
+    def _update(sid, new_seed):
+        assert sid == SID
+        store["seed"] = copy.deepcopy(new_seed)
+        store["writes"] += 1
+    monkeypatch.setattr(ehr_db, "update_seed", _update)
+    monkeypatch.setattr(ehr_db, "orders", lambda sid: [])
+    yield SID, store
+    med_orders._SESSION_MEDS.pop(SID, None)
+    med_errors.clear_session(SID)
+
+
+def _arm_doc(sid: str, err_type: str, encounter: str) -> dict:
+    cand = med_errors.suggest(sid, err_type, "document", encounter)[0]
+    return med_errors.arm(sid, err_type=err_type, vector="document",
+                          encounter=encounter, payload=cand)
+
+
+def test_report_encounter_plants_one_sbar_note_only(doc_session) -> None:
+    sid, store = doc_session
+    before = copy.deepcopy(store["seed"])
+    rec = _arm_doc(sid, "allergy", "report")
+    after = store["seed"]
+    assert store["writes"] == 1 and rec["status"] == "delivered"
+    notes = after["notes_recent"]
+    assert len(notes) == len(before["notes_recent"]) + 1
+    staged = notes[-1]
+    assert staged["note_type"] == "Shift Handoff (SBAR)"
+    assert rec["payload"]["drug"] in staged["body"]
+    assert "allerg" not in staged["body"].lower()      # never self-announcing
+    # Exactly ONE artifact changed — everything else byte-identical.
+    for key in before:
+        if key != "notes_recent":
+            assert _json.dumps(after[key], sort_keys=True) == \
+                   _json.dumps(before[key], sort_keys=True), key
+
+
+def test_charting_encounter_contradicts_mar_in_a_note(doc_session) -> None:
+    sid, store = doc_session
+    rec = _arm_doc(sid, "wrong_dose", "charting")
+    staged = store["seed"]["notes_recent"][-1]
+    assert staged["note_type"] == "Progress"
+    assert rec["payload"]["wrong_dose"] in staged["body"]
+    # The MAR (the truth) is untouched.
+    assert all(rec["payload"]["wrong_dose"] != m["dose"]
+               for m in store["seed"]["medications"])
+
+
+def test_prep_encounter_mutates_the_mar_row(doc_session) -> None:
+    sid, store = doc_session
+    rec = _arm_doc(sid, "wrong_dose", "prep")
+    p = rec["payload"]
+    rows = store["seed"]["medications"]
+    planted = [r for r in rows if med_errors._name_match(p["drug"], r["name"])]
+    assert planted and planted[0]["dose"] == p["wrong_dose"]
+    assert store["seed"]["notes_recent"][-1]["note_id"] == "n_admit_hp"  # notes untouched
+
+
+def test_med_pass_encounter_plants_due_now_interaction_row(doc_session) -> None:
+    sid, store = doc_session
+    rec = _arm_doc(sid, "interaction", "med_pass")
+    p = rec["payload"]
+    row = next(r for r in store["seed"]["medications"]
+               if med_errors._name_match(p["new_med"], r["name"]))
+    assert "due this pass" in row["frequency"]
+
+
+def test_admin_expired_tags_the_existing_row(doc_session) -> None:
+    sid, store = doc_session
+    cands = med_errors.suggest(sid, "admin", "document", "prep")
+    expired = next(c for c in cands if c["kind"] == "expired")
+    med_errors.arm(sid, err_type="admin", vector="document",
+                   encounter="prep", payload=expired)
+    row = next(r for r in store["seed"]["medications"]
+               if med_errors._name_match(expired["drug"], r["name"]))
+    assert "lot expired" in row["dose"]
+
+
+def test_disarm_restores_chart_byte_for_byte(doc_session) -> None:
+    sid, store = doc_session
+    pristine = _json.dumps(store["seed"], sort_keys=True)
+    rec = _arm_doc(sid, "interaction", "med_pass")
+    assert _json.dumps(store["seed"], sort_keys=True) != pristine
+    assert med_errors.disarm(sid, rec["id"])
+    assert _json.dumps(store["seed"], sort_keys=True) == pristine
+    assert store["writes"] == 2                        # one plant, one restore
+
+
+def test_disarm_restores_an_originally_absent_key(doc_session) -> None:
+    sid, store = doc_session
+    del store["seed"]["notes_recent"]
+    rec = _arm_doc(sid, "allergy", "charting")
+    assert "notes_recent" in store["seed"]
+    med_errors.disarm(sid, rec["id"])
+    assert "notes_recent" not in store["seed"]
+
+
+def test_resolve_keeps_the_chart_as_the_student_saw_it(doc_session) -> None:
+    sid, store = doc_session
+    rec = _arm_doc(sid, "wrong_dose", "med_pass")
+    mutated = _json.dumps(store["seed"], sort_keys=True)
+    med_errors.resolve(sid, rec["id"], "missed", note="debrief topic")
+    assert _json.dumps(store["seed"], sort_keys=True) == mutated
+
+
+def test_verbal_arms_never_touch_the_chart(doc_session) -> None:
+    sid, store = doc_session
+    cand = med_errors.suggest(sid, "wrong_dose", "verbal", "med_pass")[0]
+    med_errors.arm(sid, err_type="wrong_dose", vector="verbal",
+                   encounter="med_pass", payload=cand)
+    assert store["writes"] == 0
+
+
+def test_failed_apply_stages_nothing(doc_session) -> None:
+    sid, store = doc_session
+    # An admin error whose drug is NOT on the MAR can't be planted — atomic.
+    bogus = {"type": "admin", "vector": "document", "encounter": "prep",
+             "kind": "expired", "drug": "Zzz-not-here", "days": 30,
+             "display": "Zzz: stock expired"}
+    with pytest.raises(ValueError):
+        med_errors.arm(sid, err_type="admin", vector="document",
+                       encounter="prep", payload=bogus)
+    assert med_errors.state(sid)["errors"] == []
+    assert store["writes"] == 0

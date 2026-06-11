@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import random
 import re
@@ -194,6 +195,8 @@ def suggest(session_id: str, err_type: str, vector: str,
                 out.append({
                     "type": err_type, "vector": vector, "encounter": encounter,
                     "drug": drug, "right_dose": dose, "wrong_dose": wrong,
+                    "route": str(it.get("route") or ""),
+                    "frequency": str(it.get("frequency") or ""),
                     "direction": str(t.get("direction") or ""),
                     "transform": str(t.get("id") or ""),
                     "note": str(t.get("note") or ""),
@@ -245,8 +248,10 @@ def suggest(session_id: str, err_type: str, vector: str,
         days = rng.randint(10, 120)
         hours = rng.choice([2, 3, 4])
         board = _board_items(session_id)
-        mar = _mar_names(session_id)
-        drugs = [str(it.get("drug")) for it in board] + mar
+        # Administration errors live on meds being ADMINISTERED — the MAR only.
+        # (Board-only drugs have no MAR row to tag; offering them would make
+        # arm() reject its own suggestion — bounded means offer only what applies.)
+        drugs = _mar_names(session_id)
         pairs = {str(p["a"]): str(p["b"])
                  for p in catalog().get("sound_alike_pairs") or []}
         for drug in drugs[:8]:
@@ -287,6 +292,176 @@ def suggest(session_id: str, err_type: str, vector: str,
     return out[:_MAX_SUGGESTIONS]
 
 
+# ── S2: document vector — plant the discrepancy in the student-visible chart ──
+#
+# The EHR app renders fold(events) + the stored session seed (server.py
+# projection["seed"]) — so a surgical update_seed IS the student-visible path.
+# Encounter → artifact (revised from the plan after recon: `seed_report` is the
+# OPERATOR QA card, not the handoff — the handoff is realistically a note):
+#   report   → notes_recent  + one "Shift Handoff (SBAR)" note (off-going RN)
+#   charting → notes_recent  + one progress/clarification note
+#   prep     → medications   — ONE row's preparation fields (dose / stock tags)
+#   med_pass → medications   — ONE row's administration fields (+ due-now tag)
+# Exactly one artifact changes; everything else stays the truth (design rule 2).
+# The original artifact value is snapshotted on the record → disarm restores it
+# byte-for-byte. resolve() deliberately does NOT restore — the chart keeps what
+# the student saw, for the debrief.
+
+def _formulary_entry(drug: str) -> dict[str, str]:
+    """First authored dose/route/frequency for a drug, for planted MAR rows."""
+    try:
+        from . import med_orders
+        for key, entry in med_orders.catalog().items():
+            if key.startswith("_"):
+                continue
+            for tier in ("primary", "alternative"):
+                for opt in entry.get(tier) or []:
+                    if _name_match(drug, str(opt.get("drug") or "")):
+                        return {"dose": str(opt.get("dose") or "per order"),
+                                "route": str(opt.get("route") or "PO"),
+                                "frequency": str(opt.get("frequency") or "per order")}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"dose": "per order", "route": "PO", "frequency": "per order"}
+
+
+def _staged_note(rec: dict[str, Any], body: str) -> dict[str, Any]:
+    """A note shaped exactly like its ehr_seed siblings (render-true)."""
+    if rec["encounter"] == "report":
+        note_type, author = "Shift Handoff (SBAR)", "Off-going RN"
+    else:
+        note_type, author = "Progress", "Covering provider"
+    return {
+        "note_id": f"n_staged_{rec['id']}",
+        "note_type": note_type,
+        "author": author,
+        "ts": "T-0h",
+        "body": body,
+        "signed": True,
+    }
+
+
+def _note_body(rec: dict[str, Any]) -> str:
+    """The discrepancy line for note encounters — written the way a busy
+    clinician would, NOT self-announcing (except admin, where the documented
+    deviation itself is the error to notice)."""
+    p = rec["payload"]
+    t = rec["type"]
+    if t == "wrong_dose":
+        if rec["encounter"] == "report":
+            return (f"Handoff: {p['drug']} running at {p['wrong_dose']} — "
+                    f"continue current plan. Otherwise stable overnight.")
+        return (f"Med review: {p['drug']} dose clarified with team as "
+                f"{p['wrong_dose']}. Continue.")
+    if t == "interaction":
+        if rec["encounter"] == "report":
+            return (f"Handoff: team added {p['new_med']} overnight; first dose "
+                    f"due this shift. No other changes.")
+        return f"Plan: start {p['new_med']} for symptom control; reassess in 24h."
+    if t == "allergy":
+        if rec["encounter"] == "report":
+            return (f"Handoff: new order for {p['drug']} — first dose due this "
+                    f"shift. No other changes.")
+        return f"Plan: start {p['drug']} for coverage; first dose today."
+    # admin: the documented deviation is itself the catchable error.
+    return f"Note: {p.get('display', 'medication administration deviation')}."
+
+
+def _mutate_mar(rows: list[dict[str, Any]], rec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Apply the discrepancy to ONE MAR row (or plant one row) — returns a new
+    list; raises if the payload can't be applied to this chart."""
+    p, t, enc = rec["payload"], rec["type"], rec["encounter"]
+    rows = copy.deepcopy(rows)
+    due_tag = " — due this pass" if enc == "med_pass" else ""
+
+    def find(drug: str) -> dict[str, Any] | None:
+        return next((r for r in rows
+                     if _name_match(drug, str(r.get("name") or ""))), None)
+
+    if t == "wrong_dose":
+        row = find(p["drug"])
+        if row is None:
+            row = {"name": p["drug"], "dose": p["right_dose"],
+                   "route": p.get("route") or "PO",
+                   "frequency": p.get("frequency") or "per order",
+                   "status": "active"}
+            rows.append(row)
+        row["dose"] = p["wrong_dose"]
+        if due_tag:
+            row["frequency"] = str(row.get("frequency") or "per order") + due_tag
+        return rows
+
+    if t in ("interaction", "allergy"):
+        drug = p["new_med"] if t == "interaction" else p["drug"]
+        if find(drug) is not None:
+            raise ValueError(f"{drug} already on the MAR — pick another suggestion")
+        entry = _formulary_entry(drug)
+        rows.append({"name": drug, "dose": entry["dose"], "route": entry["route"],
+                     "frequency": entry["frequency"] + due_tag, "status": "active"})
+        return rows
+
+    if t == "admin":
+        row = find(p["drug"])
+        if row is None:
+            raise ValueError(f"{p['drug']} not on the MAR — pick another suggestion")
+        kind = p.get("kind")
+        if kind == "expired":
+            row["dose"] = (str(row.get("dose") or "") +
+                           f" (lot expired {p.get('days', '?')}d ago)").strip()
+        elif kind == "wrong_time":
+            row["frequency"] = (str(row.get("frequency") or "") +
+                                f" (next dose charted {p.get('hours', '?')}h early)").strip()
+        elif kind == "wrong_dose":
+            row["dose"] = str(p.get("wrong") or row.get("dose") or "")
+        elif kind == "wrong_med":
+            row["name"] = (str(row.get("name") or "") +
+                           f" (cart slot stocked: {p.get('other', '?')})")
+        else:
+            raise ValueError(f"unknown admin error kind {kind!r}")
+        return rows
+
+    raise ValueError(f"no document mutation for type {t!r}")
+
+
+def apply_document(session_id: str, rec: dict[str, Any]) -> None:
+    """Plant the discrepancy in the session's PRIVATE chart record. Snapshots
+    the original artifact onto the record first (byte-exact disarm restore).
+    Raises on any failure — arm() then stages nothing (atomic)."""
+    from . import ehr_db
+    seed = ehr_db.seed(session_id) or {}
+    key = "notes_recent" if rec["encounter"] in ("report", "charting") else "medications"
+    original_present = key in seed
+    original_value = copy.deepcopy(seed.get(key))
+
+    if key == "notes_recent":
+        notes = list(seed.get("notes_recent") or [])
+        notes.append(_staged_note(rec, _note_body(rec)))
+        new_value: Any = notes
+    else:
+        new_value = _mutate_mar(list(seed.get("medications") or []), rec)
+
+    rec["snapshot"] = {"key": key, "present": original_present,
+                       "value": original_value}
+    rec["applied"] = {"artifact": key,
+                      "summary": rec["payload"].get("display", "")}
+    seed[key] = new_value
+    ehr_db.update_seed(session_id, seed)
+
+
+def _restore_document(session_id: str, rec: dict[str, Any]) -> None:
+    snap = rec.get("snapshot")
+    if not snap:
+        return
+    from . import ehr_db
+    seed = ehr_db.seed(session_id) or {}
+    if snap.get("present"):
+        seed[snap["key"]] = snap["value"]
+    else:
+        seed.pop(snap["key"], None)
+    ehr_db.update_seed(session_id, seed)
+    rec["snapshot"] = None
+
+
 # ── lifecycle ──────────────────────────────────────────────────────────────────
 
 def _validate_axes(err_type: str, vector: str, encounter: str) -> None:
@@ -324,8 +499,14 @@ def arm(session_id: str, *, err_type: str, vector: str, encounter: str,
         "status": "armed", "outcome": None,
         "armed_at": time.time(), "delivered_at": None,
         "triggered_at": None, "resolved_at": None,
-        "snapshot": None,   # S2: original chart slice for byte-exact restore
+        "snapshot": None,   # document vector: original chart slice (restore)
     }
+    # Document vector plants the discrepancy NOW (atomic: a failed apply
+    # stages nothing). Verbal vector applies at turn time (S3) — no chart touch.
+    if vector == "document":
+        apply_document(session_id, rec)
+        rec["delivered_at"] = rec["armed_at"]  # visible in the chart immediately
+        rec["status"] = "delivered"
     b["errors"].append(rec)
     return rec
 
@@ -338,11 +519,14 @@ def get(session_id: str, error_id: str) -> dict[str, Any] | None:
 
 
 def disarm(session_id: str, error_id: str) -> bool:
-    """Remove a staged error. S2 adds chart-snapshot restore before removal."""
+    """Un-stage an error: restore the chart artifact byte-for-byte (document
+    vector), then remove the record. resolve() deliberately does NOT restore —
+    the chart keeps what the student actually saw, for the debrief."""
     b = _bucket(session_id)
     rec = get(session_id, error_id)
     if rec is None:
         return False
+    _restore_document(session_id, rec)
     b["errors"].remove(rec)
     return True
 

@@ -248,7 +248,10 @@ def active_med_names(session_id: str) -> list[str]:
     try:
         from portal import ehr_db
         chart = ehr_db.seed(session_id) or {}
-        for m in (chart.get("meds") or []):
+        # The seeded chart's MAR key is "medications" (ChartSeed); "meds" kept
+        # as a fallback for older stored seeds. Reading only "meds" silently
+        # emptied the doctor's already-on exclusions (found by FR-008 S2 tests).
+        for m in (chart.get("medications") or chart.get("meds") or []):
             n = str((m or {}).get("drug") or (m or {}).get("name") or "").strip()
             if n:
                 names.append(n)
