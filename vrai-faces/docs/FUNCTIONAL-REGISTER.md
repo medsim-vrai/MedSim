@@ -368,6 +368,46 @@ quietly on this hardware (model loads but inference yields empty), (b) MediaReco
 codec/decodeAudioData mismatch on this Chrome build, (c) mic permission/route to the wrong input,
 (d) playback-side autoplay gating (if step 2 is also silent).
 
+## FR-008 (P1) — Instructor-staged medication errors (error-recognition training)
+
+**Asked (2026-06-12, instructor — taxonomy near-verbatim):** medication errors fall into
+general areas, each with the vector(s) where it is realistically introduced:
+
+| # | Error type | Introduced via |
+|---|-----------|----------------|
+| 1 | **Transcription** — different meds sounding the same | verbal/phone orders |
+| 2 | **Right med, wrong dose** (high or low) | verbal/phone orders · OR an existing order in conflict with other notations/documents |
+| 3 | **Dangerous medication interaction** | verbal/phone orders · OR existing order in conflict with notations/documents |
+| 4 | **Allergic-reaction potential oversight** | verbal/phone orders · OR existing order in conflict with notations/documents |
+| 5 | **Noticed administration error** — wrong med, wrong time, wrong dose, med out of date | existing order in conflict with notations/documents |
+
+**Instructor selects three axes:** error TYPE × WHERE it is introduced (vector) × WHEN the
+student encounters it — e.g. during report, charting, preparing for med pass, during a med pass.
+
+**Design sketch (proposed, pre-plan):**
+- **Error catalog (authored data, DRAFT-gated for clinical review like med_orders.json):**
+  sound-alike pairs keyed to the formulary; dose-error transforms (10× high, ½ low, mg↔mcg);
+  interaction pairs; allergen→med map; admin-error templates (expired, wrong-time, wrong-med).
+- **Armed-error session state:** {type, vector, encounter_point, payload, caught?} — seeded
+  suggestion, instructor override; one error armed at a time (multiples = open question).
+- **Vector (a) verbal/phone order:** the ordering character SPEAKS the erroneous order at the
+  staged moment — rides FR-003 say-as + the `_extra_context` prompt machinery.
+- **Vector (b) document conflict:** mutate exactly ONE chart artifact while the rest of the
+  chart carries the truth — the discrepancy IS the teachable signal. Artifact by encounter
+  point: report → seed_report line · charting → notes_recent · prep med pass → med board
+  cart/pharmacy + MAR · med pass → the MAR row at admin time.
+- **Control room:** error card on Setup (type → vector → encounter point → payload → ARM);
+  live caught/missed marking for debrief; transcript-stamped.
+- **STT interplay (subtle):** when a transcription error is armed, BOTH sound-alike names go
+  into the recognizer hints — the student's repeat-back of either drug must transcribe
+  faithfully; the system must never auto-correct the student toward the "right" drug.
+- **Open questions:** catalog authorship/clinical review · simultaneous errors? · caught =
+  instructor-marked or transcript-inferred? · scoring/debrief artifact shape.
+
+**Status:** Filed; detailed plan pending instructor go-ahead. Effort L. Builds on FR-001/002
+(med board), FR-003 (say-as), ehr_seed chart surfaces (allergies, MAR+admin history,
+notes_recent, seed_report — all already exist).
+
 ## FR-007 — Unit-level shared staff characters (one tablet, many patients)
 
 **Area:** character-interaction · clinical-logic · scenario · **Source:** instructor (2026-06-10) ·
