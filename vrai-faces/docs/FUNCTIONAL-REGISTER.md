@@ -287,6 +287,10 @@ SILENCE (RMS≈0)` / `whisper heard no words (level ok)` / `speech model not rea
 blob size, clip duration, and RMS. **Next session starts by reading that line.**
 
 **Next-session diagnostic sequence (in order):**
+0. NEW (`&stt=` knob, shipped 2026-06-11): if step 1 reads "whisper heard no words (level ok)",
+   reload the station URL with **`&stt=wasm`** appended — if takes then transcribe, the WebGPU
+   fp16 encoder path is broken on this Android GPU (top code-side hypothesis; iPad-only validated)
+   and the fix is per-device backend selection.
 1. One deliberate take on the Android lite station → read the status/⚙ line → the named reason
    forks the investigation (capture vs silence vs model).
 2. Split capture from playback: from the control room, send Lee a **Say-as-character** line — if

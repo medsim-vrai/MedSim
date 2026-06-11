@@ -92,7 +92,18 @@ let sttError: string | null = null;
 let sttLastStages: SttStageTimings | null = null;
 let sttEmptyReason: string | null = null;
 
-/** Lazy-load the ASR pipeline once. WebGPU first, WASM (CPU) fallback. */
+/** FR-006 Android diagnosis: `&stt=wasm` / `&stt=webgpu` pins the ASR backend from the
+ *  URL so a misbehaving WebGPU path (e.g. the fp16 encoder on an unvalidated GPU — every
+ *  prior validation was the iPad) can be ruled in or out in seconds, no rebuild. */
+function backendOrder(): ReadonlyArray<'webgpu' | 'wasm'> {
+  if (typeof location !== 'undefined') {
+    const m = (location.search + location.hash).match(/[?&#]stt=(wasm|webgpu)/);
+    if (m) return [m[1] === 'wasm' ? 'wasm' : 'webgpu'];
+  }
+  return ['webgpu', 'wasm'];
+}
+
+/** Lazy-load the ASR pipeline once. WebGPU first, WASM (CPU) fallback (override: &stt=). */
 async function loadAsr(): Promise<AsrPipeline | null> {
   if (!asrPromise) {
     asrPromise = (async (): Promise<AsrPipeline | null> => {
@@ -131,7 +142,7 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         tf.env.allowLocalModels = true;          // default false in-browser; enables the bundled model
         tf.env.localModelPath = '/assets/models/';
         const { pipeline } = tf;
-        for (const device of ['webgpu', 'wasm'] as const) {
+        for (const device of backendOrder()) {
           try {
             // OPT-001 (docs/OPTIMIZATION-REGISTER.md): the fp16 *merged decoder* is an
             // invalid ORT model — its subgraph returns `logits` from outer scope, so
