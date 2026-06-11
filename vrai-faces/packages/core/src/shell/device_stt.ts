@@ -123,19 +123,6 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         // first when an adapter exists. Falls back to CDN/HF if the bundles are absent.
         const wasmFlags = tf.env?.backends?.onnx?.wasm;
         if (wasmFlags) {
-          // Use the OBJECT form {wasm,mjs}: it triggers transformers' wasm pre-load
-          // + backend registration. A bare string path skips that step, which leaves
-          // ORT with "no available backend found" even though the files fetch fine.
-          // The WebGPU EP + its `webgpuInit` ship ONLY in the .asyncify (and .jspi)
-          // ORT builds — the plain and .jsep builds DON'T export it, so device:'webgpu'
-          // throws "webgpuInit is not a function". The iPad pilot proved the old
-          // Safari→plain choice failed for exactly that reason. Use .asyncify for every
-          // browser: it carries the WebGPU EP *and* the wasm CPU fallback (one bundle).
-          const variant = 'ort-wasm-simd-threaded.asyncify';
-          wasmFlags.wasmPaths = {
-            wasm: `/assets/ort/${variant}.wasm`,
-            mjs: `/assets/ort/${variant}.mjs`,
-          };
           wasmFlags.numThreads = 1;
           wasmFlags.proxy = false;
         }
@@ -143,6 +130,25 @@ async function loadAsr(): Promise<AsrPipeline | null> {
         tf.env.localModelPath = '/assets/models/';
         const { pipeline } = tf;
         for (const device of backendOrder()) {
+          // PER-DEVICE ORT build (FR-006 Android fix, 2026-06-11). Use the OBJECT form
+          // {wasm,mjs}: it triggers transformers' wasm pre-load + backend registration
+          // (a bare string path leaves ORT with "no available backend found").
+          //  • webgpu → the .asyncify build: the WebGPU EP + `webgpuInit` ship ONLY in
+          //    .asyncify/.jspi (plain/.jsep throw "webgpuInit is not a function" — the
+          //    iPad pilot hit exactly that).
+          //  • wasm   → the PLAIN threaded build: the canonical CPU path. On a
+          //    no-WebGPU Android Chrome tablet the .asyncify build's CPU EP failed to
+          //    register ("no available backend found", COI+SAB both true — field
+          //    diagnosed 2026-06-11), while plain is the supported everywhere build.
+          if (wasmFlags) {
+            const variant = device === 'webgpu'
+              ? 'ort-wasm-simd-threaded.asyncify'
+              : 'ort-wasm-simd-threaded';
+            wasmFlags.wasmPaths = {
+              wasm: `/assets/ort/${variant}.wasm`,
+              mjs: `/assets/ort/${variant}.mjs`,
+            };
+          }
           try {
             // OPT-001 (docs/OPTIMIZATION-REGISTER.md): the fp16 *merged decoder* is an
             // invalid ORT model — its subgraph returns `logits` from outer scope, so
