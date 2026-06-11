@@ -171,7 +171,8 @@ export function mountDeviceVoice(
     const split = g
       ? ` · [rec ${g.recMs} · dec ${g.decodeMs} · rs ${g.resampleMs} · asr ${g.inferMs} · clip ${g.clipMs}]`
       : '';
-    metricsEl.textContent = `STT: ${m.backend}${cold}${last}${split}`;
+    const why = m.emptyReason ? ` · last take empty: ${m.emptyReason}` : '';
+    metricsEl.textContent = `STT: ${m.backend}${cold}${last}${split}${why}`;
   }
 
   function setStatus(msg: string, isErr = false): void {
@@ -320,7 +321,10 @@ export function mountDeviceVoice(
         turnMark('stt');                    // transcript ready (release → here = STT)
         renderMetrics();                    // surface backend + latency for the pilot
         if (text) sendUtterance(text);
-        else setStatus('(no speech detected)');
+        else {
+          const why = s.metrics().emptyReason;   // FR-006: name the cause, not just the symptom
+          setStatus(why ? `(no speech — ${why})` : '(no speech detected)', true);
+        }
       } catch {
         setStatus('Transcription failed', true);
       } finally {

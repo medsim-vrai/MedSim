@@ -42,6 +42,9 @@ export interface DeviceSttMetrics {
   lastMs: number | null;      // last take's release→transcript latency
   error: string | null;       // why the model failed to load (surfaced in the UI)
   lastStages: SttStageTimings | null; // breakdown of lastMs (null until a take runs)
+  /** WHY the last take produced no text (null after a successful take) — turns the
+   *  generic "(no speech detected)" into a diagnosable cause (FR-006 field fix). */
+  emptyReason: string | null;
 }
 
 export interface DeviceSttHandle {
@@ -87,6 +90,7 @@ let sttLoadMs: number | null = null;
 let sttLastMs: number | null = null;
 let sttError: string | null = null;
 let sttLastStages: SttStageTimings | null = null;
+let sttEmptyReason: string | null = null;
 
 /** Lazy-load the ASR pipeline once. WebGPU first, WASM (CPU) fallback. */
 async function loadAsr(): Promise<AsrPipeline | null> {
@@ -234,7 +238,7 @@ export function createDeviceStt(): DeviceSttHandle {
     isReady: () => ready,
     metrics: (): DeviceSttMetrics => ({
       backend: sttBackend, loadMs: sttLoadMs, lastMs: sttLastMs, error: sttError,
-      lastStages: sttLastStages,
+      lastStages: sttLastStages, emptyReason: sttEmptyReason,
     }),
 
     async soakStep(): Promise<number> {
@@ -249,6 +253,23 @@ export function createDeviceStt(): DeviceSttHandle {
     async start(): Promise<void> {
       if (recorder && recorder.state === 'recording') return;
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // iPadOS hands Safari a MUTED audio track right after a Camera-app QR handoff
+      // (the camera still holds the audio session) — recording then captures pure
+      // silence and the take reads "(no speech detected)" (FR-006 field bug). Wait
+      // briefly for the track to unmute before recording; warn if it never does.
+      const track = stream.getAudioTracks()[0];
+      if (track && track.muted) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 800);
+          track.onunmute = () => { clearTimeout(timer); resolve(); };
+        });
+        if (track.muted) {
+          diag.push({
+            t: performance.now(), moduleId: MODULE, kind: 'warn',
+            message: 'mic track still MUTED at record start (another app holding the mic?)',
+          });
+        }
+      }
       chunks = [];
       recorder = new MediaRecorder(stream);
       recorder.ondataavailable = (e: BlobEvent) => { if (e.data.size > 0) chunks.push(e.data); };
@@ -257,7 +278,7 @@ export function createDeviceStt(): DeviceSttHandle {
 
     async stopAndTranscribe(): Promise<string> {
       const rec = recorder;
-      if (!rec) return '';
+      if (!rec) { sttEmptyReason = 'no recording was started'; return ''; }
       const t0 = performance.now(); // release → transcript latency (ADR-0026 pilot)
       const stopped = new Promise<void>((resolve) => { rec.onstop = () => resolve(); });
       if (rec.state !== 'inactive') rec.stop();
@@ -271,11 +292,14 @@ export function createDeviceStt(): DeviceSttHandle {
       const type = chunks[0]?.type || 'audio/webm';
       const blob = new Blob(chunks, { type });
       chunks = [];
-      if (blob.size === 0) return '';
+      if (blob.size === 0) {
+        sttEmptyReason = 'recorder produced no audio (held too briefly?)';
+        return '';
+      }
 
       const Ctor = audioCtxCtor();
       const asr = await loadAsr();
-      if (!Ctor || !asr) return '';
+      if (!Ctor || !asr) { sttEmptyReason = 'speech model not ready'; return ''; }
       const ctx = new Ctor();
       try {
         const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
@@ -294,8 +318,32 @@ export function createDeviceStt(): DeviceSttHandle {
           inferMs: Math.round(tInfer - tResample),
           clipMs: Math.round(decoded.duration * 1000),
         };
-        return text;
+        if (text) {
+          sttEmptyReason = null;
+          return text;
+        }
+        // Empty text from a completed pipeline — name the cause (FR-006 field fix):
+        // a near-zero RMS means the mic CAPTURED silence (muted track / another app
+        // holding the mic — e.g. arriving straight from the Camera-app QR scan).
+        let sumSq = 0;
+        for (let i = 0; i < audio.length; i++) { const v = audio[i] ?? 0; sumSq += v * v; }
+        const rms = Math.sqrt(sumSq / Math.max(1, audio.length));
+        if (decoded.duration < 0.4) {
+          sttEmptyReason = `clip too short (${Math.round(decoded.duration * 1000)}ms)`;
+        } else if (rms < 1e-4) {
+          sttEmptyReason = 'mic captured SILENCE — mic muted or another app holds it '
+            + '(close the Camera app, then retry)';
+        } else {
+          sttEmptyReason = `whisper heard no words (clip ${decoded.duration.toFixed(1)}s, level ok)`;
+        }
+        diag.push({
+          t: performance.now(), moduleId: MODULE, kind: 'warn',
+          message: `empty transcription: ${sttEmptyReason}`,
+          data: `rms=${rms.toExponential(2)} clip=${Math.round(decoded.duration * 1000)}ms`,
+        });
+        return '';
       } catch (e) {
+        sttEmptyReason = 'audio decode/transcription failed';
         diag.push({
           t: performance.now(), moduleId: MODULE, kind: 'error',
           message: 'on-device transcription failed', data: e instanceof Error ? e.message : String(e),
