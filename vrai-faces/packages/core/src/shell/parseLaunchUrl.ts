@@ -15,6 +15,12 @@ export interface LaunchParams {
   apiBase?: string;
   /** Opt-in device-capability token (ADR-0027); echoed back on /listen when present. */
   token?: string;
+  /**
+   * Station mode (FR-006). 'avatar' (default) = the full 3D talking head.
+   * 'audio' = the lite station: flat static portrait + the complete voice loop
+   * (speech playback + push-to-talk) — no 3D rig, no WebGPU; for low-cost tablets.
+   */
+  mode: 'avatar' | 'audio';
 }
 
 export function parseLaunchUrl(loc: Location): LaunchParams | null {
@@ -33,7 +39,10 @@ export function parseLaunchUrl(loc: Location): LaunchParams | null {
     ? Math.max(0, Math.min(1, opacityRaw))
     : 0.66;
 
-  const params: LaunchParams = { characterId, scenarioId, opacityLevel };
+  const params: LaunchParams = {
+    characterId, scenarioId, opacityLevel,
+    mode: q.get('mode') === 'audio' ? 'audio' : 'avatar',
+  };
   // URLSearchParams already percent-decodes, so `api` is the plain origin.
   // exactOptionalPropertyTypes: only set the key when actually present.
   const apiBase = q.get('api');

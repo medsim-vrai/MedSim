@@ -8,7 +8,7 @@ function fakeLoc(pathname: string, search = ''): Location {
 describe('parseLaunchUrl', () => {
   it('parses /face/<id>?scenario=&opacity=', () => {
     const p = parseLaunchUrl(fakeLoc('/face/pt-001', '?scenario=s7&opacity=0.33'));
-    expect(p).toEqual({ characterId: 'pt-001', scenarioId: 's7', opacityLevel: 0.33 });
+    expect(p).toEqual({ characterId: 'pt-001', scenarioId: 's7', opacityLevel: 0.33, mode: 'avatar' });
   });
 
   it('parses the api origin (percent-decoded by URLSearchParams)', () => {
@@ -35,4 +35,15 @@ describe('parseLaunchUrl', () => {
   it('defaults opacity to 0.66 when missing', () => {
     expect(parseLaunchUrl(fakeLoc('/face/x'))?.opacityLevel).toBe(0.66);
   });
+});
+
+it('parses mode=audio (FR-006 audio-only station); anything else is avatar', () => {
+  const audio = parseLaunchUrl({
+    pathname: '/face/P-006', search: '?scenario=s1&mode=audio',
+  } as unknown as Location);
+  expect(audio?.mode).toBe('audio');
+  const dflt = parseLaunchUrl({
+    pathname: '/face/P-006', search: '?scenario=s1',
+  } as unknown as Location);
+  expect(dflt?.mode).toBe('avatar');
 });

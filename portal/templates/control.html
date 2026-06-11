@@ -222,6 +222,7 @@
             </div>
             <div class="avatar-opt" onclick="event.stopPropagation()">
               <input type="checkbox" name="avatar_personas" value="{{ p.id }}"
+                     {% if p.roleGroup == 'Patient' %}checked{% endif %}
                      onclick="event.stopPropagation()">
               <span class="muted small">🪞 3D avatar tablet — leave unchecked for 🔊 audio-only (low-cost tablet)</span>
             </div>

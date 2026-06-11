@@ -23,7 +23,8 @@ import { registerResumableHooks } from './shell/registerLifecycles';
 import { mountRenderer } from './shell/renderer';
 import { bootDemoAvatar } from './shell/demo_boot';
 import { buildAvatarFromBlob, type BuiltAvatar } from './shell/avatar_build';
-import { bindFromPortal, clearBindingCache } from './shell/portalBinding';
+import { bindForAudio, bindFromPortal, clearBindingCache } from './shell/portalBinding';
+import { mountAudioStation, noopAnimSink } from './shell/audio_station';
 import { installSpeechConsumer } from './shell/speechConsumer';
 import { lazyEmotion, lazyTts } from './shell/lazy';
 import { mountTranslucencySlider } from './shell/translucency_slider';
@@ -81,6 +82,50 @@ async function boot(): Promise<void> {
   }
 
   const deps = { diag, scenarioId, characterId };
+
+  // FR-006 — AUDIO-ONLY station (`?mode=audio`): flat static portrait + the full
+  // voice loop, no 3D rig / WebGPU / mesh pipeline. Boots only what it needs and
+  // returns before any renderer work. Default for non-patient characters.
+  if (launch?.mode === 'audio') {
+    await Promise.all([
+      audioPipeline.boot(deps),
+      medsimAdapter.boot(deps),
+      diagnosticPanel.boot(deps),
+    ]);
+    installFirstGestureWarmup();
+    const appEl = document.getElementById('app') ?? document.body;
+    const station = mountAudioStation(appEl, characterId);
+    if (launch.apiBase) {
+      mountDeviceVoice(appEl, {
+        apiBase: launch.apiBase,
+        characterId,
+        scenarioId,
+        wakeName: characterId,
+        ...(launch.token ? { token: launch.token } : {}),
+      });
+    }
+    installSpeechConsumer({
+      adapter: medsimAdapter,
+      audio: audioPipeline,
+      anim: noopAnimSink(),          // no face — visemes/emotion are discarded
+      loadTts: () => lazyTts().then((m) => m.ttsProvider),
+      voice: () => medsimAdapter.currentBinding()?.voiceProfile,
+    });
+    const binding = await bindForAudio(launch, medsimAdapter);
+    if (binding) {
+      station.setCharacter({ name: binding.characterId, portrait: binding.sourcePhoto });
+    } else {
+      diag.push({
+        t: performance.now(), moduleId: 'main', kind: 'warn',
+        message: 'audio station: portal bind failed — voice loop still live, portrait absent',
+      });
+    }
+    diag.push({
+      t: performance.now(), moduleId: 'main', kind: 'info',
+      message: `VRAI audio-only station booted. scenarioId=${scenarioId} characterId=${characterId}`,
+    });
+    return;   // the entire 3D path below never runs in audio mode
+  }
 
   await Promise.all([
     faceIngest.boot(deps),

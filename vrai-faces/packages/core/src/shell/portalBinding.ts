@@ -137,6 +137,47 @@ export interface BindDeps {
 }
 
 /**
+ * FR-006 audio-lite bind: fetch the bind document (with the same retry/backoff)
+ * and connect the speech transport via `adapter.bindFromCharacter()` — but build
+ * NO 3D avatar. Returns the binding (portrait Blob + voice + character meta) for
+ * the flat-portrait audio station, or null on failure.
+ */
+export async function bindForAudio(
+  launch: LaunchParams,
+  adapter: MedsimAdapterModule,
+  deps: Pick<BindDeps, 'fetchFn' | 'retries' | 'retryDelayMs'> = {},
+): Promise<VraiAvatarBinding | null> {
+  if (!launch.apiBase) return null;
+  const fetchFn = deps.fetchFn ?? cachingTimeoutFetch;
+  const retries = deps.retries ?? DEFAULT_RETRIES;
+  const retryDelayMs = deps.retryDelayMs ?? DEFAULT_RETRY_MS;
+  let payload: unknown | null = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    payload = await fetchBinding(
+      launch.apiBase, launch.characterId, launch.scenarioId, launch.opacityLevel, fetchFn,
+    );
+    if (payload !== null) break;
+    if (attempt < retries) await sleep(retryDelayMs * (attempt + 1));
+  }
+  if (payload === null) return null;
+  try {
+    const binding = await adapter.bindFromCharacter(payload);
+    diag.push({
+      t: performance.now(), moduleId: MODULE, kind: 'info',
+      message: `audio-lite bound ${binding.characterId} (transport=${adapter.transport()})`,
+    });
+    return binding;
+  } catch (e) {
+    diag.push({
+      t: performance.now(), moduleId: MODULE, kind: 'error',
+      message: 'audio-lite bindFromCharacter rejected',
+      data: e instanceof Error ? e.message : String(e),
+    });
+    return null;
+  }
+}
+
+/**
  * Fetch → bind → build. `adapter.bindFromCharacter()` validates the card and
  * connects the speech transport (WebSocket when the payload carries
  * `speechWsUrl`). Returns null on any failure so the caller falls back to demo.

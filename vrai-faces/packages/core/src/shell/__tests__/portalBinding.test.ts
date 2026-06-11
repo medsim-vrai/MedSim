@@ -54,7 +54,7 @@ describe('fetchBinding', () => {
 
 describe('bindFromPortal', () => {
   const launch: LaunchParams = {
-    characterId: 'c', scenarioId: 's7', opacityLevel: 0.66, apiBase: 'http://h',
+    characterId: 'c', scenarioId: 's7', opacityLevel: 0.66, apiBase: 'http://h', mode: 'avatar',
   };
 
   it('returns null when there is no apiBase (demo path)', async () => {

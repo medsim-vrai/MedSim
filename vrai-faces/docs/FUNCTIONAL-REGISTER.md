@@ -81,7 +81,7 @@ ADR → `In-progress` → `Shipped` → `Validated` (confirmed in a test session
 | **FR-003** | Instructor character prompting — speak in-context (emotion / mental status / role) | instructor-tools · character-interaction | instructor | P2 | **✅ Validated** (2026-06-10) | control-room · portal · avatar |
 | **FR-004** | Zero-config wireless device pairing for production venues | UX · scenario | testing | P1 | Proposed | portal · avatar · kit/ops (+ADR) |
 | **FR-005** | Two-stage control room — Setup page → Live-Operations window | instructor-tools · UX | instructor | P2 | **Shipped** (2026-06-10; live validation pending) | control-room · portal |
-| **FR-006** | Per-character Avatar vs Audio-only stations — clear choice + flat-portrait lite app for low-cost tablets | instructor-tools · UX · avatar | instructor | P2 | **In-progress** (choice+QR shipped 2026-06-10; lite app pending) | control-room · portal · avatar |
+| **FR-006** | Per-character Avatar vs Audio-only stations — clear choice + flat-portrait lite app for low-cost tablets | instructor-tools · UX · avatar | instructor | P2 | **Shipped** (2026-06-10: toggle+QR+lite app+patient-default; tablet validation pending) | control-room · portal · avatar |
 
 ---
 
