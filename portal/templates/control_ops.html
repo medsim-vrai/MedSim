@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Control room — ops{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="/static/control.css">
+<link rel="stylesheet" href="{{ static_v('control.css') }}">
 
 <header class="page-header" id="ops-header" style="position:sticky;top:0;z-index:40;background:#fff;border-bottom:2px solid #143b8a;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
   <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
