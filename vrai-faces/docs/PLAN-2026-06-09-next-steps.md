@@ -94,10 +94,19 @@ reality. Re-run this gate at each milestone.
 pushed; warm STT 1.1 s). Also new: **FR-004 (P1)** zero-config wireless pairing filed after the network
 field session; `scripts/preflight.sh` is now the standard session-start check.
 
-**⏸ RESUME POINT (2026-06-10 night):** FR-006 Android voice — the lite station renders on the
-Android tablet but PTT yields no speech/audio; the named-empty-reason build is LIVE, so the first
-action is ONE take + read the status line (full sequence: FUNCTIONAL-REGISTER → FR-006 OPEN
-ISSUE). Then resume the FR-001/002 loop validation (decisive doctor → pharmacist → approval).
+**⏸ RESUME POINT (2026-06-11):** FR-006 CLOSED through the room-local route (ADR-0038): the
+Android voice chain was peeled to root cause (CA trust → per-device ORT build → optimizer QDQ
+rewrite) and WORKS, but tablet CPU inference is hopeless (17 s / 4.8 s clip) — so the portal Mac
+now transcribes for audio stations (`POST /api/face/stt`, faster-whisper small.en; Mac smoke
+1.2–1.3 s; iPad on-device path unchanged; wasm auto-backup). Portal was RESTARTED on this code —
+the control session is fresh. **First action next session:** run Setup (patient + Pharmacist
+Lee, START) → swipe the old tab off the Android tablet → re-scan Lee's QR → expect "Voice ready —
+transcribed on the instructor's Mac" immediately and ~1–2 s takes. Then: FR-001/002 live loop
+validation (decisive doctor → flag unavailable → pharmacist alternative → doctor approves),
+FR-005 live validation, instructor clinical review of the DRAFT med-orders data. Queued ideas:
+formulary vocabulary hints for the transcriber (drug-name accuracy) · audio station shows the
+internal ID instead of "Pharmacist Lee" (cosmetic) · https /onboard route · FR-007 shared-staff
+investigation.
 
 **Next session, in order:**
 1. **2-min iPad fix → clean A/B.** Turn OFF "Limit IP Address Tracking" (+ Private Relay for this
