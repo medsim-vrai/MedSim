@@ -82,6 +82,7 @@ ADR → `In-progress` → `Shipped` → `Validated` (confirmed in a test session
 | **FR-004** | Zero-config wireless device pairing for production venues | UX · scenario | testing | P1 | Proposed | portal · avatar · kit/ops (+ADR) |
 | **FR-005** | Two-stage control room — Setup page → Live-Operations window | instructor-tools · UX | instructor | P2 | **Shipped** (2026-06-10; live validation pending) | control-room · portal |
 | **FR-006** | Per-character Avatar vs Audio-only stations — clear choice + flat-portrait lite app for low-cost tablets | instructor-tools · UX · avatar | instructor | P2 | **Shipped** (2026-06-10: toggle+QR+lite app+patient-default; tablet validation pending) | control-room · portal · avatar |
+| **FR-007** | Unit-level shared staff characters — one tablet serves multiple patients; student must IDENTIFY the patient | character-interaction · clinical-logic · scenario | instructor | P2 | Proposed (investigate) | portal · runtime(core) · control-room · avatar |
 
 ---
 
@@ -266,6 +267,46 @@ During a session, capture the minimum and triage later: **title + Source + one-l
 behavior**. Attach objective signals where useful — the 🐞 debug overlay (`?debug`), the
 diagnostics panel (`?diag=1`), and the transcript's `/listen` round-trip timer give numbers.
 Don't lose feedback to "we'll remember it" — **file the row**, even terse.
+
+## FR-007 — Unit-level shared staff characters (one tablet, many patients)
+
+**Area:** character-interaction · clinical-logic · scenario · **Source:** instructor (2026-06-10) ·
+**Priority:** P2 · **Status:** Proposed — *investigate before speccing* · **Effort:** L ·
+**Lands in:** portal + runtime(core) + control-room + avatar
+
+**Goal.** Mirror real staffing: ONE charge nurse / doctor / respiratory therapist / pharmacist
+covers a whole unit of patients from a single tablet. The student must IDENTIFY which patient
+they're discussing (by name — not assume a single shared patient), and the character then pulls
+that patient's details (chart, condition, meds) and discusses them in depth exactly as the
+per-patient characters do today.
+
+**Behavior sketch.**
+- A staff character is bound at the UNIT (room) level instead of to one encounter; its station
+  serves all the room's patients. (Pairs naturally with the FR-006 🔊 audio-only station — one
+  cheap tablet per unit role.)
+- Turn pipeline: detect the referenced patient from the utterance (name match against the room
+  roster); on ambiguity or no match the character asks, in role, "Which patient?" — and may
+  REQUIRE proper identification (name + second identifier), which is itself a teaching point.
+- Once identified: that encounter's context loads for the turn — chart fold/MAR, condition,
+  FR-001/002 med board — and the reply/transcript log attribute to THAT encounter.
+- Switching patients mid-conversation re-anchors context ("Now about Mr. Doyle…").
+
+**Why investigate first (the architectural questions).**
+1. Today a turn = (scenario, character) + the single active session's context; v7 ROOM mode
+   already gives per-bed encounters — the staff turn must select an encounter per utterance.
+2. Patient-name detection: deterministic roster match vs LLM-assisted resolution; confirmation
+   policy on ambiguity; misidentification as a logged teaching event?
+3. Per-encounter med boards (FR-001/002 state is currently one-per-session).
+4. Memory/attribution: one station's transcript fanning into N encounter transcripts.
+5. QR/binding shape: unit-level channel + how push_speech routes replies back to the one tablet.
+6. PHI posture unchanged (sim patients), but identification discipline should mirror two-identifier
+   practice as a curriculum touchpoint.
+
+**Acceptance (draft).** One charge-nurse tablet in a 3-bed room: asking about each patient by
+name yields patient-correct details; an unnamed/ambiguous ask gets an in-role identification
+request; transcripts land on the right encounters.
+
+---
 
 ## Adding an entry
 
