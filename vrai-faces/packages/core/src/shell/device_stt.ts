@@ -177,6 +177,15 @@ async function loadAsr(): Promise<AsrPipeline | null> {
               dtype: device === 'webgpu'
                 ? { encoder_model: 'fp16', decoder_model_merged: 'q8' }
                 : 'q8',
+              // FR-006 Android (2026-06-11): ORT 1.26-dev's CPU graph optimizer REWRITES
+              // the q8 DQ/MatMul patterns into MatMulNBits and dies on this model's
+              // embed_tokens ("Missing required scale", qdq_actions.cc — the model itself
+              // contains ZERO MatMulNBits ops; the optimizer fabricates them). 'basic'
+              // optimization skips that extended QDQ rewrite → sessions create cleanly.
+              // CPU-only: the WebGPU path (iPad-validated) keeps full optimization.
+              ...(device === 'wasm'
+                ? { session_options: { graphOptimizationLevel: 'basic' } }
+                : {}),
             });
             sttBackend = `${device}·${dtag}`; // surfaced in the metrics line for the pilot
             sttLoadMs = Math.round(performance.now() - t0);

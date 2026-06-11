@@ -302,6 +302,23 @@ blob size, clip duration, and RMS. **Next session starts by reading that line.**
    portal origin; crossOriginIsolated (COI=true shows in the debug console header).
 5. Record the tablet model + Chrome version in this entry when known.
 
+**RESOLVED CHAIN (2026-06-11, field-diagnosed step by step):** ① CA never trusted on the
+Android tablet → Chrome silently blocks getUserMedia on cert-override pages (mic dead while the
+page looked fine) → fixed by installing the root CA (downloaded via the https portal route after
+one proceed-through; the :8766 helper is broken by Android Chrome's HTTPS-First upgrade — add an
+https /onboard route, queued). ② "speech model not ready" → the ASR engine failed to init:
+`[webgpu] not supported` (no GPU API on this tablet — expected) AND the CPU fallback hit ORT
+"no available backend found" → the .asyncify ORT build's CPU EP doesn't register on this Chrome →
+fixed by committing the build per device BEFORE first init (.asyncify only when navigator.gpu
+exists; PLAIN threaded otherwise) + skipping the webgpu attempt entirely without navigator.gpu.
+③ Then "Can't create a session … TransposeDQWeightsForMatMulNBits Missing required scale"
+(qdq_actions.cc) — ORT **1.26-dev**'s CPU graph optimizer REWRITES the q8 DQ/MatMul patterns into
+MatMulNBits and fails on embed_tokens; the model contains ZERO MatMulNBits ops (verified) — the
+optimizer fabricates them → fixed with `session_options.graphOptimizationLevel='basic'` on the
+wasm path only (skips the extended QDQ rewrite; iPad/WebGPU keeps full optimization).
+Awaiting the post-③ tablet take. Lesson: dev-build ORT on the unpiloted platform = three stacked
+failures, each only visible after the previous one fell.
+
 **Hypotheses ranked for Android Chrome:** (a) the threaded-WASM / WebGPU ASR path failing
 quietly on this hardware (model loads but inference yields empty), (b) MediaRecorder
 codec/decodeAudioData mismatch on this Chrome build, (c) mic permission/route to the wrong input,
