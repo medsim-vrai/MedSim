@@ -1,0 +1,60 @@
+{
+  "_meta": {
+    "status": "DRAFT — REQUIRES INSTRUCTOR CLINICAL REVIEW BEFORE TEACHING USE",
+    "purpose": "FR-008 staged-medication-error catalog. GENERIC clinical patterns; the engine intersects these with the active session's formulary, MAR, and documented allergies so suggestions are always injectable in the running scenario. Errors live in session memory only — authored scenario files are never modified.",
+    "sources_note": "Sound-alike pairs follow the ISMP confused-drug-names list; interaction and allergy patterns are conservative teaching classics. Review every entry before classroom use.",
+    "schema": {
+      "sound_alike_pairs": "{a, b, note} — suggestion fires when EITHER member is on the session's board/MAR (it becomes the intended drug; the other is what gets heard/written)",
+      "dose_transforms": "{id, display, op:mul|unit_swap, factor?, from?, to?, direction, note}",
+      "interaction_pairs": "{a, b, risk, note} — fires when one member is on the MAR/board and the other is orderable in the session",
+      "allergy_map": "{allergen, meds[], note} — fires only when the allergen is DOCUMENTED on the chart and a mapped med is orderable",
+      "admin_error_templates": "{kind, display, detail_template} — grounded in an actual MAR row at suggest time"
+    }
+  },
+  "sound_alike_pairs": [
+    {"a": "Alteplase", "b": "Tenecteplase", "note": "both thrombolytics, both in the formulary — wrong agent/dose protocol"},
+    {"a": "Tramadol", "b": "Trazodone", "note": "ISMP classic"},
+    {"a": "Lorazepam", "b": "Alprazolam", "note": "ISMP classic"},
+    {"a": "Diazepam", "b": "Diltiazem", "note": "ISMP classic"},
+    {"a": "Metoprolol", "b": "Misoprostol", "note": "ISMP classic"},
+    {"a": "Epinephrine", "b": "Ephedrine", "note": "ISMP classic; high-alert"},
+    {"a": "Risperidone", "b": "Ropinirole", "note": "ISMP classic"},
+    {"a": "Phenobarbital", "b": "Pentobarbital", "note": "ISMP classic"},
+    {"a": "Ceftriaxone", "b": "Cefotaxime", "note": "cephalosporin sound-alike"},
+    {"a": "Heparin", "b": "Hespan", "note": "ISMP classic; high-alert anticoagulant"},
+    {"a": "Clonidine", "b": "Clonazepam", "note": "ISMP classic"},
+    {"a": "Hydroxyzine", "b": "Hydralazine", "note": "ISMP classic"}
+  ],
+  "dose_transforms": [
+    {"id": "tenfold_high", "display": "10× overdose (decimal-point slip)", "op": "mul", "factor": 10, "direction": "high", "note": "classic trailing-zero / missed-decimal error"},
+    {"id": "tenfold_low", "display": "10× underdose (decimal-point slip)", "op": "mul", "factor": 0.1, "direction": "low", "note": "leading-decimal error; therapy silently subtherapeutic"},
+    {"id": "double_dose", "display": "Double dose (verbal repeat / unit confusion)", "op": "mul", "factor": 2, "direction": "high", "note": "common phone-order readback failure"},
+    {"id": "half_dose", "display": "Half dose (misheard)", "op": "mul", "factor": 0.5, "direction": "low", "note": "subtherapeutic; easy to miss"},
+    {"id": "mg_for_mcg", "display": "mg written for mcg (1000× overdose)", "op": "unit_swap", "from": "mcg", "to": "mg", "direction": "high", "note": "high-alert with fentanyl-class meds"},
+    {"id": "mcg_for_mg", "display": "mcg written for mg (1000× underdose)", "op": "unit_swap", "from": "mg", "to": "mcg", "direction": "low", "note": "therapy effectively absent"}
+  ],
+  "interaction_pairs": [
+    {"a": "Heparin", "b": "Ibuprofen", "risk": "bleeding", "note": "anticoagulant + NSAID"},
+    {"a": "Enoxaparin", "b": "Ibuprofen", "risk": "bleeding", "note": "anticoagulant + NSAID"},
+    {"a": "Apixaban", "b": "Ibuprofen", "risk": "bleeding", "note": "DOAC + NSAID"},
+    {"a": "Heparin", "b": "Enoxaparin", "risk": "duplicate anticoagulation", "note": "two anticoagulants concurrently"},
+    {"a": "Aspirin", "b": "Heparin", "risk": "bleeding", "note": "antiplatelet + anticoagulant (often intended — the CONTEXT note must contradict it)"},
+    {"a": "Haloperidol", "b": "Ondansetron", "risk": "QT prolongation", "note": "additive QTc; teaching classic"},
+    {"a": "Lorazepam", "b": "Fentanyl", "risk": "respiratory depression", "note": "benzo + opioid"},
+    {"a": "Lorazepam", "b": "Oxycodone", "risk": "respiratory depression", "note": "benzo + opioid"},
+    {"a": "Furosemide", "b": "Bumetanide", "risk": "duplicate loop diuresis", "note": "duplicate-class order"},
+    {"a": "Tramadol", "b": "Ondansetron", "risk": "serotonergic load / seizure threshold", "note": "conservative teaching point"}
+  ],
+  "allergy_map": [
+    {"allergen": "Penicillin", "meds": ["Piperacillin-tazobactam"], "note": "same class — direct contraindication"},
+    {"allergen": "Penicillin", "meds": ["Cefepime", "Ceftriaxone"], "note": "cephalosporin cross-reactivity — LOW risk in modern practice; the teaching point is checking and documenting, not absolute avoidance"},
+    {"allergen": "Amoxicillin", "meds": ["Piperacillin-tazobactam"], "note": "penicillin class"},
+    {"allergen": "NSAIDs", "meds": ["Ibuprofen", "Aspirin"], "note": "documented NSAID allergy/intolerance"}
+  ],
+  "admin_error_templates": [
+    {"kind": "expired", "display": "Medication out of date", "detail_template": "the {drug} in the cart/fridge shows an expiry {days} days ago"},
+    {"kind": "wrong_time", "display": "Wrong time", "detail_template": "MAR shows {drug} due {hours} hours off the ordered schedule"},
+    {"kind": "wrong_dose", "display": "Wrong dose prepared", "detail_template": "prepared dose of {drug} differs from the MAR ({wrong} vs {right})"},
+    {"kind": "wrong_med", "display": "Wrong medication stocked", "detail_template": "cart slot for {drug} holds {other} (look-alike packaging)"}
+  ]
+}
