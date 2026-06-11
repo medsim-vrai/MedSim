@@ -209,6 +209,17 @@ like the AI reply — so the cloud-voice path is allowed (ADR-0037); no trainee 
 
 ## FR-004 — Zero-config wireless device pairing for production venues
 
+**KIT ROUTER VALIDATION (2026-06-12, in progress):** Beryl AX (GL-MT3000) pocket router arrived
+and is live — Mac at 192.168.8.181 behind it, internet flowing through it (Anthropic reachable →
+AI turns work), leaf cert re-minted (leaf-only, CA untouched — the make-dev-cert FORCE guard
+correctly refused a CA re-mint) with SAN covering the Beryl subnet + both prior home networks +
+portal.medsim.lan, portal restarted, **preflight PASS (6/6)**, fresh QR minted. Tablet half
+pending: join tablets to the Beryl SSID (per-network MAC privacy OFF), confirm green-lock with NO
+new trust step (the CA promise), one room-STT voice take over the new LAN. Hardening queued:
+(a) static DHCP lease for the Mac in the GL.iNet admin so the IP never drifts; (b) durable step —
+Beryl dnsmasq entry portal.medsim.lan → Mac + QRs minted on the hostname (already in the SAN),
+making the kit fully venue-independent.
+
 **Area:** UX · scenario-ops · **Source:** testing (2026-06-09 field session) · **Priority:** P1 ·
 **Status:** Proposed · **Effort:** M (kit) / L (relay, +ADR) · **Lands in:** portal + avatar + kit/ops
 
