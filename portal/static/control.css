@@ -107,7 +107,10 @@
   display: block; font-size: 11px; font-weight: 700; color: #1d6dd1;
   margin: 0 0 4px; padding-right: 26px;
 }
-.persona-card:has(input:checked) { border-color: #1d6dd1; background: #eaf2fc; }
+/* highlight ONLY when the card's SELECTION checkbox (direct child) is checked —
+   `:has(input:checked)` also matched the avatar opt-in, so pre-checked patient
+   cards glowed as if selected (field bug, 2026-06-10). */
+.persona-card:has(> input:checked) { border-color: #1d6dd1; background: #eaf2fc; }
 .persona-card-body { padding: 12px 14px; }
 .persona-card-body header {
   display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
