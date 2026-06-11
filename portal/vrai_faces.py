@@ -706,6 +706,10 @@ def _finish_streamed_turn(
             )
         except Exception:  # noqa: BLE001 — a logging hiccup must never fail the turn
             pass
+        # FR-008 S3: stamp 'delivered' if a staged verbal error was spoken
+        # (role self-resolves from the character card; never raises).
+        from . import med_errors as _me
+        _me.note_character_reply(sess.id, cid, reply)
     runtime.end_session(sim_id)
 
 
@@ -1034,9 +1038,12 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                             if getattr(sess, "scenario_text", "") else {}),
             }
             # FR-001/002: same med-board injection as /listen (doctor/pharmacist only).
-            from . import med_orders
+            # FR-008 S3: staged verbal-error context rides the same channel.
+            from . import med_errors, med_orders
             _med_ctx = med_orders.prompt_block_for(sess.id, card)
-            ic_card = {**card, "_extra_context": _med_ctx} if _med_ctx else card
+            _err_ctx = med_errors.prompt_block_for(sess.id, card)
+            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx) if x)
+            ic_card = {**card, "_extra_context": _ctx} if _ctx else card
             sim = runtime.create_session_from_data(
                 scenario=scenario_doc, characters={cid: ic_card}, api_key=sess.api_key)
             import asyncio
@@ -1137,9 +1144,11 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             # FR-001/002: doctor/pharmacist personas get the session's medication
             # board injected into their system prompt (authored data; code-selected
             # recommendation — the model never invents drugs/doses). No-op otherwise.
-            from . import med_orders
+            from . import med_errors, med_orders
             _med_ctx = med_orders.prompt_block_for(sess.id, card)
-            turn_card = {**card, "_extra_context": _med_ctx} if _med_ctx else card
+            _err_ctx = med_errors.prompt_block_for(sess.id, card)
+            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx) if x)
+            turn_card = {**card, "_extra_context": _ctx} if _ctx else card
             sim = runtime.create_session_from_data(
                 scenario=scenario, characters={cid: turn_card}, api_key=sess.api_key,
             )
@@ -1188,6 +1197,11 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                 )
             except Exception:  # noqa: BLE001 — a logging hiccup must never fail the turn
                 pass
+            # FR-008 S3: stamp 'delivered' if a staged verbal error was spoken.
+            from . import med_errors as _me, med_orders as _mo
+            _me.note_character_reply(
+                sess.id, cid, reply,
+                role=_mo.role_kind(str((card or {}).get("role") or "")))
 
         # Voice the reply server-side in the operator-assigned ElevenLabs voice
         # (ADR-0031) so tablets that can't run the on-device ONNX TTS still speak;

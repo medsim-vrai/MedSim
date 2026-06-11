@@ -462,6 +462,159 @@ def _restore_document(session_id: str, rec: dict[str, Any]) -> None:
     rec["snapshot"] = None
 
 
+# ── S3: verbal vector — the ordering character SPEAKS the staged error ────────
+#
+# The block rides the same `_extra_context` channel as the med board (FR-001/002)
+# and goes ONLY to the ordering character (role_kind == "doctor"). Arc per the
+# plan's containment rule: deliver naturally ONCE → defend briefly if questioned
+# (busy-clinician realism) → catch yourself and CORRECT when the trainee presses
+# with specifics (read-back, indication mismatch, allergy, interaction). The
+# block persists until the error is RESOLVED so repeat-backs stay consistent.
+
+_ENCOUNTER_DISPLAY = {
+    "report": "during report/handoff",
+    "charting": "while charting is being reviewed",
+    "prep": "as medications are being prepared",
+    "med_pass": "during the med pass",
+}
+
+_CONTAINMENT = (
+    "CONTAINMENT (absolute): this staged slip is the ONLY error you introduce. "
+    "Do not invent any other mistakes, do not exaggerate, never hint that this "
+    "is a drill or that anything is staged — stay fully in character."
+)
+
+
+def _verbal_arc(deliver: str, defend: str, correct: str, encounter: str) -> str:
+    when = _ENCOUNTER_DISPLAY.get(encounter, "at the next natural moment")
+    return (
+        f"STAGED VERBAL ORDER (instructor-armed teaching error): at your next "
+        f"natural ordering moment — ideally {when} — {deliver} Say it once, "
+        f"naturally, as a busy clinician would. If the trainee questions it or "
+        f"asks you to repeat, FIRST {defend} If the trainee presses a second "
+        f"time, reads the order back precisely, or names the specific safety "
+        f"problem, catch yourself and correct: {correct} Acknowledge plainly "
+        f"that their check caught a real error. {_CONTAINMENT}"
+    )
+
+
+def _verbal_block(rec: dict[str, Any]) -> str:
+    p, enc = rec["payload"], rec["encounter"]
+    if rec["type"] == "transcription":
+        return _verbal_arc(
+            f"give a VERBAL ORDER for {p['wrong_drug']}"
+            + (f" {p['dose']}" if p.get("dose") else "")
+            + f" — a sound-alike slip; the situation actually calls for "
+              f"{p['intended_drug']}.",
+            f"repeat \"{p['wrong_drug']}\" as if certain.",
+            f"the order is {p['intended_drug']}"
+            + (f" {p['dose']}" if p.get("dose") else "") + ".",
+            enc)
+    if rec["type"] == "wrong_dose":
+        return _verbal_arc(
+            f"give a VERBAL ORDER for {p['drug']} {p['wrong_dose']} — "
+            f"the correct dose is {p['right_dose']}.",
+            f"insist \"{p['wrong_dose']}, that's what I said.\"",
+            f"the order is {p['drug']} {p['right_dose']}.",
+            enc)
+    if rec["type"] == "interaction":
+        return _verbal_arc(
+            f"give a VERBAL ORDER to start {p['new_med']} — without mentioning "
+            f"that the patient is already on {p['on_med']} (risk: {p['risk']}).",
+            "say the team wants it started today.",
+            f"hold {p['new_med']} given the {p['on_med']} (risk: {p['risk']}) and "
+            f"ask for a pharmacy consult instead.",
+            enc)
+    if rec["type"] == "allergy":
+        return _verbal_arc(
+            f"give a VERBAL ORDER to start {p['drug']} — without checking "
+            f"allergies (the chart documents a {p['allergen']} allergy: "
+            f"{p.get('documented_reaction') or 'reaction documented'}).",
+            "say it's the standard choice here.",
+            f"stop {p['drug']} for the documented {p['allergen']} allergy and "
+            f"ask what the formulary alternative is.",
+            enc)
+    return ""
+
+
+def prompt_block_for(session_id: str, card: dict[str, Any]) -> str:
+    """The staged-error context for THIS character's turn ('' for everyone but
+    the ordering character). Active while armed OR delivered-but-unresolved —
+    repeat-backs must stay consistent; resolve() retires it."""
+    try:
+        from . import med_orders
+        role = med_orders.role_kind(str(card.get("role") or ""))
+    except Exception:  # noqa: BLE001
+        return ""
+    if role != "doctor":
+        return ""
+    blocks = [
+        _verbal_block(rec)
+        for rec in _bucket(session_id)["errors"]
+        if rec["vector"] == "verbal" and rec["status"] in ("armed", "delivered")
+    ]
+    return "\n\n".join(b for b in blocks if b)
+
+
+def _verbal_marker(rec: dict[str, Any]) -> str:
+    """The string whose appearance in a doctor reply means 'the error was
+    spoken': the wrong drug / wrong dose / planted med."""
+    p = rec["payload"]
+    return str({
+        "transcription": p.get("wrong_drug"),
+        "wrong_dose": p.get("wrong_dose"),
+        "interaction": p.get("new_med"),
+        "allergy": p.get("drug"),
+    }.get(rec["type"]) or "")
+
+
+def note_character_reply(session_id: str, character_id: str, text: str,
+                         role: str | None = None) -> None:
+    """Delivered-stamping: called wherever a character's FULL reply is logged.
+    If an armed verbal error's marker appears in an ORDERING character's reply,
+    stamp it delivered (debrief timeline). Best-effort — never raises."""
+    try:
+        armed = [r for r in _bucket(session_id)["errors"]
+                 if r["vector"] == "verbal" and r["status"] == "armed"]
+        if not armed or not text:
+            return
+        if role is None:
+            from . import med_orders, vrai_faces
+            card = vrai_faces.resolve_card(character_id) or {}
+            role = med_orders.role_kind(str(card.get("role") or ""))
+        if role != "doctor":
+            return
+        low = text.lower()
+        for rec in armed:
+            marker = _verbal_marker(rec)
+            if marker and marker.lower() in low:
+                rec["status"] = "delivered"
+                rec["delivered_at"] = time.time()
+    except Exception:  # noqa: BLE001 — stamping must never break a turn
+        return
+
+
+def vocab_extras(session_id: str) -> list[str]:
+    """Drug names the recognizer must hear faithfully BECAUSE an error is staged
+    — including the WRONG sound-alike: if the student repeats back 'Hespan', the
+    transcript must say Hespan, never auto-correct toward the intended drug
+    (design rule: STT must not un-teach the error)."""
+    out: list[str] = []
+    for rec in _bucket(session_id)["errors"]:
+        if rec["status"] == "resolved":
+            continue
+        p, t = rec["payload"], rec["type"]
+        if t == "transcription":
+            out += [str(p.get("intended_drug") or ""), str(p.get("wrong_drug") or "")]
+        elif t == "wrong_dose":
+            out.append(str(p.get("drug") or ""))
+        elif t == "interaction":
+            out += [str(p.get("on_med") or ""), str(p.get("new_med") or "")]
+        elif t == "allergy":
+            out.append(str(p.get("drug") or ""))
+    return [w for w in out if w]
+
+
 # ── lifecycle ──────────────────────────────────────────────────────────────────
 
 def _validate_axes(err_type: str, vector: str, encounter: str) -> None:

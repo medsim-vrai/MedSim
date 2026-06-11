@@ -315,6 +315,93 @@ def test_verbal_arms_never_touch_the_chart(doc_session) -> None:
     assert store["writes"] == 0
 
 
+# ── S3: verbal vector + STT interplay ──────────────────────────────────────────
+
+DOCTOR = {"role": "Attending physician"}
+PHARMACIST = {"role": "Clinical pharmacist"}
+PATIENT = {"role": "Patient"}
+
+
+def _arm_verbal(sid: str, err_type: str = "transcription") -> dict:
+    cand = med_errors.suggest(sid, err_type, "verbal", "med_pass")[0]
+    return med_errors.arm(sid, err_type=err_type, vector="verbal",
+                          encounter="med_pass", payload=cand)
+
+
+def test_verbal_block_goes_only_to_the_ordering_character(doc_session) -> None:
+    sid, _ = doc_session
+    rec = _arm_verbal(sid)
+    block = med_errors.prompt_block_for(sid, DOCTOR)
+    assert rec["payload"]["wrong_drug"] in block
+    assert rec["payload"]["intended_drug"] in block
+    assert "STAGED VERBAL ORDER" in block
+    assert med_errors.prompt_block_for(sid, PHARMACIST) == ""
+    assert med_errors.prompt_block_for(sid, PATIENT) == ""
+
+
+def test_verbal_block_carries_containment_and_correction_arc(doc_session) -> None:
+    sid, _ = doc_session
+    rec = _arm_verbal(sid, "wrong_dose")
+    block = med_errors.prompt_block_for(sid, DOCTOR)
+    assert rec["payload"]["wrong_dose"] in block          # the staged slip
+    assert rec["payload"]["right_dose"] in block          # the correction path
+    assert "ONLY error you introduce" in block            # containment rule
+    assert "Do not invent" in block
+    assert "never hint" in block
+
+
+def test_doctor_reply_with_the_marker_stamps_delivered(doc_session) -> None:
+    sid, _ = doc_session
+    rec = _arm_verbal(sid)
+    wrong = rec["payload"]["wrong_drug"]
+    # Unrelated reply: still armed.
+    med_errors.note_character_reply(sid, "P-X", "Let's reassess in an hour.",
+                                    role="doctor")
+    assert med_errors.get(sid, rec["id"])["status"] == "armed"
+    # The PATIENT saying the drug name must NOT stamp delivery.
+    med_errors.note_character_reply(sid, "P-Y", f"I think I was on {wrong} once?",
+                                    role=None if False else "patient")
+    assert med_errors.get(sid, rec["id"])["status"] == "armed"
+    # The doctor speaking the staged order: delivered.
+    med_errors.note_character_reply(
+        sid, "P-X", f"Start {wrong} now, please.", role="doctor")
+    got = med_errors.get(sid, rec["id"])
+    assert got["status"] == "delivered" and got["delivered_at"] is not None
+
+
+def test_block_persists_through_delivered_and_retires_on_resolve(doc_session) -> None:
+    sid, _ = doc_session
+    rec = _arm_verbal(sid)
+    med_errors.note_character_reply(
+        sid, "P-X", f"Give {rec['payload']['wrong_drug']}.", role="doctor")
+    assert med_errors.prompt_block_for(sid, DOCTOR) != ""   # repeat-backs consistent
+    med_errors.resolve(sid, rec["id"], "caught")
+    assert med_errors.prompt_block_for(sid, DOCTOR) == ""   # retired after resolve
+
+
+def test_vocab_extras_carry_both_sound_alike_names(doc_session) -> None:
+    sid, _ = doc_session
+    rec = _arm_verbal(sid)
+    extras = med_errors.vocab_extras(sid)
+    assert rec["payload"]["intended_drug"] in extras
+    assert rec["payload"]["wrong_drug"] in extras           # never auto-correct
+    med_errors.resolve(sid, rec["id"], "missed")
+    assert med_errors.vocab_extras(sid) == []
+
+
+def test_session_vocab_merges_staged_error_names(doc_session, monkeypatch) -> None:
+    from portal import control_session, room_stt
+    sid, _ = doc_session
+    rec = _arm_verbal(sid)
+
+    class _Sess:
+        id = sid
+    monkeypatch.setattr(control_session, "get_active", lambda: _Sess())
+    vocab = room_stt.session_vocab()
+    assert vocab is not None
+    assert rec["payload"]["wrong_drug"] in vocab
+
+
 def test_failed_apply_stages_nothing(doc_session) -> None:
     sid, store = doc_session
     # An admin error whose drug is NOT on the MAR can't be planted — atomic.

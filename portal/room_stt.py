@@ -73,6 +73,11 @@ def session_vocab() -> str | None:
         if state:
             words += [str(it.get("drug") or "") for it in state.get("items") or []]
         words += med_orders.active_med_names(sess.id)  # MAR — what's already running
+        # FR-008 S3: staged-error names — INCLUDING the wrong sound-alike, so a
+        # student's repeat-back of either drug transcribes faithfully (the
+        # recognizer must never auto-correct toward the intended med).
+        from . import med_errors
+        words += med_errors.vocab_extras(sess.id)
         seen: set[str] = set()
         out: list[str] = []
         for w in words:
