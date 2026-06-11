@@ -12,7 +12,7 @@
 
 import { diag } from '@perf/diag';
 import { turnBegin, turnMark, onTurnComplete } from '@perf/turn_latency';
-import { createDeviceStt, type DeviceSttHandle } from './device_stt';
+import { createDeviceStt, resolveSttRoute, type DeviceSttHandle } from './device_stt';
 import { primeSpeechSynthesis } from './speechUnlock';
 import { audioPipeline } from '../modules/audio_pipeline';
 import { createCloudStt } from './cloud_stt';
@@ -189,7 +189,26 @@ export function mountDeviceVoice(
 
   let stt: DeviceSttHandle | null = null;
   let useCloud = false; // ADR-0025 cloud fallback (non-PHI), opt-in
-  const makeStt = (): DeviceSttHandle => (useCloud ? createCloudStt() : createDeviceStt());
+  const makeStt = (): DeviceSttHandle => (useCloud ? createCloudStt() : createDeviceStt({
+    apiBase: opts.apiBase,
+    characterId: opts.characterId,
+    scenarioId: opts.scenarioId,
+    ...(opts.token ? { token: opts.token } : {}),
+  }));
+  // ADR-0038: same route decision device_stt makes — drives the honest privacy
+  // labels (room-local Mac vs fully on-device).
+  const isRoomRoute = resolveSttRoute(
+    typeof location !== 'undefined' ? location.search + location.hash : '',
+    typeof navigator !== 'undefined'
+      && !!(navigator as unknown as { gpu?: unknown }).gpu,
+  ) === 'portal';
+  const READY_MSG = isRoomRoute
+    ? 'Voice ready — transcribed on the instructor’s Mac (in-room). Hold to talk.'
+    : 'On-device voice ready — hold to talk.';
+  const NOTE_MSG = isRoomRoute
+    ? 'Room speech recognition — audio goes only to the instructor’s Mac, never a third party.'
+    : 'On-device speech recognition — your audio stays on this device.';
+  note.textContent = NOTE_MSG;
   let on = false;
   let busy = false;                       // transcribing a take
   let startP: Promise<void> | null = null; // in-flight start(), so stop waits for it
@@ -234,7 +253,7 @@ export function mountDeviceVoice(
       if (!stt) stt = makeStt(); // on-device (warms model) or cloud, per the toggle
       const s = stt;
       setStatus(s.isReady()
-        ? 'On-device voice ready — hold to talk.'
+        ? READY_MSG
         : 'Loading on-device voice model… (first time, ~once).');
       renderMetrics();
       // Surface backend + cold-load as soon as the model finishes warming.
@@ -243,15 +262,17 @@ export function mountDeviceVoice(
           const failed = s.metrics().error !== null;
           if (!on || s.isReady() || failed) {
             if (readyPoll !== null) { clearInterval(readyPoll); readyPoll = null; }
-            if (on && s.isReady()) setStatus('On-device voice ready — hold to talk.');
-            else if (on && failed) setStatus('On-device voice unavailable — details below.', true);
+            if (on && s.isReady()) setStatus(READY_MSG);
+            else if (on && failed) setStatus('Voice unavailable — details below.', true);
             renderMetrics();
           }
         }, 400);
       }
       diag.push({
         t: performance.now(), moduleId: MODULE, kind: 'info',
-        message: 'on-device push-to-talk enabled (whisper-tiny, audio stays on device)',
+        message: isRoomRoute
+          ? 'push-to-talk enabled (room route: audio → instructor Mac only, ADR-0038)'
+          : 'on-device push-to-talk enabled (whisper-tiny, audio stays on device)',
       });
     } else {
       if (readyPoll !== null) { clearInterval(readyPoll); readyPoll = null; }
@@ -274,7 +295,7 @@ export function mountDeviceVoice(
       : '☁︎ Use cloud voice (testing · not PHI)';
     note.textContent = useCloud
       ? '⚠︎ Cloud recognizer — audio leaves the device (Google). Testing only, NOT for PHI.'
-      : 'On-device speech recognition — your audio stays on this device.';
+      : NOTE_MSG;
     if (on) { setMaster(false); setMaster(true); } // re-create with the chosen engine
   };
 

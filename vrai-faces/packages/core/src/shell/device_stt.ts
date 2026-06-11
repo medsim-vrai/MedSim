@@ -83,6 +83,74 @@ function textOf(raw: unknown): string {
   return '';
 }
 
+/** Config for the portal (room-local) STT route (ADR-0038): the audio-only
+ *  stations POST their 16 kHz PCM to the instructor's portal, whose Mac runs a
+ *  BIGGER whisper faster than a tablet CPU ever could. Mirrors DeviceVoiceOpts. */
+export interface DeviceSttConfig {
+  apiBase?: string;
+  characterId?: string;
+  scenarioId?: string;
+  /** Opt-in device-capability token (ADR-0027); echoed on /api/face/stt when set. */
+  token?: string;
+}
+
+/** Where transcription runs (ADR-0038). Pure for testability. `&stt=portal`
+ *  pins the room route, `&stt=wasm|webgpu` pins on-device; default splits by
+ *  capability — WebGPU devices (iPad class) keep the validated fully-on-device
+ *  path, no-WebGPU devices (low-cost audio stations) use the portal Mac.
+ *  Field basis: whisper-tiny on the target Android CPU = 17 s for a 4.8 s clip. */
+export function resolveSttRoute(
+  search: string,
+  hasWebGpu: boolean,
+): 'portal' | 'local' {
+  const m = search.match(/[?&#]stt=(portal|wasm|webgpu)/);
+  if (m) return m[1] === 'portal' ? 'portal' : 'local';
+  return hasWebGpu ? 'local' : 'portal';
+}
+
+type PortalSttResult =
+  | { ok: true; text: string; model: string }
+  | { ok: false; error: string };
+
+/** POST the take's PCM to the portal and read text back (ADR-0038). The audio
+ *  crosses the room's LAN over TLS to the instructor's Mac ONLY — same trust
+ *  boundary as the transcript text that already flows there; never a third party. */
+async function portalTranscribe(
+  audio: Float32Array,
+  cfg: DeviceSttConfig | undefined,
+): Promise<PortalSttResult> {
+  const base = (cfg?.apiBase ?? '').replace(/\/+$/, '');
+  const q = new URLSearchParams();
+  if (cfg?.scenarioId) q.set('scenario', cfg.scenarioId);
+  if (cfg?.characterId) q.set('character', cfg.characterId);
+  if (cfg?.token) q.set('token', cfg.token);
+  const qs = q.toString();
+  const url = `${base}/api/face/stt${qs ? `?${qs}` : ''}`;
+  try {
+    // Fresh copy of the underlying bytes (the view may not span its buffer).
+    const bytes = new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength).slice();
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: bytes,
+    });
+    const j: unknown = await res.json().catch(() => null);
+    const o = (j && typeof j === 'object' ? j : {}) as
+      { ok?: unknown; text?: unknown; model?: unknown; error?: unknown };
+    if (!res.ok || o.ok !== true) {
+      const why = typeof o.error === 'string' ? o.error : `HTTP ${res.status}`;
+      return { ok: false, error: `Mac transcriber error: ${why}` };
+    }
+    return {
+      ok: true,
+      text: typeof o.text === 'string' ? o.text.trim() : '',
+      model: typeof o.model === 'string' ? o.model : 'mac',
+    };
+  } catch {
+    return { ok: false, error: 'Mac transcriber unreachable — is the portal up?' };
+  }
+}
+
 let asrPromise: Promise<AsrPipeline | null> | null = null;
 // Pilot metrics (ADR-0026) — module-level since the ASR loads once per session.
 let sttBackend: string | null = null;
@@ -274,15 +342,35 @@ async function to16kMono(buf: AudioBuffer): Promise<Float32Array> {
   return rendered.getChannelData(0).slice();
 }
 
-export function createDeviceStt(): DeviceSttHandle {
+export function createDeviceStt(cfg?: DeviceSttConfig): DeviceSttHandle {
   let stream: MediaStream | null = null;
   let recorder: MediaRecorder | null = null;
   let chunks: Blob[] = [];
   let ready = false;
 
-  // Warm the model in the background so the first PTT release isn't blocked on
-  // the full model download.
-  void loadAsr().then((a) => { ready = a !== null; });
+  // ADR-0038 routing: portal (room-local Mac) vs on-device. After a portal
+  // failure the on-device model is armed as the automatic BACKUP (slow but
+  // functional if the portal drops mid-session — instructor requirement).
+  const hasGpu = typeof navigator !== 'undefined'
+    && !!(navigator as unknown as { gpu?: unknown }).gpu;
+  let route: 'portal' | 'local' = resolveSttRoute(
+    typeof location !== 'undefined' ? location.search + location.hash : '', hasGpu);
+  let fallbackArmed = false;
+
+  if (route === 'portal') {
+    // No on-device model to load — the Mac is the engine. Ready immediately.
+    ready = true;
+    sttBackend = 'portal';
+    sttLoadMs = 0;
+    diag.push({
+      t: performance.now(), moduleId: MODULE, kind: 'info',
+      message: 'STT route: portal (room-local Mac, ADR-0038) — on-device wasm is the backup',
+    });
+  } else {
+    // Warm the model in the background so the first PTT release isn't blocked on
+    // the full model download.
+    void loadAsr().then((a) => { ready = a !== null; });
+  }
 
   return {
     isReady: () => ready,
@@ -292,6 +380,7 @@ export function createDeviceStt(): DeviceSttHandle {
     }),
 
     async soakStep(): Promise<number> {
+      if (route === 'portal') return -1; // thermal probe is for ON-DEVICE inference only
       const a = await loadAsr();
       if (!a) return -1;
       const audio = new Float32Array(SAMPLE_RATE * 2); // 2 s of silence (whisper pads to 30 s)
@@ -348,15 +437,38 @@ export function createDeviceStt(): DeviceSttHandle {
       }
 
       const Ctor = audioCtxCtor();
-      const asr = await loadAsr();
-      if (!Ctor || !asr) { sttEmptyReason = 'speech model not ready'; return ''; }
+      if (!Ctor) { sttEmptyReason = 'no audio decoder in this browser'; return ''; }
       const ctx = new Ctor();
       try {
         const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
         const tDecode = performance.now();
         const audio = await to16kMono(decoded);
         const tResample = performance.now();
-        const text = textOf(await asr(audio));
+        let text: string;
+        if (route === 'portal') {
+          const r = await portalTranscribe(audio, cfg);
+          if (!r.ok) {
+            sttEmptyReason = r.error;
+            // Arm the on-device BACKUP (instructor requirement): warm the local
+            // model in the background; later takes use it once it's ready.
+            if (!fallbackArmed) {
+              fallbackArmed = true;
+              diag.push({
+                t: performance.now(), moduleId: MODULE, kind: 'warn',
+                message: 'portal STT failed — arming the on-device wasm backup',
+                data: r.error,
+              });
+              void loadAsr().then((a) => { if (a) route = 'local'; });
+            }
+            return '';
+          }
+          sttBackend = `portal·${r.model}`;
+          text = r.text;
+        } else {
+          const asr = await loadAsr();
+          if (!asr) { sttEmptyReason = 'speech model not ready'; return ''; }
+          text = textOf(await asr(audio));
+        }
         const tInfer = performance.now();
         sttLastMs = Math.round(tInfer - t0);
         // Split the budget so we can see which phase dominates the ~2s warm take

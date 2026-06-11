@@ -167,6 +167,13 @@ vrai_faces.attach(app, templates)
 from . import med_routes as _med_routes  # noqa: E402
 _med_routes.attach(app)
 
+# ADR-0038 — room-local STT: the Mac transcribes for the audio-only stations
+# (trainee audio crosses the LAN to THIS portal only; transcribed in memory,
+# discarded). Warm the model off-thread so the first take doesn't pay the load.
+from . import room_stt as _room_stt  # noqa: E402
+_room_stt.attach(app)
+_room_stt.warm_in_background()
+
 
 # V7 — Activity catalog seed. Idempotent — only inserts rows missing
 # from the DB. Runs on every server boot; safe.
