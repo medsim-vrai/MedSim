@@ -343,8 +343,14 @@ over cloud-primary. The portal Mac transcribes for audio stations: `POST /api/fa
 `resolveSttRoute` (WebGPU→on-device unchanged; no-WebGPU→portal; `&stt=` pins), portal failure
 arms the on-device wasm BACKUP, honest per-route privacy labels. Mac smoke: 3.4s spoken clip →
 **1.34s cold / see warm below** vs 17.0s on-tablet (~13×), model boot-warmed in 1.0s.
-Future accuracy lever: bias transcription with the session's drug names via initial_prompt
-(formulary vocabulary — would catch "ampicillin"-class words). **✅ FIELD-VALIDATED 2026-06-12**
+~~Future accuracy lever~~ **SHIPPED 2026-06-12:** the active session's med-board drug names +
+MAR meds ride along as recognizer hints (faster-whisper hotwords; names only — availability
+state never leaks into recognition). A/B on the real engine: plain "seftriaxone" → hinted
+"ceftriaxone"; live unhinted control heard "Ceph Trich Zone" — the lever targets exactly the
+order-critical vocabulary. Same batch: audio station shows the persona display name (never the
+internal id), https /onboard on the portal origin (Android HTTPS-First gap closed), and the
+long-chipped placeholder-portrait test un-staled → BOTH GATES FULLY GREEN (126 client · 55
+portal). **✅ FIELD-VALIDATED 2026-06-12**
 on the Android tablet over the Beryl kit router (stt 200 → listen 200; instructor: Android now
 responds like the iPad). FR-006 chain CLOSED.
 
