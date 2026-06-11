@@ -404,7 +404,15 @@ student encounters it — e.g. during report, charting, preparing for med pass, 
 - **Open questions:** catalog authorship/clinical review · simultaneous errors? · caught =
   instructor-marked or transcript-inferred? · scoring/debrief artifact shape.
 
-**Status:** Filed; detailed plan pending instructor go-ahead. Effort L. Builds on FR-001/002
+**Amendment (2026-06-12, instructor):** + optional **patient impact** — inject the negative
+medical state the error would cause in real life (curated consequences per type, severity
+tiers, instructor-triggered or auto-on-administration — med.administer events already exist);
++ **dedicated builder page** in the pre-start (Setup) stage — a structured wizard so the
+authored error stays bounded (catalog-grounded choices only, review-and-arm summary);
++ type/mode/impact arc feeds the **debrief**. Impact composes existing levers (vitals events,
+scenes handlers incl. pump.alarm/code.blue, patient prompt blocks) — no new physiology engine.
+
+**Status:** Filed; detailed plan (S1–S6) written + amended, pending instructor ratification. Effort L–XL. Builds on FR-001/002
 (med board), FR-003 (say-as), ehr_seed chart surfaces (allergies, MAR+admin history,
 notes_recent, seed_report — all already exist).
 

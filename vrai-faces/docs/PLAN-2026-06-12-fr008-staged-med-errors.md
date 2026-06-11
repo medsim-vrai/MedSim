@@ -12,6 +12,12 @@ the instructor arms a **classified medication error** at a chosen **introduction
 | **Type** | 1 Transcription (sound-alike) · 2 Right med wrong dose (high/low) · 3 Dangerous interaction · 4 Allergy oversight · 5 Administration error (wrong med/time/dose, expired) |
 | **Vector** | verbal/phone order · document conflict (existing order vs other notations/documents) — per-type allowed vectors per the taxonomy (type 1 verbal-only; type 5 document-only) |
 | **Encounter point** | report · charting · preparing for med pass · during med pass |
+| **Impact** (2026-06-12 amendment) | optional negative patient state if the error plays out — curated consequences per type (e.g. allergy → urticaria/anaphylaxis tiers; overdose → hypotension/sedation; interaction → bleeding signs), severity tier mild/moderate/severe, trigger mode |
+
+**Impact amendment (instructor, 2026-06-12):** the instructor can inject the negative medical
+state the error would cause in real life; the system provides a STRUCTURED PATH (wizard) so the
+authored error stays bounded; the builder lives on its OWN page reached from the pre-start
+(Setup) stage; type/mode/impact feed the debrief discussion.
 
 ## Architecture decisions (locked unless instructor objects)
 
@@ -32,9 +38,25 @@ the instructor arms a **classified medication error** at a chosen **introduction
 5. **STT must not un-teach the error.** When a transcription error is armed, BOTH sound-alike
    names join the recognizer hints (`room_stt.session_vocab` merge) — the student's repeat-back
    of either drug transcribes faithfully; the system never auto-corrects toward the "right" med.
-6. **Defaults on the open questions** (flag at ratification): multiple errors may be armed but
+6. **Impact composes EXISTING levers — no new physiology engine.** The bedside monitors
+   already read vitals events (+ jitter) and the M7 scenes engine ships handlers
+   (vitals.drop/rise, lab.result, pump.alarm, code.blue…); the patient character already takes
+   prompt-block context (symptoms + emotion). An impact = a curated bundle of those, applied
+   together, fully reversible.
+7. **Impact triggers are explicit, never timed.** Primary: the instructor presses
+   "Trigger impact" in the Live window. Optional per-error toggle: auto-trigger when the
+   student ADMINISTERS the staged med (the system already records med.administer /
+   cabinet.administer events). Severe-tier impacts require a second confirmation click.
+   "Stabilize" reverts vitals toward baseline + clears the symptom block, transcript-stamped.
+8. **Bounded by construction (the structured path):** every wizard step offers only
+   catalog-grounded choices — no free-text clinical content anywhere (instructor note field
+   excepted, and it is debrief-only). Review-and-arm shows a plain-English summary of exactly
+   what will appear, where, and what the impact will do, before anything is staged.
+9. **Defaults on the open questions** (flag at ratification): multiple errors may be armed but
    the UI nudges one-at-a-time · "caught/missed" is instructor-marked (transcript-inferred is
-   a future lever) · debrief artifact = transcript entries at arm/deliver/resolve.
+   a future lever) · debrief artifact = the full structured arc (type/vector/encounter/impact ·
+   armed/delivered/triggered/resolved timestamps · caught/missed · instructor note) rendered in
+   the existing debrief surface (portal/debrief.py) plus transcript stamps throughout.
 
 ## Encounter-point → artifact map (vector b: document conflict)
 
@@ -67,17 +89,32 @@ character (with the containment rule); delivered-stamping in the turn/speak path
 `med_errors.vocab_extras()` merged into `room_stt.session_vocab` (both sound-alike names).
 Tests: block content + containment text, delivered detection, vocab merge.
 
-**S4 — Control room.** "⚠️ Staged errors" collapsible card (auto-expanded on Setup, minimized
-in Live — same behavior as the med checklist): type → vector (filtered per taxonomy) →
-encounter → Suggest → pick → ARM; live status chip + Caught/Missed + note; transcript entries
-at arm/deliver/resolve. Auth'd routes in `med_routes.py` (`GET /api/control/mederrors`,
-`POST …/arm|disarm|resolve`). Tests: route auth, taxonomy filtering, transcript stamps.
+**S4 — Impact engine.** Consequence catalog (curated per error type, severity tiers) +
+`med_errors.trigger_impact/stabilize`: applies the bundle — vitals events the monitors read,
+patient-character symptom block via `_extra_context` (with emotion cue), optional pump.alarm /
+code.blue for severe tier — and reverts cleanly. Auto-trigger hook on med.administer of the
+staged med (per-error opt-in). *Stage recon note:* confirm the v8 control-session event path
+the bedside devices poll (vs the M7 multi-encounter room path) and target that one. Tests:
+bundle apply/revert round-trip, auto-trigger match, severe-tier double-confirm flag, unarmed
+sessions untouched.
 
-**S5 — Ship + field script.** Registers, restart, Mac-side verification (pytest + curl drills
-incl. a staged-report curl read-back), and a one-page instructor validation script (arm each
-type once; expected student-visible signal per encounter point).
+**S5 — Builder page + live controls.** NEW auth'd page `/portal/control/errors` (linked
+prominently from the Setup stage banner): a 6-step wizard — 1 Type → 2 Vector (taxonomy-
+filtered) → 3 Encounter point → 4 Payload (grounded suggestions) → 5 Impact (optional:
+consequence, severity, trigger mode) → 6 Review-and-arm (plain-English summary). Live window
+gets a compact status chip per armed error: state (armed/delivered/triggered) + Trigger impact ·
+Stabilize · Caught · Missed + note. Auth'd routes (`GET /api/control/mederrors`,
+`POST …/arm|disarm|trigger|stabilize|resolve`). Tests: route auth, taxonomy filtering, wizard
+payload validation, transcript stamps.
+
+**S6 — Debrief + ship.** Staged-error section in the debrief surface (the full arc with
+timestamps); registers; restart; Mac-side verification (pytest + curl drills incl. a
+staged-report read-back and an impact trigger/stabilize round-trip); one-page instructor field
+script (arm each type once; the expected student-visible signal per encounter point + impact).
 
 Each stage gates (client 126 + portal 55, both currently fully green) and commits separately.
+S1–S3 are unchanged by the amendment; the impact arm is additive (S4) and the builder page
+(S5) replaces the earlier inline-card plan — a card remains only as the Live status chip.
 
 ## Out of scope (filed, not built)
 
