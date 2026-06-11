@@ -319,6 +319,15 @@ wasm path only (skips the extended QDQ rewrite; iPad/WebGPU keeps full optimizat
 Awaiting the post-③ tablet take. Lesson: dev-build ORT on the unpiloted platform = three stacked
 failures, each only visible after the previous one fell.
 
+**ROUTE RATIFIED + SHIPPED (2026-06-11, ADR-0038 — FR-006b):** instructor chose **room-local**
+over cloud-primary. The portal Mac transcribes for audio stations: `POST /api/face/stt`
+(faster-whisper **small.en** int8 — a bigger model than any tablet could run), device routing
+`resolveSttRoute` (WebGPU→on-device unchanged; no-WebGPU→portal; `&stt=` pins), portal failure
+arms the on-device wasm BACKUP, honest per-route privacy labels. Mac smoke: 3.4s spoken clip →
+**1.34s cold / see warm below** vs 17.0s on-tablet (~13×), model boot-warmed in 1.0s.
+Future accuracy lever: bias transcription with the session's drug names via initial_prompt
+(formulary vocabulary — would catch "ampicillin"-class words). Awaiting tablet field retest.
+
 **FIELD RESULT (2026-06-11): the Android loop WORKS end-to-end** — model loads, takes
 transcribe, character answers with server voice. Remaining: **CPU transcription is far too slow**
 (single-threaded wasm). Shipped same-day: multi-threaded inference (numThreads = min(4, cores),
