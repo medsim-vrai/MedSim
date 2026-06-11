@@ -209,6 +209,13 @@ like the AI reply — so the cloud-voice path is allowed (ADR-0037); no trainee 
 
 ## FR-004 — Zero-config wireless device pairing for production venues
 
+**KIT ROUTER ✅ VALIDATED (2026-06-12):** tablet half passed — iPad (avatar) + Android (audio
+station) both joined the Beryl, loaded green-lock with NO new trust step (the CA promise held
+across routers), and the Android ran a live voice take over the kit LAN: `POST /api/face/stt
+200 → POST /listen 200` — instructor reports the Android response now feels like the iPad.
+This simultaneously **field-validates FR-006b room-local STT** on the real tablet. Remaining
+hardening (queued, optional): static DHCP lease for the Mac; hostname QRs via Beryl dnsmasq.
+
 **KIT ROUTER VALIDATION (2026-06-12, in progress):** Beryl AX (GL-MT3000) pocket router arrived
 and is live — Mac at 192.168.8.181 behind it, internet flowing through it (Anthropic reachable →
 AI turns work), leaf cert re-minted (leaf-only, CA untouched — the make-dev-cert FORCE guard
@@ -337,7 +344,9 @@ over cloud-primary. The portal Mac transcribes for audio stations: `POST /api/fa
 arms the on-device wasm BACKUP, honest per-route privacy labels. Mac smoke: 3.4s spoken clip →
 **1.34s cold / see warm below** vs 17.0s on-tablet (~13×), model boot-warmed in 1.0s.
 Future accuracy lever: bias transcription with the session's drug names via initial_prompt
-(formulary vocabulary — would catch "ampicillin"-class words). Awaiting tablet field retest.
+(formulary vocabulary — would catch "ampicillin"-class words). **✅ FIELD-VALIDATED 2026-06-12**
+on the Android tablet over the Beryl kit router (stt 200 → listen 200; instructor: Android now
+responds like the iPad). FR-006 chain CLOSED.
 
 **FIELD RESULT (2026-06-11): the Android loop WORKS end-to-end** — model loads, takes
 transcribe, character answers with server voice. Remaining: **CPU transcription is far too slow**
