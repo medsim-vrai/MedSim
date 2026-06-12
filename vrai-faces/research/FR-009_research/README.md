@@ -40,5 +40,9 @@ to cleanup (recovered from the session context into `run1_2026-06-12_claims-and-
   NURSE handovers ×2 incl. quantitative outcomes) before the next usage cap (resets 1:50pm).
   Remaining ~16 claims: every vote cast upholds them, formally short of the 3-vote protocol.
   **Zero refutations across all passes.** Full output: run3_2026-06-12_full-output.json.
-- Deliverables REVISED on this record (PDF + plan + register). Optional final pass after the
-  1:50pm window closes the remaining claims; any refutation would trigger a further revision.
+- 2026-06-12 afternoon — run 4 (post-window resume): **20/25 confirmed at full protocol,
+  2 refuted 0–3 (the excluded IJGHR source), 3 stranded by the next quota window** — then
+  closed by DIRECT source verification (all nine facts quote-confirmed). **VERIFICATION
+  COMPLETE.** Deliverables revised to final: quantified perception gap (8.1 vs 7.1), receiver
+  read-back mandate + named observation tools, training-effectiveness source [11], instrument
+  rows marked ✓. See run2_verdicts.md for the final record.

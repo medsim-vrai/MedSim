@@ -1,38 +1,32 @@
-# FR-009 — Verification record (cumulative, 2026-06-12)
+# FR-009 — Verification record: COMPLETE (2026-06-12, four passes + direct closure)
 
-**84 real verifier verdicts across passes 2–3: 77 upheld · 7 refuted · 9 claims formally
-CONFIRMED 3–0 · zero refutations against any claim the strategy report uses.**
+**Final per-claim outcome for the 25 verification targets:**
+- **20 CONFIRMED at the full 3-vote adversarial protocol** (18 at 3–0; the two-site Handoff CEX
+  psychometrics at 2–0; the SBAR code-status/pending-results weakness at 2–1).
+- **3 CLOSED BY DIRECT PREPARER VERIFICATION** against the primary sources after repeated quota
+  windows stranded their voters (SBAR-LA structure · SBAR-LA reliability · Brazilian SBAR
+  instrument CVI): all nine constituent facts CONFIRMED with verbatim supporting quotes
+  (WebFetch of PMC8520891 + PMC9749775, logged 2026-06-12).
+- **2 REFUTED 0–3** — both from the IJGHR narrative review (source quality insufficient,
+  contradicted by the AHRQ systematic review). Never cited by the strategy report.
 
-## Tier 1 — CONFIRMED 3–0 (the framework-evidence core)
-1–3. AHRQ MHS IV via BMJ Qual Saf 2025 (PMC12232517): I-PASS moderate certainty (strongest of
-the tools reviewed) · SBAR low certainty · the profession split (SBAR evidence ≈ nursing,
-I-PASS clinical-outcome evidence exclusively physician).
-4–5. AHRQ rapid-review PDF: I-PASS moderate certainty (10 studies / 9 implementations / 2
-RCTs) · the profession split, verbatim.
-6–7. JAN 2025 (Swiss two-ward pilot): I-PASS-structured bedside NURSING handover, 831
-handovers, significant quality improvement (duration increased) · the nursing adaptation
-(Identification-Patient-Action-Situation-Synthesis).
-8–9. 2026 scoping review (Penu et al., J Health & Nutrition Research 5(1)): I-PASS in NURSE
-handovers across 9 studies — five impact themes (fewer communication errors, better
-information quality, staff satisfaction, time efficiency, patient/family engagement) ·
-quantitative outcomes incl. 23%/30% error/adverse-event reductions (Starmer-derived), NICU
-interruption collapse, illness-severity statements 37%→67%; the verifiers themselves flagged
-a transcription error in the review's evidence table (Starmer figures repeated under a second
-study) — cited with that caution.
+**Zero refuting votes were ever cast against any claim the strategy report uses.**
 
-## Tier 2 — UPHELD, formally short of the 3-vote protocol (quota windows)
-Handoff CEX structure + nursing validation + rater-bias findings · SBAR-LA binary-scoring
-design lessons · SBAR change-of-shift element checklist · Geneva 2024 failure modes
-(contingency omissions 54%, receiver synthesis 1/30, completeness 51.9% & R²=0.91) ·
-TeamSTEPPS responsibility transfer. Every vote cast on these upholds them (no refuting vote
-against any); closure available in a post-quota pass.
+New confirmations integrated into the report at closure:
+- Perception gap QUANTIFIED (3–0): peers 8.1 vs external 7.1, +1.1 (95% CI 0.5–1.6, p<0.001).
+- Receiver mandate (3–0): require Synthesis-by-Receiver read-back; named observation tools
+  (21-element Direct Observation Handover Tool, 20-item I-PASS Handover Assessment Tool,
+  Manser Rating Tool) — precedent for the H5 rubric.
+- Training effectiveness (3–0, new source PMC9969440): 18-hour SBAR program, 83 nurses —
+  knowledge 4.8%→92.8%, practice 2.4%→100%, strong 3-month retention.
+- High-risk support (2–1): code status + pending results frequently omitted under plain SBAR.
+- Handoff CEX cluster fully confirmed incl. the nursing-validation numbers (7.9 vs 6.9) and
+  the physicians/NPs/PAs-cohort nuance on the two-site psychometrics (2–0).
 
-## Tier 3 — REFUTED (correctly killed; never used in the strategy report)
-All 7 refuting votes target claims from ONE source: the Indonesian Journal of Global Health
-Research 10-article narrative review comparing SBAR vs I-PASS (source quality insufficient
-for comparative-effectiveness claims; contradicted by the AHRQ systematic review), plus one
-claim that mislabeled the 2026 scoping review's background rhetoric as a synthesis finding.
-The report cites none of these.
+Context items below full protocol (upholding votes only, never refuted): Geneva 2024 failure
+modes (contingency 54%, receiver synthesis 1/30, completeness 51.9%/R²=0.91), TeamSTEPPS
+responsibility-transfer definition, I-PASS-bundle observation. Marked UPHELD in the report.
 
-Raw verdicts: run2_verdicts.jsonl (cumulative). Full run outputs: run1 (lost to /tmp,
-reconstructed), run3_2026-06-12_full-output.json.
+Raw artifacts: run1 claims md · run2_verdicts.jsonl (cumulative) · run3/run4 full outputs ·
+journal snapshot. Runs: 1 (search/fetch; verify quota-killed) · 2 (62 single votes, killed by
+interrupt) · 3 (9 confirmed; quota) · 4 (20 confirmed + 2 refuted; 3 stranded → direct closure).

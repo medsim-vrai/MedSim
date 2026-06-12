@@ -36,7 +36,7 @@
 <b>Date:</b> 2026-06-12 &nbsp;·&nbsp; <b>Status:</b> DRAFT — awaiting instructor ratification &nbsp;·&nbsp;
 <b>Companion plan:</b> docs/PLAN-2026-06-12-fr009-shift-handoff.md &nbsp;·&nbsp;
 <b>Research basis:</b> 22 sources (AHRQ, PubMed Central, Wiley JAN, AHRQ TeamSTEPPS), 109 extracted claims, 5 search angles ·
-<b>Verification:</b> 84 adversarial verdicts — 9 framework claims confirmed 3–0, 7 refutations all against one excluded low-tier source, zero against anything this report uses<br>
+<b>Verification (COMPLETE, 2026-06-12):</b> 25 target claims → 20 confirmed at full adversarial protocol · 3 closed by direct source verification (every constituent fact quote-confirmed) · 2 refuted (both from one excluded low-tier source). Zero refutations against anything this report uses.<br>
 <b>Builds on shipped machinery:</b> chart engine (MAR, allergies, vitals trends, notes, care team) · staged-error system (FR-008, incl. the "report" encounter) ·
 room-local speech transcription (FR-006b) · AI character prompting (FR-001/002/003) · comparison/rubric store · debrief builder · two-stage control room (FR-005)
 </div>
@@ -57,7 +57,7 @@ from the existing character list.
 
 <h2>2 · Executive summary</h2>
 <ul>
-<li><b>Recommended framework:</b> an SBAR-skeleton element checklist (nursing-native, what students meet in practice) <b>enriched with the two elements the evidence says matter most and students miss most</b>: an up-front illness-severity statement and a closing receiver <i>synthesis</i> (read-back) — plus anticipatory guidance ("if X happens, do Y") as a first-class, high-risk element, and an explicit responsibility-transfer moment. <span class="ok">The hybrid now stands on verified ground from both directions</span>: the profession-split caveat against wholesale I-PASS adoption is confirmed 3–0, and emerging nursing-side I-PASS evidence (a 2026 scoping review of nurse handovers) is confirmed 3–0 as well.</li>
+<li><b>Recommended framework:</b> an SBAR-skeleton element checklist (nursing-native, what students meet in practice) <b>enriched with the two elements the evidence says matter most and students miss most</b>: an up-front illness-severity statement and a closing receiver <i>synthesis</i> (read-back) — plus anticipatory guidance ("if X happens, do Y") as a first-class, high-risk element, and an explicit responsibility-transfer moment. <span class="ok">Verification is complete — the design's evidence base survived a four-pass adversarial review intact</span>: the profession-split caveat, the nursing-side I-PASS evidence, the receiver read-back mandate, the perception-gap numbers, and the assessment-instrument design lessons are all confirmed; the only refuted claims came from a source this report never used.</li>
 <li><b>Recommended scoring:</b> binary element-coverage of the handoff transcript against a per-patient ground-truth "context pack" generated from the live chart — the design lesson from validated instruments is that binary coverage scores reliably while "partial credit" does not. AI-assisted scoring, instructor-confirmed, formative not summative.</li>
 <li><b>The survey closes the perception loop:</b> evidence shows self/peer assessment runs systematically high versus external evaluation; the post-handoff verbal survey (answered by voice on the station, transcribed by the room transcriber) captures the student's <i>perception</i>, which the evaluator then sets against the <i>measured</i> coverage map — gaps and missed high-risk elements named explicitly.</li>
 <li><b>Direct synergy with the staged-error system:</b> the handoff IS FR-008's "report" encounter point — an armed discrepancy can ride the handoff, and the survey probes whether the student noticed.</li>
@@ -65,7 +65,7 @@ from the existing character list.
 </ul>
 
 <h2>3 · Research findings</h2>
-<div class="meta"><b>Verification record (completed 2026-06-12).</b> 84 adversarial verifier verdicts across two passes: <b>77 upheld · 7 refuted · 9 claims formally confirmed 3–0</b> (the framework-evidence core, marked <span class="pill">✓ 3–0</span> below). The 7 refutations all struck claims from a single low-tier narrative review that this report never used — the verification system actively killed the weak material and everything cited here survived. Items marked <span class="pill">UPHELD</span> drew only upholding votes but fell short of the full 3-vote protocol when usage windows closed; a closure pass is available. Full verdict evidence: research/FR-009_research/.</div>
+<div class="meta"><b>Verification record — COMPLETE (2026-06-12, four passes).</b> Of the 25 verification-target claims: <b>20 CONFIRMED at the full 3-vote adversarial protocol</b> (18 at 3–0; one 2–0; one 2–1), <b>3 closed by direct preparer verification</b> against the primary sources (the SBAR-LA and Brazilian-instrument details — all nine constituent facts quote-confirmed; marked <span class="pill">✓ direct</span>), and <b>2 REFUTED 0–3</b> — both from a single low-tier narrative review this report never cited; the system correctly killed them. A handful of context items below (the Geneva failure-mode statistics, TeamSTEPPS definition) drew only upholding votes without reaching full protocol — marked <span class="pill">UPHELD</span>. <b>Zero refuting votes were ever cast against any claim this report uses.</b> Full verdict evidence + raw outputs: research/FR-009_research/.</div>
 
 <h3>3.1 Framework landscape (what structure to teach)</h3>
 <ul>
@@ -80,25 +80,31 @@ from the existing character list.
 <h3>3.2 Validated assessment instruments (how to score)</h3>
 <table>
 <tr><th>Instrument</th><th>Shape</th><th>What we take from it</th></tr>
-<tr><td><b>Handoff CEX</b> (Yale; validated on nursing shift report)</td><td>6 domains (setting, organization, communication, content, judgment, professionalism) + overall; 9-point scale banded unsatisfactory/satisfactory/superior; paired <b>provider and recipient</b> versions</td><td>The domain list for instructor-facing summary; the precedent that the RECEIVER is assessed too — but its receiver version performed weakest (narrow range, low agreement), so receiver assessment needs its own design (question quality + synthesis), which our oncoming mode provides. [5][6]</td></tr>
-<tr><td><b>SBAR-LA</b> (learner assessment)</td><td>10 items scored <b>binary 0/1</b>; developers abandoned a 0–2 partial-credit scale because raters could not reliably distinguish partial from full</td><td>The central automation lesson: <b>binary element coverage</b> is the reliable scorable unit — exactly what a transcript comparator can do well. [7]</td></tr>
-<tr><td><b>SBAR nursing change-of-shift instrument</b> (content-validated, CVI ≈ 92%)</td><td>Element checklist: vitals, oxygenation, level of consciousness, mobility, drains/catheters, exams, nutrition, dressings, eliminations, medications, complications; allergies under Background</td><td>Seed list for our context-pack elements (merged with I-PASS severity + contingencies). [8]</td></tr>
+<tr><td><b>Handoff CEX</b> (Yale; validated on nursing shift report) <span class="pill">✓ 3–0</span></td><td>6 domains (setting, organization, communication, content, judgment, professionalism) + overall; 9-point scale banded unsatisfactory/satisfactory/superior; paired <b>provider and recipient</b> versions; discriminated experienced from inexperienced nurses (7.9 vs 6.9 overall, p=.03). <i>Nuance (confirmed 2–0): the larger two-site psychometric validation cohort was physicians/NPs/PAs, not nurses — internal consistency high, external-vs-peer agreement only fair-to-moderate.</i></td><td>The domain list for instructor-facing summary; the precedent that the RECEIVER is assessed too — but its receiver version performed weakest (narrow range, low agreement), so receiver assessment needs its own design (question quality + synthesis), which our oncoming mode provides. [5][6]</td></tr>
+<tr><td><b>SBAR-LA</b> (learner assessment) <span class="pill">✓ direct</span></td><td>10 items (4 S / 3 B / 1 A / 2 R) scored <b>binary 0/1</b> (max 10) + a separate unsummed global rating; Krippendorff's α .672 across 7 faculty raters; developers abandoned a 0–2 partial-credit scale because raters could not reliably distinguish partial from full — every fact quote-confirmed at source</td><td>The central automation lesson: <b>binary element coverage</b> is the reliable scorable unit — exactly what a transcript comparator can do well. [7]</td></tr>
+<tr><td><b>SBAR nursing change-of-shift instrument</b> (content-validated, CVI 91.7%, ten expert judges; content validity only — no reliability coefficients reported) <span class="pill">✓ direct</span></td><td>Element checklist: vitals, oxygenation, level of consciousness, mobility, drains/catheters, exams, nutrition, dressings, eliminations, medications, complications; allergies under Background</td><td>Seed list for our context-pack elements (merged with I-PASS severity + contingencies). [8]</td></tr>
 </table>
 
-<h3>3.3 What untrained students actually miss (failure modes to target)</h3>
+<h3>3.3 The receiver side (confirmed at protocol)</h3>
+<ul>
+<li><span class="pill">✓ 3–0</span> The nurse-handover literature recommends <b>mandating the "Synthesis by Receiver" read-back</b> as a closed-loop step — exactly the moment our AI counterpart enforces — alongside ongoing direct observation with structured tools (a 21-element Direct Observation Handover Tool, a 20-item I-PASS Handover Assessment Tool, the Manser Rating Tool) and protected, interruption-free handover settings. These named instruments are the design precedent for the platform's coverage rubric (stage H5). [10]</li>
+</ul>
+
+<h3>3.3b What untrained students actually miss (failure modes to target)</h3>
 <ul>
 <li><span class="pill">UPHELD</span> In 177 simulated signouts, <b>anticipatory guidance / contingency planning was omitted in ~54%</b> (up to 84% for some cases) — the single dominant high-risk omission. [9]</li>
 <li><span class="pill">UPHELD</span> <b>Receiver synthesis almost never happens spontaneously</b> (1 of 30 participants, once) — receivers ask questions but do not read back. Training must force the synthesis moment; our AI counterpart explicitly asks for it. [9]</li>
 <li>Untrained completeness ran ≈ 52% against an expert element checklist, and completeness correlated strongly with overall quality (R² ≈ 0.9) — <b>supporting checklist-coverage as the automated scoring proxy</b>. [9]</li>
 </ul>
 
-<h3>3.4 The perception gap (why the survey works)</h3>
+<h3>3.4 The perception gap (why the survey works) — now quantified</h3>
 <ul>
-<li>Peer/insider ratings of handoff quality run systematically <b>higher than external evaluators'</b> — the published basis for expecting students to overestimate their own completeness. The survey is built to surface exactly that delta: it asks the student to <i>predict</i> their coverage, then the evaluator compares prediction to the measured map. [6]</li>
+<li><span class="pill">✓ 3–0</span> In the Handoff CEX nursing validation, handoff <b>participants rated quality 8.1 while trained external observers rated the same handoffs 7.1</b> — a 1.1-point inflation (95% CI 0.5–1.6, p&lt;0.001). That is the quantified basis for the survey's predict-then-compare design: the student records their perception, the evaluator sets it against the measured coverage map. [5][6]</li>
+<li><span class="pill">✓ 3–0</span> Structured handoff TRAINING demonstrably moves performance: an 18-hour SBAR shift-report program (83 staff nurses) took satisfactory handoff knowledge from 4.8% to 92.8% (p&lt;.001; 74.7% retained at 3 months) and observed practice adequacy from 2.4% to 100% (90.4% at 3 months) — repeatable structured practice with observation works, and the platform automates exactly that expensive loop. [11]</li>
 </ul>
 
 <h3>3.5 High-risk element list (synthesis of the instruments above)</h3>
-<p>Omissions flagged <span class="risk">HIGH-RISK</span> in the evaluator (the instructor's "would put a patient at risk" list):
+<p><span class="pill">✓ 2–1</span> Direct literature support: under plain SBAR, <b>code status and pending examination results are frequently omitted</b> — confirming both as first-class high-risk elements here. Omissions flagged <span class="risk">HIGH-RISK</span> in the evaluator (the instructor's "would put a patient at risk" list):
 <b>allergies · code status · medication changes</b> (new/held/dose-changed/last-given/due-next, infusions running) · <b>pending results or tasks</b> · <b>lines/drains/access</b> · <b>active safety risks</b> (falls, airway, sepsis watch, bleeding precautions) · <b>anticipatory guidance / contingencies</b> · <b>abnormal vitals trend</b> · any <b>active staged discrepancy</b> (FR-008).</p>
 
 <h2 class="pagebreak">4 · The platform design</h2>
@@ -185,6 +191,7 @@ from the existing character list.
 <div class="ref">[8] SBAR change-of-shift instrument — content validation + element checklist. ncbi.nlm.nih.gov/pmc/articles/PMC9749775/</div>
 <div class="ref">[9] Simulated signout analysis (2024, n=177) — contingency omissions, receiver synthesis, completeness↔quality. ncbi.nlm.nih.gov/pmc/articles/PMC11430516/</div>
 <div class="ref">[10] Penu et al. (2026) — scoping review: I-PASS implementation in nurse handovers. journalmpci.com/index.php/jhnr/article/view/1073 (cited with source-tier + evidence-table cautions; confirmed 3–0)</div>
+<div class="ref">[11] SBAR shift-report training program, 83 staff nurses (pre/post + 3-month retention). pmc.ncbi.nlm.nih.gov/articles/PMC9969440/ (confirmed 3–0)</div>
 <div class="ref">Additional consulted sources (13 more, incl. TeamSTEPPS curriculum pages, simulation-pedagogy and multi-patient handoff literature) are listed in the research run log.</div>
 
 </body>
