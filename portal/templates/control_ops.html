@@ -36,6 +36,8 @@
     <label class="small"><input type="checkbox" id="addchar-avatar"> avatar tablet</label>
     <button type="button" id="addchar-go">＋ Add</button>
     <span id="addchar-status" class="small"></span>
+    <span style="flex:1"></span>
+    <a href="/portal/control/errors" style="font-weight:700;color:#a02020;text-decoration:none;border:1px solid #e0a0a0;border-radius:8px;padding:5px 12px;background:#fff;">⚠️ Build a staged error</a>
   </div>
 </div>
 <script>
@@ -358,6 +360,85 @@
             else { status.textContent = j.error || 'failed'; }
           });
       });
+    })();
+    </script>
+
+    <!-- FR-008 S5 — staged-error status card (live stage). Compact chips per armed
+         error: state + Trigger impact / Stabilize / Caught / Missed / Disarm. -->
+    <section class="check-card" id="errors-card"{% if stage == 'setup' %} style="display:none"{% endif %}>
+      <h3 style="cursor:pointer" id="errors-toggle">⚠️ Staged errors <span id="errors-summary" class="muted small"></span></h3>
+      <div id="errors-body" style="display:none"></div>
+    </section>
+    <script>
+    (function () {
+      var body = document.getElementById('errors-body');
+      var summary = document.getElementById('errors-summary');
+      var toggle = document.getElementById('errors-toggle');
+      if (!body) return;
+      toggle.addEventListener('click', function () {
+        body.style.display = body.style.display === 'none' ? 'block' : 'none';
+      });
+      function post(path, payload) {
+        return fetch('/api/control/mederrors/' + path, { method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { if (!j.ok) alert(j.error || 'failed'); refresh(); });
+      }
+      function chip(e) {
+        var imp = e.impact, st = e.impact_state;
+        var stateTxt = e.status.toUpperCase() +
+          (st ? (st.stabilized_at ? ' · impact stabilized' : ' · IMPACT LIVE') : '');
+        var d = document.createElement('div');
+        d.style.cssText = 'border:1px solid #c3cedd;border-radius:8px;padding:8px 10px;margin:6px 0;background:#fbfcfe;font-size:13px;';
+        var html = '<b>' + e.id + ' · ' + (e.payload.display || '') + '</b>' +
+          '<div class="muted small">' + stateTxt +
+          (imp ? ' · impact: ' + imp.profile + '/' + imp.severity + ' (' + imp.trigger + ')' : ' · no impact configured') +
+          (e.note ? ' · note: ' + e.note : '') + '</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">';
+        if (e.status !== 'resolved') {
+          if (imp && !st) html += '<button data-act="trigger" data-id="' + e.id + '"' +
+            (imp.severity === 'severe' ? ' data-severe="1"' : '') + '>⚡ Trigger impact</button>';
+          if (st && !st.stabilized_at) html += '<button data-act="stabilize" data-id="' + e.id + '">🩺 Stabilize</button>';
+          html += '<button data-act="caught" data-id="' + e.id + '">✅ Caught</button>' +
+                  '<button data-act="missed" data-id="' + e.id + '">❌ Missed</button>' +
+                  '<button data-act="disarm" data-id="' + e.id + '">↩ Disarm</button>';
+        }
+        html += '</div>';
+        d.innerHTML = html;
+        return d;
+      }
+      function refresh() {
+        fetch('/api/control/mederrors').then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j.ok) { summary.textContent = ''; return; }
+            var errs = j.errors || [];
+            var open = errs.filter(function (e) { return e.status !== 'resolved'; }).length;
+            summary.textContent = errs.length
+              ? '· ' + open + ' active / ' + errs.length + ' staged' : '· none staged';
+            body.innerHTML = '';
+            if (!errs.length) {
+              body.innerHTML = '<p class="muted small">Nothing staged. Build one from the Setup page (⚠️ Build a staged error).</p>';
+              return;
+            }
+            errs.forEach(function (e) { body.appendChild(chip(e)); });
+            body.querySelectorAll('button[data-act]').forEach(function (b) {
+              b.addEventListener('click', function () {
+                var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
+                if (act === 'trigger') {
+                  var severe = b.getAttribute('data-severe') === '1';
+                  if (severe && !confirm('SEVERE impact — the patient will deteriorate sharply. Fire it?')) return;
+                  post('trigger', { error_id: id, confirm_severe: true });
+                } else if (act === 'stabilize') post('stabilize', { error_id: id });
+                else if (act === 'disarm') post('disarm', { error_id: id });
+                else {
+                  var note = prompt('Debrief note (optional):') || '';
+                  post('resolve', { error_id: id, outcome: act, note: note });
+                }
+              });
+            });
+          });
+      }
+      refresh();
+      setInterval(refresh, 5000);
     })();
     </script>
 

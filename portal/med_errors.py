@@ -665,6 +665,57 @@ def allowed_profiles(err_type: str, payload: dict[str, Any]) -> list[str]:
     return list(allowed.get(err_type) or [])
 
 
+# Plain-English display names (the UI never shows internal ids — house rule).
+TYPE_DISPLAY = {
+    "transcription": "Transcription — sound-alike medications",
+    "wrong_dose": "Right medication, wrong dose",
+    "interaction": "Dangerous interaction",
+    "allergy": "Allergy oversight",
+    "admin": "Administration error",
+}
+VECTOR_DISPLAY = {
+    "verbal": "Verbal / phone order (a character speaks it)",
+    "document": "Document conflict (planted in the chart)",
+}
+ENCOUNTER_DISPLAY_SHORT = {
+    "report": "During report / handoff",
+    "charting": "During charting review",
+    "prep": "Preparing for med pass",
+    "med_pass": "During the med pass",
+}
+
+
+def taxonomy() -> dict[str, Any]:
+    """The wizard's option tree (step 1–3), display-named, vectors filtered per
+    the instructor's taxonomy."""
+    return {
+        "types": [{"id": t, "display": TYPE_DISPLAY[t],
+                   "vectors": [{"id": v, "display": VECTOR_DISPLAY[v]}
+                               for v in VECTORS_BY_TYPE[t]]} for t in TYPES],
+        "encounters": [{"id": e, "display": ENCOUNTER_DISPLAY_SHORT[e]}
+                       for e in ENCOUNTERS],
+        "severities": list(SEVERITIES),
+        "triggers": [
+            {"id": "manual", "display": "I trigger it (button in the Live window)"},
+            {"id": "on_administer",
+             "display": "Automatically when the staged med is administered"},
+        ],
+    }
+
+
+def impact_menu(err_type: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Step-5 menu BEFORE arming: curated profiles for this candidate payload,
+    with per-tier previews (symptoms/behavior/exact staged vitals)."""
+    profiles = _impact_catalog().get("profiles") or {}
+    out = []
+    for pid in allowed_profiles(err_type, payload):
+        prof = profiles.get(pid)
+        if prof:
+            out.append({"profile": pid, "display": str(prof.get("display") or pid),
+                        "tiers": prof.get("tiers") or {}})
+    return out
+
+
 def impact_options(session_id: str, error_id: str) -> list[dict[str, Any]]:
     """The S5 wizard's step-5 menu: profiles this armed error may cause, with
     per-tier symptom/vitals previews (plain-English review material)."""

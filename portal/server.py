@@ -167,6 +167,10 @@ vrai_faces.attach(app, templates)
 from . import med_routes as _med_routes  # noqa: E402
 _med_routes.attach(app)
 
+# FR-008 S5 — staged-error instructor API (wizard + live controls).
+from . import med_error_routes as _med_error_routes  # noqa: E402
+_med_error_routes.attach(app)
+
 # ADR-0038 — room-local STT: the Mac transcribes for the audio-only stations
 # (trainee audio crosses the LAN to THIS portal only; transcribed in memory,
 # discarded). Warm the model off-thread so the first take doesn't pay the load.
@@ -1410,6 +1414,19 @@ async def control_setup(
     """FR-005 — Scenario Setup (stage 1): devices, medications, skins/voices →
     ▶ Start scenario (opens Live Operations in a new window)."""
     return await _control_stage_page(request, join, patient_persona_id, None, "setup")
+
+
+@app.get("/portal/control/errors")
+async def control_errors_builder(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-008 S5 — the staged-error BUILDER (own page, reached from Setup): a
+    six-step structured wizard (type → vector → encounter → grounded payload →
+    optional impact → review-and-arm). Bounded by construction — every choice
+    comes from the catalog ∩ the session's chart; free text is the debrief note
+    only. Armed errors are managed from the Live window's status card."""
+    return templates.TemplateResponse(request, "control_errors.html", {})
 
 
 @app.get("/api/control/state")

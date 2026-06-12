@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Staged error builder — MedSim</title>
+<link rel="stylesheet" href="{{ static_v('control.css') }}">
+<style>
+  body { max-width: 880px; margin: 0 auto; padding: 18px; }
+  .wiz-head { display:flex; align-items:baseline; gap:12px; }
+  .wiz-head h1 { font-size: 20px; margin: 0; }
+  .steps { display:flex; gap:6px; margin: 14px 0 18px; flex-wrap: wrap; }
+  .step-pip { padding: 4px 10px; border-radius: 14px; background:#e8edf6; color:#41566e;
+              font-size: 12.5px; font-weight: 600; }
+  .step-pip.active { background:#143b8a; color:#fff; }
+  .step-pip.done { background:#1d6b43; color:#fff; }
+  .wiz-card { background:#fff; border:1px solid #c3cedd; border-radius:10px;
+              padding:16px 18px; margin-bottom:14px; }
+  .wiz-card h2 { font-size: 15px; margin: 0 0 10px; color:#0a234f; }
+  .opt { display:block; border:1px solid #c3cedd; border-radius:8px; padding:10px 12px;
+         margin:8px 0; cursor:pointer; background:#fbfcfe; }
+  .opt:hover { border-color:#143b8a; }
+  .opt input { margin-right: 8px; }
+  .opt .why { display:block; color:#41566e; font-size: 12px; margin-top: 2px; }
+  .risk { color:#a02020; font-weight:700; }
+  .nav { display:flex; justify-content: space-between; margin-top: 10px; }
+  button { padding: 9px 18px; border-radius: 8px; border: 1px solid #c3cedd;
+           background:#fff; font-size: 14px; cursor:pointer; }
+  button.primary { background:#143b8a; color:#fff; border-color:#143b8a; }
+  button.arm { background:#a02020; color:#fff; border-color:#a02020; font-weight:700; }
+  button[disabled] { opacity:.45; cursor:default; }
+  .review { background:#eef3ff; border:1px solid #b9c9f0; border-radius:8px;
+            padding:12px 14px; font-size: 14px; line-height: 1.55; }
+  .tiers { font-size: 12.5px; color:#41566e; margin: 4px 0 0 24px; }
+  .note-row textarea { width:100%; min-height:54px; border:1px solid #c3cedd;
+                       border-radius:8px; padding:8px; font: inherit; }
+  .err-banner { background:#fde8e8; border:1px solid #e0a0a0; color:#7a1212;
+                border-radius:8px; padding:8px 12px; margin:10px 0; display:none; }
+  .muted { color:#41566e; font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wiz-head">
+  <h1>⚠️ Staged error builder</h1>
+  <a href="/portal/control/setup" style="font-size:13px">← back to Setup</a>
+</div>
+<p class="muted">A structured path: every choice comes from the reviewed catalog and this
+session's own chart — nothing free-form. Nothing is staged until you confirm the final
+summary. Already-armed errors are managed from the Live window.</p>
+
+<div class="steps" id="pips"></div>
+<div class="err-banner" id="errbox"></div>
+<div id="wiz"></div>
+
+<script>
+(function () {
+  var TAX = null, state = { step: 1, type: null, vector: null, encounter: null,
+                            candidate: null, wantImpact: false, profile: null,
+                            severity: null, trigger: 'manual', confirmed: false,
+                            note: '' };
+  var candidates = [], profiles = [];
+  var STEPS = ['Error type', 'How it arrives', 'When it appears', 'The specific error',
+               'Patient impact', 'Review & arm'];
+
+  function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
+  function showErr(m) { var b = document.getElementById('errbox');
+    b.textContent = m; b.style.display = m ? 'block' : 'none'; }
+
+  function pips() {
+    var box = document.getElementById('pips'); box.innerHTML = '';
+    STEPS.forEach(function (s, i) {
+      var c = i + 1 < state.step ? 'done' : (i + 1 === state.step ? 'active' : '');
+      box.appendChild(el('<span class="step-pip ' + c + '">' + (i + 1) + ' · ' + s + '</span>'));
+    });
+  }
+
+  function nav(canNext, nextLabel) {
+    return '<div class="nav">' +
+      (state.step > 1 ? '<button id="back">← Back</button>' : '<span></span>') +
+      '<button id="next" class="' + (state.step === 6 ? 'arm' : 'primary') + '"' +
+      (canNext ? '' : ' disabled') + '>' + (nextLabel || 'Next →') + '</button></div>';
+  }
+
+  function radio(name, items, sel, fmt) {
+    return items.map(function (it, i) {
+      var v = fmt(it);
+      return '<label class="opt"><input type="radio" name="' + name + '" value="' + i + '"' +
+        (sel === i ? ' checked' : '') + '>' + v.label +
+        (v.why ? '<span class="why">' + v.why + '</span>' : '') + '</label>';
+    }).join('');
+  }
+
+  function render() {
+    pips(); showErr('');
+    var w = document.getElementById('wiz'); var h = '';
+
+    if (state.step === 1) {
+      h = '<div class="wiz-card"><h2>What kind of error is the student meant to catch?</h2>' +
+        radio('type', TAX.types, TAX.types.findIndex(function (t) { return state.type && t.id === state.type.id; }),
+          function (t) { return { label: t.display }; }) + nav(!!state.type) + '</div>';
+    } else if (state.step === 2) {
+      h = '<div class="wiz-card"><h2>How does it arrive? <span class="muted">(only realistic routes for this type)</span></h2>' +
+        radio('vector', state.type.vectors, state.type.vectors.findIndex(function (v) { return state.vector === v.id; }),
+          function (v) { return { label: v.display }; }) + nav(!!state.vector) + '</div>';
+    } else if (state.step === 3) {
+      h = '<div class="wiz-card"><h2>When should the student run into it?</h2>' +
+        radio('enc', TAX.encounters, TAX.encounters.findIndex(function (e) { return state.encounter === e.id; }),
+          function (e) { return { label: e.display }; }) + nav(!!state.encounter) + '</div>';
+    } else if (state.step === 4) {
+      h = '<div class="wiz-card"><h2>The specific error <span class="muted">(grounded in THIS session\'s chart and formulary)</span></h2>' +
+        (candidates.length
+          ? radio('cand', candidates, candidates.indexOf(state.candidate),
+              function (c) { return { label: c.display, why: c.note || '' }; })
+          : '<p class="risk">No injectable suggestions for this combination in the current session ' +
+            '(e.g. an allergy error needs a documented allergy). Go back and pick differently.</p>') +
+        nav(!!state.candidate) + '</div>';
+    } else if (state.step === 5) {
+      var tiersTxt = function (p) {
+        return ['mild', 'moderate', 'severe'].map(function (tier) {
+          var t = p.tiers[tier] || {};
+          var v = Object.entries(t.vitals || {}).map(function (kv) { return kv[0] + ' ' + kv[1]; }).join(', ');
+          return '<div class="tiers"><b>' + tier + ':</b> ' + (t.symptoms || '') +
+                 (v ? ' <i>(staged vitals: ' + v + ')</i>' : '') + '</div>';
+        }).join('');
+      };
+      h = '<div class="wiz-card"><h2>Patient impact <span class="muted">(optional — what happens if the error plays out)</span></h2>' +
+        '<label class="opt"><input type="radio" name="imp" value="none"' + (!state.wantImpact ? ' checked' : '') +
+        '>No impact — the error is catch-only</label>' +
+        (profiles.length ? profiles.map(function (p, i) {
+          return '<label class="opt"><input type="radio" name="imp" value="' + i + '"' +
+            (state.wantImpact && state.profile === p.profile ? ' checked' : '') + '>' +
+            p.display + tiersTxt(p) + '</label>';
+        }).join('') : '<p class="muted">No curated consequences for this error type/payload.</p>') +
+        (state.wantImpact ? (
+          '<div style="margin-top:10px"><b>Severity:</b> ' +
+          ['mild', 'moderate', 'severe'].map(function (sv) {
+            return '<label style="margin-right:14px"><input type="radio" name="sev" value="' + sv + '"' +
+              (state.severity === sv ? ' checked' : '') + '> ' + sv + (sv === 'severe' ? ' <span class="risk">(double-confirmed)</span>' : '') + '</label>';
+          }).join('') +
+          '</div><div style="margin-top:8px"><b>Trigger:</b> ' +
+          TAX.triggers.map(function (tg) {
+            return '<label style="display:block;margin:4px 0"><input type="radio" name="trg" value="' + tg.id + '"' +
+              (state.trigger === tg.id ? ' checked' : '') + '> ' + tg.display + '</label>';
+          }).join('') +
+          (state.severity === 'severe' && state.trigger === 'on_administer'
+            ? '<label class="opt" style="border-color:#a02020"><input type="checkbox" id="confirmSevere"' +
+              (state.confirmed ? ' checked' : '') + '> <span class="risk">I confirm a SEVERE reaction may fire automatically on administration.</span></label>'
+            : '') + '</div>'
+        ) : '') + nav(!state.wantImpact || (state.profile && state.severity &&
+              !(state.severity === 'severe' && state.trigger === 'on_administer' && !state.confirmed))) + '</div>';
+    } else {
+      var c = state.candidate, impTxt = 'None — catch-only.';
+      if (state.wantImpact) {
+        var p = profiles.filter(function (x) { return x.profile === state.profile; })[0] || {};
+        var t = (p.tiers || {})[state.severity] || {};
+        impTxt = (p.display || state.profile) + ' — <b>' + state.severity + '</b>. ' +
+          'Patient will show: ' + (t.symptoms || '') + '. Staged vitals: ' +
+          Object.entries(t.vitals || {}).map(function (kv) { return kv[0] + ' ' + kv[1]; }).join(', ') +
+          '. Fires: ' + (state.trigger === 'manual' ? 'when you press Trigger in the Live window' +
+          (state.severity === 'severe' ? ' (it will ask you to confirm again)' : '')
+          : 'automatically when the staged med is administered') + '.';
+      }
+      h = '<div class="wiz-card"><h2>Review — exactly what will happen</h2><div class="review">' +
+        '<b>Error:</b> ' + state.type.display + '<br>' +
+        '<b>The specific slip:</b> ' + c.display + '<br>' +
+        '<b>Arrives via:</b> ' + TAX.types.filter(function (t) { return t.id === state.type.id; })[0]
+          .vectors.filter(function (v) { return v.id === state.vector; })[0].display + '<br>' +
+        '<b>Student encounters it:</b> ' + TAX.encounters.filter(function (e) { return e.id === state.encounter; })[0].display + '<br>' +
+        '<b>Patient impact:</b> ' + impTxt + '<br>' +
+        '<b>Reversal:</b> Disarm restores any chart edit exactly; Stabilize walks vitals back; ' +
+        'the character corrects itself when properly challenged.</div>' +
+        '<div class="note-row" style="margin-top:10px"><b>Note for the debrief (optional):</b>' +
+        '<textarea id="note">' + (state.note || '') + '</textarea></div>' +
+        nav(true, '⚠️ ARM this error') + '</div>';
+    }
+    w.innerHTML = h;
+    wire();
+  }
+
+  function wire() {
+    var back = document.getElementById('back');
+    if (back) back.onclick = function () { state.step--; render(); };
+    var next = document.getElementById('next');
+    if (next) next.onclick = onNext;
+    document.querySelectorAll('input[name=type]').forEach(function (r) {
+      r.onchange = function () { state.type = TAX.types[+r.value]; state.vector = null; state.candidate = null; render(); };
+    });
+    document.querySelectorAll('input[name=vector]').forEach(function (r) {
+      r.onchange = function () { state.vector = state.type.vectors[+r.value].id; render(); };
+    });
+    document.querySelectorAll('input[name=enc]').forEach(function (r) {
+      r.onchange = function () { state.encounter = TAX.encounters[+r.value].id; render(); };
+    });
+    document.querySelectorAll('input[name=cand]').forEach(function (r) {
+      r.onchange = function () { state.candidate = candidates[+r.value]; };
+    });
+    document.querySelectorAll('input[name=imp]').forEach(function (r) {
+      r.onchange = function () {
+        if (r.value === 'none') { state.wantImpact = false; state.profile = null; }
+        else { state.wantImpact = true; state.profile = profiles[+r.value].profile;
+               if (!state.severity) state.severity = 'moderate'; }
+        render();
+      };
+    });
+    document.querySelectorAll('input[name=sev]').forEach(function (r) {
+      r.onchange = function () { state.severity = r.value; render(); };
+    });
+    document.querySelectorAll('input[name=trg]').forEach(function (r) {
+      r.onchange = function () { state.trigger = r.value; render(); };
+    });
+    var cs = document.getElementById('confirmSevere');
+    if (cs) cs.onchange = function () { state.confirmed = cs.checked; render(); };
+    var note = document.getElementById('note');
+    if (note) note.onchange = function () { state.note = note.value; };
+  }
+
+  function onNext() {
+    if (state.step === 3) {
+      fetch('/api/control/mederrors/suggest?type=' + state.type.id + '&vector=' + state.vector +
+            '&encounter=' + state.encounter)
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) { showErr(j.error); return; }
+          candidates = j.candidates; state.candidate = null; state.step = 4; render();
+        });
+      return;
+    }
+    if (state.step === 4) {
+      fetch('/api/control/mederrors/impacts', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: state.type.id, payload: state.candidate }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { profiles = j.ok ? j.profiles : []; state.step = 5; render(); });
+      return;
+    }
+    if (state.step === 6) {
+      var body = { type: state.type.id, vector: state.vector, encounter: state.encounter,
+                   payload: state.candidate, note: state.note };
+      if (state.wantImpact) body.impact = { profile: state.profile, severity: state.severity,
+                                            trigger: state.trigger, confirmed: state.confirmed };
+      fetch('/api/control/mederrors/arm', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) { showErr(j.error); return; }
+          document.getElementById('wiz').innerHTML =
+            '<div class="wiz-card"><h2>✅ Armed</h2><p>' + j.error_rec.payload.display +
+            ' is staged. Manage it (trigger / stabilize / caught / missed) from the ' +
+            '<b>Live window</b>. You can build another, or close this page.</p>' +
+            '<button class="primary" onclick="location.reload()">Build another</button></div>';
+          document.getElementById('pips').innerHTML = '';
+        });
+      return;
+    }
+    state.step++; render();
+  }
+
+  fetch('/api/control/mederrors').then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (!j.ok) { showErr(j.error + ' — set up and start a session first.'); return; }
+      TAX = j.taxonomy; render();
+    });
+})();
+</script>
+</body>
+</html>
