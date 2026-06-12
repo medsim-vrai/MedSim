@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FR-009 — Shift Turnover Training: Research Report &amp; Implementation Strategy</title>
+<style>
+  @page { size: letter; margin: 18mm 16mm; }
+  body { font: 10.5pt/1.5 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #15202b; margin: 0; }
+  h1 { font-size: 19pt; margin: 0 0 2pt; color: #0a234f; }
+  .sub { color: #41566e; font-size: 10.5pt; margin-bottom: 10pt; }
+  h2 { font-size: 13pt; color: #0a234f; border-bottom: 2px solid #0a234f; padding-bottom: 2pt; margin: 18pt 0 6pt; }
+  h3 { font-size: 11pt; color: #143b8a; margin: 10pt 0 3pt; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt; font-size: 9.5pt; }
+  th { background: #0a234f; color: #fff; text-align: left; padding: 4pt 6pt; }
+  td { border: 1px solid #c3cedd; padding: 4pt 6pt; vertical-align: top; }
+  tr:nth-child(even) td { background: #f2f5fa; }
+  .meta { background: #eef2f9; border: 1px solid #c3cedd; border-radius: 6px; padding: 8pt 10pt; font-size: 9.5pt; margin: 8pt 0 14pt; }
+  .meta b { color: #0a234f; }
+  .warn { background: #fff7e8; border: 1px solid #e3c47a; border-radius: 6px; padding: 8pt 10pt; font-size: 9.5pt; margin: 8pt 0; }
+  .risk { color: #a02020; font-weight: 700; }
+  .ok { color: #1d6b43; font-weight: 700; }
+  ul, ol { margin: 4pt 0 8pt 16pt; padding: 0; }
+  li { margin: 2.5pt 0; }
+  .ref { font-size: 8.5pt; color: #41566e; margin: 2pt 0; }
+  .pill { display: inline-block; background: #143b8a; color: #fff; border-radius: 8px; padding: 0 7pt; font-size: 8.5pt; font-weight: 700; }
+  .pagebreak { page-break-before: always; }
+  blockquote { margin: 6pt 0 6pt 10pt; padding-left: 10pt; border-left: 3px solid #143b8a; color: #2a3a4e; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>Shift Turnover Training — Research Report &amp; Implementation Strategy</h1>
+<div class="sub">MedSim V8 / VRAI Faces · Functional Requirement <b>FR-009</b> · Prepared for instructor review</div>
+
+<div class="meta">
+<b>Date:</b> 2026-06-12 &nbsp;·&nbsp; <b>Status:</b> DRAFT — awaiting instructor ratification &nbsp;·&nbsp;
+<b>Companion plan:</b> docs/PLAN-2026-06-12-fr009-shift-handoff.md &nbsp;·&nbsp;
+<b>Research basis:</b> 22 sources (AHRQ, PubMed Central, Wiley JAN, AHRQ TeamSTEPPS), 109 extracted claims, 5 search angles<br>
+<b>Builds on shipped machinery:</b> chart engine (MAR, allergies, vitals trends, notes, care team) · staged-error system (FR-008, incl. the "report" encounter) ·
+room-local speech transcription (FR-006b) · AI character prompting (FR-001/002/003) · comparison/rubric store · debrief builder · two-stage control room (FR-005)
+</div>
+
+<h2>1 · The requirement (instructor, 2026-06-12)</h2>
+<blockquote>
+Critical training at the start and end of the shift: shift turnover. For single-patient or
+multiple-patient sessions there needs to be an end-of-shift handoff. This can be a scenario
+itself, built using the other scenarios. The existing portfolio — and the future expanded
+portfolio — provides the context: current patient state, concerns, key medications and
+treatments, things to look out for. Used to check what follow-up questions a student
+generates if oncoming, or how they respond if off-going. After the handoff, a student survey
+the student answers with recorded verbal responses, evaluated on their perceptions versus
+what detail and questions actually came up, key gaps, and whether any high-risk elements were
+missed that would put a patient at risk. The oncoming/off-going nurse or charge nurse comes
+from the existing character list.
+</blockquote>
+
+<h2>2 · Executive summary</h2>
+<ul>
+<li><b>Recommended framework:</b> an SBAR-skeleton element checklist (nursing-native, what students meet in practice) <b>enriched with the two elements the evidence says matter most and students miss most</b>: an up-front illness-severity statement and a closing receiver <i>synthesis</i> (read-back) — plus anticipatory guidance ("if X happens, do Y") as a first-class, high-risk element, and an explicit responsibility-transfer moment.</li>
+<li><b>Recommended scoring:</b> binary element-coverage of the handoff transcript against a per-patient ground-truth "context pack" generated from the live chart — the design lesson from validated instruments is that binary coverage scores reliably while "partial credit" does not. AI-assisted scoring, instructor-confirmed, formative not summative.</li>
+<li><b>The survey closes the perception loop:</b> evidence shows self/peer assessment runs systematically high versus external evaluation; the post-handoff verbal survey (answered by voice on the station, transcribed by the room transcriber) captures the student's <i>perception</i>, which the evaluator then sets against the <i>measured</i> coverage map — gaps and missed high-risk elements named explicitly.</li>
+<li><b>Direct synergy with the staged-error system:</b> the handoff IS FR-008's "report" encounter point — an armed discrepancy can ride the handoff, and the survey probes whether the student noticed.</li>
+<li><b>Effort:</b> six stages (H1–H6), all server/portal-side plus one station flow; no new hardware, no new privacy surface (survey audio rides the already-ratified room-local transcription path).</li>
+</ul>
+
+<h2>3 · Research findings</h2>
+<div class="warn"><b>Verification status — read first.</b> The research harness fetched 22 sources and extracted 109 claims, but its adversarial cross-verification stage hit a usage cap and could not complete; the findings below are therefore <b>cited extractions from primary sources, not formally cross-verified</b>. They are internally consistent across independent sources and consistent with the preparer's domain knowledge. Items load-bearing for the design are marked <span class="pill">KEY</span> and recommended for instructor spot-check via the cited link.</div>
+
+<h3>3.1 Framework landscape (what structure to teach)</h3>
+<ul>
+<li><span class="pill">KEY</span> The AHRQ <i>Making Healthcare Safer IV</i> review of structured handoffs rates <b>I-PASS</b> with the strongest certainty of patient-safety benefit (moderate; including RCT evidence) and <b>SBAR</b> lower (low certainty; a third of studies showing no benefit). [1][2]</li>
+<li><span class="pill">KEY</span> The same literature is <b>profession-split</b>: SBAR evidence comes predominantly from nursing handoffs; I-PASS evidence predominantly from physician signout — neither generalizes automatically to the other. For a NURSING shift-report trainer this argues for an SBAR-shaped skeleton carrying I-PASS's strongest elements, not a wholesale I-PASS adoption. [2]</li>
+<li>I-PASS benefits were demonstrated as a <b>bundle</b> — mnemonic + workshop + simulation practice + observation tools — not the mnemonic alone. The platform's contribution is exactly the expensive part of that bundle: repeatable simulated practice with observation. [1]</li>
+<li>Nursing-specific I-PASS adaptations are emerging (e.g., a 2025 <i>Journal of Advanced Nursing</i> pilot structuring oral end-of-shift bedside handover, reporting improved handover quality across ~800 evaluated handovers). The space is converging on hybrid structures — which is what we recommend. [3]</li>
+<li>TeamSTEPPS defines a handoff as transferring <b>information + authority + responsibility</b> — so the checklist ends with an explicit acceptance moment, not just a data dump. [4]</li>
+</ul>
+
+<h3>3.2 Validated assessment instruments (how to score)</h3>
+<table>
+<tr><th>Instrument</th><th>Shape</th><th>What we take from it</th></tr>
+<tr><td><b>Handoff CEX</b> (Yale; validated on nursing shift report)</td><td>6 domains (setting, organization, communication, content, judgment, professionalism) + overall; 9-point scale banded unsatisfactory/satisfactory/superior; paired <b>provider and recipient</b> versions</td><td>The domain list for instructor-facing summary; the precedent that the RECEIVER is assessed too — but its receiver version performed weakest (narrow range, low agreement), so receiver assessment needs its own design (question quality + synthesis), which our oncoming mode provides. [5][6]</td></tr>
+<tr><td><b>SBAR-LA</b> (learner assessment)</td><td>10 items scored <b>binary 0/1</b>; developers abandoned a 0–2 partial-credit scale because raters could not reliably distinguish partial from full</td><td>The central automation lesson: <b>binary element coverage</b> is the reliable scorable unit — exactly what a transcript comparator can do well. [7]</td></tr>
+<tr><td><b>SBAR nursing change-of-shift instrument</b> (content-validated, CVI ≈ 92%)</td><td>Element checklist: vitals, oxygenation, level of consciousness, mobility, drains/catheters, exams, nutrition, dressings, eliminations, medications, complications; allergies under Background</td><td>Seed list for our context-pack elements (merged with I-PASS severity + contingencies). [8]</td></tr>
+</table>
+
+<h3>3.3 What untrained students actually miss (failure modes to target)</h3>
+<ul>
+<li><span class="pill">KEY</span> In 177 simulated signouts, <b>anticipatory guidance / contingency planning was omitted in ~54%</b> (up to 84% for some cases) — the single dominant high-risk omission. [9]</li>
+<li><span class="pill">KEY</span> <b>Receiver synthesis almost never happens spontaneously</b> (1 of 30 participants, once) — receivers ask questions but do not read back. Training must force the synthesis moment; our AI counterpart explicitly asks for it. [9]</li>
+<li>Untrained completeness ran ≈ 52% against an expert element checklist, and completeness correlated strongly with overall quality (R² ≈ 0.9) — <b>supporting checklist-coverage as the automated scoring proxy</b>. [9]</li>
+</ul>
+
+<h3>3.4 The perception gap (why the survey works)</h3>
+<ul>
+<li>Peer/insider ratings of handoff quality run systematically <b>higher than external evaluators'</b> — the published basis for expecting students to overestimate their own completeness. The survey is built to surface exactly that delta: it asks the student to <i>predict</i> their coverage, then the evaluator compares prediction to the measured map. [6]</li>
+</ul>
+
+<h3>3.5 High-risk element list (synthesis of the instruments above)</h3>
+<p>Omissions flagged <span class="risk">HIGH-RISK</span> in the evaluator (the instructor's "would put a patient at risk" list):
+<b>allergies · code status · medication changes</b> (new/held/dose-changed/last-given/due-next, infusions running) · <b>pending results or tasks</b> · <b>lines/drains/access</b> · <b>active safety risks</b> (falls, airway, sepsis watch, bleeding precautions) · <b>anticipatory guidance / contingencies</b> · <b>abnormal vitals trend</b> · any <b>active staged discrepancy</b> (FR-008).</p>
+
+<h2 class="pagebreak">4 · The platform design</h2>
+
+<h3>4.1 The handoff context pack — the ground truth</h3>
+<p>Generated per patient from the live session (chart seed + events + medication board + staged-error state) at handoff time. It is simultaneously: the AI counterpart's knowledge, the completeness rubric, and the debrief artifact.</p>
+<table>
+<tr><th>#</th><th>Element</th><th>Source in the system</th><th>Risk</th></tr>
+<tr><td>1</td><td>Identity &amp; situation (name, age, room, admitting problem, today's story)</td><td>chart banner, chief complaint, encounter</td><td></td></tr>
+<tr><td>2</td><td>Illness severity, one line (stable / watcher / unstable)</td><td>vitals trend vs condition ranges</td><td class="risk">HIGH</td></tr>
+<tr><td>3</td><td>Background: diagnoses, relevant history, <b>allergies</b>, <b>code status</b></td><td>problem list, allergies, code_status</td><td class="risk">HIGH</td></tr>
+<tr><td>4</td><td>Current assessment: latest vitals + trend direction, key labs, focused exam notes</td><td>vitals_baseline + vitals.record events, labs</td><td></td></tr>
+<tr><td>5</td><td>Medications &amp; treatments: new / changed / held / due-soon, infusions running, high-alert flags</td><td>MAR + admin history, med board, IV fluids</td><td class="risk">HIGH</td></tr>
+<tr><td>6</td><td>Lines / drains / access</td><td>chart (iv_fluids, devices)</td><td class="risk">HIGH</td></tr>
+<tr><td>7</td><td>Pending items: orders, labs, consults awaiting</td><td>orders, events</td><td class="risk">HIGH</td></tr>
+<tr><td>8</td><td>Safety risks (falls, airway, bleeding, isolation…)</td><td>condition + overlays + safety_class</td><td class="risk">HIGH</td></tr>
+<tr><td>9</td><td>Anticipatory guidance: "watch for X — if X, then Y"</td><td>condition profile + active staged errors</td><td class="risk">HIGH</td></tr>
+<tr><td>10</td><td>Receiver synthesis (read-back) occurred</td><td>transcript</td><td class="risk">HIGH</td></tr>
+<tr><td>11</td><td>Responsibility transfer explicit ("I've got them")</td><td>transcript</td><td></td></tr>
+</table>
+
+<h3>4.2 Two student roles, one machinery</h3>
+<table>
+<tr><th></th><th>Student OFF-GOING (gives report)</th><th>Student ONCOMING (receives report)</th></tr>
+<tr><td><b>AI counterpart</b></td><td>Oncoming nurse / charge nurse (from the existing character list) — holds the context pack, listens, then probes 2–4 omissions prioritizing high-risk ones, and asks for a synthesis if the student doesn't offer one</td><td>Off-going nurse — delivers report at an instructor-set <b>completeness dial</b>: complete · typical-gaps (the evidence-backed common omissions: anticipatory guidance + a pending item) · staged-error embedded (FR-008 report encounter)</td></tr>
+<tr><td><b>Assessed behavior</b></td><td>Element coverage of what the student SAID + response quality to probes</td><td>The QUESTIONS the student asks (mapped to the gap list), read-back/synthesis, and whether planted gaps/discrepancies were caught</td></tr>
+<tr><td><b>Containment</b></td><td colspan="2">Same rule as the staged-error system: the AI introduces nothing beyond its instructions, never hints anything is staged, stays in character</td></tr>
+</table>
+
+<h3>4.3 Multi-patient mode (charge-nurse turnover)</h3>
+<p>Sequential context packs for 2–3 patients (v1 cap, ratify) + one cross-patient element: <b>prioritization</b> — "who do you see first and why." Builds on the shared-staff investigation (FR-007): one charge-nurse character handles all patients' reports in one conversation.</p>
+
+<h3>4.4 The post-handoff verbal survey</h3>
+<p>Presented on the station immediately after the handoff; the student answers each question by holding to talk; the room transcriber (already ratified, in-room only) writes the answers down. Questions (v1 set, ratify):</p>
+<ol>
+<li>"Overall, how complete was the handoff you just gave/received, 0–10 — and why?" <i>(prediction)</i></li>
+<li>"Name the three most important things you handed off / heard." <i>(prioritization recall)</i></li>
+<li>"What, if anything, do you think you missed or wish you'd asked?" <i>(self-identified gaps)</i></li>
+<li>"What should be watched for on this patient over the next shift?" <i>(anticipatory guidance recall — the #1 evidence-backed omission)</i></li>
+<li>"Was there anything in the chart or report that didn't match what you heard or read?" <i>(discrepancy probe — fires the FR-008 comparison when an error was staged)</i></li>
+<li><i>Oncoming only:</i> "What is your first action for this patient?" <i>(synthesis into plan)</i></li>
+</ol>
+
+<h3>4.5 Evaluation &amp; debrief</h3>
+<ul>
+<li><b>Coverage map:</b> each pack element scored binary (said / not said) against the handoff transcript — AI-assisted on the existing comparison-store pattern, every line instructor-confirmable before it is shown to the student. High-risk misses called out in red.</li>
+<li><b>Perception delta:</b> the survey's self-rating and claimed coverage set against the measured map — "you rated yourself 8/10 and named meds and vitals; the record shows allergies, the pending culture, and the watch-for items were never mentioned."</li>
+<li><b>Receiver metrics (oncoming):</b> questions asked vs the gap list; synthesis performed y/n; planted gap/discrepancy caught y/n.</li>
+<li><b>Debrief artifact:</b> one section in the existing debrief surface — pack, transcript, coverage map, survey answers, perception delta, high-risk misses — printable for post-sim discussion. Formative, not a grade (recommended).</li>
+</ul>
+
+<h3>4.6 Composition (the instructor's "scenario built from scenarios")</h3>
+<p>Two entry points, same engine: <b>(a)</b> a handoff PHASE appended to any live session ("end the shift" button in the control room); <b>(b)</b> a STANDALONE handoff session built from the charts of one or more existing scenarios — pick patients on the Setup stage, the engine seeds their charts, the session IS the turnover.</p>
+
+<h2>5 · Implementation strategy</h2>
+<table>
+<tr><th>Stage</th><th>Scope</th><th>Builds on (already shipped)</th><th>Effort</th></tr>
+<tr><td><b>H1</b></td><td>Context-pack generator + high-risk tagging + ground-truth element list</td><td>chart seed/fold, med board, FR-008 state</td><td>M</td></tr>
+<tr><td><b>H2</b></td><td>Handoff session mode + AI counterpart prompts (receiver-probe / giver-with-dial, containment, synthesis ask, responsibility transfer)</td><td>FR-001/002/003 prompt machinery, persona list</td><td>M</td></tr>
+<tr><td><b>H3</b></td><td>Multi-patient sequencing + prioritization element</td><td>H1–H2, FR-007 direction</td><td>M</td></tr>
+<tr><td><b>H4</b></td><td>Verbal survey station flow (question sequence → PTT answers → storage)</td><td>FR-006b room transcription, audio station</td><td>M</td></tr>
+<tr><td><b>H5</b></td><td>Evaluation engine (coverage map, survey comparison, perception delta, instructor confirm) + debrief section</td><td>comparison store, debrief builder</td><td>L</td></tr>
+<tr><td><b>H6</b></td><td>Control-room integration (Setup: phase/role/dial/characters · Live: start-handoff + status) + field validation script</td><td>FR-005 two-stage control room</td><td>M</td></tr>
+</table>
+<p><b>Sequencing:</b> FR-008's remaining stages (S5 builder page, S6 debrief) come first — H5/H6 share those surfaces. Then H1→H6 in order; H1+H2 alone already yield a usable single-patient handoff drill.</p>
+
+<h2>6 · Risks &amp; open questions</h2>
+<ul>
+<li><b>Scoring validity:</b> binary coverage measures completeness, not judgment quality — mitigated by instructor confirmation and formative use. <i>Ratify: formative-only for v1.</i></li>
+<li><b>AI receiver question quality:</b> the probing behavior needs prompt iteration in field tests (same path FR-001's decisive-doctor took).</li>
+<li><b>Survey transcription accuracy:</b> drug names in answers ride the existing vocabulary-hints lever; the pack's terms join the hints during survey mode.</li>
+<li><b>Session length (multi-patient):</b> cap at 2–3 patients for v1. <i>Ratify.</i></li>
+<li><b>Verification caveat</b> on the research basis (Section 3 box): key claims flagged for spot-check.</li>
+</ul>
+
+<h2>7 · References</h2>
+<div class="ref">[1] AHRQ Making Healthcare Safer IV — Structured Handoffs rapid review. effectivehealthcare.ahrq.gov/sites/default/files/related_files/structured-handoff-rapid-research.pdf</div>
+<div class="ref">[2] BMJ Quality &amp; Safety (2025) — MHS IV structured-handoff certainty ratings. pmc.ncbi.nlm.nih.gov/articles/PMC12232517/</div>
+<div class="ref">[3] Journal of Advanced Nursing (2025) — I-PASS-structured bedside nursing handover pilot. onlinelibrary.wiley.com/doi/10.1111/jan.16896</div>
+<div class="ref">[4] AHRQ TeamSTEPPS 3.0 — Handoff (information + authority + responsibility). ahrq.gov/teamstepps-program/curriculum/communication/tools/handoff.html</div>
+<div class="ref">[5] Handoff CEX — nursing shift-report validation. pmc.ncbi.nlm.nih.gov/articles/PMC3504166/</div>
+<div class="ref">[6] Handoff CEX — multi-site validation, rater effects, receiver-version limits. pmc.ncbi.nlm.nih.gov/articles/PMC3621018/</div>
+<div class="ref">[7] SBAR-LA — 10-item binary learner-assessment rubric. ncbi.nlm.nih.gov/pmc/articles/PMC8520891/</div>
+<div class="ref">[8] SBAR change-of-shift instrument — content validation + element checklist. ncbi.nlm.nih.gov/pmc/articles/PMC9749775/</div>
+<div class="ref">[9] Simulated signout analysis (2024, n=177) — contingency omissions, receiver synthesis, completeness↔quality. ncbi.nlm.nih.gov/pmc/articles/PMC11430516/</div>
+<div class="ref">Additional consulted sources (13 more, incl. TeamSTEPPS curriculum pages, simulation-pedagogy and multi-patient handoff literature) are listed in the research run log.</div>
+
+</body>
+</html>

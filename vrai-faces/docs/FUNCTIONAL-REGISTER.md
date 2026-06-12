@@ -368,6 +368,38 @@ quietly on this hardware (model loads but inference yields empty), (b) MediaReco
 codec/decodeAudioData mismatch on this Chrome build, (c) mic permission/route to the wrong input,
 (d) playback-side autoplay gating (if step 2 is also silent).
 
+## FR-009 (P1) — Shift turnover / handoff training (filed 2026-06-12, deep research commissioned)
+
+**Asked (instructor, near-verbatim):** Critical training at the start and end of the shift:
+SHIFT TURNOVER. For single-patient or multiple-patient sessions there needs to be an
+end-of-shift handoff. This can be a scenario ITSELF, built using the other scenarios. The
+existing portfolio (and the future expanded portfolio) provides the context — current patient
+state, concerns, key medications and treatments, things to look out for. Used two ways: check
+what follow-up questions a student GENERATES if oncoming, or how they RESPOND if off-going.
+After the handoff, a STUDENT SURVEY the student answers with recorded VERBAL responses, then
+evaluated: their perceptions versus what detail and questions actually came up, key gaps, and
+whether any high-risk elements were missed that would put a patient at risk. The
+oncoming/off-going nurse or charge nurse comes from the existing character list.
+
+**Filed assets to build on:** chart seed already carries the handoff substance (chief
+complaint, problems, MAR + admin history, vitals trend, allergies, care_team, notes incl. the
+FR-008 staged SBAR note machinery); FR-008 report-encounter errors can be EMBEDDED in a
+handoff (catch-the-discrepancy during turnover); room-local STT (FR-006b) records + transcribes
+the verbal survey; the comparison/rubric store (ehr_db save_comparison) and debrief surface
+exist; personas list carries nurse/charge-nurse characters; FR-007 (shared staff across
+patients) intersects for the multi-patient mode.
+
+**Status (2026-06-12):** Research DONE (22 sources / 109 extracted claims; NOTE: the
+adversarial-verification stage hit a usage cap — findings are cited primary-source extractions
+flagged for instructor spot-check, key claims marked in the report). Plan WRITTEN
+(`docs/PLAN-2026-06-12-fr009-shift-handoff.md`, stages H1–H6) + **PDF strategy report
+delivered** (`research/FR-009_shift-handoff-strategy.pdf`, copy on the Desktop). Design core:
+SBAR skeleton + I-PASS severity/synthesis + contingencies as first-class high-risk element;
+per-patient context pack as ground truth; off-going/oncoming modes; completeness dial;
+6-question verbal survey via room STT; binary coverage scoring + perception delta, instructor-
+confirmed, formative. Sequencing: FR-008 S5–S6 first (shared surfaces). **Build awaits
+instructor review of the PDF.**
+
 ## FR-008 (P1) — Instructor-staged medication errors (error-recognition training)
 
 **Asked (2026-06-12, instructor — taxonomy near-verbatim):** medication errors fall into
