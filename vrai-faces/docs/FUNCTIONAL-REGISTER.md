@@ -394,7 +394,13 @@ full adversarial protocol, 3 closed by direct quote-verification at source, 2 re
 from one excluded low-tier source; ZERO refutations against used material across four passes).
 Report finalized with the quantified perception gap (8.1 vs 7.1, p<0.001), the receiver
 read-back mandate + named observation tools, and a training-effectiveness source. Durability
-pack: research/FR-009_research/. Plan WRITTEN
+pack: research/FR-009_research/. **PACKAGE COMPLETE (2026-06-12):** + worked samples
+(FR-009_samples.xlsx — 6 sheets incl. the standalone authoring template; sample context-pack
+PDF; sample evaluation/debrief PDF), + CODING PLAN at implementation grain
+(docs/PLAN-2026-06-12-fr009-coding-plan.md: H1–H6 file-level + SA1–SA3 standalone extraction
+— handoff_core package → handoff-lite app → packaged install; build-once-extract-never-fork),
++ dual-deployment strategy section in the report (§5b + Appendix A). All on the Desktop for
+review. Build starts at FR-008 S5/S6 then H1, on ratification. Plan WRITTEN
 (`docs/PLAN-2026-06-12-fr009-shift-handoff.md`, stages H1–H6) + **PDF strategy report
 delivered** (`research/FR-009_shift-handoff-strategy.pdf`, copy on the Desktop). Design core:
 SBAR skeleton + I-PASS severity/synthesis + contingencies as first-class high-risk element;

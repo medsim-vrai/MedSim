@@ -34,7 +34,7 @@
 
 <div class="meta">
 <b>Date:</b> 2026-06-12 &nbsp;·&nbsp; <b>Status:</b> DRAFT — awaiting instructor ratification &nbsp;·&nbsp;
-<b>Companion plan:</b> docs/PLAN-2026-06-12-fr009-shift-handoff.md &nbsp;·&nbsp;
+<b>Companions:</b> design plan (docs/PLAN-…fr009-shift-handoff.md) · CODING PLAN for Claude Code (docs/PLAN-…fr009-coding-plan.md) · worked samples (Appendix A) &nbsp;·&nbsp;
 <b>Research basis:</b> 22 sources (AHRQ, PubMed Central, Wiley JAN, AHRQ TeamSTEPPS), 109 extracted claims, 5 search angles ·
 <b>Verification (COMPLETE, 2026-06-12):</b> 25 target claims → 20 confirmed at full adversarial protocol · 3 closed by direct source verification (every constituent fact quote-confirmed) · 2 refuted (both from one excluded low-tier source). Zero refutations against anything this report uses.<br>
 <b>Builds on shipped machinery:</b> chart engine (MAR, allergies, vitals trends, notes, care team) · staged-error system (FR-008, incl. the "report" encounter) ·
@@ -171,6 +171,17 @@ from the existing character list.
 </table>
 <p><b>Sequencing:</b> FR-008's remaining stages (S5 builder page, S6 debrief) come first — H5/H6 share those surfaces. Then H1→H6 in order; H1+H2 alone already yield a usable single-patient handoff drill.</p>
 
+<h2>5b · Dual-deployment strategy (module + standalone)</h2>
+<p><b>Principle: build once inside MedSimVRAI, then extract — never fork.</b> The handoff
+trainer ships twice from one codebase, in the same modular stage→gate→commit method as every
+feature before it (full implementation grain in the coding plan):</p>
+<table>
+<tr><th></th><th>In MedSimVRAI (stages H1–H6)</th><th>Standalone "Handoff Trainer" (stages SA1–SA3)</th></tr>
+<tr><td><b>What it is</b></td><td>A session phase / standalone session type inside the existing portal — full chart engine, staged-error synergy, control room, debrief</td><td>A lean install (laptop + browser + microphone): authoring via the Excel template, the AI counterpart, voice survey, printable evaluation — no avatars, devices, or EHR sim</td></tr>
+<tr><td><b>How</b></td><td>H1 pack generator → H2 AI counterpart → H3 multi-patient → H4 voice survey → H5 scoring + debrief → H6 control room</td><td>SA1: extract the pure logic into a <code>handoff_core</code> package (chart access behind a thin interface; zero portal imports — proven by tests). SA2: a minimal app around it; patients authored by filling the samples workbook (sheet 2 = one patient) or pasting a chart summary; voice rides the same local-transcription posture (audio never leaves the host). SA3: packaged install with the workbook template as the starter kit.</td></tr>
+<tr><td><b>Why this order</b></td><td colspan="2">The module ships first and gets field-validated inside the full system; the extraction then carves a PROVEN core, and the standalone inherits verified behavior instead of reimplementing it. One evidence base, one rubric, two products.</td></tr>
+</table>
+
 <h2>6 · Risks &amp; open questions</h2>
 <ul>
 <li><b>Scoring validity:</b> binary coverage measures completeness, not judgment quality — mitigated by instructor confirmation and formative use. <i>Ratify: formative-only for v1.</i></li>
@@ -179,6 +190,15 @@ from the existing character list.
 <li><b>Session length (multi-patient):</b> cap at 2–3 patients for v1. <i>Ratify.</i></li>
 <li><b>Verification caveat</b> on the research basis (Section 3 box): key claims flagged for spot-check.</li>
 </ul>
+
+<h2>Appendix A · Worked samples (bundled with this report)</h2>
+<table>
+<tr><th>File</th><th>What it shows</th></tr>
+<tr><td><b>FR-009_samples.xlsx</b></td><td>Six sheets: ① the 11-element scoring rubric with high-risk flags and evidence basis · ② a complete sample context pack (fictional patient — Margaret Hale, CAP, penicillin allergy; this sheet doubles as the STANDALONE AUTHORING TEMPLATE) · ③ a scored coverage map of a sample off-going handoff (7/11, four high-risk misses) · ④ the verbal survey with sample transcribed answers and the perception-delta verdicts (self-rating 8/10 vs measured 64% — the published 8.1-vs-7.1 inflation reproduced) · ⑤ a multi-patient prioritization sample (post-op soft BP outranks improving pneumonia) · ⑥ references with verification status.</td></tr>
+<tr><td><b>FR-009_sample_context-pack.pdf</b></td><td>The context pack as the system renders it — simultaneously the AI counterpart's knowledge, the rubric, and the debrief artifact; high-risk rows badged; the AI receiver's armed behavior stated.</td></tr>
+<tr><td><b>FR-009_sample_evaluation.pdf</b></td><td>The debrief artifact: coverage map with transcript evidence, perception-vs-performance table, and auto-generated debrief prompts. Formative; every line instructor-confirmed before the student sees it.</td></tr>
+</table>
+<p class="note" style="font-size:9pt;color:#41566e">All sample clinical content is fictional and exists for instructor review of the FORMAT; the live system generates packs from each session's actual chart.</p>
 
 <h2>7 · References</h2>
 <div class="ref">[1] AHRQ Making Healthcare Safer IV — Structured Handoffs rapid review. effectivehealthcare.ahrq.gov/sites/default/files/related_files/structured-handoff-rapid-research.pdf</div>
