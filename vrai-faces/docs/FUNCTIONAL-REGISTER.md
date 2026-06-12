@@ -337,6 +337,18 @@ wasm path only (skips the extended QDQ rewrite; iPad/WebGPU keeps full optimizat
 Awaiting the post-③ tablet take. Lesson: dev-build ORT on the unpiloted platform = three stacked
 failures, each only visible after the previous one fell.
 
+**FR-008 COMPLETE (2026-06-12): all six stages shipped.** S5 — the staged-error BUILDER
+(own page off Setup: six-step bounded wizard, taxonomy-filtered, grounded suggestions only,
+impact previews with exact staged vitals, severe double-confirm, review-and-arm) + the Live
+window's staged-errors card (trigger / stabilize / caught / missed / disarm; 5s refresh) +
+the instructor API with operator-transcript stamps at every lifecycle action. S6 — the
+debrief now renders the full arc (⚠️ Staged medication errors section: what was planted,
+where, impact, timeline, outcome; missed rows highlighted as discussion anchors) + the
+one-page field script (`docs/FR-008-field-script.md`, five drills — one per error type —
+incl. the auto-on-administer impact + stabilize check). Gates 95→96 portal / 126 client.
+**Awaiting:** the field validation session (script above) + instructor clinical review of
+the two DRAFT catalogs. ↓ History below.
+
 **ROUTE RATIFIED + SHIPPED (2026-06-11, ADR-0038 — FR-006b):** instructor chose **room-local**
 over cloud-primary. The portal Mac transcribes for audio stations: `POST /api/face/stt`
 (faster-whisper **small.en** int8 — a bigger model than any tablet could run), device routing

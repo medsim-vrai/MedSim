@@ -159,6 +159,38 @@
   </div>
 </section>
 
+<!-- ===== FR-008 · Staged medication errors ===== -->
+{% if debrief.staged_errors %}
+<section class="db-section">
+  <h2>⚠️ Staged medication errors <span class="muted small">(instructor-armed teaching errors)</span></h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+    <tr style="text-align:left;background:#0a234f;color:#fff;">
+      <th style="padding:6px 8px;">Error</th><th style="padding:6px 8px;">Staged as</th>
+      <th style="padding:6px 8px;">Timeline</th><th style="padding:6px 8px;">Patient impact</th>
+      <th style="padding:6px 8px;">Outcome</th>
+    </tr>
+    {% for e in debrief.staged_errors %}
+    <tr style="border-bottom:1px solid #c3cedd;{% if e.outcome == 'missed' %}background:#fdf0f0;{% endif %}">
+      <td style="padding:6px 8px;vertical-align:top;"><strong>{{ e.display }}</strong>
+        <div class="muted small">{{ e.type_display }}</div></td>
+      <td style="padding:6px 8px;vertical-align:top;">{{ e.vector_display }}<div class="muted small">{{ e.encounter_display }}</div></td>
+      <td style="padding:6px 8px;vertical-align:top;" class="small">
+        armed {{ e.armed_at or '—' }}{% if e.delivered_at %} · delivered {{ e.delivered_at }}{% endif %}{% if e.triggered_at %} · impact {{ e.triggered_at }}{% endif %}{% if e.impact and e.impact.stabilized_at %} · stabilized {{ e.impact.stabilized_at }}{% endif %}{% if e.resolved_at %} · resolved {{ e.resolved_at }}{% endif %}</td>
+      <td style="padding:6px 8px;vertical-align:top;" class="small">
+        {% if e.impact %}{{ e.impact.profile }} / {{ e.impact.severity }} ({{ e.impact.trigger }}){% else %}—{% endif %}</td>
+      <td style="padding:6px 8px;vertical-align:top;">
+        {% if e.outcome == 'caught' %}<strong style="color:#1d6b43;">✅ CAUGHT</strong>
+        {% elif e.outcome == 'missed' %}<strong style="color:#a02020;">❌ MISSED</strong>
+        {% else %}<span class="muted">{{ e.status }}</span>{% endif %}
+        {% if e.note %}<div class="muted small">{{ e.note }}</div>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p class="muted small" style="margin-top:6px;">Missed high-risk errors are the debrief's
+  primary discussion anchors; the operator transcript carries the full arc stamps.</p>
+</section>
+{% endif %}
+
 <!-- ===== V3 · Documentation alignment ===== -->
 {% if debrief.documentation_alignment %}
 {% set da = debrief.documentation_alignment %}

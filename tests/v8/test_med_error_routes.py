@@ -144,6 +144,30 @@ def test_invalid_axes_and_unknown_ids_surface_cleanly(client) -> None:
     assert r.status_code == 400                                  # bad outcome named
 
 
+def test_debrief_carries_the_staged_error_arc(client) -> None:
+    """FR-008 S6 — the debrief artifact renders the full arc (what was planted,
+    where, impact, outcome) with wall-clock timestamps."""
+    from portal import debrief
+    sess = client._sess
+    cand = client.get("/api/control/mederrors/suggest"
+                      "?type=interaction&vector=document&encounter=med_pass"
+                      ).json()["candidates"][0]
+    eid = client.post("/api/control/mederrors/arm", json={
+        "type": "interaction", "vector": "document", "encounter": "med_pass",
+        "payload": cand}).json()["error_rec"]["id"]
+    client.post("/api/control/mederrors/resolve",
+                json={"error_id": eid, "outcome": "missed", "note": "debrief anchor"})
+    d = debrief.build(sess)
+    arc = d["staged_errors"]
+    assert len(arc) == 1
+    e = arc[0]
+    assert e["outcome"] == "missed" and e["note"] == "debrief anchor"
+    assert e["type_display"] == "Dangerous interaction"
+    assert e["armed_at"] and ":" in e["armed_at"]          # HH:MM
+    assert e["delivered_at"]                               # document vector = immediate
+    assert e["impact"] is None
+
+
 def test_builder_page_renders_for_instructor(client) -> None:
     r = client.get("/portal/control/errors")
     assert r.status_code == 200

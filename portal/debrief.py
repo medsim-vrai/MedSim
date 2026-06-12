@@ -42,6 +42,45 @@ OBJECTIVE_CATEGORIES = (
 # Public API
 # ---------------------------------------------------------------------------
 
+def _staged_errors_section(sess: control_session.ControlSession) -> list[dict[str, Any]]:
+    """FR-008 S6 — the staged-error arc for the debrief: what was planted, where,
+    whether it fired, and whether the student caught it. Times are wall-clock
+    strings (HH:MM) so the template stays dumb. Empty list when nothing staged."""
+    try:
+        from portal import med_errors
+    except Exception:  # noqa: BLE001
+        return []
+
+    def hm(ts: float | None) -> str | None:
+        return time.strftime("%H:%M", time.localtime(ts)) if ts else None
+
+    out: list[dict[str, Any]] = []
+    for rec in med_errors.state(sess.id).get("errors", []):
+        imp = rec.get("impact") or {}
+        ist = rec.get("impact_state") or {}
+        out.append({
+            "id": rec["id"],
+            "type_display": med_errors.TYPE_DISPLAY.get(rec["type"], rec["type"]),
+            "vector_display": med_errors.VECTOR_DISPLAY.get(rec["vector"], rec["vector"]),
+            "encounter_display": med_errors.ENCOUNTER_DISPLAY_SHORT.get(
+                rec["encounter"], rec["encounter"]),
+            "display": rec["payload"].get("display", ""),
+            "status": rec["status"],
+            "outcome": rec.get("outcome"),
+            "note": rec.get("note") or "",
+            "armed_at": hm(rec.get("armed_at")),
+            "delivered_at": hm(rec.get("delivered_at")),
+            "triggered_at": hm(rec.get("triggered_at")),
+            "resolved_at": hm(rec.get("resolved_at")),
+            "impact": ({
+                "profile": imp.get("profile"), "severity": imp.get("severity"),
+                "trigger": imp.get("trigger"),
+                "stabilized_at": hm(ist.get("stabilized_at")),
+            } if imp else None),
+        })
+    return out
+
+
 def build(sess: control_session.ControlSession) -> dict[str, Any]:
     """Build a complete debrief dict from a live or recently-active session."""
     entries = sess.transcript
@@ -70,6 +109,9 @@ def build(sess: control_session.ControlSession) -> dict[str, Any]:
 
     # V6 — Device sections (pump + cabinet activity merged into the timeline).
     device_sections = _device_sections(sess, started, ended)
+
+    # FR-008 S6 — the staged-medication-error arc (empty list when none staged).
+    staged_errors = _staged_errors_section(sess)
 
     return {
         "session_id":        sess.id,
@@ -102,6 +144,7 @@ def build(sess: control_session.ControlSession) -> dict[str, Any]:
         "objective_alignment":       objective_alignment,
         "documentation_alignment":   documentation_alignment,
         "orders_alignment":          orders_alignment,
+        "staged_errors":             staged_errors,
         "ehr_id":                    getattr(sess, "ehr_id", None),
         "charting_locked_at":        getattr(sess, "charting_locked_at", None),
         "transcript":                tagged_entries,
