@@ -1,0 +1,350 @@
+{
+  "summary": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report.",
+  "agentCount": 104,
+  "logs": [
+    "Q: Evidence-based design for NURSING SHIFT-HANDOFF (turnover) TRAINING in a clinica…",
+    "Decomposed into 5 angles: Framework comparative evidence (broad/primary), Validated assessment instruments and psychometrics (academic/technical), Receiver-side behaviors and read-back (under-examined role), Simulation training designs, failure modes, and self-vs-observed gap (practitioner/implementation), Multi-patient and charge-nurse handoff (niche/scenario design)",
+    "Framework comparative evidence (broad/primary): 6 results",
+    "Validated assessment instruments and psychometrics (academic/technical): 6 results",
+    "Receiver-side behaviors and read-back (under-examined role): 6 results",
+    "Simulation training designs, failure modes, and self-vs-observed gap (practitioner/implementation): 6 results",
+    "Multi-patient and charge-nurse handoff (niche/scenario design): 6 results",
+    "Validated assessment instruments and psychometrics (academic/technical): 5 novel (1 filtered)",
+    "Receiver-side behaviors and read-back (under-examined role): 4 novel (2 filtered)",
+    "Simulation training designs, failure modes, and self-vs-observed gap (practitioner/implementation): 3 novel (3 filtered)",
+    "Multi-patient and charge-nurse handoff (niche/scenario design): 4 novel (2 filtered)",
+    "Fetched 22 sources → 108 claims → verifying top 25",
+    "\"The Making Healthcare Safer IV systematic review (…\": 3-0 ✓",
+    "\"The same review rated the evidence that SBAR impro…\": 3-0 ✓",
+    "\"The evidence populations are split by profession: …\": 3-0 ✓",
+    "\"The AHRQ Making Healthcare Safer IV rapid review c…\": 3-0 ✓",
+    "\"In a two-ward Swiss pilot (one surgery, one medici…\": 3-0 ✓",
+    "\"The review explicitly found that the evidence base…\": 3-0 ✓",
+    "\"This study operationalizes a nursing-specific adap…\": 3-0 ✓",
+    "\"The review concludes that I-PASS should be recomme…\": 0-3 ✗",
+    "\"Both SBAR and I-PASS were found effective at incre…\": 0-3 ✗",
+    "\"A 2026 scoping review (9 studies, 2015-2025: 6 US,…\": 3-0 ✓",
+    "\"The review reports concrete quantitative outcomes …\": 3-0 ✓",
+    "[v0:On the RECEIVER side, the review recomme] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:An 18-hour SBAR shift-report training pr] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:An 18-hour SBAR shift-report training pr] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v0:Observed handoff practice quality, score] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:Observed handoff practice quality, score] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:Observed handoff practice quality, score] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"Observed handoff practice quality, scored with a 3…\": 0-0 (3 abstain) ✗",
+    "[v0:The Handoff CEX scores each of its domai] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:The Handoff CEX scores each of its domai] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:The Handoff CEX scores each of its domai] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"The Handoff CEX scores each of its domains (settin…\": 0-0 (3 abstain) ✗",
+    "[v0:The Handoff CEX exists in two role-speci] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:The Handoff CEX exists in two role-speci] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:The Handoff CEX exists in two role-speci] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"The Handoff CEX exists in two role-specific versio…\": 0-0 (3 abstain) ✗",
+    "[v0:Validated specifically on nursing shift ] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:Validated specifically on nursing shift ] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:Validated specifically on nursing shift ] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"Validated specifically on nursing shift report (25…\": 0-0 (3 abstain) ✗",
+    "[v0:Peer evaluators (the handoff participant] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:Peer evaluators (the handoff participant] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:Peer evaluators (the handoff participant] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"Peer evaluators (the handoff participants themselv…\": 0-0 (3 abstain) ✗",
+    "[v0:The Handoff CEX is a structured shift-ha] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:The Handoff CEX is a structured shift-ha] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:The Handoff CEX is a structured shift-ha] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"The Handoff CEX is a structured shift-handoff asse…\": 0-0 (3 abstain) ✗",
+    "[v0:The Handoff CEX has nursing-specific val] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:The Handoff CEX has nursing-specific val] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:The Handoff CEX has nursing-specific val] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"The Handoff CEX has nursing-specific validity evid…\": 0-0 (3 abstain) ✗",
+    "[v0:In the two-site prospective validation (] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:In the two-site prospective validation (] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:In the two-site prospective validation (] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"In the two-site prospective validation (University…\": 0-0 (3 abstain) ✗",
+    "[v0:The SBAR-LA is a 10-item rubric for asse] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:The SBAR-LA is a 10-item rubric for asse] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:The SBAR-LA is a 10-item rubric for asse] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"The SBAR-LA is a 10-item rubric for assessing lear…\": 0-0 (3 abstain) ✗",
+    "[v0:The SBAR-LA showed moderate interrater r] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:The SBAR-LA showed moderate interrater r] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:The SBAR-LA showed moderate interrater r] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"The SBAR-LA showed moderate interrater reliability…\": 0-0 (3 abstain) ✗",
+    "[v0:A SBAR-structured change-of-shift report] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:A SBAR-structured change-of-shift report] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:A SBAR-structured change-of-shift report] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"A SBAR-structured change-of-shift reporting instru…\": 0-0 (3 abstain) ✗",
+    "[v0:An 18-hour SBAR shift-report training pr] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"An 18-hour SBAR shift-report training program (qua…\": 0-0 (3 abstain) ✗",
+    "[v0:The review asserts a specific weakness o] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v1:On the RECEIVER side, the review recomme] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "[v2:On the RECEIVER side, the review recomme] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"On the RECEIVER side, the review recommends that p…\": 0-0 (3 abstain) ✗",
+    "[v2:The review asserts a specific weakness o] failed: You've hit your session limit · resets 1:50pm (America/New_York)",
+    "\"The review asserts a specific weakness of SBAR rel…\": 0-1 (2 abstain) ✗",
+    "Verify done: 25 claims → 9 confirmed, 16 killed",
+    "[synthesize] failed: You've hit your session limit · resets 1:50pm (America/New_York)"
+  ],
+  "result": {
+    "question": "Evidence-based design for NURSING SHIFT-HANDOFF (turnover) TRAINING in a clinical-simulation platform — grounding a feature where a student GIVES or RECEIVES an end-of-shift handoff with an AI nurse/charge-nurse character (single patient or multiple patients), then completes a post-handoff VERBAL self-assessment survey that is scored against what actually happened in the handoff transcript.\n\nResearch questions:\n1. Which handoff frameworks dominate nursing education and practice in 2024–2026 — SBAR, I-PASS (nursing adaptations), ISBARR/ISBARQ, others? Evidence on which produces better information transfer and patient-safety outcomes for NURSING shift report specifically (not only physician signout).\n2. Validated ASSESSMENT instruments/rubrics for handoff quality (e.g., Handoff CEX, I-PASS adherence checklists, SBAR scoring rubrics): their items, scales, reliability, and which elements are treated as HIGH-RISK omissions (med changes, pending results, code status, allergies, lines/access, fall/airway/safety risks, anticipatory guidance).\n3. The RECEIVER side: what questions should an oncoming nurse ask; evidence on read-back/check-back and cross-checking behaviors; how receiver competence is assessed.\n4. Simulation-based handoff training designs (pre-brief → structured handoff → debrief): published outcomes and the common student failure modes (omissions, poor prioritization, missing anticipatory guidance, data dumps without synthesis).\n5. Self-assessment versus observed performance in handoff training: evidence on perception gaps (students overestimating completeness), and reflection/survey instrument designs that compare self-report against transcript or checklist data.\n6. MULTI-PATIENT handoff (charge-nurse / team turnover): published approaches for sequential multi-patient report and cross-patient prioritization.\n\nDeliverables: (a) recommended framework + element checklist for this platform (single- AND multi-patient modes) with the high-risk element list; (b) a scoring-rubric design (dimensions, anchors) suitable for automated transcript-based scoring with instructor confirmation; (c) recommended post-handoff verbal survey questions that expose perception-vs-performance gaps; (d) key design pitfalls for simulated handoff training; (e) full citations.",
+    "summary": "Synthesis step was skipped or failed — returning 9 verified claims unmerged.",
+    "findings": [],
+    "confirmed": [
+      {
+        "claim": "The Making Healthcare Safer IV systematic review (16 articles: 2 systematic reviews and 13 primary studies) concluded there is moderate-certainty evidence that the I-PASS handoff tool reduces medical errors and adverse events — the strongest evidence rating of any structured handoff tool reviewed, with the overall conclusion that both SBAR and I-PASS 'probably improve patient safety, with I-PASS having a stronger certainty of evidence.'",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12232517/",
+        "quote": "moderate certainty evidence that the I-PASS tool reduces medical errors and adverse events",
+        "vote": "3-0"
+      },
+      {
+        "claim": "The same review rated the evidence that SBAR improves patient safety outcomes as only LOW certainty, based on two prior systematic reviews (11 and 28 original studies, of which 5 and 15 concerned handoffs) plus two newer original studies.",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12232517/",
+        "quote": "Two systematic reviews of Situation, Background, Assessment, Recommendation (SBAR) (including 11 and 28 original research studies; 5 and 15 were about the use in handoffs) and two newer original research studies provided low certainty evidence that the SBAR tool improves patient safety outcomes.",
+        "vote": "3-0"
+      },
+      {
+        "claim": "The evidence populations are split by profession: SBAR's evidence base comes predominantly from nurse-involved handoffs (nurse-to-nurse or nurse-to-physician), whereas the clinical-outcome evidence for I-PASS is exclusively from physician handoffs — meaning I-PASS's superior evidence rating has NOT been demonstrated for nursing shift report specifically, a key caveat when choosing a framework for a nursing handoff training platform.",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12232517/",
+        "quote": "Evidence about SBAR use comes predominantly from handoffs where nurses are involved (either nurse-to-nurse or nurse-to-physician). ... The evidence supporting the effect of I-PASS use on clinical outcomes is exclusively about physician handoffs",
+        "vote": "3-0"
+      },
+      {
+        "claim": "The AHRQ Making Healthcare Safer IV rapid review concluded there is moderate-certainty evidence, from 10 studies covering 9 implementations (including 2 randomized controlled trials), that the I-PASS structured handoff tool improves patient safety clinical outcomes for within-hospital transitions — the strongest evidence rating given to any handoff framework in the review.",
+        "source": "https://effectivehealthcare.ahrq.gov/sites/default/files/related_files/structured-handoff-rapid-research.pdf",
+        "quote": "Ten studies (of 9 implementations; 2 studies were randomized controlled trials) provided moderate-certainty evidence that the I-PASS tool...can improve patient safety clinical outcomes.",
+        "vote": "3-0"
+      },
+      {
+        "claim": "The review explicitly found that the evidence bases for the two leading frameworks are split by profession: SBAR evidence comes predominantly from nursing handoffs, while I-PASS effectiveness evidence comes exclusively from physician handoffs — meaning the moderate-certainty I-PASS outcome data has not been demonstrated in nurse-to-nurse shift report.",
+        "source": "https://effectivehealthcare.ahrq.gov/sites/default/files/related_files/structured-handoff-rapid-research.pdf",
+        "quote": "Evidence about SBAR is predominantly nursing, and evidence about I-PASS is exclusively about physicians.",
+        "vote": "3-0"
+      },
+      {
+        "claim": "In a two-ward Swiss pilot (one surgery, one medicine ward), introducing I-PASS-structured bedside nursing handovers produced statistically significant improvements in measured handover quality across 831 evaluated handovers compared with pre-implementation, but handover duration increased.",
+        "source": "https://onlinelibrary.wiley.com/doi/10.1111/jan.16896",
+        "quote": "Bedside nursing handovers were introduced into one surgery and one medicine ward, with the 831 handovers evaluated showing significant improvements in handover quality compared to before implementation, although handover duration increased.",
+        "vote": "3-0"
+      },
+      {
+        "claim": "This study operationalizes a nursing-specific adaptation of the I-PASS mnemonic for end-of-shift handovers as Identification-Patient-Action-Situation-Synthesis (departing from the original physician I-PASS, where I = Illness severity and P = Patient summary), and evaluates it against handover global quality and patient trust in nurses as outcomes.",
+        "source": "https://onlinelibrary.wiley.com/doi/10.1111/jan.16896",
+        "quote": "The aim of this study was to evaluate the feasibility, acceptability and preliminary effectiveness of I-PASS-structured (Identification-Patient-Action-Situation-Synthesis) bedside nursing handovers on the handover global quality and the patients trust in nurses.",
+        "vote": "3-0"
+      },
+      {
+        "claim": "A 2026 scoping review (9 studies, 2015-2025: 6 US, 1 Canada, 1 Iran, 1 Switzerland; quasi-experimental, PDSA, observational, pre-post, and mixed-methods designs; 15 to ~3,177 participants in inpatient, ED, psychiatric emergency, ICU/CCU/NICU, and surgical settings) found that I-PASS implementation for NURSE handovers was associated with five impact themes: reduced communication errors, improved information quality, medical staff satisfaction, time efficiency, and patient/family engagement.",
+        "source": "https://www.journalmpci.com/index.php/jhnr/article/view/1073",
+        "quote": "The implementation of I-PASS was associated with reduction in communication errors, improvement information quality, medical staff satisfaction, time efficiency, as well as patient and family engagement. While the effectiveness of I-PASS has been demonstrated across various contexts, implementation challenges such as environmental interruptions and the need for managerial support remain.",
+        "vote": "3-0"
+      },
+      {
+        "claim": "The review reports concrete quantitative outcomes from included studies: a 23% reduction in medical errors and 30% reduction in preventable adverse events (multicentre, nine pediatric hospitals, attributed to Starmer 2017); a 92% reduction in avoidable interruptions in a NICU (4 to 0.3 per handover, zero-interruption handovers 11% to 80%); illness-severity statements rising 37% to 67% and to-do lists 35% to 100% in a 90-nurse pediatric ICU pre-post study; and zero high-harm events maintained at an oncology hospital — with no significant increase in handover duration (18.8 vs 19.9 min). Caution: the review's own evidence table repeats the identical Starmer 2017 figures under a second study (Blazin et al. 2020), suggesting a transcription error.",
+        "source": "https://www.journalmpci.com/index.php/jhnr/article/view/1073",
+        "quote": "A multicentre study conducted at nine pediatric hospitals by Starmer, (2017) reported a 23% reduction in medical errors and a 30% reduction in preventable adverse events following I-PASS implementation. Similar outcomes were observed in intensive care units and cardiac care units, where handoff quality scores improved significantly after I-PASS training... Another study demonstrated a 92% reduction in interruptions, which further minimized the potential for information errors. Research conducted at an oncology hospital showed that I-PASS implementation helped maintain zero high-harm events throughout the implementation period.",
+        "vote": "3-0"
+      }
+    ],
+    "refuted": [
+      {
+        "claim": "The review concludes that I-PASS should be recommended over SBAR for nursing handover practice, on the grounds that it is more effective at reducing medical-error risk and improving the quality of information transfer.",
+        "vote": "0-3",
+        "source": "https://jurnal.globalhealthsciencegroup.com/index.php/IJGHR/article/view/6437"
+      },
+      {
+        "claim": "Both SBAR and I-PASS were found effective at increasing patient safety in nurse handover, with I-PASS only slightly superior in reducing the risk of medical errors — i.e., the safety advantage of I-PASS over SBAR is marginal, not dramatic.",
+        "vote": "0-3",
+        "source": "https://jurnal.globalhealthsciencegroup.com/index.php/IJGHR/article/view/6437"
+      },
+      {
+        "claim": "The review asserts a specific weakness of SBAR relative to I-PASS for nursing handover: under SBAR, critical high-risk items — resuscitation (code) status and pending examination results — are frequently omitted, and SBAR handovers remain vulnerable to interruptions and incomplete transfer of key clinical information. This directly supports treating code status and pending results as high-risk omission elements.",
+        "vote": "0-1",
+        "source": "https://www.journalmpci.com/index.php/jhnr/article/view/1073"
+      },
+      {
+        "claim": "On the RECEIVER side, the review recommends that policy mandate the 'Synthesis by Receiver' element (the final S of I-PASS: Illness severity, Patient summary, Action list, Situation awareness/contingency planning, Synthesis by receiver), requiring the receiver to read back key points as a closed-loop step; it also recommends ongoing direct observation of verbal handovers by trained observers using structured assessment tools (included studies used a 21-element Direct Observation Handover Tool, a 20-item I-PASS Handover Assessment Tool, and the Manser Rating Tool for Handover Quality), EHR-integrated I-PASS documentation audits, and protected handover spaces to reduce interruptions.",
+        "vote": "0-0",
+        "source": "https://www.journalmpci.com/index.php/jhnr/article/view/1073"
+      },
+      {
+        "claim": "An 18-hour SBAR shift-report training program (quasi-experimental pre/post design, 83 staff nurses in noncritical departments at Suez Canal University Hospitals, Egypt) increased the proportion of nurses with satisfactory handoff knowledge from 4.8% pre-intervention to 92.8% immediately post-intervention (p < .001), with 74.7% retention at 3-month follow-up.",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9969440/"
+      },
+      {
+        "claim": "Observed handoff practice quality, scored with a 35-item observation checklist (preparation of report, handover process, and exchange of SBAR shift-report contents), rose from only 2.4% of nurses rated adequate pre-intervention to 100% immediately post-intervention, and 90.4% at 3-month follow-up.",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9969440/"
+      },
+      {
+        "claim": "The Handoff CEX scores each of its domains (setting, organisation, communication, content, judgment, professionalism, overall competency) on a 1-9 point scale with descriptive behavioral anchors at the high and low ends, banded into unsatisfactory (1-3), satisfactory (4-6), and superior (7-9) — a structure directly reusable as rubric dimensions and anchors for automated transcript-based handoff scoring.",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3504166/"
+      },
+      {
+        "claim": "The Handoff CEX exists in two role-specific versions — one for the handoff provider (giver) and one for the handoff recipient (receiver) with unique role-based anchors — and the recipient version omits the content domain, providing a validated template for assessing the RECEIVING nurse separately from the giver.",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3504166/"
+      },
+      {
+        "claim": "Validated specifically on nursing shift report (25 shift-to-shift nurse reports on medicine, surgical, and cardiovascular units, yielding 98 evaluations), the tool discriminated experienced from inexperienced nurses: experienced nurses (>5 years) received mean overall competency 7.9 vs 6.9 for inexperienced nurses (difference 1.0 points, 95% CI 0.2-1.9, p=0.03), supporting construct validity for nursing handoffs.",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3504166/"
+      },
+      {
+        "claim": "Peer evaluators (the handoff participants themselves) rated handoff quality significantly higher than trained external observers — overall 8.1 vs 7.1, a 1.1-point inflation (95% CI 0.5-1.6, p<0.001) — quantitative evidence that participants' self/peer perception of handoff quality exceeds externally observed performance, supporting a perception-vs-performance gap design in post-handoff self-assessment.",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3504166/"
+      },
+      {
+        "claim": "The Handoff CEX is a structured shift-handoff assessment instrument consisting of six subdomains (setting, organization, communication skills, content, judgment, professionalism) plus an overall assessment, each rated on a 9-point scale with descriptive anchors and banded as unsatisfactory (1-3), satisfactory (4-6), and superior (7-9); a separate version exists for handoff RECEIVERS that omits the content domain.",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3621018/"
+      },
+      {
+        "claim": "The Handoff CEX has nursing-specific validity evidence: in prior work by the same group it discriminated between experienced and inexperienced nurses performing nursing shift handoffs, with more experienced nurses scoring higher on average.",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3621018/"
+      },
+      {
+        "claim": "In the two-site prospective validation (University of Chicago and Yale-New Haven; cohort of hospitalists, house staff, NPs/PAs — not nurses), 675 evaluations of 97 unique individuals across 149 live handoff sessions showed high internal consistency among subdomains (Spearman correlations 0.71-0.86) except the setting domain (0.39-0.40), and only fair-to-moderate external-vs-peer inter-rater agreement (weighted kappa for overall score 0.50, 95% CI 0.36-0.64).",
+        "vote": "0-0",
+        "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3621018/"
+      },
+      {
+        "claim": "The SBAR-LA is a 10-item rubric for assessing learner SBAR communication, scored dichotomously (0/1, max 10 points), with items distributed across the four SBAR dimensions as 4 situation, 3 background, 1 assessment, and 2 recommendation statements, plus a separately scored 3-point global effectiveness rating — a structure directly adaptable to automated transcript-based handoff scoring.",
+        "vote": "0-0",
+        "source": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8520891/"
+      },
+      {
+        "claim": "The SBAR-LA showed moderate interrater reliability overall: Krippendorff's alpha for the 10-item total score was .672, and Fleiss' kappa was good or fair for 8 of the 10 items (2 items had weak reliability) across 7 expert faculty raters — meaning even trained human raters disagree on some SBAR elements, a benchmark relevant to validating automated scoring.",
+        "vote": "0-0",
+        "source": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8520891/"
+      },
+      {
+        "claim": "A SBAR-structured change-of-shift reporting instrument for nursing staff, judged by 10 experts (6 clinical nurses, 4 faculty) at a Brazilian teaching hospital surgical ward, achieved a first-round Content Validity Index of 91.7%, with items on identification/situation/background clarity, indicator pertinence, and situation/background appearance reaching 100% agreement.",
+        "vote": "0-0",
+        "source": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9749775/"
+      }
+    ],
+    "sources": [
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12232517/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://effectivehealthcare.ahrq.gov/sites/default/files/related_files/structured-handoff-rapid-research.pdf",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://onlinelibrary.wiley.com/doi/10.1111/jan.16896",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://jurnal.globalhealthsciencegroup.com/index.php/IJGHR/article/view/6437",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.journalmpci.com/index.php/jhnr/article/view/1073",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9969440/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3504166/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC3621018/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8520891/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9749775/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11430516/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.ahrq.gov/teamstepps-program/curriculum/communication/tools/handoff.html",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11044331/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.ncbi.nlm.nih.gov/books/NBK2649/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4079746/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8199372/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://link.springer.com/article/10.1186/s12909-023-04495-8",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9996978/",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.sciencedirect.com/science/article/abs/pii/S1876139921001377",
+        "quality": "primary",
+        "claimCount": 4
+      },
+      {
+        "url": "https://pubmed.ncbi.nlm.nih.gov/29454873/",
+        "quality": "primary",
+        "claimCount": 4
+      },
+      {
+        "url": "https://www.sciencedirect.com/science/article/abs/pii/S1876139923000622",
+        "quality": "primary",
+        "claimCount": 5
+      },
+      {
+        "url": "https://www.sciencedirect.com/science/article/abs/pii/S147159532300032X",
+        "quality": "primary",
+        "claimCount": 5
+      }
+    ],
+    "stats": {
+      "angles": 5,
+      "sources": 22,
+      "claims": 108,
+      "verified": 25,
+      "confirmed": 9,
+      "killed": 16,
+      "afterSynthesis": 0
+    }
+  }
+}

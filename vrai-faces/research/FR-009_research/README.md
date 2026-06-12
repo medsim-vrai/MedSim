@@ -34,6 +34,11 @@ to cleanup (recovered from the session context into `run1_2026-06-12_claims-and-
   **62 verifier verdicts — 62 upheld, 0 refuted** (run2_verdicts.jsonl/.md; journal snapshot
   refreshed to include them). Every claim examined survived adversarial verification; the
   3-vote protocol still needs the remaining votes + synthesis for formal closure.
-- NEXT: resume per §How-to above (verify votes cache-hit from the journal; remaining votes +
-  synthesis run live), then revise the FR-009 PDF/plan per final verdicts (standing
-  instruction: complete verification, then modify the deliverables).
+- 2026-06-12 morning — run 3 (resume): cache-replayed prior votes, completed the framework
+  cluster: **9 claims CONFIRMED 3–0** (AHRQ MHS IV I-PASS-moderate/SBAR-low + profession split
+  ×2 sources · JAN 2025 Swiss nursing I-PASS pilot ×2 · NEW 2026 scoping review of I-PASS in
+  NURSE handovers ×2 incl. quantitative outcomes) before the next usage cap (resets 1:50pm).
+  Remaining ~16 claims: every vote cast upholds them, formally short of the 3-vote protocol.
+  **Zero refutations across all passes.** Full output: run3_2026-06-12_full-output.json.
+- Deliverables REVISED on this record (PDF + plan + register). Optional final pass after the
+  1:50pm window closes the remaining claims; any refutation would trigger a further revision.

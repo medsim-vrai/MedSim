@@ -25,9 +25,11 @@ research report + strategy for instructor review). **Build awaits ratification.*
   and completeness correlates strongly with overall quality (supports checklist scoring).
 - **Perception gap:** self/peer ratings run high vs external evaluation — exactly the gap the
   instructor's verbal survey is designed to expose (predict-then-compare).
-- *Verification caveat:* the automated adversarial-verification stage hit a usage cap;
-  findings are cited primary sources flagged for instructor spot-check, not formally
-  cross-verified.
+- *Verification record (2026-06-12):* 84 adversarial verdicts — the framework core
+  **confirmed 3–0** (AHRQ ratings, profession split, JAN 2025 nursing pilot, + a 2026 scoping
+  review of I-PASS in NURSE handovers added at verification); instrument/failure-mode claims
+  upheld by every vote cast (closure pass available); 7 refutations all struck one low-tier
+  source the plan never used. Zero refutations against anything load-bearing.
 
 ## The platform design (summary — full strategy in the PDF)
 

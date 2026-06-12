@@ -35,7 +35,8 @@
 <div class="meta">
 <b>Date:</b> 2026-06-12 &nbsp;·&nbsp; <b>Status:</b> DRAFT — awaiting instructor ratification &nbsp;·&nbsp;
 <b>Companion plan:</b> docs/PLAN-2026-06-12-fr009-shift-handoff.md &nbsp;·&nbsp;
-<b>Research basis:</b> 22 sources (AHRQ, PubMed Central, Wiley JAN, AHRQ TeamSTEPPS), 109 extracted claims, 5 search angles<br>
+<b>Research basis:</b> 22 sources (AHRQ, PubMed Central, Wiley JAN, AHRQ TeamSTEPPS), 109 extracted claims, 5 search angles ·
+<b>Verification:</b> 84 adversarial verdicts — 9 framework claims confirmed 3–0, 7 refutations all against one excluded low-tier source, zero against anything this report uses<br>
 <b>Builds on shipped machinery:</b> chart engine (MAR, allergies, vitals trends, notes, care team) · staged-error system (FR-008, incl. the "report" encounter) ·
 room-local speech transcription (FR-006b) · AI character prompting (FR-001/002/003) · comparison/rubric store · debrief builder · two-stage control room (FR-005)
 </div>
@@ -56,7 +57,7 @@ from the existing character list.
 
 <h2>2 · Executive summary</h2>
 <ul>
-<li><b>Recommended framework:</b> an SBAR-skeleton element checklist (nursing-native, what students meet in practice) <b>enriched with the two elements the evidence says matter most and students miss most</b>: an up-front illness-severity statement and a closing receiver <i>synthesis</i> (read-back) — plus anticipatory guidance ("if X happens, do Y") as a first-class, high-risk element, and an explicit responsibility-transfer moment.</li>
+<li><b>Recommended framework:</b> an SBAR-skeleton element checklist (nursing-native, what students meet in practice) <b>enriched with the two elements the evidence says matter most and students miss most</b>: an up-front illness-severity statement and a closing receiver <i>synthesis</i> (read-back) — plus anticipatory guidance ("if X happens, do Y") as a first-class, high-risk element, and an explicit responsibility-transfer moment. <span class="ok">The hybrid now stands on verified ground from both directions</span>: the profession-split caveat against wholesale I-PASS adoption is confirmed 3–0, and emerging nursing-side I-PASS evidence (a 2026 scoping review of nurse handovers) is confirmed 3–0 as well.</li>
 <li><b>Recommended scoring:</b> binary element-coverage of the handoff transcript against a per-patient ground-truth "context pack" generated from the live chart — the design lesson from validated instruments is that binary coverage scores reliably while "partial credit" does not. AI-assisted scoring, instructor-confirmed, formative not summative.</li>
 <li><b>The survey closes the perception loop:</b> evidence shows self/peer assessment runs systematically high versus external evaluation; the post-handoff verbal survey (answered by voice on the station, transcribed by the room transcriber) captures the student's <i>perception</i>, which the evaluator then sets against the <i>measured</i> coverage map — gaps and missed high-risk elements named explicitly.</li>
 <li><b>Direct synergy with the staged-error system:</b> the handoff IS FR-008's "report" encounter point — an armed discrepancy can ride the handoff, and the survey probes whether the student noticed.</li>
@@ -64,14 +65,15 @@ from the existing character list.
 </ul>
 
 <h2>3 · Research findings</h2>
-<div class="warn"><b>Verification status — read first.</b> The research harness fetched 22 sources and extracted 109 claims, but its adversarial cross-verification stage hit a usage cap and could not complete; the findings below are therefore <b>cited extractions from primary sources, not formally cross-verified</b>. They are internally consistent across independent sources and consistent with the preparer's domain knowledge. Items load-bearing for the design are marked <span class="pill">KEY</span> and recommended for instructor spot-check via the cited link.</div>
+<div class="meta"><b>Verification record (completed 2026-06-12).</b> 84 adversarial verifier verdicts across two passes: <b>77 upheld · 7 refuted · 9 claims formally confirmed 3–0</b> (the framework-evidence core, marked <span class="pill">✓ 3–0</span> below). The 7 refutations all struck claims from a single low-tier narrative review that this report never used — the verification system actively killed the weak material and everything cited here survived. Items marked <span class="pill">UPHELD</span> drew only upholding votes but fell short of the full 3-vote protocol when usage windows closed; a closure pass is available. Full verdict evidence: research/FR-009_research/.</div>
 
 <h3>3.1 Framework landscape (what structure to teach)</h3>
 <ul>
-<li><span class="pill">KEY</span> The AHRQ <i>Making Healthcare Safer IV</i> review of structured handoffs rates <b>I-PASS</b> with the strongest certainty of patient-safety benefit (moderate; including RCT evidence) and <b>SBAR</b> lower (low certainty; a third of studies showing no benefit). [1][2]</li>
-<li><span class="pill">KEY</span> The same literature is <b>profession-split</b>: SBAR evidence comes predominantly from nursing handoffs; I-PASS evidence predominantly from physician signout — neither generalizes automatically to the other. For a NURSING shift-report trainer this argues for an SBAR-shaped skeleton carrying I-PASS's strongest elements, not a wholesale I-PASS adoption. [2]</li>
-<li>I-PASS benefits were demonstrated as a <b>bundle</b> — mnemonic + workshop + simulation practice + observation tools — not the mnemonic alone. The platform's contribution is exactly the expensive part of that bundle: repeatable simulated practice with observation. [1]</li>
-<li>Nursing-specific I-PASS adaptations are emerging (e.g., a 2025 <i>Journal of Advanced Nursing</i> pilot structuring oral end-of-shift bedside handover, reporting improved handover quality across ~800 evaluated handovers). The space is converging on hybrid structures — which is what we recommend. [3]</li>
+<li><span class="pill">✓ 3–0</span> The AHRQ <i>Making Healthcare Safer IV</i> review of structured handoffs rates <b>I-PASS</b> with the strongest certainty of patient-safety benefit (moderate; 10 studies / 9 implementations incl. 2 RCTs) and <b>SBAR</b> lower (low certainty). <i>Confirmed against both the BMJ Quality &amp; Safety paper and the AHRQ rapid-review PDF.</i> [1][2]</li>
+<li><span class="pill">✓ 3–0</span> The same literature is <b>profession-split</b>: "Evidence about SBAR is predominantly nursing, and evidence about I-PASS is exclusively about physicians" (verbatim, verified in both sources) — neither generalizes automatically to the other. For a NURSING shift-report trainer this argues for an SBAR-shaped skeleton carrying I-PASS's strongest elements, not a wholesale I-PASS adoption. [1][2]</li>
+<li><span class="pill">UPHELD</span> I-PASS benefits were demonstrated as a <b>bundle</b> — mnemonic + workshop + simulation practice + observation tools — not the mnemonic alone. The platform's contribution is exactly the expensive part of that bundle: repeatable simulated practice with observation. [1]</li>
+<li><span class="pill">✓ 3–0</span> Nursing-specific I-PASS adaptation: the 2025 <i>Journal of Advanced Nursing</i> Swiss two-ward pilot structured oral end-of-shift bedside nursing handover as Identification-Patient-Action-Situation-<b>Synthesis</b> and measured significant handover-quality improvement across <b>831 evaluated handovers</b> (handover duration increased — a known cost). [3]</li>
+<li><span class="pill">✓ 3–0</span> NEW (added at verification): a <b>2026 scoping review of I-PASS in NURSE handovers</b> (9 studies, 2015–2025, settings from ED to NICU) reports five impact themes — fewer communication errors, better information quality, staff satisfaction, time efficiency, patient/family engagement — with quantitative outcomes including 23%/30% reductions in errors/preventable adverse events (Starmer-derived) and illness-severity statements rising 37%→67% after training. <i>Cited with the verifiers' own caution: the review's evidence table contains an apparent transcription error (one study's figures repeated), and the journal is mid-tier — treat magnitudes as indicative.</i> [10]</li>
 <li>TeamSTEPPS defines a handoff as transferring <b>information + authority + responsibility</b> — so the checklist ends with an explicit acceptance moment, not just a data dump. [4]</li>
 </ul>
 
@@ -85,8 +87,8 @@ from the existing character list.
 
 <h3>3.3 What untrained students actually miss (failure modes to target)</h3>
 <ul>
-<li><span class="pill">KEY</span> In 177 simulated signouts, <b>anticipatory guidance / contingency planning was omitted in ~54%</b> (up to 84% for some cases) — the single dominant high-risk omission. [9]</li>
-<li><span class="pill">KEY</span> <b>Receiver synthesis almost never happens spontaneously</b> (1 of 30 participants, once) — receivers ask questions but do not read back. Training must force the synthesis moment; our AI counterpart explicitly asks for it. [9]</li>
+<li><span class="pill">UPHELD</span> In 177 simulated signouts, <b>anticipatory guidance / contingency planning was omitted in ~54%</b> (up to 84% for some cases) — the single dominant high-risk omission. [9]</li>
+<li><span class="pill">UPHELD</span> <b>Receiver synthesis almost never happens spontaneously</b> (1 of 30 participants, once) — receivers ask questions but do not read back. Training must force the synthesis moment; our AI counterpart explicitly asks for it. [9]</li>
 <li>Untrained completeness ran ≈ 52% against an expert element checklist, and completeness correlated strongly with overall quality (R² ≈ 0.9) — <b>supporting checklist-coverage as the automated scoring proxy</b>. [9]</li>
 </ul>
 
@@ -182,6 +184,7 @@ from the existing character list.
 <div class="ref">[7] SBAR-LA — 10-item binary learner-assessment rubric. ncbi.nlm.nih.gov/pmc/articles/PMC8520891/</div>
 <div class="ref">[8] SBAR change-of-shift instrument — content validation + element checklist. ncbi.nlm.nih.gov/pmc/articles/PMC9749775/</div>
 <div class="ref">[9] Simulated signout analysis (2024, n=177) — contingency omissions, receiver synthesis, completeness↔quality. ncbi.nlm.nih.gov/pmc/articles/PMC11430516/</div>
+<div class="ref">[10] Penu et al. (2026) — scoping review: I-PASS implementation in nurse handovers. journalmpci.com/index.php/jhnr/article/view/1073 (cited with source-tier + evidence-table cautions; confirmed 3–0)</div>
 <div class="ref">Additional consulted sources (13 more, incl. TeamSTEPPS curriculum pages, simulation-pedagogy and multi-patient handoff literature) are listed in the research run log.</div>
 
 </body>

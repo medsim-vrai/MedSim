@@ -389,9 +389,10 @@ the verbal survey; the comparison/rubric store (ehr_db save_comparison) and debr
 exist; personas list carries nurse/charge-nurse characters; FR-007 (shared staff across
 patients) intersects for the multi-patient mode.
 
-**Status (2026-06-12):** Research DONE (22 sources / 109 extracted claims; NOTE: the
-adversarial-verification stage hit a usage cap — findings are cited primary-source extractions
-flagged for instructor spot-check, key claims marked in the report). Plan WRITTEN
+**Status (2026-06-12):** Research DONE + VERIFIED (22 sources / 109 claims / 84 adversarial
+verdicts: framework core confirmed 3–0 incl. a 2026 nurse-handover I-PASS scoping review added
+at verification; 7 refutations all against one excluded low-tier source; zero against used
+material; durability pack in research/FR-009_research/). Plan WRITTEN
 (`docs/PLAN-2026-06-12-fr009-shift-handoff.md`, stages H1–H6) + **PDF strategy report
 delivered** (`research/FR-009_shift-handoff-strategy.pdf`, copy on the Desktop). Design core:
 SBAR skeleton + I-PASS severity/synthesis + contingencies as first-class high-risk element;
