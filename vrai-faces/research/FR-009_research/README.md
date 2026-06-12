@@ -27,6 +27,13 @@ to cleanup (recovered from the session context into `run1_2026-06-12_claims-and-
 ## Status log
 - 2026-06-11 ~16:45 — run 1: search/fetch complete (22 sources, 109 claims); verification
   killed by session usage cap (resets 8:20pm); all 25 claims 3-abstain.
-- 2026-06-11 ~20:31 — run 2 launched (resume + cache-busted verifier): Search/Fetch cached,
-  Verify running live. Result lands in run2 files here + the FR-009 PDF gets revised per
-  verdicts (the standing instruction: modify deliverables based on the review).
+- 2026-06-11 ~20:31 — run 2 launched. NOTE: the first (args-less) resume attempt had
+  "completed" with an error, finalizing run 1's cache — so run 2 re-ran Search/Fetch LIVE,
+  then entered Verify.
+- 2026-06-11 ~20:49 — run 2 KILLED by a session interrupt mid-verify. Secured here:
+  **62 verifier verdicts — 62 upheld, 0 refuted** (run2_verdicts.jsonl/.md; journal snapshot
+  refreshed to include them). Every claim examined survived adversarial verification; the
+  3-vote protocol still needs the remaining votes + synthesis for formal closure.
+- NEXT: resume per §How-to above (verify votes cache-hit from the journal; remaining votes +
+  synthesis run live), then revise the FR-009 PDF/plan per final verdicts (standing
+  instruction: complete verification, then modify the deliverables).
