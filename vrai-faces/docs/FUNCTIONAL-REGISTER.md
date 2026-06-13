@@ -83,6 +83,7 @@ ADR → `In-progress` → `Shipped` → `Validated` (confirmed in a test session
 | **FR-005** | Two-stage control room — Setup page → Live-Operations window | instructor-tools · UX | instructor | P2 | **Shipped** (2026-06-10; live validation pending) | control-room · portal |
 | **FR-006** | Per-character Avatar vs Audio-only stations — clear choice + flat-portrait lite app for low-cost tablets | instructor-tools · UX · avatar | instructor | P2 | **Shipped — OPEN ISSUE:** voice take fails on Android Chrome (see entry) | control-room · portal · avatar |
 | **FR-007** | Unit-level shared staff characters — one tablet serves multiple patients; student must IDENTIFY the patient | character-interaction · clinical-logic · scenario | instructor | P2 | Proposed (investigate) | portal · runtime(core) · control-room · avatar |
+| **FR-010** | Post-restart device readiness ping — health-check paired tablets (status / what they run / working?) + warm character tablets cold→warm | UX · instructor-tools · ops · avatar | instructor | P1 | Proposed (investigate) | portal · avatar · control-room |
 
 ---
 
@@ -556,6 +557,64 @@ per-patient characters do today.
 **Acceptance (draft).** One charge-nurse tablet in a 3-bed room: asking about each patient by
 name yields patient-correct details; an unnamed/ambiguous ask gets an in-role identification
 request; transcripts land on the right encounters.
+
+---
+
+## FR-010 — Post-restart device readiness ping (health-check + warm cold→warm)
+
+**Area:** UX · instructor-tools · ops · avatar · **Source:** instructor (2026-06-13) ·
+**Priority:** P1 · **Status:** Proposed — *investigate before speccing* · **Effort:** L ·
+**Lands in:** portal + avatar + control-room
+
+**Asked (instructor, near-verbatim):** To make the system easier to use, after a tablet has
+been cached with a character or device — once the system is started back up, can it ping the
+devices to: (a) check status — ready to go or not; (b) check what device or character they
+have; (c) check it's working OK; (d) for a character, push text and activate the mic to warm
+the system from cold to warm.
+
+**Goal.** A one-glance readiness board after any portal restart: the instructor sees every
+previously-paired tablet, what it's running, whether it's healthy, and can warm the character
+tablets so the first real interaction isn't slow — instead of re-walking to each tablet.
+
+**Behavior (target).**
+- **(a) Status ready/not** — per tablet: paired · reconnected-since-restart · model loaded ·
+  last-seen fresh → a green/amber/red readiness pill.
+- **(b) What it runs** — character (which persona, avatar vs audio) or device (kind/model),
+  read from the persisted pairing.
+- **(c) Working OK** — a round-trip health ping over the tablet's live channel (ack + report:
+  WS connected, model state, mic-permission state, errors).
+- **(d) Warm cold→warm (character)** — trigger model/pipeline warmup (ASR load + room-STT
+  connect + a TTS test line pushed over the speech WS), so the first turn is warm.
+
+**Why investigate first (the hard constraints).**
+1. **Persistence across restart.** A restart wipes the in-memory control session and drops
+   paired stations (the repeated "fresh Setup after restart" pain). Pinging "cached" tablets
+   first requires persisting the roster (which station, what character/device, last-seen) and
+   re-adopting it on boot. `ehr_db.register_station` already persists some of this — scope
+   what must survive + a boot-time re-adopt path.
+2. **Reverse channel (portal→tablet).** Tablets currently PULL (poll/heartbeat). A push ping +
+   warmup needs a portal→device channel. The avatar app already holds a speech WebSocket
+   (push_speech, ADR-0007 auto-reconnect) — readiness = "has the WS reconnected since the
+   restart?"; health = a round-trip over it. Audio/device stations may need an equivalent.
+3. **Browser gesture wall on (d).** Browsers BLOCK starting the mic (getUserMedia) and audio
+   playback without a user gesture on the tablet — the portal cannot force-open the mic
+   remotely. So warmup can preload the model + connect room-STT + push a line, but the mic
+   stream itself likely needs a one-tap "Ready" handshake on the tablet. Design a low-friction
+   tablet-side "tap to arm" that the instructor's ping prompts (a single tap warms everything).
+4. **Health semantics + security.** Define "working OK" precisely (WS up · model loaded ·
+   mic-permission granted · last error). Keep the ping auth'd (ADR-0027 token posture) so a
+   stray LAN client can't enumerate/drive tablets.
+
+**Acceptance (draft).** After a portal restart with 3 previously-paired tablets (2 characters,
+1 device): the control room shows all three with correct identity + a readiness pill within
+~10 s of each reconnecting; a "Warm" action on a character tablet loads its model and pushes a
+test line; an unreachable tablet reads red with a reason. No second walk to the tablets for
+status; at most one tap per character tablet to fully arm the mic (browser constraint, noted).
+
+**Builds on.** Speech WS + push_speech (ADR-0007) · station registry + heartbeat
+(`/api/device/{id}/heartbeat`, `/api/ehr/state` roster poll) · room-STT warm path (ADR-0038) ·
+the avatar app's reconnect/warm hooks (`installFirstGestureWarmup`) · device-token posture
+(ADR-0027). **Note:** directly addresses the standing restart-wipes-the-session friction.
 
 ---
 
