@@ -192,7 +192,7 @@ summary. Already-armed errors are managed from the Live window.</p>
       r.onchange = function () { state.encounter = TAX.encounters[+r.value].id; render(); };
     });
     document.querySelectorAll('input[name=cand]').forEach(function (r) {
-      r.onchange = function () { state.candidate = candidates[+r.value]; };
+      r.onchange = function () { state.candidate = candidates[+r.value]; render(); };
     });
     document.querySelectorAll('input[name=imp]').forEach(function (r) {
       r.onchange = function () {
