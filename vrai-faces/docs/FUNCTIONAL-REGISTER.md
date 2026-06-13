@@ -338,6 +338,16 @@ wasm path only (skips the extended QDQ rewrite; iPad/WebGPU keeps full optimizat
 Awaiting the post-③ tablet take. Lesson: dev-build ORT on the unpiloted platform = three stacked
 failures, each only visible after the previous one fell.
 
+**FR-008 S7 bugfix (2026-06-13) — multi-patient 'wrong dose' returned no suggestions.** The
+staged-error engine grounds dose/admin/interaction candidates in the FR-001/002 med board
+(med_orders.get_state). Single-patient lazily inits that board when the meds card loads;
+multi-patient beds had no such trigger, so 'right med, wrong dose' on a bed came back "No
+injectable suggestions." Fix: the staged-error routes now lazily create the board for the
+resolved session (_ensure_board in _resolve — condition detected from the bed's patient, same
+as med_routes), so single- AND multi-patient self-init. Caught a test gap: the S7 fixture
+pre-initialized the board, masking this; added a regression test that clears it to reproduce
+the real room flow.
+
 **FR-008 S7 (2026-06-13) — per-encounter staged errors (multi-patient).** Field gap: the
 builder only worked single-patient (its routes resolved "the session" via get_active(), which
 returns None in a multi-bed room) and had no entry point on the per-bed console. Now the

@@ -261,3 +261,31 @@ def test_builder_page_scopes_to_a_bed(room_client):
     assert r.status_code == 200
     assert "Bed: Bed A" in r.text
     assert '"bed-A"' in r.text or "bed-A" in r.text     # threaded into the page JS
+
+
+def _dosed_condition() -> str:
+    """A condition whose primary meds carry numeric doses (so wrong_dose grounds)."""
+    for key, entry in med_orders.catalog().items():
+        if key.startswith("_"):
+            continue
+        for opt in entry.get("primary") or []:
+            if any(ch.isdigit() for ch in str(opt.get("dose") or "")):
+                return key
+    raise AssertionError("no dosed condition in the formulary")
+
+
+def test_wrong_dose_lazy_inits_the_board_per_bed(room_client, monkeypatch):
+    """2026-06-13 regression — multi-patient 'right med, wrong dose' returned
+    'no injectable suggestions' because the bed's FR-001/002 med board was never
+    initialized (only the single-patient meds card does that). The builder now
+    creates the board itself on first use. (The S7 fixture pre-inits the board,
+    which MASKED this — here we clear it to reproduce the real room flow.)"""
+    from portal import med_orders, med_routes
+    med_orders._SESSION_MEDS.pop("bed-A", None)
+    assert med_orders.get_state("bed-A") is None          # the real multi-patient state
+    monkeypatch.setattr(med_routes, "_detect_default_condition",
+                        lambda sess: _dosed_condition())
+    j = room_client.get("/api/control/mederrors/suggest"
+                        "?type=wrong_dose&vector=verbal&encounter=med_pass&bed=bed-A").json()
+    assert j["ok"] and j["candidates"], "wrong_dose must ground after the board lazy-inits"
+    assert med_orders.get_state("bed-A") is not None       # the route created the board

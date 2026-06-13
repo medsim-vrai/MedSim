@@ -22,12 +22,30 @@ from fastapi.responses import JSONResponse
 from portal import auth, control_session, credentials, med_errors
 
 
+def _ensure_board(sess: Any) -> None:
+    """Make sure the FR-001/002 medication board exists for this session.
+
+    Bugfix 2026-06-13: the staged-error engine grounds dose / admin / interaction
+    suggestions in that board (med_orders.get_state). In SINGLE-patient the board
+    is lazily created when the meds card loads; MULTI-patient beds have no such
+    trigger, so 'right med, wrong dose' returned "no injectable suggestions" on a
+    bed whose board was never initialized. The builder now creates it itself
+    (condition detected from the bed's patient — same lazy init as med_routes)."""
+    try:
+        from portal import med_orders, med_routes
+        if med_orders.get_state(sess.id) is None:
+            med_orders.init_session(sess.id, med_routes._detect_default_condition(sess))
+    except Exception:  # noqa: BLE001 — grounding is best-effort, never blocks the route
+        pass
+
+
 def _resolve(request: Request) -> tuple[Any | None, JSONResponse | None]:
     """Resolve the target session. Multi-patient (FR-008 S7): ``?bed=<encounter_id>``
     picks a specific bed in the active room. Single-patient: falls back to the sole
     active encounter (get_active returns None in a multi-bed room, so the bed param
     is REQUIRED there). The staged-error engine is keyed by session id and each
-    encounter IS a session, so per-bed arming needs only this resolution."""
+    encounter IS a session, so per-bed arming needs only this resolution. Also
+    lazily ensures the med board exists so dose/admin suggestions are grounded."""
     bed = (request.query_params.get("bed") or "").strip()
     if bed:
         from portal import control_room
@@ -37,11 +55,12 @@ def _resolve(request: Request) -> tuple[Any | None, JSONResponse | None]:
             return None, JSONResponse(
                 {"ok": False, "error": f"bed {bed!r} is not in the active room"},
                 status_code=404)
-        return sess, None
-    sess = control_session.get_active()
-    if sess is None:
-        return None, JSONResponse(
-            {"ok": False, "error": "no running scenario"}, status_code=409)
+    else:
+        sess = control_session.get_active()
+        if sess is None:
+            return None, JSONResponse(
+                {"ok": False, "error": "no running scenario"}, status_code=409)
+    _ensure_board(sess)
     return sess, None
 
 
