@@ -24,6 +24,17 @@ Dated 2026-06-07.
 
 ---
 
+## Field-test instrument (2026-06-13)
+
+Expanded field validation runs against **`docs/field-test/`** — a 72-test matrix across all 13
+core areas (network/pairing · avatar · audio station · voice loop · control room · say-as ·
+med ordering · staged errors · EHR · multi-patient · devices · debrief · non-functional):
+- **MedSimVRAI_Field-Test-Plan.pdf** — readable plan + coverage map + the Claude issue pipeline.
+- **MedSimVRAI_Field-Test-Matrix.xlsx** — execution (dropdowns), a **Claude-ingestible Issue
+  Log** (paste Status=New rows back to Claude for fixes), a live Coverage rollup, and an
+  Environment inventory.
+Fixes flow back here as FR/bugfix entries. Goal: no P1 row left "Not run" before broader rollout.
+
 ## The feedback → development loop
 
 1. **Observe** — during testing or teaching, note a desired refinement/expansion (a behavior
