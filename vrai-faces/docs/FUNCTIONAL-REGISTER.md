@@ -370,8 +370,15 @@ debrief now renders the full arc (⚠️ Staged medication errors section: what 
 where, impact, timeline, outcome; missed rows highlighted as discussion anchors) + the
 one-page field script (`docs/FR-008-field-script.md`, five drills — one per error type —
 incl. the auto-on-administer impact + stabilize check). Gates 95→96 portal / 126 client.
-**Awaiting:** the field validation session (script above) + instructor clinical review of
-the two DRAFT catalogs. ↓ History below.
+**✅ FIELD-VALIDATED (2026-06-13, partial):** in a live session the system **tracked an armed
+medication error and the debrief correctly reported it as MISSED** — confirming the core
+arm → resolve(missed) → debrief arc (S1 catalog · S5 builder · S6 debrief outcome). Still to
+validate in a session: the verbal-vector delivery (doctor speaks the error → defend → correct),
+the document-vector chart-discrepancy catch, and the patient-impact trigger/stabilize (the
+remaining drills in `docs/FR-008-field-script.md`).
+
+**Awaiting:** the remaining field drills (verbal / document / impact) + instructor clinical
+review of the two DRAFT catalogs. ↓ History below.
 
 **ROUTE RATIFIED + SHIPPED (2026-06-11, ADR-0038 — FR-006b):** instructor chose **room-local**
 over cloud-primary. The portal Mac transcribes for audio stations: `POST /api/face/stt`
