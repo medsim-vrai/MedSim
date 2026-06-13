@@ -1361,8 +1361,8 @@ async def _control_stage_page(
     # patient persona when the caller didn't pass one explicitly.
     default_device_patient = (
         patient_persona_id
-        or sess.patient_persona_id
-        or (sess.selected_personas[0] if sess.selected_personas else "")
+        or ehr_seed.patient_persona_id(sess)   # role-aware (not blindly [0] → the doctor)
+        or ""
     )
     # This page shows the per-character device QRs — make sure the avatar app is
     # up + LAN-reachable so a scanned tablet doesn't hit connection-refused.
@@ -2061,7 +2061,10 @@ def _ensure_ehr_session_registered(sess: control_session.ControlSession) -> None
     if existing:
         return
     seed = ehr_seed.seed_from_session(sess, ehr_id=sess.ehr_id) or {}
-    primary = sess.selected_personas[0] if sess.selected_personas else None
+    # The EHR session's "primary" persona is the PATIENT — resolve it role-aware
+    # (not selected_personas[0], which may be a clinician once one is added).
+    primary = ehr_seed.patient_persona_id(sess) or (
+        sess.selected_personas[0] if sess.selected_personas else None)
     ehr_db.register_session(sess.id, sess.join_code, sess.ehr_id, primary, seed)
 
 

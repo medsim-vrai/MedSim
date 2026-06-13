@@ -380,6 +380,21 @@ quietly on this hardware (model loads but inference yields empty), (b) MediaReco
 codec/decodeAudioData mismatch on this Chrome build, (c) mic permission/route to the wrong input,
 (d) playback-side autoplay gating (if step 2 is also silent).
 
+## BUGFIX 2026-06-13 — Medical Record showed the DOCTOR as the patient
+
+**Symptom (instructor):** single-patient session → open the Medical Record → the doctor is
+listed as the patient character. **Root cause:** `ehr_seed.seed_from_session` built the chart
+from `selected_personas[0]` blindly, and `create_session` never sets `patient_persona_id`, so
+once a clinician is listed first (e.g. a doctor added for the FR-001/002 ordering loop) the
+chart seeds from the CLINICIAN. The M58 resolver `patient_persona_id()` existed but its
+fallback was also `[0]`. **Fix:** role-aware patient resolution — `patient_persona_id()` now
+prefers the selected persona whose `roleGroup == "Patient"` before the legacy `[0]` fallback;
+`seed_from_session` + the EHR `register_session` "primary" + the med-board condition detector
++ the add-device default all route through it. 4 regression tests (clinician-first resolves
+the patient, explicit pick wins, chart seeds from the patient, all-clinician legacy fallback).
+Gate 136/136. Note: requires the wizard to include a Patient-roleGroup persona (it always
+does in single-patient mode).
+
 ## FR-009 (P1) — Shift turnover / handoff training (filed 2026-06-12, deep research commissioned)
 
 **Asked (instructor, near-verbatim):** Critical training at the start and end of the shift:

@@ -113,3 +113,53 @@ def test_altered_state_documented_in_note():
     seed = ehr_seed.seed_from_persona(p, modules=[], scenario_text="")
     bodies = " ".join(n["body"].lower() for n in seed["notes_recent"])
     assert "delirium" in bodies or "confused" in bodies
+
+# ── 2026-06-13 bugfix — Medical Record showed the DOCTOR as the patient ──────
+# A single-patient session that lists a clinician FIRST (e.g. a doctor added for
+# the ordering loop) must still resolve the PATIENT for the chart, not [0].
+from types import SimpleNamespace
+
+
+def _find_by_rolegroup(group: str) -> str:
+    for p in library.list_personas():
+        if str(p.get("roleGroup") or "").strip().lower() == group.lower():
+            return p["id"]
+    raise AssertionError(f"no persona with roleGroup {group!r}")
+
+
+def test_patient_resolved_role_aware_when_clinician_listed_first():
+    patient = _find_by_rolegroup("Patient")
+    clinician = _find_by_rolegroup("Clinician")
+    # Clinician first, patient second, no explicit patient_persona_id (the v6
+    # single-patient path never sets it).
+    sess = SimpleNamespace(selected_personas=[clinician, patient],
+                           patient_persona_id=None)
+    assert ehr_seed.patient_persona_id(sess) == patient
+
+
+def test_explicit_patient_pick_still_wins():
+    patient = _find_by_rolegroup("Patient")
+    clinician = _find_by_rolegroup("Clinician")
+    sess = SimpleNamespace(selected_personas=[clinician], patient_persona_id=patient)
+    assert ehr_seed.patient_persona_id(sess) == patient
+
+
+def test_chart_seeds_from_the_patient_not_the_first_clinician():
+    patient = _find_by_rolegroup("Patient")
+    clinician = _find_by_rolegroup("Clinician")
+    sess = SimpleNamespace(selected_personas=[clinician, patient],
+                           patient_persona_id=None, selected_modules=[],
+                           scenario_text="")
+    seed = ehr_seed.seed_from_session(sess, ehr_id="cyrus")
+    assert seed is not None
+    patient_name = library.get_persona(patient)["name"]
+    clinician_name = library.get_persona(clinician)["name"]
+    assert seed["persona_id"] == patient
+    assert seed["name"] == patient_name and seed["name"] != clinician_name
+
+
+def test_legacy_fallback_when_no_patient_present():
+    # All-clinician selection (degenerate) → fall back to the first entry, never None.
+    clinician = _find_by_rolegroup("Clinician")
+    sess = SimpleNamespace(selected_personas=[clinician], patient_persona_id=None)
+    assert ehr_seed.patient_persona_id(sess) == clinician

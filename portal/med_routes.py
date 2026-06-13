@@ -32,8 +32,9 @@ def _detect_default_condition(sess: Any) -> str:
     """Best-effort condition from the running scenario (ehr_seed's detector)."""
     try:
         from portal import ehr_seed
-        pid = (getattr(sess, "patient_persona_id", "")
-               or (sess.selected_personas[0] if getattr(sess, "selected_personas", None) else ""))
+        # Role-aware: the med board's condition must come from the PATIENT, not
+        # whoever is first in selected_personas (could be the doctor).
+        pid = ehr_seed.patient_persona_id(sess) or ""
         persona = library.get_persona(pid) or {}
         modules = [m for m in (library.get_module(mid)
                                for mid in getattr(sess, "selected_modules", []) or []) if m]

@@ -1438,16 +1438,29 @@ def _insurance_for(persona: dict[str, Any]) -> str:
 # ──────────────────────────────────────────────────────────────────────
 
 def seed_from_session(session: Any, *, ehr_id: str) -> ChartSeed | None:
-    """Pick the first selected persona; build a seed using selected modules."""
-    if not session.selected_personas:
+    """Build the chart for the session's PATIENT persona, role-aware.
+
+    Bugfix 2026-06-13: previously took selected_personas[0] blindly, so a
+    session that lists a clinician first (e.g. a doctor added for the ordering
+    loop) seeded the Medical Record from the DOCTOR. The patient is now resolved
+    via patient_persona_id() (explicit patient pick, then the persona whose
+    roleGroup is 'Patient')."""
+    pid = patient_persona_id(session)
+    if not pid:
         return None
-    pid = session.selected_personas[0]
     persona = library.get_persona(pid)
     if persona is None:
         return None
     modules = [m for m in (library.get_module(mid) for mid in session.selected_modules) if m]
     return seed_from_persona(persona, modules=modules,
                              scenario_text=session.scenario_text, ehr_id=ehr_id)
+
+
+def _is_patient_persona(pid: str) -> bool:
+    """True if this persona's roleGroup is 'Patient' (vs Clinician/Allied Health
+    /family role-players that ride in selected_personas for chat)."""
+    p = library.get_persona((pid or "").strip())
+    return bool(p) and str(p.get("roleGroup") or "").strip().lower() == "patient"
 
 
 def patient_persona_id(session: Any) -> str | None:
@@ -1461,17 +1474,21 @@ def patient_persona_id(session: Any) -> str | None:
     Resolution order:
       1. `session.patient_persona_id` if set (v7 default — the
          wizard's "Patient" picker writes this).
-      2. First entry in `selected_personas` (v6 single-patient
-         convention — the first persona was the patient).
-      3. None — caller decides what to do (usually skip).
+      2. The first selected persona whose roleGroup is 'Patient'
+         (role-aware — the patient need not be listed first once
+         clinicians are added; 2026-06-13 bugfix).
+      3. First entry in `selected_personas` (legacy fallback — only
+         when NO selected persona is a patient).
+      4. None — caller decides what to do (usually skip).
     """
     pid = getattr(session, "patient_persona_id", None)
     if pid:
         return str(pid).strip() or None
-    chosen = getattr(session, "selected_personas", None) or []
-    if chosen:
-        return str(chosen[0]).strip() or None
-    return None
+    chosen = [str(c).strip() for c in (getattr(session, "selected_personas", None) or []) if str(c).strip()]
+    for cand in chosen:                       # role-aware: the actual patient
+        if _is_patient_persona(cand):
+            return cand
+    return chosen[0] if chosen else None        # legacy fallback
 
 
 def seeds_for_patient_only(session: Any, *,
