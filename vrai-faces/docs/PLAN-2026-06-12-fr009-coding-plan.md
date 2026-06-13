@@ -168,7 +168,7 @@ bundled as the authoring starter. Version pinned to handoff_core; CHANGELOG.
 | 1 | H1 pack generator ✅ SHIPPED 2026-06-13 | M | — |
 | 2 | H2 session mode + counterpart ✅ SHIPPED 2026-06-13 | M | H1 |
 | 3 | H4 survey station | M | H2 (parallel-safe with H3) |
-| 4 | H3 multi-patient | M | H2 |
+| 4 | H3 multi-patient ✅ SHIPPED 2026-06-13 | M | H2 |
 | 5 | H5 evaluation + debrief | L | H2, H4, FR-008 S6 |
 | 6 | H6 control room + field script | M | all |
 | 7 | SA1 extract handoff_core | M | H1–H6 field-validated |

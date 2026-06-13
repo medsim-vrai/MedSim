@@ -62,6 +62,9 @@ def attach(app: Any) -> None:
         if not persona_ids:                      # default to this session's patient
             pid = ehr_seed.patient_persona_id(sess)
             persona_ids = [pid] if pid else []
+        # H3 — multi-patient: {persona_id: source_session_id} (which bed's chart
+        # builds each patient's pack). Optional; single-patient ignores it.
+        sources = body.get("patient_sources") or None
         try:
             handoff.start_handoff(
                 sess.id,
@@ -69,10 +72,24 @@ def attach(app: Any) -> None:
                 dial=str(body.get("dial") or "complete"),
                 persona_ids=list(persona_ids),
                 counterpart_id=str(body.get("counterpart_id") or ""),
+                patient_sources=sources if isinstance(sources, dict) else None,
             )
         except ValueError as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
         return JSONResponse({"ok": True, **handoff.state(sess.id)})
+
+    @app.post("/api/control/handoff/advance")
+    async def api_handoff_advance(  # noqa: ANN202
+        request: Request,
+        _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    ):
+        """H3 — close the current patient and move to the next (or, after the
+        last, to the cross-patient prioritization question)."""
+        sess, err = _resolve(request)
+        if err:
+            return err
+        nxt = handoff.advance_patient(sess.id)
+        return JSONResponse({"ok": True, "next_patient": nxt, **handoff.state(sess.id)})
 
     @app.post("/api/control/handoff/end")
     async def api_handoff_end(  # noqa: ANN202

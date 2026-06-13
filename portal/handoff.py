@@ -66,18 +66,12 @@ def _ranges() -> dict[str, Any]:
 
 # ── severity ────────────────────────────────────────────────────────────────
 
-def severity_for(seed: dict[str, Any]) -> str:
-    """One-word illness severity from the chart: stable / watcher / unstable.
-
-    Uses the condition's trend (CLINICAL_RANGES) + how far the latest vitals sit
-    outside the normal (stable_baseline) ranges. Conservative + deterministic."""
-    ranges = _ranges()
-    cond = str(seed.get("condition") or "stable_baseline")
-    trend = str((ranges.get(cond) or {}).get("trend", "flat"))
-    norm = ranges.get("stable_baseline") or {}
+def _abnormal_count(seed: dict[str, Any]) -> int:
+    """How many of the latest vitals sit outside the normal (stable_baseline)
+    ranges — the acuity signal behind severity + cross-patient prioritization."""
+    norm = _ranges().get("stable_baseline") or {}
     snaps = seed.get("vitals_baseline") or []
     latest = snaps[-1] if snaps else {}
-
     abn = 0
     for key, rk in (("hr", "hr"), ("rr", "rr"), ("spo2", "spo2"), ("pain", "pain")):
         v, rng = _num(latest.get(key)), norm.get(rk)
@@ -88,7 +82,17 @@ def severity_for(seed: dict[str, Any]) -> str:
         sys_, rng = _num(bp.split("/")[0]), norm.get("bp_sys")
         if sys_ is not None and rng and (sys_ < rng[0] or sys_ > rng[1]):
             abn += 1
+    return abn
 
+
+def severity_for(seed: dict[str, Any]) -> str:
+    """One-word illness severity from the chart: stable / watcher / unstable.
+
+    Uses the condition's trend (CLINICAL_RANGES) + how far the latest vitals sit
+    outside the normal ranges. Conservative + deterministic."""
+    cond = str(seed.get("condition") or "stable_baseline")
+    trend = str((_ranges().get(cond) or {}).get("trend", "flat"))
+    abn = _abnormal_count(seed)
     if trend == "worsening" or abn >= 2:
         return "unstable"
     if abn >= 1 or trend in ("improving", "fluctuating"):
@@ -287,14 +291,26 @@ def get(session_id: str) -> dict[str, Any] | None:
     return _HANDOFFS.get(session_id)
 
 
+MAX_PATIENTS = 3   # charge-nurse turnover cap (ratified FR-009 v1)
+
+
 def start_handoff(session_id: str, *, mode: str, persona_ids: list[str],
-                  counterpart_id: str, dial: str = "complete") -> dict[str, Any]:
-    """Begin a handoff phase. Builds a pack per covered patient. ONCOMING with the
-    'staged_error' dial requires an FR-008 error already armed (else ValueError)."""
+                  counterpart_id: str, dial: str = "complete",
+                  patient_sources: dict[str, str] | None = None) -> dict[str, Any]:
+    """Begin a handoff phase. Builds a pack per covered patient.
+
+    Multi-patient (H3, charge-nurse turnover): pass up to MAX_PATIENTS persona_ids;
+    `patient_sources` maps each persona → the session/encounter whose chart to
+    build its pack from (default: this session). The handoff walks the patients in
+    order; after the last, it asks the trainee to PRIORITIZE.
+
+    ONCOMING with the 'staged_error' dial requires an FR-008 error already armed."""
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
     if not persona_ids:
         raise ValueError("persona_ids: at least one patient required")
+    if len(persona_ids) > MAX_PATIENTS:
+        raise ValueError(f"at most {MAX_PATIENTS} patients per handoff (v1 cap)")
     if not counterpart_id:
         raise ValueError("counterpart_id required (the AI nurse/charge-nurse)")
     if mode == "oncoming":
@@ -303,16 +319,63 @@ def start_handoff(session_id: str, *, mode: str, persona_ids: list[str],
         if dial == "staged_error" and not _has_armed_error(session_id):
             raise ValueError("the 'staged_error' report dial needs an FR-008 error "
                              "armed first (arm one in the staged-error builder)")
-    packs = {pid: build_pack(session_id, pid) for pid in persona_ids}
+    sources = patient_sources or {}
+    packs = {pid: build_pack(sources.get(pid, session_id), pid) for pid in persona_ids}
     rec = {
         "mode": mode, "dial": dial, "counterpart_id": counterpart_id,
         "persona_ids": list(persona_ids), "order": list(persona_ids),
-        "packs": packs, "phase": "handoff",
+        "packs": packs, "phase": "handoff", "cursor": 0,
         "said": {pid: set() for pid in persona_ids},
         "started_at": time.time(),
     }
     _HANDOFFS[session_id] = rec
     return rec
+
+
+def current_patient(session_id: str) -> str | None:
+    """The persona being handed off right now (cursor), or None when complete."""
+    h = _HANDOFFS.get(session_id)
+    if not h or h.get("phase") not in ("handoff",):
+        return None
+    order = h["order"]
+    cur = h.get("cursor", 0)
+    return order[cur] if 0 <= cur < len(order) else None
+
+
+def advance_patient(session_id: str) -> str | None:
+    """Close the current patient and move on. Returns the next persona, or None
+    when the last patient is done — which (multi-patient) flips to the
+    'prioritization' phase (the cross-patient 'who first and why' question)."""
+    h = _HANDOFFS.get(session_id)
+    if not h:
+        return None
+    order = h["order"]
+    cur = h.get("cursor", 0)
+    if cur < len(order) - 1:
+        h["cursor"] = cur + 1
+        return order[h["cursor"]]
+    # last patient just closed
+    h["phase"] = "prioritization" if len(order) > 1 else "done"
+    return None
+
+
+def expected_priority(session_id: str) -> list[dict[str, Any]]:
+    """The rubric answer for 'who do you see first': patients ranked by severity
+    tier (unstable > watcher > stable), then acuity (abnormal-vital count), then
+    report order. The instructor can override (H6); H5 scores the student vs this."""
+    h = _HANDOFFS.get(session_id)
+    if not h:
+        return []
+    rank = {"unstable": 0, "watcher": 1, "stable": 2}
+    rows = []
+    for i, pid in enumerate(h["order"]):
+        pack = h["packs"].get(pid) or {}
+        rows.append((rank.get(pack.get("severity", "stable"), 2),
+                     -int(pack.get("_acuity", 0)), i, pid, pack))
+    rows.sort(key=lambda r: (r[0], r[1], r[2]))
+    return [{"persona_id": pid, "name": pack.get("patient", {}).get("name", pid),
+             "severity": pack.get("severity", "stable"), "rank": idx + 1}
+            for idx, (_s, _a, _i, pid, pack) in enumerate(rows)]
 
 
 def end_handoff(session_id: str) -> bool:
@@ -331,9 +394,12 @@ def state(session_id: str) -> dict[str, Any]:
     return {
         "active": True, "mode": h["mode"], "dial": h["dial"],
         "counterpart_id": h["counterpart_id"], "persona_ids": h["persona_ids"],
-        "phase": h["phase"],
+        "phase": h["phase"], "cursor": h.get("cursor", 0),
+        "current_patient": current_patient(session_id),
+        "n_patients": len(h["order"]),
         "covered": {pid: sorted(s) for pid, s in h["said"].items()},
         "still_unsaid": {pid: still_unsaid(session_id, pid) for pid in h["persona_ids"]},
+        "expected_priority": expected_priority(session_id) if len(h["order"]) > 1 else [],
     }
 
 
@@ -414,22 +480,41 @@ def prompt_block_for(session_id: str, card: dict[str, Any]) -> str:
     """The handoff context for THIS character's turn. '' for everyone except the
     chosen counterpart (matched by card id)."""
     h = _HANDOFFS.get(session_id)
-    if not h or h.get("phase") != "handoff":
+    if not h or h.get("phase") not in ("handoff", "prioritization"):
         return ""
     if str(card.get("id") or "") != str(h["counterpart_id"]):
         return ""
 
-    pid = h["order"][0] if h["order"] else (h["persona_ids"][0] if h["persona_ids"] else None)
+    # Cross-patient prioritization (charge-nurse, after the last patient).
+    if h["phase"] == "prioritization":
+        names = "; ".join(h["packs"][p]["patient"].get("name", p) for p in h["order"])
+        return (
+            f"HANDOFF — PRIORITIZATION. You have now received report on all "
+            f"{len(h['order'])} patients ({names}). Ask the trainee: \"Of these "
+            f"patients, who will you see first, and why?\" Listen to their reasoning "
+            f"and follow up briefly. Do NOT rank the patients for them or reveal the "
+            f"answer. {_CONTAIN}"
+        )
+
+    pid = current_patient(session_id) or (h["order"][0] if h["order"] else None)
     pack = h["packs"].get(pid) if pid else None
     if not pack:
         return ""
     name = pack["patient"].get("name", "the patient")
 
+    # Sequence frame for charge-nurse turnover (>1 patient).
+    seq = ""
+    if len(h["order"]) > 1:
+        cur = h.get("cursor", 0)
+        seq = (f"[Charge-nurse turnover — patient {cur + 1} of {len(h['order'])}: {name}. "
+               f"Focus on THIS patient now; move on only once this one is handed off "
+               f"with a read-back.]\n")
+
     if h["mode"] == "offgoing":
         gaps = still_unsaid(session_id, pid)
         gap_line = ("Still uncovered so far: " + "; ".join(gaps[:6]) + "."
                     if gaps else "They appear to have covered the key elements.")
-        return (
+        return seq + (
             f"HANDOFF — you are the ONCOMING nurse RECEIVING end-of-shift report on {name} "
             f"from the trainee. Listen to their report. You hold this patient's chart as your "
             f"reference, so you know what a complete handoff should cover.\n"
@@ -444,7 +529,7 @@ def prompt_block_for(session_id: str, card: dict[str, Any]) -> str:
         )
     # oncoming: the AI GIVES report (student receives + asks questions)
     include, note = _dial_includes(h["dial"])
-    return (
+    return seq + (
         f"HANDOFF — you are the OFF-GOING nurse GIVING end-of-shift report on {name} to the "
         f"trainee (the oncoming nurse). Give a structured verbal report, then answer their "
         f"follow-up questions HONESTLY from this chart. {note} {_CONTAIN}\n"
@@ -548,6 +633,7 @@ def build_pack(session_id: str, persona_id: str | None = None,
             "condition": str(seed.get("condition") or ""),
         },
         "severity": sev,
+        "_acuity": _abnormal_count(seed),   # abnormal-vital count → priority secondary
         "elements": elements,
         "high_risk_elements": [e[0] for e in ELEMENTS if e[2]],
         # A staged FR-008 discrepancy is live in this chart → the survey should
