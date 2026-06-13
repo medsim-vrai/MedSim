@@ -166,7 +166,7 @@ bundled as the authoring starter. Version pinned to handoff_core; CHANGELOG.
 |---|---|---|---|
 | 0 | FR-008 S5 (builder page) + S6 (debrief) | M+M | — (shared surfaces) |
 | 1 | H1 pack generator ✅ SHIPPED 2026-06-13 | M | — |
-| 2 | H2 session mode + counterpart | M | H1 |
+| 2 | H2 session mode + counterpart ✅ SHIPPED 2026-06-13 | M | H1 |
 | 3 | H4 survey station | M | H2 (parallel-safe with H3) |
 | 4 | H3 multi-patient | M | H2 |
 | 5 | H5 evaluation + debrief | L | H2, H4, FR-008 S6 |

@@ -1039,10 +1039,11 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             }
             # FR-001/002: same med-board injection as /listen (doctor/pharmacist only).
             # FR-008 S3: staged verbal-error context rides the same channel.
-            from . import med_errors, med_orders
+            from . import handoff, med_errors, med_orders
             _med_ctx = med_orders.prompt_block_for(sess.id, card)
             _err_ctx = med_errors.prompt_block_for(sess.id, card)
-            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx) if x)
+            _ho_ctx = handoff.prompt_block_for(sess.id, card)  # FR-009 H2 — counterpart only
+            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx, _ho_ctx) if x)
             ic_card = {**card, "_extra_context": _ctx} if _ctx else card
             sim = runtime.create_session_from_data(
                 scenario=scenario_doc, characters={cid: ic_card}, api_key=sess.api_key)
@@ -1111,6 +1112,15 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                                 status_code=400)
         scenario_id = str(body.get("scenario") or "default")
 
+        # FR-009 H2 — feed the trainee's utterance to the handoff gap-tracker so the
+        # oncoming-nurse counterpart can probe what was NOT covered (off-going mode).
+        try:
+            from . import handoff as _handoff
+            if _handoff.get(sess.id):
+                _handoff.note_student_utterance(sess.id, text)
+        except Exception:  # noqa: BLE001
+            pass
+
         # Device-token capability check (ADR-0027) — only when enforcement is on.
         # The token is minted into the QR/launch URL for (scenario, character), so a
         # LAN client that never scanned the QR can't drive the avatar / spend AI.
@@ -1144,10 +1154,11 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             # FR-001/002: doctor/pharmacist personas get the session's medication
             # board injected into their system prompt (authored data; code-selected
             # recommendation — the model never invents drugs/doses). No-op otherwise.
-            from . import med_errors, med_orders
+            from . import handoff, med_errors, med_orders
             _med_ctx = med_orders.prompt_block_for(sess.id, card)
             _err_ctx = med_errors.prompt_block_for(sess.id, card)
-            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx) if x)
+            _ho_ctx = handoff.prompt_block_for(sess.id, card)  # FR-009 H2 — counterpart only
+            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx, _ho_ctx) if x)
             turn_card = {**card, "_extra_context": _ctx} if _ctx else card
             sim = runtime.create_session_from_data(
                 scenario=scenario, characters={cid: turn_card}, api_key=sess.api_key,

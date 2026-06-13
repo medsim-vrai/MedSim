@@ -78,6 +78,10 @@ def session_vocab() -> str | None:
         # recognizer must never auto-correct toward the intended med).
         from . import med_errors
         words += med_errors.vocab_extras(sess.id)
+        # FR-009 H2: the active handoff's pack drugs/allergens (so the report +
+        # survey transcribe the order-critical vocabulary faithfully).
+        from . import handoff
+        words += handoff.handoff_vocab(sess.id)
         seen: set[str] = set()
         out: list[str] = []
         for w in words:

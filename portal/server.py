@@ -171,6 +171,10 @@ _med_routes.attach(app)
 from . import med_error_routes as _med_error_routes  # noqa: E402
 _med_error_routes.attach(app)
 
+# FR-009 H2 — shift-handoff instructor API (start/end/state of the handoff phase).
+from . import handoff_routes as _handoff_routes  # noqa: E402
+_handoff_routes.attach(app)
+
 # ADR-0038 — room-local STT: the Mac transcribes for the audio-only stations
 # (trainee audio crosses the LAN to THIS portal only; transcribed in memory,
 # discarded). Warm the model off-thread so the first take doesn't pay the load.

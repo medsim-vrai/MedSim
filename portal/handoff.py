@@ -237,6 +237,238 @@ def pack_vocab(pack: dict[str, Any]) -> list[str]:
     return list(pack.get("_vocab") or [])
 
 
+# ── H2: handoff session mode + AI counterpart ─────────────────────────────────
+#
+# A handoff runs as a phase over a live session. The instructor chooses:
+#   • mode — OFFGOING (student GIVES report; the AI is the oncoming nurse who
+#     RECEIVES, then probes the gaps) or ONCOMING (student RECEIVES; the AI is the
+#     off-going nurse who GIVES report, at a chosen completeness dial).
+#   • counterpart_id — which character (from the roster) is that AI nurse.
+#   • persona_ids — the patient(s) the handoff covers (multi-patient is H3).
+# The pack (H1) is the AI's knowledge AND the gap-detector. Only the counterpart
+# character receives the handoff prompt block; everyone else gets "".
+
+MODES = ("offgoing", "oncoming")
+DIALS = ("complete", "typical_gaps", "staged_error")
+
+# session_id -> handoff state
+_HANDOFFS: dict[str, dict[str, Any]] = {}
+
+# Coarse, RECALL-BIASED keyword cues per element — drives the receiver's probes
+# (if unsure, leave an element "unsaid" so the AI asks about it). NOT the score:
+# real coverage scoring is AI-assisted in H5.
+_ELEMENT_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "identity":   ("admitted", "came in", "here for", "year-old", "year old", "room", "bed "),
+    "severity":   ("stable", "unstable", "watcher", "critical", "sick", "deteriorat",
+                   "improving", "worsening", "severity", "guarded", "sats are", "holding"),
+    "background": ("allerg", "code status", "full code", "dnr", "dni", "history of",
+                   " hx", "diagnos", "known ", "background"),
+    "assessment": ("vital", "temp", "fever", "heart rate", " hr ", "blood pressure",
+                   " bp ", " sat", "spo2", "respirat", "resp rate", "lab", "wbc",
+                   "white count", "glucose", "afebrile"),
+    "meds":       ("medication", " med ", "meds", "dose", "milligram", " mg", "ordered",
+                   "antibiotic", "drip", "infus", "giving", "administer", "due at", "next dose"),
+    "access":     (" iv", "i.v", "line", "catheter", "drain", "access", "picc",
+                   "central", "peripheral", "foley", "gauge"),
+    "pending":    ("pending", "awaiting", "waiting on", "culture", "follow up", "follow-up",
+                   "result", "consult", "still out", "ordered but"),
+    "safety":     ("fall", "risk", "precaution", "airway", "isolation", "bleeding",
+                   "aspiration", "seizure", "bed alarm"),
+    "anticipate": ("watch for", "watch out", "if ", "escalate", "call ", "contingency",
+                   "keep an eye", "look out", "may need", "be ready"),
+    "synthesis":  ("so to summarize", "to summarize", "just to confirm", "read back",
+                   "let me confirm", "so the plan"),
+    "transfer":   ("i've got", "i have got", "i have them", "taking over", "i'll take",
+                   "got them", "i have him", "i have her", "i'll pick"),
+}
+
+
+def get(session_id: str) -> dict[str, Any] | None:
+    return _HANDOFFS.get(session_id)
+
+
+def start_handoff(session_id: str, *, mode: str, persona_ids: list[str],
+                  counterpart_id: str, dial: str = "complete") -> dict[str, Any]:
+    """Begin a handoff phase. Builds a pack per covered patient. ONCOMING with the
+    'staged_error' dial requires an FR-008 error already armed (else ValueError)."""
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {MODES}")
+    if not persona_ids:
+        raise ValueError("persona_ids: at least one patient required")
+    if not counterpart_id:
+        raise ValueError("counterpart_id required (the AI nurse/charge-nurse)")
+    if mode == "oncoming":
+        if dial not in DIALS:
+            raise ValueError(f"dial must be one of {DIALS}")
+        if dial == "staged_error" and not _has_armed_error(session_id):
+            raise ValueError("the 'staged_error' report dial needs an FR-008 error "
+                             "armed first (arm one in the staged-error builder)")
+    packs = {pid: build_pack(session_id, pid) for pid in persona_ids}
+    rec = {
+        "mode": mode, "dial": dial, "counterpart_id": counterpart_id,
+        "persona_ids": list(persona_ids), "order": list(persona_ids),
+        "packs": packs, "phase": "handoff",
+        "said": {pid: set() for pid in persona_ids},
+        "started_at": time.time(),
+    }
+    _HANDOFFS[session_id] = rec
+    return rec
+
+
+def end_handoff(session_id: str) -> bool:
+    return _HANDOFFS.pop(session_id, None) is not None
+
+
+def clear_session(session_id: str) -> None:
+    _HANDOFFS.pop(session_id, None)
+
+
+def state(session_id: str) -> dict[str, Any]:
+    """JSON-safe snapshot (sets → sorted lists)."""
+    h = _HANDOFFS.get(session_id)
+    if not h:
+        return {"active": False}
+    return {
+        "active": True, "mode": h["mode"], "dial": h["dial"],
+        "counterpart_id": h["counterpart_id"], "persona_ids": h["persona_ids"],
+        "phase": h["phase"],
+        "covered": {pid: sorted(s) for pid, s in h["said"].items()},
+        "still_unsaid": {pid: still_unsaid(session_id, pid) for pid in h["persona_ids"]},
+    }
+
+
+def _has_armed_error(session_id: str) -> bool:
+    try:
+        from portal import med_errors
+        return any(e.get("status") != "resolved"
+                   for e in med_errors.state(session_id).get("errors", []))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def note_student_utterance(session_id: str, text: str) -> None:
+    """Mark elements the student has TOUCHED (off-going mode), to drive the
+    receiver's gap probes. Recall-biased + best-effort; never raises."""
+    try:
+        h = _HANDOFFS.get(session_id)
+        if not h or not text:
+            return
+        low = " " + text.lower() + " "
+        hit = {eid for eid, kws in _ELEMENT_KEYWORDS.items()
+               if any(k in low for k in kws)}
+        # Drug/allergen mentions count as meds/background coverage.
+        for pid, pack in h["packs"].items():
+            for v in pack.get("_vocab", []):
+                if v.lower() in low:
+                    hit.add("meds")
+                    break
+            h["said"][pid] |= hit
+    except Exception:  # noqa: BLE001
+        return
+
+
+def still_unsaid(session_id: str, persona_id: str) -> list[str]:
+    """Element displays NOT yet covered for this patient, HIGH-RISK first —
+    the receiver's probe targets. Synthesis/transfer are the receiver's own job,
+    so they're excluded from the giver's gap list."""
+    h = _HANDOFFS.get(session_id)
+    if not h:
+        return []
+    said = h["said"].get(persona_id, set())
+    skip = {"synthesis", "transfer"}
+    pending = [(eid, eid in HIGH_RISK) for eid, _d, _hr in ELEMENTS
+               if eid not in said and eid not in skip]
+    pending.sort(key=lambda x: (not x[1], x[0]))   # high-risk first
+    return [DISPLAY[eid] for eid, _ in pending]
+
+
+# ── prompt blocks (only the counterpart character receives one) ───────────────
+
+_CONTAIN = ("Stay fully in character as a busy but professional nurse. Introduce nothing "
+            "beyond this patient's chart, and NEVER hint that this is a drill or that "
+            "anything is staged.")
+
+
+def _render_elements(pack: dict[str, Any], include: set[str]) -> str:
+    return "\n".join(f"  - {el['display']}: {el['content']}"
+                     for eid, el in pack["elements"].items() if eid in include)
+
+
+def _dial_includes(dial: str) -> tuple[set[str], str]:
+    """Elements the off-going AI should volunteer, + a delivery note, per dial."""
+    allids = {e[0] for e in ELEMENTS}
+    if dial == "typical_gaps":
+        # The evidence-backed common omissions: anticipatory guidance + a pending item.
+        return (allids - {"anticipate"},
+                "Give a realistic, slightly rushed report. It's fine to UNDER-cover the "
+                "pending items and to skip the 'watch-for' contingencies unless the "
+                "student asks — that mirrors a typical real handoff.")
+    if dial == "staged_error":
+        return (allids,
+                "Deliver the report normally; the staged discrepancy already in the chart "
+                "rides along — present it as fact without flagging it.")
+    return (allids, "Give a complete, well-organized report.")
+
+
+def prompt_block_for(session_id: str, card: dict[str, Any]) -> str:
+    """The handoff context for THIS character's turn. '' for everyone except the
+    chosen counterpart (matched by card id)."""
+    h = _HANDOFFS.get(session_id)
+    if not h or h.get("phase") != "handoff":
+        return ""
+    if str(card.get("id") or "") != str(h["counterpart_id"]):
+        return ""
+
+    pid = h["order"][0] if h["order"] else (h["persona_ids"][0] if h["persona_ids"] else None)
+    pack = h["packs"].get(pid) if pid else None
+    if not pack:
+        return ""
+    name = pack["patient"].get("name", "the patient")
+
+    if h["mode"] == "offgoing":
+        gaps = still_unsaid(session_id, pid)
+        gap_line = ("Still uncovered so far: " + "; ".join(gaps[:6]) + "."
+                    if gaps else "They appear to have covered the key elements.")
+        return (
+            f"HANDOFF — you are the ONCOMING nurse RECEIVING end-of-shift report on {name} "
+            f"from the trainee. Listen to their report. You hold this patient's chart as your "
+            f"reference, so you know what a complete handoff should cover.\n"
+            f"After they report: ask 2–4 focused follow-up QUESTIONS about what they did not "
+            f"cover — HIGH-RISK items first. {gap_line}\n"
+            f"If they never summarized the key points back to you, ASK them to confirm "
+            f"severity, next-due meds, pending items, and what to watch for (a read-back). "
+            f"Then accept responsibility (\"I've got them\"). Probe gaps through questions — "
+            f"do NOT recite the chart yourself. {_CONTAIN}\n"
+            f"CHART REFERENCE (your knowledge — do not read it aloud):\n"
+            f"{_render_elements(pack, {e[0] for e in ELEMENTS})}"
+        )
+    # oncoming: the AI GIVES report (student receives + asks questions)
+    include, note = _dial_includes(h["dial"])
+    return (
+        f"HANDOFF — you are the OFF-GOING nurse GIVING end-of-shift report on {name} to the "
+        f"trainee (the oncoming nurse). Give a structured verbal report, then answer their "
+        f"follow-up questions HONESTLY from this chart. {note} {_CONTAIN}\n"
+        f"REPORT CONTENT (your chart):\n{_render_elements(pack, include)}"
+    )
+
+
+def handoff_vocab(session_id: str) -> list[str]:
+    """Drug/allergen names across the active handoff's packs — merged into the
+    room-STT hints during the handoff phase so they transcribe faithfully."""
+    h = _HANDOFFS.get(session_id)
+    if not h:
+        return []
+    out: list[str] = []
+    for pack in h["packs"].values():
+        out += pack.get("_vocab", [])
+    seen, dedup = set(), []
+    for v in out:
+        if v.lower() not in seen:
+            seen.add(v.lower())
+            dedup.append(v)
+    return dedup
+
+
 def build_pack(session_id: str, persona_id: str | None = None,
                *, now: float | None = None) -> dict[str, Any]:
     """Generate the per-patient handoff context pack from the live session.
