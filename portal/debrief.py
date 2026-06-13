@@ -81,6 +81,40 @@ def _staged_errors_section(sess: control_session.ControlSession) -> list[dict[st
     return out
 
 
+def _handoff_section(sess: control_session.ControlSession) -> dict[str, Any] | None:
+    """FR-009 H5 — the shift-handoff evaluation for the debrief: per-patient
+    coverage map (confirmed lines), high-risk misses, the perception-vs-
+    performance survey delta, the prioritization result, and auto-generated
+    discussion prompts. None when no handoff ran this session."""
+    try:
+        from portal import handoff, handoff_eval
+    except Exception:  # noqa: BLE001
+        return None
+    h = handoff.get(sess.id)
+    if not h:
+        return None
+    # The trainee's report/questions from THIS session's transcript (the debrief
+    # holds the real session object; build fresh only if not already evaluated).
+    student_text = " ".join(
+        e.text for e in (getattr(sess, "transcript", None) or [])
+        if getattr(e, "direction", "") == "student" and getattr(e, "text", ""))
+    patients = []
+    for pid in h.get("persona_ids", []):
+        ev = handoff_eval.get_evaluation(sess.id, pid)
+        if not ev:
+            ev = handoff_eval.build_evaluation(sess.id, pid, transcript_text=student_text)
+        if ev:
+            patients.append(ev)
+    return {
+        "mode": h.get("mode"),
+        "n_patients": len(h.get("persona_ids", [])),
+        "patients": patients,
+        "expected_priority": handoff.expected_priority(sess.id)
+                             if len(h.get("persona_ids", [])) > 1 else [],
+        "survey_answers": handoff.survey_answers(sess.id),
+    }
+
+
 def build(sess: control_session.ControlSession) -> dict[str, Any]:
     """Build a complete debrief dict from a live or recently-active session."""
     entries = sess.transcript
@@ -112,6 +146,9 @@ def build(sess: control_session.ControlSession) -> dict[str, Any]:
 
     # FR-008 S6 — the staged-medication-error arc (empty list when none staged).
     staged_errors = _staged_errors_section(sess)
+
+    # FR-009 H5 — the shift-handoff evaluation (None when no handoff ran).
+    handoff_section = _handoff_section(sess)
 
     return {
         "session_id":        sess.id,
@@ -145,6 +182,7 @@ def build(sess: control_session.ControlSession) -> dict[str, Any]:
         "documentation_alignment":   documentation_alignment,
         "orders_alignment":          orders_alignment,
         "staged_errors":             staged_errors,
+        "handoff":                   handoff_section,
         "ehr_id":                    getattr(sess, "ehr_id", None),
         "charting_locked_at":        getattr(sess, "charting_locked_at", None),
         "transcript":                tagged_entries,
