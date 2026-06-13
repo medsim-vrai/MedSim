@@ -374,12 +374,22 @@
     // checkboxes stayed empty — operators had to manually re-check
     // every module. Now they see the same auto-fill experience as
     // the single-patient Step 2 template picker.
-    if (a.seed_persona_id) {
-      const personaCb = row.querySelector(
-        `[data-row-persona][value="${cssEscape(a.seed_persona_id)}"]`,
-      );
-      if (personaCb) personaCb.checked = true;
-    }
+    // 2026-06-13 — check the FULL character roster for this bed, matching the
+    // single-patient template picker (charge nurse, RT, family, doctor + the
+    // patient), not just the patient. The activity's label mirrors a sample
+    // scenario name whose personas[] is the authored roster; fall back to just
+    // the patient when no same-named sample exists (e.g. the resp-failure activity).
+    const _sample = (window.MEDSIM2.samples || []).find(s => s.name === a.label);
+    const _roster = (_sample && (_sample.personas || []).length)
+      ? _sample.personas
+      : (a.seed_persona_id ? [a.seed_persona_id] : []);
+    let _lastRosterCb = null;
+    _roster.forEach(pid => {
+      const cb = row.querySelector(`[data-row-persona][value="${cssEscape(pid)}"]`);
+      if (cb) { cb.checked = true; _lastRosterCb = cb; }
+    });
+    // Refresh the row's persona-count badge via the existing change listener.
+    if (_lastRosterCb) _lastRosterCb.dispatchEvent(new Event("change", { bubbles: true }));
     const seedModules = Array.isArray(a.seed_modules) ? a.seed_modules : [];
     if (seedModules.length) {
       const wantModules = new Set(seedModules);

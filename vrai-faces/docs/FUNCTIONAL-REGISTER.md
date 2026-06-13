@@ -380,6 +380,28 @@ quietly on this hardware (model loads but inference yields empty), (b) MediaReco
 codec/decodeAudioData mismatch on this Chrome build, (c) mic permission/route to the wrong input,
 (d) playback-side autoplay gating (if step 2 is also silent).
 
+## BUGFIX 2026-06-13 — multi-patient bed only checked the patient, not the full roster
+
+**Symptom (instructor):** in multi-patient (room) mode the characters checked off for a bed
+differ from single-patient — e.g. Mr. Hayes should bring his charge nurse, RT, wife and doctor
+(as single-patient does), but only Mr. Hayes was checked. **Root cause:** single-patient's
+template picker checks the sample scenario's full `personas[]` roster; the room wizard's
+per-row Activity picker checked only `seed_persona_id` (the patient). The room finalize already
+sends each row's CHECKED persona boxes, so the gap was purely the auto-fill. **Fix
+(client-only, no schema change):** when a bed's Activity is picked, match its label to the
+same-named sample scenario and check that sample's full `personas[]` roster (single source of
+truth = sample_scenarios.json), falling back to just the patient when no sample matches.
+Operators can still tick/untick per bed. 2 data-contract tests (Hayes pulls the 5-persona
+roster; every sample-backed activity's roster contains its patient). Gate 112.
+**Known gap:** the 8th built-in activity (Med-surg · Acute respiratory failure) has no
+matching sample → still seeds only its persona; that activity also seeds P-006 (a pharmacist)
+as its patient — a pre-existing data oddity to clean up when a resp-failure sample is authored.
+
+## BUGFIX 2026-06-13 — Medical Records opened in the same tab (Back reset the system)
+Launch EHR used a bare target= (a tab, often the same one); switched to an explicit
+sized window.open('medsim_ehr_window') with same-context-nav cancelled — closing the
+EHR window returns to an intact control panel. Mirrors the Live Ops + error-builder windows.
+
 ## BUGFIX 2026-06-13 — Medical Record showed the DOCTOR as the patient
 
 **Symptom (instructor):** single-patient session → open the Medical Record → the doctor is
