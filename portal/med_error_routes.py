@@ -22,7 +22,22 @@ from fastapi.responses import JSONResponse
 from portal import auth, control_session, credentials, med_errors
 
 
-def _active_or_409() -> tuple[Any | None, JSONResponse | None]:
+def _resolve(request: Request) -> tuple[Any | None, JSONResponse | None]:
+    """Resolve the target session. Multi-patient (FR-008 S7): ``?bed=<encounter_id>``
+    picks a specific bed in the active room. Single-patient: falls back to the sole
+    active encounter (get_active returns None in a multi-bed room, so the bed param
+    is REQUIRED there). The staged-error engine is keyed by session id and each
+    encounter IS a session, so per-bed arming needs only this resolution."""
+    bed = (request.query_params.get("bed") or "").strip()
+    if bed:
+        from portal import control_room
+        room = control_room.get_active_room()
+        sess = room.encounters.get(bed) if room else None
+        if sess is None:
+            return None, JSONResponse(
+                {"ok": False, "error": f"bed {bed!r} is not in the active room"},
+                status_code=404)
+        return sess, None
     sess = control_session.get_active()
     if sess is None:
         return None, JSONResponse(
@@ -52,9 +67,10 @@ def _err_line(rec: dict[str, Any]) -> str:
 def attach(app: Any) -> None:
     @app.get("/api/control/mederrors")
     async def api_mederrors(  # noqa: ANN202
+        request: Request,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        sess, err = _active_or_409()
+        sess, err = _resolve(request)
         if err:
             return err
         return JSONResponse({"ok": True, "taxonomy": med_errors.taxonomy(),
@@ -65,7 +81,7 @@ def attach(app: Any) -> None:
         request: Request,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        sess, err = _active_or_409()
+        sess, err = _resolve(request)
         if err:
             return err
         q = request.query_params
@@ -82,7 +98,7 @@ def attach(app: Any) -> None:
         request: Request,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        sess, err = _active_or_409()
+        sess, err = _resolve(request)
         if err:
             return err
         body = await request.json()
@@ -95,7 +111,7 @@ def attach(app: Any) -> None:
         request: Request,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        sess, err = _active_or_409()
+        sess, err = _resolve(request)
         if err:
             return err
         body = await request.json()
@@ -122,7 +138,7 @@ def attach(app: Any) -> None:
         request: Request,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        sess, err = _active_or_409()
+        sess, err = _resolve(request)
         if err:
             return err
         body = await request.json()
@@ -139,7 +155,7 @@ def attach(app: Any) -> None:
         request: Request,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        sess, err = _active_or_409()
+        sess, err = _resolve(request)
         if err:
             return err
         body = await request.json()
@@ -159,7 +175,7 @@ def attach(app: Any) -> None:
         request: Request,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        sess, err = _active_or_409()
+        sess, err = _resolve(request)
         if err:
             return err
         body = await request.json()
@@ -175,7 +191,7 @@ def attach(app: Any) -> None:
         request: Request,
         _: Annotated[credentials.Vault, Depends(auth.require_vault)],
     ):
-        sess, err = _active_or_409()
+        sess, err = _resolve(request)
         if err:
             return err
         body = await request.json()

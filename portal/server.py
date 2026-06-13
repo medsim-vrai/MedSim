@@ -1425,8 +1425,20 @@ async def control_errors_builder(
     six-step structured wizard (type → vector → encounter → grounded payload →
     optional impact → review-and-arm). Bounded by construction — every choice
     comes from the catalog ∩ the session's chart; free text is the debrief note
-    only. Armed errors are managed from the Live window's status card."""
-    return templates.TemplateResponse(request, "control_errors.html", {})
+    only. Armed errors are managed from the Live window's status card.
+
+    FR-008 S7 — ``?bed=<encounter_id>`` scopes the whole builder to one bed in a
+    multi-patient room (the page threads it onto every API call); absent, it
+    targets the single active session."""
+    bed = (request.query_params.get("bed") or "").strip()
+    bed_label = ""
+    if bed:
+        room = control_room.get_active_room()
+        enc = room.encounters.get(bed) if room else None
+        if enc is not None:
+            bed_label = getattr(enc, "encounter_label", "") or enc.scenario_name or ""
+    return templates.TemplateResponse(
+        request, "control_errors.html", {"bed": bed, "bed_label": bed_label})
 
 
 @app.get("/api/control/state")

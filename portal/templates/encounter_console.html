@@ -314,6 +314,17 @@
     </form>
   </article>
 
+  <!-- FR-008 S7 — staged medication errors scoped to THIS bed. Build assigns an
+       error to this patient's characters; the list manages it during the scenario. -->
+  <article class="console-card" id="card-mederrors">
+    <h2>⚠️ Staged medication errors</h2>
+    <p class="muted small">Assign a classified error to this patient's characters, then
+      trigger / stabilize / mark caught or missed here. Scoped to this bed only.</p>
+    <button type="button" id="mederr-build" class="primary-action"
+            data-encounter-id="{{ encounter.id }}">⚠️ Build a staged error for this bed ↗</button>
+    <div id="mederr-list" style="margin-top:10px;"><p class="muted small">loading…</p></div>
+  </article>
+
   <!-- Chart event recent — read-only window into what students wrote. -->
   <article class="console-card" id="card-chart">
     <h2>Recent chart events</h2>
@@ -374,4 +385,70 @@
 </script>
 <script src="{{ static_v('ecg_strip.js') }}"></script>
 <script src="{{ static_v('encounter_console.js') }}"></script>
+<script>
+// FR-008 S7 — staged medication errors for THIS bed. Build opens the wizard
+// scoped to this encounter (?bed=); the list manages armed errors per bed.
+(function () {
+  var BED = {{ encounter.id | tojson }};
+  var buildBtn = document.getElementById('mederr-build');
+  var list = document.getElementById('mederr-list');
+  if (!buildBtn || !list) return;
+  buildBtn.addEventListener('click', function () {
+    var w = window.open('/portal/control/errors?bed=' + encodeURIComponent(BED),
+                        'medsim_error_builder_' + BED, 'width=1000,height=940');
+    if (w) w.focus();
+  });
+  function api(p) { return p + (p.indexOf('?') >= 0 ? '&' : '?') + 'bed=' + encodeURIComponent(BED); }
+  function post(path, body) {
+    return fetch(api('/api/control/mederrors/' + path), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json(); })
+      .then(function (j) { if (!j.ok) alert(j.error || 'failed'); refresh(); });
+  }
+  function chip(e) {
+    var imp = e.impact, st = e.impact_state;
+    var stateTxt = e.status.toUpperCase() +
+      (st ? (st.stabilized_at ? ' · impact stabilized' : ' · IMPACT LIVE') : '');
+    var d = document.createElement('div');
+    d.style.cssText = 'border:1px solid #c3cedd;border-radius:8px;padding:8px 10px;margin:6px 0;background:#fbfcfe;font-size:13px;';
+    var html = '<b>' + e.id + ' · ' + (e.payload.display || '') + '</b>' +
+      '<div class="muted small">' + stateTxt +
+      (imp ? ' · impact: ' + imp.profile + '/' + imp.severity + ' (' + imp.trigger + ')' : '') +
+      (e.note ? ' · ' + e.note : '') + '</div><div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">';
+    if (e.status !== 'resolved') {
+      if (imp && !st) html += '<button data-act="trigger" data-id="' + e.id + '"' +
+        (imp.severity === 'severe' ? ' data-severe="1"' : '') + '>⚡ Trigger impact</button>';
+      if (st && !st.stabilized_at) html += '<button data-act="stabilize" data-id="' + e.id + '">🩺 Stabilize</button>';
+      html += '<button data-act="caught" data-id="' + e.id + '">✅ Caught</button>' +
+              '<button data-act="missed" data-id="' + e.id + '">❌ Missed</button>' +
+              '<button data-act="disarm" data-id="' + e.id + '">↩ Disarm</button>';
+    }
+    html += '</div>'; d.innerHTML = html; return d;
+  }
+  function refresh() {
+    fetch(api('/api/control/mederrors')).then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) { list.innerHTML = '<p class="muted small">' + (j.error || 'unavailable') + '</p>'; return; }
+        var errs = j.errors || [];
+        if (!errs.length) { list.innerHTML = '<p class="muted small">none staged — build one above.</p>'; return; }
+        list.innerHTML = '';
+        errs.forEach(function (e) { list.appendChild(chip(e)); });
+        list.querySelectorAll('button[data-act]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var act = b.getAttribute('data-act'), id = b.getAttribute('data-id');
+            if (act === 'trigger') {
+              var sev = b.getAttribute('data-severe') === '1';
+              if (sev && !confirm('SEVERE impact — the patient will deteriorate sharply. Fire it?')) return;
+              post('trigger', { error_id: id, confirm_severe: true });
+            } else if (act === 'stabilize') post('stabilize', { error_id: id });
+            else if (act === 'disarm') post('disarm', { error_id: id });
+            else { var note = prompt('Debrief note (optional):') || ''; post('resolve', { error_id: id, outcome: act, note: note }); }
+          });
+        });
+      });
+  }
+  refresh(); setInterval(refresh, 5000);
+})();
+</script>
 {% endblock %}

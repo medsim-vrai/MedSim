@@ -337,6 +337,19 @@ wasm path only (skips the extended QDQ rewrite; iPad/WebGPU keeps full optimizat
 Awaiting the post-③ tablet take. Lesson: dev-build ORT on the unpiloted platform = three stacked
 failures, each only visible after the previous one fell.
 
+**FR-008 S7 (2026-06-13) — per-encounter staged errors (multi-patient).** Field gap: the
+builder only worked single-patient (its routes resolved "the session" via get_active(), which
+returns None in a multi-bed room) and had no entry point on the per-bed console. Now the
+staged-error API resolves a specific bed via `?bed=<encounter_id>` (the engine is already keyed
+by session id and each encounter IS a session — so per-bed arming needed only route
+resolution); single-patient still falls back to get_active(). The encounter console gained a
+"⚠️ Staged medication errors" card per bed — a "Build a staged error for this bed ↗" launch
+(opens the wizard scoped via ?bed=, its own window per bed) + the armed-errors management list
+(trigger / stabilize / caught / missed / disarm), all scoped to that bed. The builder page
+threads `bed` onto every API call and shows the bed label. Per-bed isolation tested (arming on
+bed A never appears on bed B; lifecycle actions 404 on the wrong bed; unknown bed → 404).
+Gate 101 (v8 subset). 
+
 **FR-008 COMPLETE (2026-06-12): all six stages shipped.** S5 — the staged-error BUILDER
 (own page off Setup: six-step bounded wizard, taxonomy-filtered, grounded suggestions only,
 impact previews with exact staged vitals, severe double-confirm, review-and-arm) + the Live

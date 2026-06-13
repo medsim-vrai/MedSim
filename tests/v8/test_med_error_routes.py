@@ -173,3 +173,91 @@ def test_builder_page_renders_for_instructor(client) -> None:
     assert r.status_code == 200
     assert "Staged error builder" in r.text
     assert "structured path" in r.text
+
+
+# ── FR-008 S7 — per-encounter (multi-patient) staged errors ─────────────────────
+import copy as _copy
+
+
+@pytest.fixture
+def room_client(monkeypatch):
+    """Logged-in instructor + a TWO-bed room. Each bed is its own ControlSession
+    with a grounded chart (MAR + documented allergy) so suggestions resolve."""
+    _ensure_vault()
+    from portal import control_room, control_session, ehr_db, med_orders, server
+    c = TestClient(server.app)
+    c.post("/login", data={"password": TEST_PASSWORD})
+
+    if control_room.get_active_room() is not None:
+        control_room.end_active_room()
+    room = control_room.create_room(label="two-bed-test")
+    cond = next(k for k in med_orders.catalog() if not k.startswith("_"))
+
+    beds = {}
+    for name in ("A", "B"):
+        sess = control_session.ControlSession(
+            id=f"bed-{name}", join_code=f"BED{name}1",
+            scenario_name=f"Bed {name}", api_key="dummy",
+            selected_personas=["P-001"], selected_modules=[], ehr_id="cyrus")
+        room.add_encounter(sess)
+        med_orders.init_session(sess.id, cond)
+        beds[name] = sess
+
+    seeds = {f"bed-{n}": {
+        "allergies": [{"substance": "Penicillin", "reaction": "rash"}],
+        "medications": [{"name": "Heparin gtt", "dose": "see order", "route": "IV",
+                         "frequency": "cont", "status": "active"}],
+        "vitals_baseline": [{"time": "t-4h", "hr": "82", "bp": "118/74"}],
+    } for n in ("A", "B")}
+    monkeypatch.setattr(ehr_db, "seed", lambda sid: _copy.deepcopy(seeds.get(sid, {})))
+    monkeypatch.setattr(ehr_db, "update_seed", lambda sid, new: seeds.__setitem__(sid, _copy.deepcopy(new)))
+    monkeypatch.setattr(ehr_db, "orders", lambda sid: [])
+    monkeypatch.setattr(ehr_db, "append_event", lambda *a, **k: 1)
+    c._beds = beds
+    yield c
+    for n in ("A", "B"):
+        med_orders._SESSION_MEDS.pop(f"bed-{n}", None)
+        med_errors.clear_session(f"bed-{n}")
+    control_room.end_active_room()
+
+
+def test_multibed_requires_a_bed_selector(room_client):
+    from portal import control_room
+    # get_active() is None in a multi-bed room → no-bed call 409s.
+    assert control_room.get_active() is None
+    assert room_client.get("/api/control/mederrors").status_code == 409
+    # An unknown bed is a clean 404.
+    assert room_client.get("/api/control/mederrors?bed=nope").status_code == 404
+
+
+def test_error_armed_on_one_bed_does_not_leak_to_the_other(room_client):
+    # Both beds start empty.
+    for n in ("A", "B"):
+        j = room_client.get(f"/api/control/mederrors?bed=bed-{n}").json()
+        assert j["ok"] and j["errors"] == []
+    # Arm an error on bed A only.
+    cand = room_client.get("/api/control/mederrors/suggest"
+                           "?type=allergy&vector=verbal&encounter=med_pass&bed=bed-A"
+                           ).json()["candidates"][0]
+    armed = room_client.post("/api/control/mederrors/arm?bed=bed-A", json={
+        "type": "allergy", "vector": "verbal", "encounter": "med_pass",
+        "payload": cand}).json()
+    assert armed["ok"]
+    # Bed A shows it; bed B is still empty (per-bed isolation).
+    a = room_client.get("/api/control/mederrors?bed=bed-A").json()["errors"]
+    b = room_client.get("/api/control/mederrors?bed=bed-B").json()["errors"]
+    assert len(a) == 1 and b == []
+    # Lifecycle action also scopes by bed.
+    eid = armed["error_rec"]["id"]
+    assert room_client.post("/api/control/mederrors/resolve?bed=bed-A",
+                            json={"error_id": eid, "outcome": "caught"}).json()["ok"]
+    # Resolving on bed B for that id is a 404 (not present there).
+    assert room_client.post("/api/control/mederrors/resolve?bed=bed-B",
+                            json={"error_id": eid, "outcome": "caught"}).status_code == 404
+
+
+def test_builder_page_scopes_to_a_bed(room_client):
+    r = room_client.get("/portal/control/errors?bed=bed-A")
+    assert r.status_code == 200
+    assert "Bed: Bed A" in r.text
+    assert '"bed-A"' in r.text or "bed-A" in r.text     # threaded into the page JS

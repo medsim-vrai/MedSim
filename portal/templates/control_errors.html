@@ -44,9 +44,10 @@
   <h1>⚠️ Staged error builder</h1>
   <a href="/portal/control/setup" id="returnlink" style="font-size:13px">← back to Setup</a>
 </div>
+{% if bed_label %}<p style="margin:6px 0 2px;font-weight:700;color:#0a234f;">Bed: {{ bed_label }}</p>{% endif %}
 <p class="muted">A structured path: every choice comes from the reviewed catalog and this
-session's own chart — nothing free-form. Nothing is staged until you confirm the final
-summary. Already-armed errors are managed from the Live window.</p>
+{% if bed_label %}bed's{% else %}session's{% endif %} own chart — nothing free-form. Nothing is staged until you confirm the final
+summary. Already-armed errors are managed from the Live window{% if bed_label %} for this bed{% endif %}.</p>
 
 <div class="steps" id="pips"></div>
 <div class="err-banner" id="errbox"></div>
@@ -63,6 +64,12 @@ summary. Already-armed errors are managed from the Live window.</p>
                'Patient impact', 'Review & arm'];
   // Opened as a separate window from the control panel? Then "return" = close it.
   var isPopup = !!(window.opener && !window.opener.closed);
+  // FR-008 S7 — which BED (encounter id) this builder targets in a multi-patient
+  // room; "" means the single active session. Threaded onto every API call.
+  var BED = {{ bed | tojson }};
+  function api(path) {
+    return BED ? path + (path.indexOf('?') >= 0 ? '&' : '?') + 'bed=' + encodeURIComponent(BED) : path;
+  }
 
   function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
   function showErr(m) { var b = document.getElementById('errbox');
@@ -218,8 +225,8 @@ summary. Already-armed errors are managed from the Live window.</p>
 
   function onNext() {
     if (state.step === 3) {
-      fetch('/api/control/mederrors/suggest?type=' + state.type.id + '&vector=' + state.vector +
-            '&encounter=' + state.encounter)
+      fetch(api('/api/control/mederrors/suggest?type=' + state.type.id + '&vector=' + state.vector +
+            '&encounter=' + state.encounter))
         .then(function (r) { return r.json(); })
         .then(function (j) {
           if (!j.ok) { showErr(j.error); return; }
@@ -228,7 +235,7 @@ summary. Already-armed errors are managed from the Live window.</p>
       return;
     }
     if (state.step === 4) {
-      fetch('/api/control/mederrors/impacts', { method: 'POST',
+      fetch(api('/api/control/mederrors/impacts'), { method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: state.type.id, payload: state.candidate }) })
         .then(function (r) { return r.json(); })
@@ -240,7 +247,7 @@ summary. Already-armed errors are managed from the Live window.</p>
                    payload: state.candidate, note: state.note };
       if (state.wantImpact) body.impact = { profile: state.profile, severity: state.severity,
                                             trigger: state.trigger, confirmed: state.confirmed };
-      fetch('/api/control/mederrors/arm', { method: 'POST',
+      fetch(api('/api/control/mederrors/arm'), { method: 'POST',
         headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then(function (r) { return r.json(); })
         .then(function (j) {
@@ -270,7 +277,7 @@ summary. Already-armed errors are managed from the Live window.</p>
     rl.onclick = function (e) { if (isPopup) { e.preventDefault(); window.close(); } };
   })();
 
-  fetch('/api/control/mederrors').then(function (r) { return r.json(); })
+  fetch(api('/api/control/mederrors')).then(function (r) { return r.json(); })
     .then(function (j) {
       if (!j.ok) { showErr(j.error + ' — set up and start a session first.'); return; }
       TAX = j.taxonomy; render();
