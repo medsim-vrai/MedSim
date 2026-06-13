@@ -42,7 +42,7 @@
 <body>
 <div class="wiz-head">
   <h1>⚠️ Staged error builder</h1>
-  <a href="/portal/control/setup" style="font-size:13px">← back to Setup</a>
+  <a href="/portal/control/setup" id="returnlink" style="font-size:13px">← back to Setup</a>
 </div>
 <p class="muted">A structured path: every choice comes from the reviewed catalog and this
 session's own chart — nothing free-form. Nothing is staged until you confirm the final
@@ -61,6 +61,8 @@ summary. Already-armed errors are managed from the Live window.</p>
   var candidates = [], profiles = [];
   var STEPS = ['Error type', 'How it arrives', 'When it appears', 'The specific error',
                'Patient impact', 'Review & arm'];
+  // Opened as a separate window from the control panel? Then "return" = close it.
+  var isPopup = !!(window.opener && !window.opener.closed);
 
   function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
   function showErr(m) { var b = document.getElementById('errbox');
@@ -243,17 +245,30 @@ summary. Already-armed errors are managed from the Live window.</p>
         .then(function (r) { return r.json(); })
         .then(function (j) {
           if (!j.ok) { showErr(j.error); return; }
+          var ret = isPopup
+            ? '<button class="primary" onclick="window.close()">✓ Done — close &amp; return to the control panel</button>'
+            : '<button class="primary" onclick="location.href=\'/portal/control/setup\'">← Return to the control panel</button>';
           document.getElementById('wiz').innerHTML =
-            '<div class="wiz-card"><h2>✅ Armed</h2><p>' + j.error_rec.payload.display +
-            ' is staged. Manage it (trigger / stabilize / caught / missed) from the ' +
-            '<b>Live window</b>. You can build another, or close this page.</p>' +
-            '<button class="primary" onclick="location.reload()">Build another</button></div>';
+            '<div class="wiz-card"><h2>✅ Armed</h2><p><b>' + j.error_rec.payload.display +
+            '</b> is staged. Manage it (trigger / stabilize / caught / missed) from the ' +
+            '<b>Live Operations window</b>.</p>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">' + ret +
+            '<button onclick="location.reload()">＋ Build another error</button></div></div>';
           document.getElementById('pips').innerHTML = '';
         });
       return;
     }
     state.step++; render();
   }
+
+  // Make the header return-control match how the page was opened: close the
+  // window when it's a popup, otherwise link back to the Setup page.
+  (function () {
+    var rl = document.getElementById('returnlink');
+    if (!rl) return;
+    rl.textContent = isPopup ? '✕ Close this window' : '← back to Setup';
+    rl.onclick = function (e) { if (isPopup) { e.preventDefault(); window.close(); } };
+  })();
 
   fetch('/api/control/mederrors').then(function (r) { return r.json(); })
     .then(function (j) {
