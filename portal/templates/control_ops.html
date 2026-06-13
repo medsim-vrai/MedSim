@@ -368,6 +368,136 @@
 
     <!-- FR-008 S5 — staged-error status card (live stage). Compact chips per armed
          error: state + Trigger impact / Stabilize / Caught / Missed / Disarm. -->
+    <!-- FR-009 H6 — shift-handoff: configure + run + score the turnover. -->
+    <section class="check-card" id="handoff-card"{% if stage == 'setup' %} style="display:none"{% endif %}>
+      <h3 style="cursor:pointer" id="handoff-toggle">🔄 Shift handoff <span id="handoff-summary" class="muted small"></span></h3>
+      <div id="handoff-body" style="display:none">
+        <div id="handoff-config">
+          <label class="small" style="display:block;margin:4px 0;">Mode:
+            <select id="ho-mode">
+              <option value="offgoing">Student GIVES report (AI nurse receives + probes gaps)</option>
+              <option value="oncoming">Student RECEIVES report (AI nurse gives it)</option>
+            </select>
+          </label>
+          <label class="small" id="ho-dial-wrap" style="display:none;margin:4px 0;">Report completeness:
+            <select id="ho-dial">
+              <option value="complete">Complete</option>
+              <option value="typical_gaps">Typical gaps (drops watch-fors + a pending item)</option>
+              <option value="staged_error">Staged-error embedded (needs an armed error)</option>
+            </select>
+          </label>
+          <label class="small" style="display:block;margin:4px 0;">AI nurse / charge-nurse (the counterpart):
+            <select id="ho-counterpart">
+              {% for p in personas_in_use %}<option value="{{ p.id }}">{{ p.name }} — {{ p.role }}</option>{% endfor %}
+            </select>
+          </label>
+          <button type="button" id="ho-start" class="primary-action">▶ Start handoff</button>
+          <p class="muted small">After the handoff, send the student's tablet to the survey
+            (append <code>&survey=1</code> to its URL), then press <b>Score</b> to see coverage
+            vs their self-rating.</p>
+        </div>
+        <div id="handoff-active" style="display:none"></div>
+        <div id="handoff-eval" style="display:none"></div>
+      </div>
+    </section>
+    <script>
+    (function () {
+      var body = document.getElementById('handoff-body');
+      if (!body) return;
+      var summary = document.getElementById('handoff-summary');
+      document.getElementById('handoff-toggle').addEventListener('click', function () {
+        body.style.display = body.style.display === 'none' ? 'block' : 'none';
+      });
+      document.getElementById('ho-mode').addEventListener('change', function (e) {
+        document.getElementById('ho-dial-wrap').style.display =
+          e.target.value === 'oncoming' ? 'block' : 'none';
+      });
+      function api(path, opts) {
+        return fetch('/api/control/handoff' + path, opts).then(function (r) { return r.json(); });
+      }
+      document.getElementById('ho-start').addEventListener('click', function () {
+        var b = { mode: document.getElementById('ho-mode').value,
+                  counterpart_id: document.getElementById('ho-counterpart').value };
+        if (b.mode === 'oncoming') b.dial = document.getElementById('ho-dial').value;
+        api('/start', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(b) })
+          .then(function (j) { if (!j.ok) { alert(j.error || 'failed'); return; } refresh(); });
+      });
+      function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+      function renderActive(st) {
+        var cfg = document.getElementById('handoff-config');
+        var a = document.getElementById('handoff-active');
+        if (!st.active) { cfg.style.display = 'block'; a.style.display = 'none';
+          document.getElementById('handoff-eval').style.display = 'none'; return; }
+        cfg.style.display = 'none'; a.style.display = 'block';
+        var h = '<div class="muted small">Mode: ' + esc(st.mode) + (st.dial ? (' · ' + esc(st.dial)) : '')
+              + ' · phase: ' + esc(st.phase) + '</div>';
+        if (st.n_patients > 1 && st.current_patient)
+          h += '<div class="small">Current patient: ' + esc(st.current_patient)
+             + ' (' + (st.cursor + 1) + '/' + st.n_patients + ')</div>';
+        h += '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">';
+        if (st.phase === 'handoff' && st.n_patients > 1) h += '<button data-act="advance">Next patient →</button>';
+        if (st.phase === 'handoff' || st.phase === 'prioritization') h += '<button data-act="evaluate">🧮 Score the handoff</button>';
+        h += '<button data-act="end">End handoff</button></div>';
+        a.innerHTML = h;
+        a.querySelectorAll('button[data-act]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var act = btn.getAttribute('data-act');
+            if (act === 'advance') api('/advance', { method: 'POST' }).then(refresh);
+            else if (act === 'evaluate') api('/evaluate', { method: 'POST' })
+              .then(function (j) { renderEval(j.evaluations || {}); });
+            else if (act === 'end') { if (confirm('End the handoff?')) api('/end', { method: 'POST' }).then(refresh); }
+          });
+        });
+      }
+      function renderEval(evals) {
+        var box = document.getElementById('handoff-eval'); box.style.display = 'block';
+        var html = '';
+        Object.keys(evals).forEach(function (pid) {
+          var ev = evals[pid]; if (!ev) return;
+          var d = ev.perception_delta || {};
+          html += '<div style="border-top:1px solid #dde2ee;margin-top:8px;padding-top:6px;"><b>'
+            + esc(ev.patient && ev.patient.name || pid) + '</b> — measured ' + d.measured_pct + '%</div>';
+          var comp = (d.rows || []).filter(function (r) { return r.q === 'completeness'; })[0];
+          if (comp) html += '<div class="small">Self ' + comp.self_pct + '% vs measured '
+            + comp.measured_pct + '% → <b>' + esc(comp.verdict) + '</b></div>';
+          html += '<div class="muted small" style="margin-top:3px;">Tick to confirm (✗ = high-risk miss); untick a box you disagree with:</div>';
+          Object.keys(ev.coverage).forEach(function (eid) {
+            var c = ev.coverage[eid];
+            var mark = c.said ? '✓' : (c.high_risk ? '✗' : '·');
+            html += '<label class="small" style="display:block;' + (c.high_risk && !c.said ? 'color:#a02020;' : '') + '">'
+              + '<input type="checkbox" data-confirm="' + pid + ':' + eid + '"' + (c.confirmed ? ' checked' : '') + '> '
+              + mark + ' ' + esc(c.display) + '</label>';
+          });
+          if ((ev.auto_prompts || []).length) {
+            html += '<div class="small muted" style="margin-top:4px;">Debrief prompts:</div><ul class="small" style="margin:2px 0 0 16px;">';
+            ev.auto_prompts.forEach(function (p) { html += '<li>' + esc(p) + '</li>'; });
+            html += '</ul>';
+          }
+        });
+        html += '<div style="margin-top:8px;"><a href="/portal/debrief/current" target="_blank" rel="noopener">Open debrief ↗</a></div>';
+        box.innerHTML = html;
+        box.querySelectorAll('input[data-confirm]').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var parts = cb.getAttribute('data-confirm').split(':');
+            api('/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ persona_id: parts[0], element_id: parts[1], confirmed: cb.checked }) });
+          });
+        });
+      }
+      function refresh() {
+        api('/').then(function (st) {
+          summary.textContent = st.active ? ('· ' + st.mode + ' · ' + st.phase) : '· not started';
+          renderActive(st);
+          if (st.active) api('/evaluation').then(function (j) {
+            if (j.evaluations && Object.keys(j.evaluations).length) renderEval(j.evaluations);
+          });
+        });
+      }
+      refresh(); setInterval(refresh, 6000);
+    })();
+    </script>
+
     <section class="check-card" id="errors-card"{% if stage == 'setup' %} style="display:none"{% endif %}>
       <h3 style="cursor:pointer" id="errors-toggle">⚠️ Staged errors <span id="errors-summary" class="muted small"></span></h3>
       <div id="errors-body" style="display:none"></div>

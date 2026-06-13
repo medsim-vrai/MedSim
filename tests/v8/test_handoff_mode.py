@@ -220,3 +220,42 @@ def test_survey_routes_serve_and_store(client):
     # It landed in handoff state.
     sess = client._sess
     assert handoff.survey_answers(sess.id)["completeness"]["text"] == "Seven."
+
+
+# ── H6 — evaluate / confirm instructor routes ───────────────────────────────────
+
+def test_evaluate_and_confirm_routes(client):
+    from portal import control_session
+    sess = client._sess
+    # Give the session a student report to score.
+    sess.transcript.append(control_session.TranscriptEntry(
+        ts=0.0, source="station:x", source_label="x", persona_id="P-099",
+        persona_name="Margaret", direction="student",
+        text="This is Margaret, admitted with pneumonia, on Ceftriaxone, 20-gauge IV, fall risk."))
+    client.post("/api/control/handoff/start",
+                json={"mode": "offgoing", "counterpart_id": "P-040"})
+    client.post("/api/face/P-040/survey/answer", json={"q": "completeness", "text": "Nine."})
+    # Score it.
+    j = client.post("/api/control/handoff/evaluate").json()
+    assert j["ok"]
+    pid = client.get("/api/control/handoff").json()["persona_ids"][0]
+    ev = j["evaluations"][pid]
+    assert ev["coverage"]["meds"]["said"] is True
+    assert ev["perception_delta"]["measured_pct"] < 90      # self 90 will overestimate
+    assert ev["coverage"]["background"]["confirmed"] is False
+    # Confirm + override a line.
+    c = client.post("/api/control/handoff/confirm",
+                    json={"persona_id": pid, "element_id": "background",
+                          "said": True, "confirmed": True}).json()
+    assert c["ok"] and c["evaluation"]["coverage"]["background"]["confirmed"] is True
+    assert c["evaluation"]["coverage"]["background"]["said"] is True
+    # GET evaluation reflects it.
+    g = client.get("/api/control/handoff/evaluation").json()
+    assert g["evaluations"][pid]["coverage"]["background"]["said"] is True
+    # Unknown line → 404.
+    assert client.post("/api/control/handoff/confirm",
+                       json={"persona_id": pid, "element_id": "zzz"}).status_code == 404
+
+
+def test_evaluate_without_handoff_is_409(client):
+    assert client.post("/api/control/handoff/evaluate").status_code == 409

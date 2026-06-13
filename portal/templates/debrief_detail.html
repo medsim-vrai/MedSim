@@ -159,6 +159,37 @@
   </div>
 </section>
 
+<!-- ===== FR-009 · Shift handoff ===== -->
+{% if debrief.handoff %}
+{% set ho = debrief.handoff %}
+<section class="db-section">
+  <h2>🔄 Shift handoff <span class="muted small">({{ ho.mode }}{% if ho.n_patients > 1 %} · {{ ho.n_patients }} patients{% endif %})</span></h2>
+  {% for pt in ho.patients %}
+  {% set d = pt.perception_delta %}
+  <div style="border:1px solid #c3cedd;border-radius:8px;padding:10px 12px;margin:8px 0;">
+    <h3 style="margin:0 0 4px;">{{ pt.patient.name or pt.persona_id }} <span class="muted small">— measured coverage {{ d.measured_pct }}%</span></h3>
+    {% for r in d.rows %}{% if r.q == 'completeness' %}
+      <p class="small" style="margin:2px 0;">Self-rating {{ r.self_pct }}% vs measured {{ r.measured_pct }}% →
+        <strong style="color:{% if r.verdict == 'overestimate' %}#a02020{% elif r.verdict == 'aligned' %}#1d6b43{% else %}#143b8a{% endif %};">{{ r.verdict | upper }}</strong></p>
+    {% endif %}{% endfor %}
+    {% if d.high_risk_misses %}<p class="small" style="color:#a02020;margin:2px 0;"><strong>High-risk misses:</strong> {{ d.high_risk_misses | join(', ') }}</p>{% endif %}
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px;">
+      {% for eid, c in pt.coverage.items() %}
+      <tr style="border-bottom:1px solid #eef2f9;{% if c.high_risk and not c.said %}background:#fdf0f0;{% endif %}">
+        <td style="padding:3px 6px;width:24px;">{% if c.said %}<span style="color:#1d6b43;">✓</span>{% elif c.high_risk %}<span style="color:#a02020;">✗</span>{% else %}·{% endif %}</td>
+        <td style="padding:3px 6px;">{{ c.display }}{% if not c.confirmed %} <span class="muted small">(unconfirmed)</span>{% endif %}</td>
+        <td style="padding:3px 6px;color:#41566e;">{{ c.evidence }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% if pt.receiver_metrics %}<p class="small muted" style="margin-top:4px;">Receiver: read-back {{ 'yes' if pt.receiver_metrics.synthesis else 'NO' }} · questions touched {{ pt.receiver_metrics.n_touched }} element(s){% if pt.receiver_metrics.discrepancy_caught is not none %} · staged discrepancy {{ 'CAUGHT' if pt.receiver_metrics.discrepancy_caught else 'MISSED' }}{% endif %}</p>{% endif %}
+    {% if pt.auto_prompts %}<p class="small muted" style="margin-top:4px;">Debrief prompts:</p><ul class="small" style="margin:2px 0 0 16px;">{% for p in pt.auto_prompts %}<li>{{ p }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  {% endfor %}
+  {% if ho.expected_priority %}<p class="small"><strong>Expected prioritization:</strong> {% for pr in ho.expected_priority %}{{ pr.rank }}. {{ pr.name }} ({{ pr.severity }}){% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+</section>
+{% endif %}
+
 <!-- ===== FR-008 · Staged medication errors ===== -->
 {% if debrief.staged_errors %}
 <section class="db-section">

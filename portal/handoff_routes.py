@@ -102,6 +102,68 @@ def attach(app: Any) -> None:
         ended = handoff.end_handoff(sess.id)
         return JSONResponse({"ok": True, "ended": ended})
 
+    # ── H5/H6 — evaluation (score the handoff, view it, confirm coverage lines) ──
+    @app.post("/api/control/handoff/evaluate")
+    async def api_handoff_evaluate(  # noqa: ANN202
+        request: Request,
+        _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    ):
+        """Score the handoff against the pack (per patient) from the live
+        transcript + survey answers."""
+        sess, err = _resolve(request)
+        if err:
+            return err
+        from portal import handoff_eval
+        h = handoff.get(sess.id)
+        if not h:
+            return JSONResponse({"ok": False, "error": "no handoff in progress"},
+                                status_code=409)
+        body = await request.json() if request.headers.get("content-type", "").startswith(
+            "application/json") else {}
+        only = str((body or {}).get("persona_id") or "")
+        pids = [only] if only else list(h.get("persona_ids", []))
+        evals = {pid: handoff_eval.build_evaluation(sess.id, pid) for pid in pids}
+        return JSONResponse({"ok": True, "evaluations": evals, **handoff.state(sess.id)})
+
+    @app.get("/api/control/handoff/evaluation")
+    async def api_handoff_evaluation(  # noqa: ANN202
+        request: Request,
+        _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    ):
+        sess, err = _resolve(request)
+        if err:
+            return err
+        from portal import handoff_eval
+        h = handoff.get(sess.id)
+        evals = {pid: handoff_eval.get_evaluation(sess.id, pid)
+                 for pid in (h.get("persona_ids", []) if h else [])}
+        return JSONResponse({"ok": True,
+                             "evaluations": {k: v for k, v in evals.items() if v}})
+
+    @app.post("/api/control/handoff/confirm")
+    async def api_handoff_confirm(  # noqa: ANN202
+        request: Request,
+        _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    ):
+        """Instructor gate: confirm a coverage line (optionally override its
+        said verdict) before it renders to the student."""
+        sess, err = _resolve(request)
+        if err:
+            return err
+        from portal import handoff_eval
+        body = await request.json()
+        said = body.get("said")
+        ok = handoff_eval.confirm_coverage(
+            sess.id, str(body.get("persona_id") or ""), str(body.get("element_id") or ""),
+            said=said if isinstance(said, bool) else None,
+            confirmed=bool(body.get("confirmed", True)))
+        if not ok:
+            return JSONResponse({"ok": False, "error": "no such coverage line"},
+                                status_code=404)
+        return JSONResponse({"ok": True,
+                             "evaluation": handoff_eval.get_evaluation(
+                                 sess.id, str(body.get("persona_id") or ""))})
+
     # ── H4 device-facing survey (on the STUDENT's station, same trust posture as
     #    /listen: no auth by default, ADR-0027 device token when enforced) ──────
     def _device_session(request: Request):
