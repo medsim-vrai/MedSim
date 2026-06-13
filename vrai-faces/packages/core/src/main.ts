@@ -83,6 +83,24 @@ async function boot(): Promise<void> {
 
   const deps = { diag, scenarioId, characterId };
 
+  // FR-009 H4 — post-handoff VERBAL SURVEY (`?survey=1`): the station switches to
+  // a voice questionnaire (answers ride the room-STT path, same as the audio
+  // station). No 3D rig, no avatar. The instructor directs the tablet here after
+  // the handoff; results land in the debrief (perception-vs-performance).
+  if (new URLSearchParams(window.location.search).get('survey') === '1') {
+    const surveyEl = document.getElementById('app') ?? document.body;
+    if (launch?.apiBase) {
+      const { mountSurveyStation } = await import('./shell/survey_station');
+      mountSurveyStation(surveyEl, {
+        apiBase: launch.apiBase, characterId, scenarioId,
+        ...(launch.token ? { token: launch.token } : {}),
+      });
+    } else {
+      surveyEl.textContent = 'Survey needs a portal connection (missing api= in the URL).';
+    }
+    return;
+  }
+
   // FR-006 — AUDIO-ONLY station (`?mode=audio`): flat static portrait + the full
   // voice loop, no 3D rig / WebGPU / mesh pipeline. Boots only what it needs and
   // returns before any renderer work. Default for non-patient characters.

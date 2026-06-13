@@ -554,6 +554,69 @@ def handoff_vocab(session_id: str) -> list[str]:
     return dedup
 
 
+# ── H4: post-handoff verbal survey (perception capture) ───────────────────────
+#
+# Answered by VOICE on the station after the handoff (room-STT transcribes). The
+# answers capture the student's PERCEPTION; H5 sets that against the measured
+# coverage map → the perception-vs-performance delta (the research's core
+# finding: self-rating runs high vs observed). Q1 phrasing flips by mode; Q6 is
+# oncoming-only. Question set = FR-009 strategy §4.4 (v1).
+_SURVEY: tuple[dict[str, str], ...] = (
+    {"id": "completeness",
+     "offgoing": "Overall, how complete was the handoff you just GAVE, on a scale of 0 to 10 — and why?",
+     "oncoming": "Overall, how complete was the report you just RECEIVED, on a scale of 0 to 10 — and why?"},
+    {"id": "top_three",
+     "both": "Name the three most important things about this patient that you handed off or heard."},
+    {"id": "missed",
+     "both": "What, if anything, do you think you missed — or wish you had asked about?"},
+    {"id": "watch_for",
+     "both": "What should be watched for on this patient over the next shift?"},
+    {"id": "discrepancy",
+     "both": "Was there anything in the chart or the report that did NOT match what you heard or read?"},
+    {"id": "first_action",
+     "oncoming": "What is your first action for this patient?"},   # oncoming only
+)
+_SURVEY_IDS = frozenset(q["id"] for q in _SURVEY)
+
+
+def survey_questions(session_id: str) -> list[dict[str, str]]:
+    """The survey for the active handoff, mode-filtered (Q1 phrasing per mode;
+    first_action only when ONCOMING)."""
+    h = _HANDOFFS.get(session_id)
+    if not h:
+        return []
+    mode = h["mode"]
+    out: list[dict[str, str]] = []
+    for q in _SURVEY:
+        if "both" in q:
+            out.append({"id": q["id"], "text": q["both"]})
+        elif mode in q:
+            out.append({"id": q["id"], "text": q[mode]})
+    return out
+
+
+def record_survey_answer(session_id: str, q_id: str, text: str,
+                         persona_id: str | None = None) -> bool:
+    """Store one voice answer. Marks the handoff into the 'survey' phase on the
+    first answer."""
+    h = _HANDOFFS.get(session_id)
+    if not h:
+        return False
+    if q_id not in _SURVEY_IDS:
+        raise ValueError(f"unknown survey question {q_id!r}")
+    h.setdefault("survey", {})[q_id] = {
+        "text": str(text or ""), "ts": time.time(), "persona_id": persona_id,
+    }
+    if h.get("phase") not in ("survey", "done"):
+        h["phase"] = "survey"
+    return True
+
+
+def survey_answers(session_id: str) -> dict[str, Any]:
+    h = _HANDOFFS.get(session_id)
+    return dict(h.get("survey", {})) if h else {}
+
+
 def build_pack(session_id: str, persona_id: str | None = None,
                *, now: float | None = None) -> dict[str, Any]:
     """Generate the per-patient handoff context pack from the live session.

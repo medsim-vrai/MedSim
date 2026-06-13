@@ -174,3 +174,49 @@ def test_start_bad_mode_is_400(client):
     r = client.post("/api/control/handoff/start",
                     json={"mode": "nope", "counterpart_id": "P-040"})
     assert r.status_code == 400
+
+
+# ── H4 — verbal survey (engine + device routes) ─────────────────────────────────
+
+def test_survey_questions_mode_filtered(chart):
+    # Off-going: Q1 phrased "GAVE", no first_action.
+    handoff.start_handoff(SID, mode="offgoing", persona_ids=["P-099"], counterpart_id="P-040")
+    qs = handoff.survey_questions(SID)
+    ids = [q["id"] for q in qs]
+    assert "completeness" in ids and "first_action" not in ids
+    assert "GAVE" in next(q["text"] for q in qs if q["id"] == "completeness")
+    handoff.end_handoff(SID)
+    # Oncoming: Q1 phrased "RECEIVED", first_action present.
+    handoff.start_handoff(SID, mode="oncoming", persona_ids=["P-099"], counterpart_id="P-040")
+    qs2 = handoff.survey_questions(SID)
+    assert "first_action" in [q["id"] for q in qs2]
+    assert "RECEIVED" in next(q["text"] for q in qs2 if q["id"] == "completeness")
+
+
+def test_record_and_read_survey_answers(chart):
+    handoff.start_handoff(SID, mode="offgoing", persona_ids=["P-099"], counterpart_id="P-040")
+    assert handoff.record_survey_answer(SID, "completeness", "Eight, I covered the meds.")
+    assert handoff.record_survey_answer(SID, "missed", "Maybe the pending cultures.")
+    ans = handoff.survey_answers(SID)
+    assert ans["completeness"]["text"].startswith("Eight")
+    assert handoff.state(SID)["phase"] == "survey"          # entering the survey phase
+    with pytest.raises(ValueError):
+        handoff.record_survey_answer(SID, "not_a_question", "x")
+
+
+def test_survey_routes_serve_and_store(client):
+    # No handoff yet → survey 409.
+    assert client.get("/api/face/P-040/survey").status_code == 409
+    client.post("/api/control/handoff/start",
+                json={"mode": "oncoming", "counterpart_id": "P-040"})
+    j = client.get("/api/face/P-040/survey").json()
+    assert j["ok"] and j["mode"] == "oncoming"
+    assert any(q["id"] == "first_action" for q in j["questions"])
+    # Store an answer; empty text rejected.
+    assert client.post("/api/face/P-040/survey/answer",
+                       json={"q": "completeness", "text": "Seven."}).json()["ok"]
+    assert client.post("/api/face/P-040/survey/answer",
+                       json={"q": "completeness", "text": "  "}).status_code == 400
+    # It landed in handoff state.
+    sess = client._sess
+    assert handoff.survey_answers(sess.id)["completeness"]["text"] == "Seven."

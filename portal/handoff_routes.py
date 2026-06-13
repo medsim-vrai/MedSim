@@ -101,3 +101,61 @@ def attach(app: Any) -> None:
             return err
         ended = handoff.end_handoff(sess.id)
         return JSONResponse({"ok": True, "ended": ended})
+
+    # ── H4 device-facing survey (on the STUDENT's station, same trust posture as
+    #    /listen: no auth by default, ADR-0027 device token when enforced) ──────
+    def _device_session(request: Request):
+        """Resolve the active control session + optional token check for a
+        device survey call. Returns (sess, error_response)."""
+        from portal import control_session, vrai_faces
+        sess = control_session.get_active()
+        if sess is None:
+            return None, JSONResponse({"ok": False, "error": "no running scenario"},
+                                      status_code=409)
+        if vrai_faces.token_enabled():
+            scenario = str(request.query_params.get("scenario") or "default")
+            character = str(request.query_params.get("character")
+                            or request.query_params.get("cid") or "")
+            token = str(request.query_params.get("token") or "")
+            import hmac
+            if not hmac.compare_digest(token, vrai_faces.face_token(scenario, character)):
+                return None, JSONResponse({"ok": False, "error": "invalid device token"},
+                                          status_code=403)
+        return sess, None
+
+    @app.get("/api/face/{character_id}/survey")
+    async def api_face_survey(request: Request, character_id: str):  # noqa: ANN202
+        """The post-handoff survey questions for the active handoff (mode-filtered).
+        409 when no handoff is running."""
+        sess, err = _device_session(request)
+        if err:
+            return err
+        qs = handoff.survey_questions(sess.id)
+        if not qs:
+            return JSONResponse({"ok": False, "error": "no handoff in progress"},
+                                status_code=409)
+        h = handoff.get(sess.id) or {}
+        return JSONResponse({"ok": True, "mode": h.get("mode"), "questions": qs})
+
+    @app.post("/api/face/{character_id}/survey/answer")
+    async def api_face_survey_answer(request: Request, character_id: str):  # noqa: ANN202
+        """Store one voice answer {q, text} from the station."""
+        sess, err = _device_session(request)
+        if err:
+            return err
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        q = str((body or {}).get("q") or "")
+        text = str((body or {}).get("text") or "").strip()
+        if not text:
+            return JSONResponse({"ok": False, "error": "text required"}, status_code=400)
+        try:
+            ok = handoff.record_survey_answer(sess.id, q, text)
+        except ValueError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+        if not ok:
+            return JSONResponse({"ok": False, "error": "no handoff in progress"},
+                                status_code=409)
+        return JSONResponse({"ok": True})
