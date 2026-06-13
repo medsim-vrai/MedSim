@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MedSim VRAI — Educator GUI: Report &amp; Plan</title>
+<style>
+  @page { size: letter; margin: 16mm 14mm; }
+  body { font: 10.4pt/1.45 -apple-system,"Helvetica Neue",Arial,sans-serif; color:#15202b; margin:0; }
+  h1 { font-size:21pt; color:#0a234f; margin:0 0 2pt; }
+  .sub { color:#41566e; font-size:10.5pt; margin-bottom:10pt; }
+  h2 { font-size:14pt; color:#fff; background:#0a234f; padding:5pt 9pt; border-radius:5px; margin:16pt 0 6pt; }
+  h3 { font-size:11.5pt; color:#0a234f; margin:12pt 0 4pt; border-bottom:2px solid #143b8a; padding-bottom:2pt; }
+  h4 { font-size:10.5pt; color:#143b8a; margin:9pt 0 3pt; }
+  table { border-collapse:collapse; width:100%; margin:6pt 0 10pt; font-size:9.2pt; }
+  th { background:#0a234f; color:#fff; text-align:left; padding:4pt 6pt; }
+  td { border:1px solid #c3cedd; padding:4pt 6pt; vertical-align:top; }
+  tr:nth-child(even) td { background:#f3f6fb; }
+  .meta { background:#eef2f9; border:1px solid #c3cedd; border-radius:6px; padding:8pt 10pt; font-size:9.4pt; margin:8pt 0 12pt; }
+  .good { color:#1d6b43; font-weight:700; } .bad { color:#a02020; font-weight:700; } .warn { color:#9a6a00; font-weight:700; }
+  ul,ol { margin:4pt 0 8pt 16pt; padding:0; } li { margin:2.5pt 0; }
+  .pill { display:inline-block; background:#143b8a; color:#fff; border-radius:8px; padding:0 7pt; font-size:8.4pt; font-weight:700; }
+  .pagebreak { page-break-before:always; }
+  figure { margin:8pt 0; } figcaption { font-size:8.6pt; color:#41566e; margin-top:3pt; }
+  .note { background:#fff7e8; border:1px solid #e3c47a; border-radius:6px; padding:7pt 10pt; font-size:9.2pt; margin:7pt 0; }
+  code { background:#eef2f9; padding:0 4pt; border-radius:3px; font-size:9pt; }
+  .two { display:flex; gap:14px; } .two > div { flex:1; }
+</style>
+</head>
+<body>
+
+<h1>MedSim VRAI — Educator Management GUI</h1>
+<div class="sub">A best-in-class interface to set up, operate, test, and recover the training system — with the current control room as a default fallback. Report · design critique · 3 examples + consolidated best · resumability · coding plan.</div>
+
+<div class="meta">
+<b>Date:</b> 2026-06-13 &nbsp;·&nbsp; <b>Inputs:</b> the attached layered-ecosystem direction (<i>SimMedVRAI GUI-1.pdf</i>) · <code>Memory_management.MD</code> §3 (module boundaries), §7 ADR-0018 (pause/resume) · the shipped two-stage control room (FR-005) · <code>preflight.sh</code> · FR-010 (readiness ping) &nbsp;·&nbsp;
+<b>Companions:</b> MedSimVRAI_GUI-Redesign.xlsx (comparison + screen/state inventories + backlog) · PLAN-2026-06-13-gui-mission-control.md (Claude Code coding plan)<br>
+<b>Two hard requirements honored throughout:</b> (1) the GUI is an <b>alternative</b> — the classic control room stays the <b>default fallback</b>, always one click away; (2) <b>no data is lost</b> on pause / stop / restart (Memory_management ADR-0018 extended from the tablet to the portal).
+</div>
+
+<h2>1 · The educator's problem (why a GUI)</h2>
+<p>The system is now feature-rich — avatars, audio stations, medication ordering, staged errors, shift handoff, multi-patient rooms, devices, debrief. That power is exposed through one dense control page plus shell scripts. For a non-technical educator under time pressure before a class, three frictions dominate:</p>
+<ul>
+<li><b>Startup time &amp; uncertainty.</b> Preflight is a terminal script; "is everything working?" is answered by checking several places. Pairing a tablet, trusting a certificate, warming the speech model — each is a separate, manual, easy-to-miss step.</li>
+<li><b>Restart fragility.</b> Any portal restart <b>wipes the in-memory session</b> — the educator must reconfigure from scratch mid-prep (observed repeatedly during development). There is no "resume where I left off."</li>
+<li><b>Configuration is expert-shaped.</b> The control page assumes you know the model (which persona is the patient, avatar vs audio, which characters belong to a scenario). There is little guidance, few presets, and easy ways to misconfigure.</li>
+</ul>
+<p>A purpose-built educator GUI should turn each of these into a guided, status-first, recoverable flow — and measurably cut time-to-training.</p>
+
+<h2>2 · Critique of the attached direction</h2>
+<p>The attached diagram is a <b>layered ecosystem model</b>: Simulation control → shared <i>characters</i> (doctor, charge nurse, supervisor, allied health) → shared <i>resources</i> (nursing station, charting, med cart) → <i>rooms</i> → <i>individual patients</i> (avatar/manikin, family, devices). As a conceptual taxonomy it is genuinely strong and should be preserved.</p>
+<div class="two">
+<div>
+<h4 class="good">What it gets right</h4>
+<ul>
+<li><b>Correct mental model.</b> It separates <i>shared</i> staff/resources (used across patients) from <i>individual</i> patients — exactly the distinction multi-patient/charge-nurse training needs (and that FR-007 is filed against).</li>
+<li><b>Composable hierarchy.</b> Ecosystem → room → patient → device mirrors how a unit is actually organized; it scales from one patient to a ward.</li>
+<li><b>Device + family inclusion.</b> Treating call bell / IV / telemetry / vent and family/support as first-class is right.</li>
+</ul>
+</div>
+<div>
+<h4 class="bad">Where it must be improved (best-in-class gaps)</h4>
+<ul>
+<li><b>It is a taxonomy, not an interaction.</b> It shows <i>what exists</i>, not <i>how an educator goes from blank → running</i>. There is no setup <b>flow</b>, no <b>guidance</b>, no defaults.</li>
+<li><b>No status / readiness layer.</b> Nothing tells the educator whether each tablet/character/system is <i>working</i> — the single biggest pre-class anxiety.</li>
+<li><b>No recovery model.</b> No "resume," no restart-safe state — the exact friction the system suffers today.</li>
+<li><b>No progressive disclosure.</b> A flat board shows everything at once; novices need a guided path, experts need the full board. Best practice serves both.</li>
+<li><b>No error/empty states or testing.</b> "Test the system before training" is unaddressed.</li>
+</ul>
+</div>
+</div>
+<p>The redesign therefore <b>keeps the layered model as the structural backbone</b> and layers on the three things best-in-class operations consoles always add: <b>guided setup</b>, <b>status-first operation</b>, and <b>recoverability</b>.</p>
+
+<h2>3 · Best-in-class methodologies applied</h2>
+<table>
+<tr><th>Principle (source pattern)</th><th>What it means here</th></tr>
+<tr><td><b>Guided setup / wizard</b> (NN/g "wizard" pattern; appliance setup)</td><td>A linear, validated, pull-down-driven path from a scenario template to a running session — minimizes decisions and misconfiguration; "you can't reach Launch until you're ready."</td></tr>
+<tr><td><b>Single pane of glass / status dashboard</b> (NOC &amp; ops consoles)</td><td>One screen shows every device, character and subsystem as a traffic-light tile with health + a one-click action. Answers "is it working?" instantly.</td></tr>
+<tr><td><b>Progressive disclosure</b> (NN/g)</td><td>Novice → the wizard (few choices); expert → the ecosystem board (full control). Same data, two depths.</td></tr>
+<tr><td><b>Templates &amp; sane defaults</b> (config-as-presets)</td><td>Scenario templates pre-fill patient, characters, devices, modules (already in <code>sample_scenarios.json</code> / activities). The educator confirms, doesn't author.</td></tr>
+<tr><td><b>Recoverability / autosave</b> (Memory_management ADR-0018; "never lose work")</td><td>Structured session state is snapshotted continuously and restored on boot — pause/stop/restart resume exactly where you were.</td></tr>
+<tr><td><b>Guardrails &amp; validation</b> (poka-yoke)</td><td>Readiness gates the Launch; destructive actions confirm; the cert/network state is shown, not assumed.</td></tr>
+<tr><td><b>One-click remediation</b> (self-service ops)</td><td>Each red tile offers its fix inline — Warm, Re-pair, Restart, Open instructions — instead of a terminal.</td></tr>
+<tr><td><b>Graceful fallback</b> (no dead ends)</td><td>"Switch to classic control room" is always present; the new GUI never traps the educator.</td></tr>
+</table>
+
+<h2 class="pagebreak">4 · Three GUI examples (worked references)</h2>
+<p>Three distinct approaches, each strongest for a different need. Section 5 consolidates them.</p>
+
+<h3>Example A — Guided Launch Wizard <span class="pill">fastest setup</span></h3>
+<figure>
+<svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="Arial" font-size="11">
+  <rect x="1" y="1" width="758" height="248" rx="6" fill="#fff" stroke="#c3cedd"/>
+  <rect x="1" y="1" width="758" height="26" rx="6" fill="#0a234f"/>
+  <text x="12" y="18" fill="#fff" font-weight="bold">MedSim VRAI · New training — Setup</text>
+  <text x="640" y="18" fill="#cfe0ff" font-size="9">Classic control ↗</text>
+  <!-- stepper -->
+  <g font-size="9.5">
+    <circle cx="60" cy="50" r="9" fill="#1d6b43"/><text x="56" y="54" fill="#fff">✓</text><text x="78" y="54" fill="#1d6b43" font-weight="bold">Scenario</text>
+    <circle cx="200" cy="50" r="9" fill="#143b8a"/><text x="197" y="54" fill="#fff">2</text><text x="218" y="54" fill="#143b8a" font-weight="bold">Patients &amp; rooms</text>
+    <circle cx="370" cy="50" r="9" fill="#c3cedd"/><text x="367" y="54" fill="#41566e">3</text><text x="388" y="54" fill="#41566e">Characters</text>
+    <circle cx="500" cy="50" r="9" fill="#c3cedd"/><text x="497" y="54" fill="#41566e">4</text><text x="518" y="54" fill="#41566e">Devices</text>
+    <circle cx="610" cy="50" r="9" fill="#c3cedd"/><text x="607" y="54" fill="#41566e">5</text><text x="628" y="54" fill="#41566e">Review</text>
+  </g>
+  <line x1="40" y1="68" x2="720" y2="68" stroke="#e3e9f3"/>
+  <!-- body: pulldowns -->
+  <text x="40" y="92" font-weight="bold" fill="#0a234f">Patient</text>
+  <rect x="40" y="100" width="320" height="26" rx="4" fill="#fbfcfe" stroke="#143b8a"/><text x="50" y="117">Mr. Hayes — ED · Sepsis w/ delirium ▾</text>
+  <text x="400" y="92" font-weight="bold" fill="#0a234f">Room</text>
+  <rect x="400" y="100" width="200" height="26" rx="4" fill="#fbfcfe" stroke="#c3cedd"/><text x="410" y="117">Room A ▾</text>
+  <text x="40" y="150" font-weight="bold" fill="#0a234f">Station type</text>
+  <rect x="40" y="158" width="150" height="26" rx="4" fill="#fbfcfe" stroke="#c3cedd"/><text x="50" y="175">🪞 Avatar ▾</text>
+  <text x="210" y="150" font-weight="bold" fill="#0a234f">Auto-included characters (from template)</text>
+  <g font-size="9"><rect x="210" y="158" width="110" height="26" rx="13" fill="#eef3ff" stroke="#b9c9f0"/><text x="222" y="175">Doctor ✓</text>
+  <rect x="328" y="158" width="120" height="26" rx="13" fill="#eef3ff" stroke="#b9c9f0"/><text x="340" y="175">Charge Nurse ✓</text>
+  <rect x="456" y="158" width="80" height="26" rx="13" fill="#eef3ff" stroke="#b9c9f0"/><text x="468" y="175">RT ✓</text>
+  <rect x="544" y="158" width="90" height="26" rx="13" fill="#eef3ff" stroke="#b9c9f0"/><text x="556" y="175">Wife ✓</text></g>
+  <!-- footer readiness + nav -->
+  <rect x="1" y="210" width="758" height="39" fill="#f3f6fb"/>
+  <text x="14" y="234" font-size="9.5" fill="#1d6b43">● Network ● Cert ● Voice ● Speech model — all ready</text>
+  <rect x="560" y="218" width="80" height="24" rx="4" fill="#fff" stroke="#c3cedd"/><text x="578" y="234" font-size="9.5">← Back</text>
+  <rect x="650" y="218" width="96" height="24" rx="4" fill="#143b8a"/><text x="668" y="234" fill="#fff" font-size="9.5">Next →</text>
+</svg>
+<figcaption><b>Wizard:</b> a stepper + pull-downs + template auto-fill + a readiness strip that gates the final Launch. Best for novices and speed.</figcaption>
+</figure>
+<div class="two"><div><b>Strengths.</b> Lowest cognitive load; near-impossible to misconfigure; fastest blank→running; perfect for the "reduce startup time" goal; readiness baked into the flow.</div>
+<div><b>Limits.</b> Linear; weaker for ad-hoc mid-session changes and for visualizing a multi-patient unit; an expert may find it slow for the 10th run.</div></div>
+
+<h3>Example B — Ecosystem Board <span class="pill">structure &amp; multi-patient</span></h3>
+<figure>
+<svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="Arial" font-size="10">
+  <rect x="1" y="1" width="758" height="248" rx="6" fill="#fff" stroke="#c3cedd"/>
+  <text x="12" y="18" fill="#0a234f" font-weight="bold" font-size="11">Ecosystem board — drag &amp; configure</text>
+  <text x="650" y="18" fill="#143b8a" font-size="9">Classic control ↗</text>
+  <!-- rows -->
+  <g font-size="9">
+  <rect x="8" y="28" width="744" height="34" fill="#eef2f9"/><text x="14" y="48" fill="#41566e">Shared characters</text>
+   <rect x="150" y="33" width="96" height="24" rx="4" fill="#fff" stroke="#143b8a"/><text x="160" y="49">Doctor ▾</text>
+   <rect x="256" y="33" width="110" height="24" rx="4" fill="#fff" stroke="#c3cedd"/><text x="266" y="49">Charge Nurse ▾</text>
+   <rect x="376" y="33" width="120" height="24" rx="4" fill="#fff" stroke="#c3cedd"/><text x="386" y="49">Supervisor ▾</text>
+   <rect x="506" y="33" width="120" height="24" rx="4" fill="#fff" stroke="#c3cedd"/><text x="516" y="49">Allied (RT…) ▾</text>
+   <rect x="636" y="33" width="40" height="24" rx="4" fill="#eef3ff" stroke="#b9c9f0"/><text x="648" y="49">＋</text>
+  <rect x="8" y="66" width="744" height="34" fill="#f6f8fc"/><text x="14" y="86" fill="#41566e">Shared resources</text>
+   <rect x="150" y="71" width="110" height="24" rx="4" fill="#fff" stroke="#c3cedd"/><text x="160" y="87">Nursing station ▾</text>
+   <rect x="270" y="71" width="100" height="24" rx="4" fill="#fff" stroke="#c3cedd"/><text x="280" y="87">Charting ▾</text>
+   <rect x="380" y="71" width="90" height="24" rx="4" fill="#fff" stroke="#c3cedd"/><text x="390" y="87">Med cart ▾</text>
+  <rect x="8" y="104" width="744" height="58" fill="#eef2f9"/><text x="14" y="128" fill="#41566e">Rooms / patients</text>
+   <rect x="150" y="110" width="240" height="46" rx="6" fill="#fff" stroke="#143b8a"/>
+    <text x="160" y="126" font-weight="bold">Room A · Mr. Hayes</text><text x="160" y="140" fill="#41566e" font-size="8.5">🪞 Avatar · Wife · IV·Tele·Vent</text><circle cx="372" cy="120" r="5" fill="#1d6b43"/>
+   <rect x="400" y="110" width="240" height="46" rx="6" fill="#fff" stroke="#c3cedd"/>
+    <text x="410" y="126" font-weight="bold">Room B · Ms. Diaz</text><text x="410" y="140" fill="#41566e" font-size="8.5">🔊 Audio · Call bell</text><circle cx="622" cy="120" r="5" fill="#b5851f"/>
+   <rect x="650" y="110" width="40" height="46" rx="6" fill="#eef3ff" stroke="#b9c9f0"/><text x="662" y="138">＋</text>
+  </g>
+  <!-- side popover -->
+  <rect x="470" y="168" width="280" height="74" rx="6" fill="#fbfcfe" stroke="#143b8a"/>
+  <text x="480" y="184" font-weight="bold" fill="#0a234f" font-size="9.5">Configure: Mr. Hayes</text>
+  <text x="480" y="200" font-size="9">Station ▾ Avatar · Voice ▾ Bill · Skin ▾ default</text>
+  <text x="480" y="216" font-size="9">Devices ▾ IV, Telemetry, Vent</text>
+  <rect x="480" y="222" width="120" height="16" rx="3" fill="#143b8a"/><text x="492" y="234" fill="#fff" font-size="8.5">Stage error here ▾</text>
+  <text x="14" y="234" font-size="8.5" fill="#41566e">Click any card to configure via pull-downs · ● green = ready  ● amber = needs trust/pairing</text>
+</svg>
+<figcaption><b>Board:</b> the attached layered model made interactive — click a card, configure via pull-downs, see per-entity readiness dots. Best for multi-patient units and spatial thinkers.</figcaption>
+</figure>
+<div class="two"><div><b>Strengths.</b> Matches the educator's mental model directly; superb for multi-patient/charge-nurse and ad-hoc changes; everything visible and directly manipulable; honors the attached direction.</div>
+<div><b>Limits.</b> More clicks and screen real estate; steeper for novices; without a guided path a beginner can stall on "where do I start?".</div></div>
+
+<h3>Example C — Readiness Cockpit <span class="pill">operate · test · restart</span></h3>
+<figure>
+<svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="Arial" font-size="10">
+  <rect x="1" y="1" width="758" height="248" rx="6" fill="#fff" stroke="#c3cedd"/>
+  <rect x="1" y="1" width="758" height="30" rx="6" fill="#0a234f"/>
+  <text x="12" y="20" fill="#fff" font-weight="bold" font-size="11">System status — 6 / 7 ready</text>
+  <rect x="430" y="7" width="150" height="18" rx="9" fill="#1d6b43"/><text x="446" y="20" fill="#fff" font-size="9">▶ Resume last session</text>
+  <rect x="588" y="7" width="76" height="18" rx="9" fill="#143b8a"/><text x="600" y="20" fill="#fff" font-size="9">⟳ Test all</text>
+  <text x="672" y="20" fill="#cfe0ff" font-size="9">Classic ↗</text>
+  <!-- tiles -->
+  <g font-size="9">
+   <!-- tile template -->
+   <g>
+    <rect x="14" y="42" width="172" height="58" rx="6" fill="#f4faf6" stroke="#bfe0cb"/><circle cx="28" cy="58" r="5" fill="#1d6b43"/><text x="40" y="61" font-weight="bold">Portal</text><text x="24" y="80" fill="#41566e" font-size="8.5">running · 192.168.8.181</text><text x="24" y="94" fill="#143b8a" font-size="8.5">Open · Restart</text>
+   </g>
+   <rect x="198" y="42" width="172" height="58" rx="6" fill="#f4faf6" stroke="#bfe0cb"/><circle cx="212" cy="58" r="5" fill="#1d6b43"/><text x="224" y="61" font-weight="bold">Network &amp; cert</text><text x="208" y="80" fill="#41566e" font-size="8.5">trusted · SAN ok</text><text x="208" y="94" fill="#143b8a" font-size="8.5">Re-check · QR</text>
+   <rect x="382" y="42" width="172" height="58" rx="6" fill="#f4faf6" stroke="#bfe0cb"/><circle cx="396" cy="58" r="5" fill="#1d6b43"/><text x="408" y="61" font-weight="bold">Patient A · Avatar</text><text x="392" y="80" fill="#41566e" font-size="8.5">paired · model warm</text><text x="392" y="94" fill="#143b8a" font-size="8.5">Test · Warm · Re-pair</text>
+   <rect x="566" y="42" width="180" height="58" rx="6" fill="#fff7e8" stroke="#e3c47a"/><circle cx="580" cy="58" r="5" fill="#b5851f"/><text x="592" y="61" font-weight="bold">Audio station</text><text x="576" y="80" fill="#9a6a00" font-size="8.5">paired · model COLD</text><text x="576" y="94" fill="#143b8a" font-size="8.5">Warm now ⚡ · Test</text>
+   <rect x="14" y="108" width="172" height="58" rx="6" fill="#f4faf6" stroke="#bfe0cb"/><circle cx="28" cy="124" r="5" fill="#1d6b43"/><text x="40" y="127" font-weight="bold">Med cart</text><text x="24" y="146" fill="#41566e" font-size="8.5">joined</text><text x="24" y="160" fill="#143b8a" font-size="8.5">Open</text>
+   <rect x="198" y="108" width="172" height="58" rx="6" fill="#f4faf6" stroke="#bfe0cb"/><circle cx="212" cy="124" r="5" fill="#1d6b43"/><text x="224" y="127" font-weight="bold">EHR / Medical Rec.</text><text x="208" y="146" fill="#41566e" font-size="8.5">chart loaded</text><text x="208" y="160" fill="#143b8a" font-size="8.5">Open ↗</text>
+   <rect x="382" y="108" width="172" height="58" rx="6" fill="#fdeeee" stroke="#e0a0a0"/><circle cx="396" cy="124" r="5" fill="#a02020"/><text x="408" y="127" font-weight="bold">Tablet 4 (RT)</text><text x="392" y="146" fill="#a02020" font-size="8.5">not connected</text><text x="392" y="160" fill="#143b8a" font-size="8.5">Show QR · Help</text>
+   <rect x="566" y="108" width="180" height="58" rx="6" fill="#f4faf6" stroke="#bfe0cb"/><circle cx="580" cy="124" r="5" fill="#1d6b43"/><text x="592" y="127" font-weight="bold">Voice (ElevenLabs)</text><text x="576" y="146" fill="#41566e" font-size="8.5">key set · reachable</text><text x="576" y="160" fill="#143b8a" font-size="8.5">Test voice</text>
+  </g>
+  <rect x="1" y="176" width="758" height="73" fill="#f3f6fb"/>
+  <text x="14" y="196" font-size="9.5" fill="#0a234f" font-weight="bold">Resumed: “ED · Mr. Hayes” — 3 stations, handoff configured (saved 18:42). Continue or start new.</text>
+  <rect x="14" y="206" width="150" height="26" rx="5" fill="#143b8a"/><text x="34" y="223" fill="#fff" font-size="9.5">▶ Continue session</text>
+  <rect x="176" y="206" width="120" height="26" rx="5" fill="#fff" stroke="#c3cedd"/><text x="196" y="223" font-size="9.5">＋ New setup</text>
+  <text x="320" y="223" font-size="8.6" fill="#41566e">One amber (warm it) + one red (RT tablet) before you're 7/7. “Test all” pings every device.</text>
+</svg>
+<figcaption><b>Cockpit:</b> every device/character/subsystem as a traffic-light tile with inline fixes, a "Test all," and a "Resume last session" banner. Best for operating, testing, and recovering — directly targets startup time + restart.</figcaption>
+</figure>
+<div class="two"><div><b>Strengths.</b> Answers "is it working?" in one glance; one-click Warm/Test/Re-pair/Restart replaces the terminal; the Resume banner kills restart friction; ideal pre-class and mid-session.</div>
+<div><b>Limits.</b> It operates an <i>already-configured</i> session — it is not itself a setup authoring tool (needs the wizard/board for that).</div></div>
+
+<h2 class="pagebreak">5 · Consolidated best example — "Mission Control"</h2>
+<p>No single example is sufficient: A sets up fast, B models structure, C operates &amp; recovers. The consolidated design is <b>one app, three modes</b> over a shared session model, with a persistent readiness bar, the classic control room as a one-click fallback, and a portal-side resumability layer underneath everything.</p>
+<figure>
+<svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" font-family="Arial" font-size="10">
+  <rect x="1" y="1" width="758" height="298" rx="6" fill="#fff" stroke="#c3cedd"/>
+  <!-- top bar -->
+  <rect x="1" y="1" width="758" height="30" rx="6" fill="#0a234f"/>
+  <text x="12" y="20" fill="#fff" font-weight="bold" font-size="11">MedSim VRAI · Mission Control</text>
+  <rect x="300" y="7" width="150" height="18" rx="9" fill="#1d6b43"/><text x="312" y="20" fill="#fff" font-size="9">● System ready 7/7</text>
+  <rect x="458" y="7" width="150" height="18" rx="9" fill="#143b8a"/><text x="470" y="20" fill="#fff" font-size="9">▶ Resume “Mr. Hayes”</text>
+  <text x="618" y="20" fill="#cfe0ff" font-size="9">⚙</text>
+  <text x="650" y="20" fill="#cfe0ff" font-size="9">Classic ↗</text>
+  <!-- left rail -->
+  <rect x="1" y="31" width="120" height="268" fill="#f3f6fb"/>
+  <rect x="8" y="40" width="106" height="26" rx="5" fill="#143b8a"/><text x="20" y="57" fill="#fff" font-size="9.5">① Set up</text>
+  <rect x="8" y="72" width="106" height="26" rx="5" fill="#dfe7f4"/><text x="20" y="89" fill="#0a234f" font-size="9.5">② Operate</text>
+  <rect x="8" y="104" width="106" height="26" rx="5" fill="#dfe7f4"/><text x="20" y="121" fill="#0a234f" font-size="9.5">③ Debrief</text>
+  <text x="14" y="150" font-size="8.4" fill="#41566e">Setup view:</text>
+  <rect x="8" y="156" width="106" height="22" rx="4" fill="#fff" stroke="#c3cedd"/><text x="16" y="171" font-size="8.6">Wizard</text>
+  <rect x="8" y="180" width="106" height="22" rx="4" fill="#fff" stroke="#c3cedd"/><text x="16" y="195" font-size="8.6">Ecosystem board</text>
+  <text x="14" y="226" font-size="8.4" fill="#41566e">Autosaved 18:42 ✓</text>
+  <text x="14" y="242" font-size="8.4" fill="#1d6b43">Resumable ✓</text>
+  <!-- main: setup wizard with board toggle -->
+  <text x="134" y="50" font-weight="bold" fill="#0a234f">Set up — Wizard (toggle ▸ Ecosystem board for the full layered view)</text>
+  <g font-size="9.5">
+   <circle cx="150" cy="74" r="8" fill="#1d6b43"/><text x="147" y="78" fill="#fff" font-size="9">✓</text><text x="166" y="78">Scenario</text>
+   <circle cx="270" cy="74" r="8" fill="#143b8a"/><text x="267" y="78" fill="#fff" font-size="9">2</text><text x="286" y="78">Patients</text>
+   <circle cx="390" cy="74" r="8" fill="#c3cedd"/><text x="387" y="78" font-size="9">3</text><text x="406" y="78" fill="#41566e">Characters</text>
+   <circle cx="520" cy="74" r="8" fill="#c3cedd"/><text x="517" y="78" font-size="9">4</text><text x="536" y="78" fill="#41566e">Review</text>
+  </g>
+  <rect x="134" y="92" width="320" height="26" rx="4" fill="#fbfcfe" stroke="#143b8a"/><text x="144" y="109" font-size="9.5">Patient ▾ Mr. Hayes — Sepsis/delirium</text>
+  <rect x="464" y="92" width="120" height="26" rx="4" fill="#fbfcfe" stroke="#c3cedd"/><text x="474" y="109" font-size="9.5">Room A ▾</text>
+  <rect x="600" y="92" width="148" height="26" rx="4" fill="#fbfcfe" stroke="#c3cedd"/><text x="610" y="109" font-size="9.5">🪞 Avatar ▾</text>
+  <text x="134" y="138" font-size="9" fill="#41566e">From template: Doctor · Charge Nurse · RT · Wife (toggle each ▾)</text>
+  <!-- embedded readiness preview -->
+  <rect x="134" y="150" width="614" height="64" rx="6" fill="#f4faf6" stroke="#bfe0cb"/>
+  <text x="144" y="168" font-weight="bold" fill="#0a234f" font-size="9.5">Readiness preview (live)</text>
+  <text x="144" y="186" font-size="9">● Network ● Cert ● Voice ● Speech-warm ● Patient A paired</text>
+  <text x="144" y="204" font-size="9" fill="#9a6a00">● Audio station COLD — will auto-warm on launch · ● RT tablet not yet scanned (Show QR)</text>
+  <!-- launch -->
+  <rect x="560" y="226" width="188" height="30" rx="6" fill="#143b8a"/><text x="584" y="246" fill="#fff" font-weight="bold">▶ Launch training</text>
+  <rect x="134" y="226" width="180" height="30" rx="6" fill="#fff" stroke="#c3cedd"/><text x="150" y="246" font-size="9.5">Switch to classic control ↗</text>
+  <!-- footer resumability -->
+  <rect x="1" y="268" width="758" height="31" fill="#eef2f9"/>
+  <text x="134" y="288" font-size="8.8" fill="#41566e">Every change autosaves to the restart-durable store · pause/stop/crash → “Resume” restores stations, assignments, handoff &amp; staged-error state (PHI-free).</text>
+</svg>
+<figcaption><b>Mission Control:</b> a 3-mode shell (Set up · Operate · Debrief) over one resumable session model. Setup offers Wizard <i>or</i> Ecosystem board; a live readiness preview gates Launch; Operate is the Cockpit; the classic control room is always one click away; everything autosaves and resumes.</figcaption>
+</figure>
+<h4>Why this is the best synthesis</h4>
+<ul>
+<li><b>Serves novice and expert</b> (progressive disclosure): the Wizard for speed, the Ecosystem board for full structural control — same session model underneath.</li>
+<li><b>Status-first</b>: the readiness bar + Cockpit answer "is it working?" everywhere, and gate Launch so a class never starts half-broken.</li>
+<li><b>Recoverable</b>: the resumability layer makes restart a non-event — the single biggest time sink today becomes a one-click "Resume."</li>
+<li><b>Safe by construction</b>: pull-downs + templates + validation prevent misconfiguration; the classic control room is the guaranteed fallback (requirement honored).</li>
+<li><b>Honors the attached direction</b>: the Ecosystem board <i>is</i> the layered model, now interactive.</li>
+</ul>
+
+<h2>6 · Resumability — no data lost on pause / stop / restart</h2>
+<p>This is both a hard requirement and the highest-leverage fix. <code>Memory_management.MD §7 ADR-0018</code> already defines the pattern on the <b>tablet</b> (each module implements <code>Resumable&lt;T&gt;</code>; <code>memory_state</code> aggregates <code>SnapshotHooks</code> → one structured-clone-safe <code>SessionState</code> blob to IndexedDB; <code>resumeAll()</code> on boot; <b>PHI free-text is never persisted</b>). The gap is the <b>portal</b>: the <code>ControlRoom</code>/<code>ControlSession</code> + handoff + staged-error + med-board + assignments live in memory and are wiped on restart.</p>
+<div class="note"><b>The fix (one new ADR, extends 0018 server-side):</b> mirror the same contract on the portal. Each stateful module (<code>control_session</code>, <code>med_orders</code>, <code>med_errors</code>, <code>handoff</code>, voice/skin assignments) exposes a <b>PHI-free</b> structured snapshot; a <code>session_state</code> aggregator writes ONE blob to the <b>already restart-durable</b> SQLite (<code>~/.medsim/v7/medsim.db</code> — the EHR chart already survives restarts there) on every mutation + on shutdown; on boot the portal <b>auto-restores</b> the last session. The GUI's "Resume" simply surfaces it. Trainee free-text stays out of the snapshot (ADR-0014 fail-closed).</div>
+<p>Result: a Python change / crash / power blip no longer costs the educator their setup — they reopen Mission Control and press <b>Resume</b>. This also subsumes FR-010's intent (post-restart readiness) and removes the "fresh Setup after every restart" friction seen throughout development.</p>
+
+<h2>7 · Cutting startup time (the explicit goal)</h2>
+<ul>
+<li><b>Templates &amp; presets</b> — one pull-down (scenario) pre-fills patient + characters + devices + modules; the educator confirms instead of authoring.</li>
+<li><b>Parallel readiness + one-click Warm</b> — the cockpit pings all devices at once and warms the speech model on demand, so the first take is never cold.</li>
+<li><b>Resume</b> — the biggest single saver: skip setup entirely after a restart.</li>
+<li><b>Preflight-as-a-service</b> — the terminal checks become a "Test all" button with inline fixes (no shell, no context-switch).</li>
+<li><b>Guided pairing</b> — a tablet that isn't connected shows its QR + plain-language fix in its own red tile, instead of silent failure.</li>
+</ul>
+
+<h2>8 · Risks, fallback &amp; accessibility</h2>
+<ul>
+<li><b>Fallback is mandatory and built-in</b> — "Switch to classic control room" on every screen; the new GUI is additive, the control room remains the source of truth and the default.</li>
+<li><b>Don't fork the backend</b> — the GUI is a new front-end over the SAME portal APIs (control/meds/errors/handoff/devices) the control room uses; no parallel logic to drift.</li>
+<li><b>Snapshot safety</b> — strictly structured, PHI-free state; never persist trainee free-text; version the blob and tolerate schema drift on resume.</li>
+<li><b>Accessibility</b> — keyboard-navigable, high-contrast traffic lights paired with text/shape (not color alone), large touch targets for a cart-side tablet.</li>
+<li><b>Scope discipline</b> — module-per-PR and an ADR for the server-snapshot contract, per <code>Memory_management §0/§3/§7</code>.</li>
+</ul>
+
+<h2>9 · Recommendation</h2>
+<p>Build <b>Mission Control</b> in the staged plan (companion coding plan), <b>foundation-first</b>: ship the <b>portal resumability layer</b> and the <b>readiness/health API</b> before any new pixels — those alone remove the worst friction and are reusable by the classic control room too. Then layer the GUI shell, the Cockpit (Operate), the Wizard (Set up), and the Ecosystem board, keeping the classic control room as the default fallback throughout. The supporting Excel carries the example comparison, the screen/state inventories, and the build backlog; the coding plan specifies it to the file.</p>
+
+</body>
+</html>

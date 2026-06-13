@@ -588,6 +588,28 @@ request; transcripts land on the right encounters.
 
 ---
 
+## FR-011 (P1) — Educator management GUI "Mission Control" (filed 2026-06-13)
+
+**Asked (instructor):** a best-in-class graphical interface to make the system easier for
+educators to set up, operate, restart and TEST — an ALTERNATIVE to the control room (which
+stays the default fallback), pull-down/guided, reducing startup time + delays, with NO data
+lost on pause/stop/restart (per Memory_management ADR-0018).
+
+**Delivered (this session):** design report + plan (`docs/gui-redesign/MedSimVRAI_GUI-Redesign-Report.pdf`,
++ Desktop) — critique of the attached layered-ecosystem direction vs best-in-class; 3 worked
+examples (Guided Launch Wizard · Ecosystem Board · Readiness Cockpit) with mockups; the
+consolidated best ("Mission Control" — 3-mode shell over one resumable session model);
+resumability design (extend ADR-0018 to the portal → the already-restart-durable SQLite);
+startup-time levers. Supporting Excel (`MedSimVRAI_GUI-Redesign.xlsx`: example comparison ·
+screen inventory · resumability-state inventory · build backlog · readiness checks). File-level
+coding plan (`docs/PLAN-2026-06-13-gui-mission-control.md`: stages G1–G8, foundation-first —
+G1 portal resumability + G2 readiness API before any new pixels; classic control room = default
+fallback throughout).
+
+**Status:** Designed; coding plan written (G1–G8), pending ratification. Highest-leverage first
+build = G1 resumability (kills the restart-wipes-the-session friction; benefits the classic
+control room too). Effort L (phased). Subsumes FR-010's post-restart intent.
+
 ## FR-010 — Post-restart device readiness ping (health-check + warm cold→warm)
 
 **Area:** UX · instructor-tools · ops · avatar · **Source:** instructor (2026-06-13) ·
