@@ -130,10 +130,11 @@
         </div>
         <p class="join-url small"><code>{{ base_url }}/ehr/join?code={{ session.join_code }}</code></p>
         {% if session.ehr_id %}
-          <a href="/portal/control/launch_ehr" target="medsim_ehr_window" rel="noopener"
+          <a href="/portal/control/launch_ehr" target="medsim_ehr_window"
+             onclick="var w=window.open('/portal/control/launch_ehr','medsim_ehr_window','width=1200,height=900'); if(w){w.focus(); return false;} return true;"
              id="btn-launch-ehr" class="primary-action"
              style="display:block;box-sizing:border-box;text-align:center;text-decoration:none;width:100%;margin-top:6px;font-size:12px;padding:7px 8px;">
-            🖥 Launch EHR on this device
+            🖥 Launch EHR (Medical Records) in a new window ↗
           </a>
         {% endif %}
       </div>
