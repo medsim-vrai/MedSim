@@ -382,3 +382,69 @@ _sys.modules[__name__].__class__ = _ControlSessionModule
 # Initialize the legacy attribute so reads do not raise; it carries no
 # state (the real state lives in control_room._active_room).
 _active: Any = None
+
+
+# ── FR-011 G1 (ADR-0039) — resumability snapshot (PHI-free session config) ─────
+_SNAP_FIELDS = (
+    "id", "join_code", "scenario_name", "scenario_notes", "program_id", "week",
+    "selected_modules", "scenario_text", "selected_personas", "avatar_personas",
+    "state", "ehr_id", "voice_assignments", "room_id", "encounter_label",
+    "activity_id", "chart_mode", "patient_persona_id", "started_at",
+    "assigned_student_ids", "charting_locked_at",
+)
+
+
+def snapshot() -> dict[str, Any] | None:
+    """PHI-free config of the active room's session(s). EXCLUDES the transcript
+    (trainee PHI), live stations (re-pair via QR), and API keys (re-acquired)."""
+    from . import control_room
+    room = control_room.get_active_room()
+    if room is None:
+        return None
+    encs = [{k: getattr(s, k, None) for k in _SNAP_FIELDS}
+            for s in room.encounters.values()]
+    if not encs:
+        return None
+    return {"room_label": getattr(room, "label", ""), "encounters": encs}
+
+
+def restore(blob: dict[str, Any] | None) -> bool:
+    """Reconstruct the room + session SHELLS with their ORIGINAL ids (so the
+    med/error/handoff state keyed by those ids lines up). api_key is "" — it is
+    re-acquired from the vault when the operator resumes."""
+    if not blob or not blob.get("encounters"):
+        return False
+    from . import control_room
+    if control_room.get_active_room() is not None:
+        control_room.end_active_room()
+    room = control_room.create_room(label=str(blob.get("room_label") or ""))
+    made = 0
+    for snap in blob["encounters"]:
+        if not isinstance(snap, dict) or not snap.get("id"):
+            continue
+        sess = ControlSession(
+            id=str(snap["id"]),
+            join_code=str(snap.get("join_code") or _new_join_code()),
+            scenario_name=str(snap.get("scenario_name") or ""),
+            scenario_notes=str(snap.get("scenario_notes") or ""),
+            program_id=snap.get("program_id"), week=snap.get("week"),
+            selected_modules=list(snap.get("selected_modules") or []),
+            scenario_text=str(snap.get("scenario_text") or ""),
+            selected_personas=list(snap.get("selected_personas") or []),
+            avatar_personas=list(snap.get("avatar_personas") or []),
+            api_key="",
+            ehr_id=snap.get("ehr_id"),
+            voice_assignments=dict(snap.get("voice_assignments") or {}),
+            room_id=snap.get("room_id"),
+            encounter_label=str(snap.get("encounter_label") or ""),
+            activity_id=snap.get("activity_id"),
+            chart_mode=str(snap.get("chart_mode") or "shared"),
+            patient_persona_id=snap.get("patient_persona_id"),
+            assigned_student_ids=list(snap.get("assigned_student_ids") or []),
+            state=str(snap.get("state") or "configured"),
+            started_at=float(snap.get("started_at") or time.time()),
+            charting_locked_at=snap.get("charting_locked_at"),
+        )
+        room.add_encounter(sess)
+        made += 1
+    return made > 0

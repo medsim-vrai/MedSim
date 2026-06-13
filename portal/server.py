@@ -195,6 +195,38 @@ async def _seed_activity_catalog() -> None:
               file=sys.stderr, flush=True)
 
 
+@app.on_event("startup")
+async def _resume_session_state() -> None:
+    """FR-011 G1 (ADR-0039) — restore the last session on boot so a restart /
+    crash / pause resumes instead of wiping. Off with MEDSIM_RESUME=0."""
+    if (os.environ.get("MEDSIM_RESUME") or "1").strip() == "0":
+        return
+    try:
+        from . import session_state
+        summary = session_state.resume()
+        if summary:
+            print(f"  [resume] restored last session "
+                  f"({summary.get('n_encounters')} encounter(s): "
+                  f"{', '.join(n for n in (summary.get('names') or []) if n)})",
+                  flush=True)
+    except Exception as exc:  # noqa: BLE001 — never fatal at boot
+        import sys
+        print(f"  [warn] session resume failed (clean start): {exc}",
+              file=sys.stderr, flush=True)
+
+
+@app.on_event("shutdown")
+async def _persist_session_state() -> None:
+    """FR-011 G1 — on a graceful restart (SIGTERM), snapshot the live session so
+    the next boot resumes it. PHI-free structured state only (ADR-0014)."""
+    try:
+        from . import session_state
+        if session_state.persist():
+            print("  [persist] session state saved for resume", flush=True)
+    except Exception:  # noqa: BLE001 — never block shutdown
+        pass
+
+
 @app.exception_handler(HTTPException)
 async def auth_redirect_handler(request: Request, exc: HTTPException):
     if exc.status_code == 401 and "text/html" in request.headers.get("accept", ""):
@@ -1264,6 +1296,14 @@ async def control_start(
     )
     # Build + persist the ChartSeed eagerly so the EHR bundle bootstraps fast.
     _ensure_ehr_session_registered(sess)
+    # FR-011 G1 — snapshot the freshly-configured session NOW, so even an
+    # ungraceful kill (which skips the shutdown hook) resumes the scenario the
+    # instructor just built instead of dropping them at a fresh Setup wizard.
+    try:
+        from . import session_state
+        session_state.persist()
+    except Exception:  # noqa: BLE001 — resumability must never block configure
+        pass
     return JSONResponse({
         "ok": True,
         "session_id": sess.id,

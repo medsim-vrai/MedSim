@@ -272,3 +272,18 @@ def prompt_block_for(session_id: str, card: dict[str, Any]) -> str:
     if kind == "doctor":
         return doctor_prompt_block(session_id, active_med_names(session_id))
     return pharmacist_prompt_block(session_id)
+
+
+# ── FR-011 G1 (ADR-0039) — resumability snapshot (PHI-free med-board state) ────
+def snapshot() -> dict[str, Any]:
+    """The per-session medication board, for the resumability blob."""
+    import copy
+    return {sid: copy.deepcopy(st) for sid, st in _SESSION_MEDS.items()}
+
+
+def restore(blob: dict[str, Any]) -> None:
+    import copy
+    _SESSION_MEDS.clear()
+    for sid, st in (blob or {}).items():
+        if isinstance(st, dict):
+            _SESSION_MEDS[sid] = copy.deepcopy(st)

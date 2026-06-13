@@ -709,3 +709,42 @@ def build_pack(session_id: str, persona_id: str | None = None,
             "has_board": board is not None, "staged_errors": len(staged),
         },
     }
+
+
+# ── FR-011 G1 (ADR-0039) — resumability snapshot (PHI-free handoff config) ─────
+def snapshot() -> dict[str, Any]:
+    """Handoff CONFIG for resumability. EXCLUDES trainee survey free-text and the
+    transcript-derived evaluation (ADR-0014 fail-closed); said-sets → lists."""
+    out: dict[str, Any] = {}
+    for sid, h in _HANDOFFS.items():
+        out[sid] = {
+            "mode": h.get("mode"), "dial": h.get("dial"),
+            "counterpart_id": h.get("counterpart_id"),
+            "persona_ids": list(h.get("persona_ids", [])),
+            "order": list(h.get("order", [])),
+            "packs": h.get("packs", {}),
+            "phase": h.get("phase"), "cursor": h.get("cursor", 0),
+            "started_at": h.get("started_at"),
+            "said": {pid: sorted(s) for pid, s in h.get("said", {}).items()},
+        }
+    return out
+
+
+def restore(blob: dict[str, Any]) -> None:
+    _HANDOFFS.clear()
+    for sid, h in (blob or {}).items():
+        if not isinstance(h, dict):
+            continue
+        _HANDOFFS[sid] = {
+            "mode": h.get("mode"), "dial": h.get("dial", "complete"),
+            "counterpart_id": h.get("counterpart_id"),
+            "persona_ids": list(h.get("persona_ids", [])),
+            "order": list(h.get("order", [])),
+            "packs": h.get("packs", {}),
+            "phase": h.get("phase", "handoff"), "cursor": h.get("cursor", 0),
+            "started_at": h.get("started_at"),
+            "said": {pid: set(v) for pid, v in (h.get("said") or {}).items()},
+            # Survey answers + evaluation are NOT restored (trainee text / PHI);
+            # they are re-collected/re-scored live after resume.
+            "survey": {}, "evaluation": {},
+        }

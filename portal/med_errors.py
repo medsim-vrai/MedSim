@@ -970,3 +970,17 @@ def state(session_id: str) -> dict[str, Any]:
 
 def clear_session(session_id: str) -> None:
     _SESSION_ERRORS.pop(session_id, None)
+
+
+# ── FR-011 G1 (ADR-0039) — resumability snapshot (staged errors + chart-restore) ──
+def snapshot() -> dict[str, Any]:
+    """The per-session armed-error state (incl. each error's chart-restore
+    snapshot), for the resumability blob. All structured / JSON-safe."""
+    return {sid: copy.deepcopy(bucket) for sid, bucket in _SESSION_ERRORS.items()}
+
+
+def restore(blob: dict[str, Any]) -> None:
+    _SESSION_ERRORS.clear()
+    for sid, bucket in (blob or {}).items():
+        if isinstance(bucket, dict):
+            _SESSION_ERRORS[sid] = copy.deepcopy(bucket)

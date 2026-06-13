@@ -237,6 +237,17 @@ SCHEMA_MIGRATIONS: list[tuple[int, str]] = [
     ALTER TABLE student ADD COLUMN role TEXT NOT NULL DEFAULT 'bedside';
     CREATE INDEX IF NOT EXISTS ix_student_role ON student(role);
     """),
+    (6, """
+    -- FR-011 G1 (ADR-0039) — portal resumability: ONE versioned, PHI-free
+    -- structured snapshot of the live control session (config + med board +
+    -- staged errors + handoff config) so a portal restart / crash / pause
+    -- resumes instead of wiping. Single row (id=1) = the latest snapshot.
+    CREATE TABLE IF NOT EXISTS session_state (
+      id         INTEGER PRIMARY KEY CHECK (id = 1),
+      saved_at   REAL NOT NULL,
+      blob_json  TEXT NOT NULL
+    );
+    """),
 ]
 
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]
@@ -624,6 +635,45 @@ def save_comparison(session_id: str, rules: dict[str, Any], rubric: dict[str, An
         )
         db.execute("UPDATE ehr_session SET charting_locked_at=? WHERE session_id=?",
                    (time.time(), session_id))
+
+
+# ── FR-011 G1 (ADR-0039) — resumability snapshot store ────────────────────────
+# One PHI-free structured blob persisted to the SAME restart-durable SQLite the
+# EHR chart already survives in. In-memory fallback keeps degraded mode working.
+_mem_session_state: str | None = None
+
+
+def save_session_state(blob_json: str) -> None:
+    """Write/replace the single latest session-state snapshot."""
+    global _mem_session_state
+    _mem_session_state = blob_json
+    db = _conn()
+    if db is None:
+        return
+    with _lock:
+        db.execute(
+            "INSERT OR REPLACE INTO session_state (id, saved_at, blob_json) "
+            "VALUES (1, ?, ?)", (time.time(), blob_json))
+
+
+def load_session_state() -> str | None:
+    """The latest snapshot JSON, or None."""
+    db = _conn()
+    if db is None:
+        return _mem_session_state
+    with _lock:
+        row = db.execute("SELECT blob_json FROM session_state WHERE id=1").fetchone()
+    return row[0] if row else _mem_session_state
+
+
+def clear_session_state() -> None:
+    global _mem_session_state
+    _mem_session_state = None
+    db = _conn()
+    if db is None:
+        return
+    with _lock:
+        db.execute("DELETE FROM session_state WHERE id=1")
 
 
 def get_comparison(session_id: str) -> dict[str, Any] | None:
