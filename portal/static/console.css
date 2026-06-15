@@ -199,6 +199,66 @@
 .mc-link { font-size: 12.5px; color: #2b6cb0; text-decoration: none; }
 .mc-link:hover { text-decoration: underline; }
 
+/* ── G5 Launch Wizard ──────────────────────────────────────────────────── */
+.wizard {
+  max-width: 720px; background: #fff; border: 1px solid #e1e7ed;
+  border-radius: 10px; padding: 20px 24px;
+}
+.wiz-pills {
+  display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 20px; padding: 0;
+}
+.wiz-pill {
+  font-size: 12.5px; font-weight: 600; color: #6b7a88;
+  background: #f1f4f7; border: 1px solid #e1e7ed; border-radius: 14px; padding: 4px 12px;
+}
+.wiz-pill.active { color: #14202b; background: #e4eefa; border-color: #b9d4f2; }
+.wiz-pill.done { color: #1f7a45; }
+
+.wiz-step h2 { font-size: 16px; margin: 0 0 14px; }
+.wiz-field { display: block; font-size: 13px; font-weight: 600; color: #3a4855; margin: 0 0 14px; }
+.wiz-field .muted { font-weight: 400; }
+.wiz-field input, .wiz-field select, .wiz-field textarea {
+  display: block; width: 100%; box-sizing: border-box; margin-top: 5px;
+  font: inherit; font-weight: 400; color: #1b2733;
+  border: 1px solid #c4cfd9; border-radius: 6px; padding: 8px 10px;
+}
+.wiz-field input:focus, .wiz-field select:focus, .wiz-field textarea:focus {
+  outline: none; border-color: #2b6cb0; box-shadow: 0 0 0 3px rgba(43,108,176,0.15);
+}
+
+.wiz-personas { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.wiz-persona {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  border: 1px solid #e1e7ed; border-radius: 6px; padding: 7px 10px; background: #fbfcfd;
+}
+.wiz-persona .wp-label { flex: 1 1 auto; }
+.wiz-persona .wp-avatar {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #6b7a88;
+}
+.wiz-persona input { margin: 0; }
+
+.wiz-review { display: grid; gap: 6px; margin: 0 0 16px; }
+.wr-row { display: flex; gap: 12px; font-size: 13px; border-bottom: 1px solid #eef2f5; padding-bottom: 6px; }
+.wr-k { width: 110px; color: #6b7a88; font-weight: 600; }
+.wr-v { flex: 1 1 auto; }
+
+.wiz-readiness { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 13px; }
+.wiz-rpill { font-weight: 600; padding: 2px 10px; border-radius: 11px; }
+.wiz-rpill[data-status="green"]   { color: #1f7a45; background: #e6f5ec; }
+.wiz-rpill[data-status="amber"]   { color: #8a5a00; background: #fbeed3; }
+.wiz-rpill[data-status="red"]     { color: #a32d2d; background: #fbe2e2; }
+.wiz-rpill[data-status="loading"] { color: #6b7a88; background: #eef2f5; }
+.wiz-launch-msg { margin-top: 10px; }
+
+.wiz-nav { display: flex; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #eef2f5; }
+.wiz-btn {
+  cursor: pointer; font-size: 13px; font-weight: 600;
+  border: 1px solid #b9c4cf; border-radius: 6px; padding: 8px 18px; background: #eef3f7; color: #27435a;
+}
+.wiz-btn:hover { background: #e1ebf3; }
+.wiz-btn--primary { margin-left: auto; background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+.wiz-btn--primary:hover { background: #245d99; }
+
 @media (max-width: 760px) {
   .rb-checks { display: none; }          /* keep the overall pill on small screens */
   .ct-classic { font-size: 12px; padding: 4px 7px; }

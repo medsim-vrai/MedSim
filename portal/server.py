@@ -356,7 +356,21 @@ async def mission_control_console(
     stays the default; G4-G6 fill the mode panels. Mode lives in the URL."""
     if mode not in ("setup", "operate", "debrief"):
         mode = "operate"
-    return templates.TemplateResponse(request, "console.html", {"mode": mode})
+    # FR-011 G5 — bootstrap the Launch Wizard from the SAME catalogs the classic
+    # control room uses (each sample carries its FULL persona roster), so there's
+    # no divergent data source. Samples + EHRs have no GET API (template-injected,
+    # exactly like control.html); personas trimmed to what the picker shows.
+    bootstrap = {
+        "samples": library.list_sample_scenarios(),
+        "ehrs": [{"id": e["id"], "name": e["name"]} for e in ehr_registry.REGISTRY],
+        "default_ehr": ehr_registry.default_id(),
+        "personas": [
+            {"id": p["id"], "name": p.get("name", ""), "role": p.get("role", "")}
+            for p in library.list_personas()
+        ],
+    }
+    return templates.TemplateResponse(
+        request, "console.html", {"mode": mode, "bootstrap": bootstrap})
 
 
 @app.post("/portal/examples/load")

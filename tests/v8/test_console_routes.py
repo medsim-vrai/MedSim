@@ -150,3 +150,79 @@ def test_cockpit_client_wires_resume_tiles_and_testall():
     assert "readiness-tiles" in js               # tile grid render target
     assert "test_all" in js                      # Test all action id
     assert "renderResumeBanner" in js and "renderTiles" in js
+
+
+# ── G5 — Launch Wizard ────────────────────────────────────────────────────────
+
+def _bootstrap(html: str):
+    import json
+    import re
+    m = re.search(r'<script id="console-bootstrap"[^>]*>(.*?)</script>', html, re.S)
+    return json.loads(m.group(1)) if m else None
+
+
+def test_wizard_mounts_and_bootstrap_present(client):
+    html = client.get("/portal/console").text
+    for mount in ('id="launch-wizard"', 'id="wiz-sample"', 'id="wiz-ehr"',
+                  'id="wiz-personas"', 'id="wiz-launch"', 'id="console-bootstrap"'):
+        assert mount in html
+
+
+def test_bootstrap_carries_full_sample_roster(client):
+    """The wizard auto-fills from the SAME sample catalog the classic room uses,
+    and each sample carries its FULL persona roster (not just a seed)."""
+    boot = _bootstrap(client.get("/portal/console").text)
+    assert boot is not None
+    assert boot["samples"] and boot["ehrs"] and boot["personas"]
+    # every sample exposes a roster, and at least one is a real multi-persona roster
+    assert all("personas" in s for s in boot["samples"])
+    assert any(len(s.get("personas") or []) >= 4 for s in boot["samples"])
+    # EHRs carry id+name and a default is named
+    assert all({"id", "name"} <= set(e) for e in boot["ehrs"])
+    assert boot["default_ehr"]
+    # personas trimmed to picker fields
+    assert all({"id", "name"} <= set(p) for p in boot["personas"])
+
+
+def test_wizard_posts_the_same_body_as_classic_start():
+    """No divergent submission: the wizard builds FormData with exactly the fields
+    POST /portal/control/start consumes, against that same (unchanged) endpoint."""
+    js = (_STATIC / "console.js").read_text()
+    assert '"/portal/control/start"' in js
+    for field in ("scenario_name", "scenario_notes", "scenario_text", "program_id",
+                  "week", "modules", "personas", "avatar_personas", "ehr_id"):
+        assert '"' + field + '"' in js
+    # the gate rule exists and a red check blocks launch
+    assert "function launchAllowed" in js and '"red"' in js
+
+
+def test_wizard_launch_creates_session_like_classic(monkeypatch):
+    """End-to-end: a wizard-shaped FormData posted to the classic start creates the
+    session and returns the live-ops redirect — proving body-equivalence."""
+    from portal import server, ehr_db, control_session, auth
+    monkeypatch.setattr(ehr_db, "_conn", lambda: None)
+    ehr_db._mem_session_state = None
+    _ensure_vault()
+    c = TestClient(server.app)
+    c.post("/login", data={"password": TEST_PASSWORD})
+    for v in auth._active_vaults.values():        # in-memory only — no vault-file write
+        v._data["ANTHROPIC_API_KEY"] = "dummy-key"
+    if control_session.get_active() is not None:
+        control_session.end_active()
+    try:
+        r = c.post("/portal/control/start", data={
+            "scenario_name": "Wizard launch test",
+            "personas": ["P-014", "P-001"],
+            "avatar_personas": ["P-014"],
+            "ehr_id": "cyrus",
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is True and data["redirect_url"] == "/portal/control/ops"
+        restored = control_session.get_active()
+        assert restored is not None
+        assert set(restored.selected_personas) == {"P-014", "P-001"}
+    finally:
+        if control_session.get_active() is not None:
+            control_session.end_active()
+        ehr_db._mem_session_state = None

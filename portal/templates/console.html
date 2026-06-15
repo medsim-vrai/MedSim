@@ -46,12 +46,58 @@
     <!-- mode panels (G4 Operate cockpit · G5 wizard · G6 ecosystem board fill these) -->
     <main class="console-main">
       <section class="console-panel" data-panel="setup" role="tabpanel" aria-label="Set up">
-        <div class="panel-placeholder">
-          <h2>Set up</h2>
-          <p>The launch wizard (G5) and the ecosystem board (G6) land here — scenario,
-             patients &amp; rooms, characters, devices — gated on a green readiness preview.</p>
-          <p class="muted">For now, configure in the
-             <a href="/portal/control/setup">classic control room ↗</a>.</p>
+        <div class="wizard" id="launch-wizard">
+          <ol class="wiz-pills">
+            <li class="wiz-pill active" data-pill="1">1&nbsp;·&nbsp;Scenario</li>
+            <li class="wiz-pill" data-pill="2">2&nbsp;·&nbsp;Patients &amp; rooms</li>
+            <li class="wiz-pill" data-pill="3">3&nbsp;·&nbsp;Characters</li>
+            <li class="wiz-pill" data-pill="4">4&nbsp;·&nbsp;Review</li>
+          </ol>
+
+          <div class="wiz-step" data-step="1">
+            <h2>Scenario</h2>
+            <label class="wiz-field">Start from a sample
+              <select id="wiz-sample"><option value="">— blank scenario —</option></select>
+            </label>
+            <label class="wiz-field">Scenario name
+              <input id="wiz-name" type="text" placeholder="e.g. ED · Mr. Hayes">
+            </label>
+            <label class="wiz-field">Instructor notes <span class="muted">(not shown to trainees)</span>
+              <textarea id="wiz-notes" rows="3"></textarea>
+            </label>
+          </div>
+
+          <div class="wiz-step" data-step="2" hidden>
+            <h2>Patients &amp; rooms</h2>
+            <label class="wiz-field">EHR
+              <select id="wiz-ehr"></select>
+            </label>
+            <p class="muted">Single-patient launch. Multi-patient rooms are configured in the
+               ecosystem board (G6) or the <a href="/portal/control/setup">classic room ↗</a>.</p>
+          </div>
+
+          <div class="wiz-step" data-step="3" hidden>
+            <h2>Characters</h2>
+            <p class="muted">Pre-filled from the sample's roster — adjust as needed. Toggle
+               “avatar” to give a character a face.</p>
+            <div id="wiz-personas" class="wiz-personas"></div>
+          </div>
+
+          <div class="wiz-step" data-step="4" hidden>
+            <h2>Review</h2>
+            <div id="wiz-review" class="wiz-review"></div>
+            <div class="wiz-readiness">
+              <span class="muted">Readiness</span>
+              <span id="wiz-readiness-pill" class="wiz-rpill" data-status="loading">checking…</span>
+            </div>
+            <button type="button" id="wiz-launch" class="rs-btn" disabled>Launch scenario</button>
+            <div id="wiz-launch-msg" class="wiz-launch-msg muted"></div>
+          </div>
+
+          <div class="wiz-nav">
+            <button type="button" id="wiz-back" class="wiz-btn" hidden>Back</button>
+            <button type="button" id="wiz-next" class="wiz-btn wiz-btn--primary">Next</button>
+          </div>
         </div>
       </section>
 
@@ -101,6 +147,7 @@
     </main>
 
   </div>
+  <script id="console-bootstrap" type="application/json">{{ (bootstrap or {}) | tojson }}</script>
   <script src="/static/console.js"></script>
 </body>
 </html>

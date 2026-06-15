@@ -96,6 +96,7 @@
     renderTiles(checks);
     renderResumeBanner(snap);
     renderMgmt(snap);
+    wizSetReadiness(overall);            // keep the wizard's launch gate live
   }
 
   function renderDetail(checks) {
@@ -191,6 +192,204 @@
       .then(function () { if (btn) btn.disabled = false; });
   }
 
+  // ── G5 Launch Wizard ──────────────────────────────────────────────────────
+  var WIZ = { step: 1, max: 4, sample: null, boot: null, overall: "loading" };
+
+  function readBootstrap() {
+    var el = document.getElementById("console-bootstrap");
+    if (!el) return null;
+    try { return JSON.parse(el.textContent || "{}"); } catch (e) { return null; }
+  }
+
+  function initWizard() {
+    var boot = readBootstrap();
+    if (!boot || !document.getElementById("launch-wizard")) return;
+    WIZ.boot = boot;
+    fillOptions("#wiz-sample", boot.samples || [], "id", "name");
+    fillOptions("#wiz-ehr", boot.ehrs || [], "id", "name", boot.default_ehr);
+    fillPersonas(boot.personas || []);
+    var sampleSel = $("#wiz-sample");
+    if (sampleSel) sampleSel.addEventListener("change", function () { applySample(sampleSel.value); });
+    var ehrSel = $("#wiz-ehr");
+    if (ehrSel) ehrSel.addEventListener("change", refreshReview);
+    var nameEl = $("#wiz-name");
+    if (nameEl) nameEl.addEventListener("input", refreshReview);
+    var back = $("#wiz-back"), next = $("#wiz-next"), launch = $("#wiz-launch");
+    if (back) back.addEventListener("click", function () { wizGoto(WIZ.step - 1); });
+    if (next) next.addEventListener("click", function () { wizGoto(WIZ.step + 1); });
+    if (launch) launch.addEventListener("click", launchScenario);
+    wizGoto(1);
+  }
+
+  function fillOptions(sel, rows, idKey, labelKey, selectedId) {
+    var el = $(sel);
+    if (!el) return;
+    rows.forEach(function (r) {
+      var o = document.createElement("option");
+      o.value = r[idKey];
+      o.textContent = r[labelKey];
+      if (selectedId && r[idKey] === selectedId) o.selected = true;
+      el.appendChild(o);
+    });
+  }
+
+  function fillPersonas(personas) {
+    var box = $("#wiz-personas");
+    if (!box) return;
+    box.textContent = "";
+    personas.forEach(function (p) {
+      var row = document.createElement("label");
+      row.className = "wiz-persona";
+      var sel = document.createElement("input");
+      sel.type = "checkbox"; sel.value = p.id; sel.className = "wp-sel";
+      sel.addEventListener("change", refreshReview);
+      var lab = document.createElement("span");
+      lab.className = "wp-label";
+      lab.textContent = p.name + (p.role ? " — " + p.role : "");
+      var av = document.createElement("span");
+      av.className = "wp-avatar";
+      var avcb = document.createElement("input");
+      avcb.type = "checkbox"; avcb.value = p.id; avcb.className = "wp-avatar-cb";
+      var avtxt = document.createElement("span"); avtxt.textContent = "avatar";
+      av.appendChild(avcb); av.appendChild(avtxt);
+      row.appendChild(sel); row.appendChild(lab); row.appendChild(av);
+      box.appendChild(row);
+    });
+  }
+
+  function applySample(id) {
+    var boot = WIZ.boot || {};
+    var found = (boot.samples || []).filter(function (x) { return x.id === id; });
+    var s = found.length ? found[0] : null;
+    WIZ.sample = s;
+    var nameEl = $("#wiz-name"), notesEl = $("#wiz-notes");
+    if (nameEl) nameEl.value = s ? (s.name || "") : "";
+    if (notesEl) notesEl.value = s ? (s.notes || "") : "";
+    var ids = s ? (s.personas || []) : [];          // FULL roster from the sample
+    document.querySelectorAll(".wp-sel").forEach(function (cb) {
+      cb.checked = ids.indexOf(cb.value) >= 0;
+    });
+    refreshReview();
+  }
+
+  function selectedPersonas() {
+    return Array.prototype.slice.call(document.querySelectorAll(".wp-sel:checked"))
+      .map(function (cb) { return cb.value; });
+  }
+  function selectedAvatars() {
+    var chosen = selectedPersonas();
+    return Array.prototype.slice.call(document.querySelectorAll(".wp-avatar-cb:checked"))
+      .map(function (cb) { return cb.value; })
+      .filter(function (id) { return chosen.indexOf(id) >= 0; });
+  }
+
+  function wizardValid() {
+    var nameEl = $("#wiz-name");
+    var name = (nameEl && nameEl.value || "").trim();
+    return !!name && selectedPersonas().length > 0;
+  }
+
+  // Launch gate (unit-checkable rule): a red readiness check blocks launch; a
+  // complete form + non-red readiness allows it (amber = caution, not a blocker —
+  // e.g. a cert-SAN drift must not permanently bar a local sim from starting).
+  function launchAllowed(overall) {
+    return overall !== "red" && wizardValid();
+  }
+
+  function reviewRow(k, v) {
+    var row = document.createElement("div"); row.className = "wr-row";
+    var kk = document.createElement("span"); kk.className = "wr-k"; kk.textContent = k;
+    var vv = document.createElement("span"); vv.className = "wr-v"; vv.textContent = v;
+    row.appendChild(kk); row.appendChild(vv);
+    return row;
+  }
+
+  function refreshReview() {
+    var rev = $("#wiz-review");
+    if (rev) {
+      var nameEl = $("#wiz-name");
+      var name = (nameEl && nameEl.value || "").trim() || "—";
+      var ehrEl = $("#wiz-ehr");
+      var ehr = ehrEl ? ehrEl.value : "";
+      var n = selectedPersonas().length;
+      rev.textContent = "";
+      rev.appendChild(reviewRow("Scenario", name));
+      rev.appendChild(reviewRow("EHR", ehr || "—"));
+      rev.appendChild(reviewRow("Characters", n ? (n + " selected") : "none — pick at least one"));
+      var avs = selectedAvatars().length;
+      if (avs) rev.appendChild(reviewRow("Avatars", avs + " with a face"));
+    }
+    var pill = $("#wiz-readiness-pill");
+    if (pill) {
+      pill.setAttribute("data-status", WIZ.overall);
+      pill.textContent = WIZ.overall === "loading" ? "checking…" : WIZ.overall;
+    }
+    var btn = $("#wiz-launch");
+    if (btn) btn.disabled = !launchAllowed(WIZ.overall);
+    var msg = $("#wiz-launch-msg");
+    if (msg) {
+      if (!wizardValid()) msg.textContent = "Add a scenario name and select at least one character.";
+      else if (WIZ.overall === "red") msg.textContent = "Readiness is red — resolve the blocking check before launching.";
+      else if (WIZ.overall === "amber") msg.textContent = "Readiness amber — you can launch; review the warnings in the cockpit.";
+      else msg.textContent = "Ready to launch.";
+    }
+  }
+
+  function wizSetReadiness(overall) {
+    WIZ.overall = overall || "amber";
+    if (document.getElementById("launch-wizard")) refreshReview();
+  }
+
+  function launchScenario() {
+    if (!launchAllowed(WIZ.overall)) return;
+    var btn = $("#wiz-launch");
+    if (btn) { btn.disabled = true; btn.textContent = "Launching…"; }
+    var s = WIZ.sample;
+    var fd = new FormData();
+    fd.append("scenario_name", ($("#wiz-name").value || "").trim());
+    fd.append("scenario_notes", ($("#wiz-notes") && $("#wiz-notes").value || "").trim());
+    if (s) {
+      fd.append("scenario_text", s.scenario_text || "");
+      if (s.program_id) fd.append("program_id", s.program_id);
+      if (s.week !== undefined && s.week !== null) fd.append("week", String(s.week));
+      (s.modules || []).forEach(function (m) { fd.append("modules", m); });
+    }
+    selectedPersonas().forEach(function (p) { fd.append("personas", p); });
+    selectedAvatars().forEach(function (p) { fd.append("avatar_personas", p); });
+    var ehrEl = $("#wiz-ehr");
+    if (ehrEl) fd.append("ehr_id", ehrEl.value);
+    fetch("/portal/control/start", { method: "POST", credentials: "same-origin", body: fd })
+      .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.ok && data.redirect_url) { window.location = data.redirect_url; return; }
+        var msg = $("#wiz-launch-msg");
+        if (msg) msg.textContent = (data && data.message) || "Launch failed.";
+        if (btn) { btn.disabled = false; btn.textContent = "Launch scenario"; }
+      })
+      .catch(function () {
+        var msg = $("#wiz-launch-msg");
+        if (msg) msg.textContent = "Launch failed (network).";
+        if (btn) { btn.disabled = false; btn.textContent = "Launch scenario"; }
+      });
+  }
+
+  function wizGoto(n) {
+    if (n < 1 || n > WIZ.max) return;
+    WIZ.step = n;
+    document.querySelectorAll(".wiz-step").forEach(function (st) {
+      st.hidden = parseInt(st.getAttribute("data-step"), 10) !== n;
+    });
+    document.querySelectorAll(".wiz-pill").forEach(function (p) {
+      var pn = parseInt(p.getAttribute("data-pill"), 10);
+      p.classList.toggle("active", pn === n);
+      p.classList.toggle("done", pn < n);
+    });
+    var back = $("#wiz-back"), next = $("#wiz-next");
+    if (back) back.hidden = n === 1;
+    if (next) next.hidden = n === WIZ.max;
+    if (n === WIZ.max) refreshReview();
+  }
+
   function handle401(r) {
     if (r && r.status === 401) { location.href = "/login"; return true; }
     return false;
@@ -250,6 +449,7 @@
     if (resumeBtn) {
       resumeBtn.addEventListener("click", function () { resumeSession(resumeBtn); });
     }
+    initWizard();
     applyMode(currentMode());
     poll();
     setInterval(poll, POLL_MS);
