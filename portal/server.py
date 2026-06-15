@@ -5198,6 +5198,33 @@ async def api_encounter_vent_state(
     return JSONResponse({"ok": True, "vent": view})
 
 
+@app.get("/api/control/readiness")
+async def api_control_readiness(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-011 G2 — system readiness (portal / network / cert / storage / vault /
+    session / devices) for the mission-control readiness bar + Setup board."""
+    from portal import readiness
+    return JSONResponse(readiness.snapshot())
+
+
+@app.post("/api/control/readiness/action")
+async def api_control_readiness_action(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-011 G2 — run a one-tap readiness action (e.g. resume the last session);
+    returns the action result + a fresh readiness snapshot."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    from portal import readiness
+    result = readiness.run_action(str(body.get("id", "")))
+    result["readiness"] = readiness.snapshot()
+    return JSONResponse(result)
+
+
 # =====================================================================
 # V7 M30 — Per-encounter parity (transcript / voice / lead student)
 # =====================================================================
