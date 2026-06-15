@@ -25,7 +25,7 @@
   // so the device display advances even when the client-side interpolator
   // can't run (e.g. cached old JS, very slow tablet). Bumping the build
   // marker confirms on the tablet which JS is actually executing.
-  const DEVICE_JS_BUILD = 'v6.1.9';   // FR-012 — monitor: no PROGRAM PUMP box + anti-flicker QRS
+  const DEVICE_JS_BUILD = 'v6.2.0';   // FR-012 — monitor injects drive physiology (HR/ECG/rhythm)
   console.log('[MEDSIM device] booting build', DEVICE_JS_BUILD);
   const body = document.body;
   const JOIN  = body.dataset.joinCode;
@@ -1160,8 +1160,11 @@
   const _MON_WINDOW_S = 4;     // seconds visible — narrower window = more px per beat
   const _MON_STEP_PX = 2;      // fine x sampling so the sharp QRS peak never aliases/flickers
   const _MON_RHYTHM_LABEL = {
-    nsr: 'Sinus rhythm', sinus: 'Sinus rhythm', asystole: 'ASYSTOLE',
-    vfib: 'VF', vf: 'VF', vtach: 'VT', vt: 'VT', afib: 'A-fib',
+    nsr: 'Sinus rhythm', sinus: 'Sinus rhythm',
+    sinus_brady: 'Sinus bradycardia', sinus_tachy: 'Sinus tachycardia',
+    asystole: 'ASYSTOLE', vfib: 'VF', vf: 'VF',
+    vtach_mono: 'VT', vtach_poly: 'Torsades (VT)', vtach: 'VT', vt: 'VT',
+    afib: 'A-fib', aflutter: 'A-flutter', pea: 'PEA', paced: 'Paced',
   };
   const _MON_ALARM_LABEL = {
     asystole: 'ASYSTOLE', vfib: 'VF', vtach: 'VT', brady_severe: 'SEVERE BRADY',
@@ -1235,10 +1238,12 @@
 
   // Waveform morphology (phase in [0,1) within one cycle).
   function _ecgShape(phase, rhythm) {
+    rhythm = rhythm || 'nsr';
     if (rhythm === 'asystole') return 0;
     if (rhythm === 'vfib' || rhythm === 'vf')
       return 0.45 * Math.sin(phase * Math.PI * 17) + 0.30 * Math.sin(phase * Math.PI * 29 + 1);
-    if (rhythm === 'vtach' || rhythm === 'vt') return 0.85 * Math.sin(phase * Math.PI * 2);
+    if (rhythm.indexOf('vtach') === 0 || rhythm === 'vt')   // vtach_mono / vtach_poly
+      return 0.85 * Math.sin(phase * Math.PI * 2);
     let y = 0;
     y += 0.12 * Math.exp(-Math.pow((phase - 0.15) / 0.035, 2));   // P
     y -= 0.10 * Math.exp(-Math.pow((phase - 0.255) / 0.014, 2));  // Q

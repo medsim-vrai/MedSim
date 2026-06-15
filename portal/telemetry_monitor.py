@@ -38,11 +38,12 @@ DEFAULT_LIMITS: dict[str, tuple[float, float]] = {
 _HR_BRADY_SEVERE = 40
 _HR_TACHY_SEVERE = 150
 _RR_APNEA = 6
-# Lethal-rhythm → alarm tone (accepts a few aliases the catalog may use).
+# Lethal-rhythm id (v8 ECG catalog, portal/ecg.py) → alarm tone.
 _RHYTHM_ALARM = {
-    "asystole": "asystole", "asys": "asystole",
+    "asystole": "asystole", "asys": "asystole", "pea": "asystole",
     "vfib": "vfib", "vf": "vfib", "v_fib": "vfib",
     "vtach": "vtach", "vt": "vtach", "v_tach": "vtach",
+    "vtach_mono": "vtach", "vtach_poly": "vtach",
 }
 
 
@@ -130,3 +131,45 @@ def evaluate(encounter_id: str, *, surface: str = AUTO_SURFACE) -> dict[str, Any
             log.exception("telemetry_monitor: evaluate failed for station %s",
                           st.get("id"))
     return summary
+
+
+# Instructor "inject this condition" -> the PHYSIOLOGY that produces it, so the
+# monitor's HR / ECG / SpO2 actually change and the matching alarm AUTO-fires
+# (coherent). Rhythm ids are v8 ECG catalog ids (portal/ecg.py).
+CLINICAL_EFFECTS: dict[str, dict[str, Any]] = {
+    "brady_severe": {"rhythm": "sinus_brady", "vitals": {"hr": 35}},
+    "brady":        {"rhythm": "sinus_brady", "vitals": {"hr": 46}},
+    "tachy_severe": {"rhythm": "sinus_tachy", "vitals": {"hr": 165}},
+    "tachy":        {"rhythm": "sinus_tachy", "vitals": {"hr": 130}},
+    "spo2_low":     {"vitals": {"spo2": 82}},
+    "apnea":        {"vitals": {"rr": 4}},
+    "rr_high":      {"vitals": {"rr": 34}},
+    "nibp_high":    {"vitals": {"sbp": 196, "dbp": 112}},
+    "nibp_low":     {"vitals": {"sbp": 78, "dbp": 44}},
+    "asystole":     {"rhythm": "asystole",   "vitals": {"hr": 0, "spo2": 60}},
+    "vfib":         {"rhythm": "vfib",       "vitals": {"hr": 0, "spo2": 55}},
+    "vtach":        {"rhythm": "vtach_mono", "vitals": {"hr": 180}},
+}
+
+
+def inject_clinical(encounter_id: str, tone: str) -> bool:
+    """Apply the physiology that PRODUCES a condition so HR/ECG/SpO2 change and
+    the alarm auto-fires. Returns False for tones with no physiology mapping
+    (equipment/advisory alarms — leads_off, pvc_frequent, afib) so the caller
+    falls back to sounding a plain tone."""
+    effect = CLINICAL_EFFECTS.get(tone)
+    if not effect:
+        return False
+    from . import physiology
+    rhythm = effect.get("rhythm")
+    if rhythm:
+        try:
+            physiology.set_rhythm(encounter_id, rhythm)
+        except Exception:  # noqa: BLE001 — a rhythm-catalog miss never blocks the vitals
+            log.debug("inject_clinical: set_rhythm(%s) failed", rhythm, exc_info=True)
+    vitals = effect.get("vitals")
+    if vitals:
+        physiology.set_vitals(encounter_id, vitals)   # the hook auto-evaluates -> alarm
+    else:
+        evaluate(encounter_id)
+    return True

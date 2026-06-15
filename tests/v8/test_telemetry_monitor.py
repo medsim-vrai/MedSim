@@ -88,6 +88,23 @@ def test_instructor_alarm_survives_auto_clear():
     assert "leads_off" in _alarms(eid, sid)             # manual one preserved
 
 
+def test_inject_clinical_drives_physiology_then_alarm():
+    """The reported bug: injecting 'severe bradycardia' must change HR/ECG, not
+    just sound a tone. inject_clinical drives physiology -> HR drops -> the alarm
+    auto-fires (coherent)."""
+    eid, sid = "tm-test-inject", "tm-st-inject"
+    _register(eid, sid)
+    physiology.set_vitals(eid, {"hr": 78})            # normal baseline
+    assert telemetry_monitor.inject_clinical(eid, "brady_severe") is True
+    assert physiology.read(eid)["vitals"]["hr"] == 35     # physiology actually changed
+    assert "brady_severe" in _alarms(eid, sid)            # and the alarm auto-fired
+
+
+def test_inject_clinical_unmapped_tone_falls_back():
+    # Equipment/advisory tones have no physiology mapping -> caller sounds a tone.
+    assert telemetry_monitor.inject_clinical("tm-x-eid", "leads_off") is False
+
+
 def test_lethal_rhythm_fires_on_monitor():
     eid, sid = "tm-test-rhythm", "tm-st-rhythm"
     _register(eid, sid)

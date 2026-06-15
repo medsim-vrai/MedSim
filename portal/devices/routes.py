@@ -735,6 +735,21 @@ async def api_device_inject(
     engine = make_engine(session_id=sess.id, station_id=station_id,
                          device_kind=station["device_kind"],
                          device_model=station["device_model"])
+    # FR-012 — a telemetry monitor's "alarm" is a CLINICAL CONDITION: drive the
+    # physiology so HR/ECG/SpO2 actually change, then the monitor auto-fires the
+    # matching alarm and the display reflects it. Equipment/advisory tones (leads
+    # off, frequent PVCs) have no physiology mapping and fall through to a tone.
+    if station["device_kind"] == "telemetry_monitor":
+        from portal import telemetry_monitor
+        if telemetry_monitor.inject_clinical(sess.id, tone):
+            state = engine.fold()      # includes the auto-fired alarm
+            await devices_ws.manager.send_to_device(station_id, {
+                "type": "fold", "state": state})
+            await devices_ws.manager.broadcast_to_instructors({
+                "type": "device_event", "station_id": station_id,
+                "event_type": "alarm.injected",
+                "payload": {"tone": tone, "auto": True}, "state": state})
+            return JSONResponse({"ok": True, "state": state, "via": "physiology"})
     state = engine.handle(type="alarm.injected", surface="instructor",
                           payload=payload)
     # Push to the device + firehose to other instructors.
