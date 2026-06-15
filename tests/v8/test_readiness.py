@@ -14,7 +14,8 @@ import pytest
 from portal import control_session, readiness, session_state
 
 _VALID = {readiness.GREEN, readiness.AMBER, readiness.RED}
-_EXPECTED_IDS = {"portal", "network", "cert", "storage", "vault", "session", "devices"}
+_EXPECTED_IDS = {"portal", "network", "cert", "voice", "speech",
+                 "storage", "ehr", "vault", "session", "devices"}
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ def test_snapshot_shape_and_every_check_present():
 
 def test_overall_rolls_up_worst_status(monkeypatch):
     def fake(status):
-        return lambda: readiness._check("x", "X", status, "")
+        return lambda vault=None: readiness._check("x", "X", status, "")
     monkeypatch.setattr(readiness, "_CHECKS", (fake(readiness.GREEN), fake(readiness.GREEN)))
     assert readiness.snapshot()["overall"] == readiness.GREEN
     monkeypatch.setattr(readiness, "_CHECKS", (fake(readiness.GREEN), fake(readiness.AMBER)))
@@ -60,7 +61,7 @@ def test_overall_rolls_up_worst_status(monkeypatch):
 
 
 def test_one_broken_check_never_breaks_the_bar(monkeypatch):
-    def boom():
+    def boom(vault=None):
         raise RuntimeError("kaboom")
     monkeypatch.setattr(readiness, "_CHECKS", (readiness._portal, boom))
     snap = readiness.snapshot()
@@ -96,6 +97,52 @@ def test_cert_san_coverage_drives_amber_vs_green(monkeypatch, tmp_path):
     assert out["status"] == readiness.AMBER and "192.168.1.99" in out["detail"]
     monkeypatch.setattr(readiness, "_lan_ip", lambda: "192.168.1.50")  # covered
     assert readiness._cert()["status"] == readiness.GREEN
+
+
+def test_voice_needs_anthropic_key(monkeypatch):
+    from types import SimpleNamespace
+    # No vault → can't verify → amber (log in).
+    assert readiness._voice(None)["status"] == readiness.AMBER
+    # Vault without the Anthropic key → RED (characters can't reply).
+    out = readiness._voice(SimpleNamespace(credentials={}))
+    assert out["status"] == readiness.RED and "Anthropic" in out["detail"]
+    # Anthropic set, no ElevenLabs → green, notes the browser-TTS fallback.
+    out = readiness._voice(SimpleNamespace(credentials={"ANTHROPIC_API_KEY": "sk-x"}))
+    assert out["status"] == readiness.GREEN and "browser TTS" in out["detail"]
+    # Both set → green.
+    out = readiness._voice(SimpleNamespace(
+        credentials={"ANTHROPIC_API_KEY": "sk-x", "ELEVENLABS_API_KEY": "el-y"}))
+    assert out["status"] == readiness.GREEN and "ElevenLabs" in out["detail"]
+
+
+def test_speech_warm_vs_cold(monkeypatch):
+    from portal import room_stt
+    monkeypatch.setattr(room_stt, "_engine", object(), raising=False)
+    assert readiness._speech()["status"] == readiness.GREEN
+    monkeypatch.setattr(room_stt, "_engine", None, raising=False)
+    monkeypatch.setattr(room_stt, "_engine_err", None, raising=False)
+    out = readiness._speech()
+    assert out["status"] == readiness.AMBER
+    assert any(a["id"] == "warm_speech" for a in out["actions"])   # cold → offers Warm
+    monkeypatch.setattr(room_stt, "_engine_err", "OOM loading model", raising=False)
+    out = readiness._speech()
+    assert out["status"] == readiness.AMBER and "OOM" in out["detail"]
+
+
+def test_ehr_selection(isolated_store):
+    assert readiness._ehr()["status"] == readiness.AMBER          # no active session
+    control_session.create_session(
+        scenario_name="ED", selected_personas=["P-014"], selected_modules=[],
+        api_key="k", ehr_id="cyrus")
+    out = readiness._ehr()
+    assert out["status"] == readiness.GREEN and "cyrus" in out["detail"]
+
+
+def test_ehr_unselected_is_amber(isolated_store):
+    control_session.create_session(
+        scenario_name="ED", selected_personas=["P-014"], selected_modules=[],
+        api_key="k", ehr_id="")
+    assert readiness._ehr()["status"] == readiness.AMBER
 
 
 def test_storage_durable_green_degraded_red(monkeypatch):
@@ -146,6 +193,27 @@ def test_resume_action_restores_the_session(isolated_store):
     assert result["ok"] is True
     restored = control_session.get_active()
     assert restored is not None and restored.id == sid
+
+
+def test_warm_speech_action_warms_without_blocking(monkeypatch):
+    from portal import room_stt
+    called = {"n": 0}
+    monkeypatch.setattr(room_stt, "warm_in_background", lambda: called.__setitem__("n", 1))
+    out = readiness.run_action("warm_speech")
+    assert out["ok"] is True and called["n"] == 1
+
+
+def test_restart_hint_is_info_only_never_restarts():
+    out = readiness.run_action("restart_hint")
+    assert out["ok"] is True
+    assert "run_portal.py" in out["hint"]          # returns the command, doesn't run it
+
+
+def test_recheck_cert_and_test_all_are_safe(monkeypatch):
+    from portal import room_stt
+    monkeypatch.setattr(room_stt, "_engine", object(), raising=False)  # already warm
+    assert readiness.run_action("recheck_cert")["ok"] is True
+    assert readiness.run_action("test_all")["ok"] is True
 
 
 def test_unknown_action_is_rejected():

@@ -5200,28 +5200,29 @@ async def api_encounter_vent_state(
 
 @app.get("/api/control/readiness")
 async def api_control_readiness(
-    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
 ):
-    """FR-011 G2 — system readiness (portal / network / cert / storage / vault /
-    session / devices) for the mission-control readiness bar + Setup board."""
+    """FR-011 G2 — system readiness (portal / network / cert / voice / speech /
+    storage / EHR / vault / session / devices) for the mission-control readiness
+    bar + Setup board. The vault lets the voice check verify stored provider keys."""
     from portal import readiness
-    return JSONResponse(readiness.snapshot())
+    return JSONResponse(readiness.snapshot(vault))
 
 
 @app.post("/api/control/readiness/action")
 async def api_control_readiness_action(
     request: Request,
-    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
 ):
-    """FR-011 G2 — run a one-tap readiness action (e.g. resume the last session);
-    returns the action result + a fresh readiness snapshot."""
+    """FR-011 G2 — run a one-tap readiness action (resume session / warm speech /
+    re-check cert / restart hint / test all); returns the result + a fresh snapshot."""
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(400, "JSON body required.") from None
     from portal import readiness
     result = readiness.run_action(str(body.get("id", "")))
-    result["readiness"] = readiness.snapshot()
+    result["readiness"] = readiness.snapshot(vault)
     return JSONResponse(result)
 
 
