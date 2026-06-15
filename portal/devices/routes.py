@@ -165,6 +165,27 @@ async def device_app(request: Request, join_code: str, station_id: str):
 # Public — device-side API
 # ──────────────────────────────────────────────────────────────────────
 
+_ADVANCED_DEVICE_KINDS = ("telemetry_monitor", "vent_monitor", "ventilator")
+
+
+def _physiology_view(device_kind: str, encounter_id: str, *,
+                     evaluate: bool = False) -> dict[str, Any] | None:
+    """FR-012 — the live physiology snapshot attached to an advanced device's
+    bootstrap/state payload (None for basic pump/cabinet devices). When
+    ``evaluate`` is set (telemetry monitor opening), re-run the auto-alarm
+    evaluation first so the monitor reflects current breaches immediately."""
+    if device_kind not in _ADVANCED_DEVICE_KINDS:
+        return None
+    try:
+        from portal import physiology
+        if evaluate and device_kind == "telemetry_monitor":
+            from portal import telemetry_monitor
+            telemetry_monitor.evaluate(encounter_id)
+        return physiology.read(encounter_id)
+    except Exception:  # noqa: BLE001 — physiology view is best-effort
+        return None
+
+
 @router.get("/api/device/{station_id}/bootstrap")
 async def api_device_bootstrap(station_id: str):
     """V6 — wrapped in try/except so the next 500 returns a JSON body
@@ -261,6 +282,11 @@ async def api_device_bootstrap(station_id: str):
                         characters.append(c)
             except Exception:
                 characters = []
+        # FR-012 — advanced devices carry a live physiology snapshot so the
+        # monitor/vent client renders real vitals; opening a telemetry monitor
+        # re-evaluates its auto alarms so it reflects current breaches at once.
+        physiology_view = _physiology_view(station["device_kind"], sess.id,
+                                           evaluate=True)
         return JSONResponse({
             "station":      station,
             "session_id":   sess.id,
@@ -271,6 +297,7 @@ async def api_device_bootstrap(station_id: str):
             "audio_urls":   audio,
             "state":        state,
             "characters":   characters,
+            "physiology":   physiology_view,
         })
     except HTTPException:
         raise
@@ -311,7 +338,11 @@ async def api_device_state(station_id: str):
     engine = make_engine(session_id=sess.id, station_id=station_id,
                          device_kind=station["device_kind"],
                          device_model=station["device_model"])
-    return JSONResponse({"session_state": sess.state, "state": engine.fold()})
+    return JSONResponse({
+        "session_state": sess.state,
+        "state": engine.fold(),
+        "physiology": _physiology_view(station["device_kind"], sess.id),
+    })
 
 
 @router.post("/api/device/{station_id}/event")

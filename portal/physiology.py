@@ -113,6 +113,18 @@ def _write_vitals(encounter_id: str, vitals: dict[str, Any], *,
                       encounter_id)
 
 
+def _notify_monitors(encounter_id: str) -> None:
+    """Change hook — re-evaluate telemetry-monitor alarms after a vitals/rhythm
+    change (v8 has no ticker, so evaluation is change-driven). Best-effort +
+    lazy import to avoid a physiology<->telemetry_monitor cycle."""
+    try:
+        from . import telemetry_monitor
+        telemetry_monitor.evaluate(encounter_id)
+    except Exception:  # noqa: BLE001 — the monitor hook must never break a write
+        log.debug("physiology: monitor notify hook failed for %s", encounter_id,
+                  exc_info=True)
+
+
 # ── Authority lease ──────────────────────────────────────────────────────────
 
 def register_source(encounter_id: str, source: str, *, healthy: bool = True) -> None:
@@ -194,6 +206,7 @@ def apply_delta(encounter_id: str, deltas: dict[str, float], *,
     new = _bound(new, condition_for(encounter_id))
     _write_vitals(encounter_id, new, surface=surface, cause=cause, source=source)
     _add_map(new)
+    _notify_monitors(encounter_id)
     return new
 
 
@@ -214,6 +227,7 @@ def set_vitals(encounter_id: str, values: dict[str, float], *,
     new = _bound(new, condition_for(encounter_id))
     _write_vitals(encounter_id, new, surface=surface, cause=cause, source=source)
     _add_map(new)
+    _notify_monitors(encounter_id)
     return new
 
 
