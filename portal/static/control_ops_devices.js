@@ -464,6 +464,39 @@
   }
 
   // ── Detail modal ────────────────────────────────────────────────────
+  // ── FR-012 D6b — ventilator fault picker (vent devices) ─────────────
+  function _isVentKind(k) { return k === 'ventilator' || k === 'vent_monitor'; }
+  async function loadVentFaults(stationId) {
+    try {
+      const r = await fetchJSON(`/api/device/${stationId}/vent/faults`);
+      $('dd-vent-fault').innerHTML = (r.catalog || []).map((f) =>
+        `<option value="${escapeHtml(f.id)}">${escapeHtml(f.label)}</option>`).join('');
+      renderVentFaultActive(r.active || []);
+    } catch (e) { /* ignore */ }
+  }
+  function renderVentFaultActive(active) {
+    const ul = $('dd-vent-fault-active'); if (!ul) return;
+    if (!active.length) { ul.innerHTML = '<li class="muted small">No faults armed.</li>'; return; }
+    ul.innerHTML = active.map((f) =>
+      `<li style="display:flex;gap:8px;align-items:center;margin:4px 0;flex-wrap:wrap">`
+      + `<span style="color:#a02437;font-weight:600">⚠ ${escapeHtml(f.label)}</span>`
+      + `<button type="button" class="secondary small btn-vfault-clear" data-fault="${escapeHtml(f.id)}">Clear</button>`
+      + `<span class="muted small" style="flex-basis:100%">${escapeHtml(f.resolution || '')}</span></li>`).join('');
+    ul.querySelectorAll('.btn-vfault-clear').forEach((b) =>
+      b.addEventListener('click', () => ventFault('clear', b.dataset.fault)));
+  }
+  async function ventFault(action, faultId) {
+    if (!currentDetail) return;
+    try {
+      const r = await fetchJSON(`/api/device/${currentDetail}/vent/fault`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action, fault_id: faultId}),
+      });
+      renderVentFaultActive(r.active || []);
+      fetchTail(currentDetail);
+    } catch (e) { alert('Vent fault: ' + (e.detail || e.message)); }
+  }
+
   function openDetail(stationId) {
     const s = rosterCache.find((x) => x.station_id === stationId);
     if (!s) return;
@@ -477,6 +510,11 @@
       $('dd-tone').innerHTML = tones.map((t) =>
         `<option value="${escapeHtml(t)}">${escapeHtml(t.replace(/_/g, ' '))}</option>`).join('');
     });
+    const vf = $('dd-vent-faults');
+    if (vf) {
+      if (_isVentKind(s.device_kind)) { vf.hidden = false; loadVentFaults(stationId); }
+      else { vf.hidden = true; }
+    }
     $('dd-events').innerHTML = '<span class="muted">Loading…</span>';
     fetchTail(stationId);
     $('device-detail-modal').hidden = false;
@@ -571,6 +609,10 @@
     $('dd-close').addEventListener('click', closeDetail);
     $('dd-assign-form').addEventListener('submit', submitAssign);
     $('dd-inject-form').addEventListener('submit', submitInject);
+    const _vff = $('dd-vent-fault-form');
+    if (_vff) _vff.addEventListener('submit', (e) => {
+      e.preventDefault(); ventFault('arm', $('dd-vent-fault').value);
+    });
 
     // Close modals by clicking the dark backdrop.
     ['add-device-modal', 'device-detail-modal'].forEach((id) => {

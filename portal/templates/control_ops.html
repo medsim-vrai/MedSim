@@ -818,6 +818,17 @@
     </form>
     <p class="muted small" id="dd-inject-hint">Alarm catalogue is filtered to alarms valid for this device kind.</p>
 
+    <!-- FR-012 D6b — ventilator fault injection (vent devices only). -->
+    <div id="dd-vent-faults" hidden>
+      <h3 style="margin:14px 0 6px">Ventilator fault</h3>
+      <form id="dd-vent-fault-form" style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <select id="dd-vent-fault" style="flex:1"></select>
+        <button type="submit" class="danger">⚠️ Arm fault</button>
+      </form>
+      <p class="muted small">Degrades the waveforms, fires the equipment alarm, and moves patient physiology. Clear it to let the ventilator recover the patient.</p>
+      <ul id="dd-vent-fault-active" style="margin:6px 0 0;padding-left:0;list-style:none"></ul>
+    </div>
+
     <h3 style="margin:14px 0 6px">Recent events</h3>
     <div id="dd-events" style="max-height:200px;overflow-y:auto;background:#f4f5f8;border-radius:6px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.5"></div>
 
