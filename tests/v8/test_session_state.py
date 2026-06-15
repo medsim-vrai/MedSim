@@ -101,6 +101,36 @@ def test_simulated_restart_resumes_everything(isolated_store):
     assert h["survey"] == {} and h["evaluation"] == {}           # PHI not restored
 
 
+def test_resume_restores_physiology_and_vent(isolated_store):
+    """FR-012 D7 — the advanced-device physiology + ventilator state (conditions,
+    sources, vent settings, fault penalty, armed faults) survive a restart too."""
+    from portal import control_room, physiology, vent_faults, vent_state
+    sid = _populate()
+    physiology.set_condition(sid, "ards")
+    physiology.register_source(sid, "physiobridge")
+    vent_state._settings[sid] = {"peep": 9}
+    vent_state.set_fault_penalty(sid, 5.0, 3.0)
+    vent_faults._armed[sid] = {"air_leak": {"fault_id": "air_leak", "armed_at": 1.0, "captured": {}}}
+    assert session_state.persist() is True
+    # simulate restart — wipe every in-memory store.
+    control_room.end_active_room()
+    med_orders._SESSION_MEDS.clear()
+    med_errors._SESSION_ERRORS.clear()
+    handoff._HANDOFFS.clear()
+    physiology._conditions.clear()
+    physiology._sources.clear()
+    vent_state._settings.clear()
+    vent_state._fault_penalty.clear()
+    vent_state._faults.clear()
+    vent_faults._armed.clear()
+    assert session_state.resume() is not None
+    assert physiology.condition_for(sid) == "ards"
+    assert physiology.authority(sid) == "physiobridge"           # source lease restored
+    assert vent_state.settings_for(sid)["peep"] == 9
+    assert vent_state.fault_penalty_for(sid)["spo2"] == 5.0
+    assert any(f["id"] == "air_leak" for f in vent_faults.active(sid))
+
+
 def test_nothing_to_save_with_no_active_session(isolated_store):
     assert session_state.snapshot() is None
     assert session_state.persist() is False

@@ -31,7 +31,8 @@ def _safe(fn: Callable[[], Any]) -> Any:
 def snapshot() -> dict[str, Any] | None:
     """Aggregate the live portal state into one versioned, PHI-free blob. None
     when there is nothing worth saving (no active control session)."""
-    from . import control_session, handoff, med_errors, med_orders
+    from . import (control_session, handoff, med_errors, med_orders,
+                   physiology, vent_faults, vent_state)
     cs = _safe(control_session.snapshot)
     if not cs:
         return None
@@ -42,6 +43,11 @@ def snapshot() -> dict[str, Any] | None:
         "med_orders": _safe(med_orders.snapshot) or {},
         "med_errors": _safe(med_errors.snapshot) or {},
         "handoff": _safe(handoff.snapshot) or {},
+        # FR-012 D7 — advanced-device physiology + ventilator state survive a
+        # restart too (PHI-free: conditions, settings, fault flags, penalties).
+        "physiology": _safe(physiology.snapshot) or {},
+        "vent_state": _safe(vent_state.snapshot) or {},
+        "vent_faults": _safe(vent_faults.snapshot) or {},
     }
 
 
@@ -83,6 +89,10 @@ def resume() -> dict[str, Any] | None:
     _safe(lambda: med_orders.restore(blob.get("med_orders") or {}))
     _safe(lambda: med_errors.restore(blob.get("med_errors") or {}))
     _safe(lambda: handoff.restore(blob.get("handoff") or {}))
+    from . import physiology, vent_faults, vent_state
+    _safe(lambda: physiology.restore(blob.get("physiology") or {}))
+    _safe(lambda: vent_state.restore(blob.get("vent_state") or {}))
+    _safe(lambda: vent_faults.restore(blob.get("vent_faults") or {}))
     encs = (blob.get("control_session") or {}).get("encounters") or []
     return {
         "saved_at": blob.get("saved_at"),
