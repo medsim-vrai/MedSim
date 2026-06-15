@@ -186,6 +186,22 @@ def _physiology_view(device_kind: str, encounter_id: str, *,
         return None
 
 
+def _vent_view(device_kind: str, encounter_id: str, *,
+               evaluate: bool = False) -> dict[str, Any] | None:
+    """FR-012 D4 — the ventilator numerics + settings/faults attached to a
+    vent_monitor / ventilator payload (None otherwise). When ``evaluate`` is set
+    (device opening), re-run the vent auto-alarm evaluation first."""
+    if device_kind not in ("vent_monitor", "ventilator"):
+        return None
+    try:
+        from portal import vent_state
+        if evaluate:
+            vent_state.evaluate(encounter_id)
+        return vent_state.view(encounter_id)
+    except Exception:  # noqa: BLE001 — vent view is best-effort
+        return None
+
+
 @router.get("/api/device/{station_id}/bootstrap")
 async def api_device_bootstrap(station_id: str):
     """V6 — wrapped in try/except so the next 500 returns a JSON body
@@ -287,6 +303,7 @@ async def api_device_bootstrap(station_id: str):
         # re-evaluates its auto alarms so it reflects current breaches at once.
         physiology_view = _physiology_view(station["device_kind"], sess.id,
                                            evaluate=True)
+        vent_view = _vent_view(station["device_kind"], sess.id, evaluate=True)
         return JSONResponse({
             "station":      station,
             "session_id":   sess.id,
@@ -298,6 +315,7 @@ async def api_device_bootstrap(station_id: str):
             "state":        state,
             "characters":   characters,
             "physiology":   physiology_view,
+            "vent":         vent_view,
         })
     except HTTPException:
         raise
@@ -342,6 +360,7 @@ async def api_device_state(station_id: str):
         "session_state": sess.state,
         "state": engine.fold(),
         "physiology": _physiology_view(station["device_kind"], sess.id),
+        "vent": _vent_view(station["device_kind"], sess.id),
     })
 
 
