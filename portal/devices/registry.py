@@ -33,6 +33,13 @@ KIND_DIRS: dict[str, str] = {
     # spec/skin in `pia/pia_v1/` is a minimal stub kept only so the
     # registry's load_spec/load_skin don't fail for legacy callers.
     "patient_integrated_alarm": "pia",
+    # FR-012 — Advanced clinical devices. Each is a full device-framework
+    # surface (spec+skin+engine) built to v8's vitals event-log contract; see
+    # docs/PLAN-2026-06-14-advanced-devices.md +
+    # docs/DESIGN-2026-06-14-physiology-source-authority.md.
+    "telemetry_monitor": "monitors",        # full-screen bedside patient monitor
+    "vent_monitor":      "vent_monitors",   # ventilator display (graphics only)
+    "ventilator":        "ventilators",     # ventilator with control interface
 }
 
 # v6.0 ships these three reference models. Re-skins live in the same
@@ -42,6 +49,9 @@ REFERENCE_MODELS: dict[str, list[str]] = {
     "pump_enteral": ["kangaroo_omni"],
     "cabinet":      ["pyxis"],
     "patient_integrated_alarm": ["pia_v1"],
+    "telemetry_monitor": ["generic_tele"],
+    "vent_monitor":      ["generic_vent_display"],
+    "ventilator":        ["generic_vent"],
 }
 
 

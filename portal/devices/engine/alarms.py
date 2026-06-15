@@ -56,12 +56,64 @@ CABINET_ALERTS: dict[str, dict[str, Any]] = {
 }
 
 
+# FR-012 — telemetry-monitor alarm catalogue (nursing-station standard).
+# Tiers follow IEC 60601-1-8: life-threatening rhythms + desat/apnea = high.
+MONITOR_ALARMS: dict[str, dict[str, Any]] = {
+    "asystole":     {"tier": "high",   "loop": True, "label": "Asystole"},
+    "vfib":         {"tier": "high",   "loop": True, "label": "Ventricular fibrillation"},
+    "vtach":        {"tier": "high",   "loop": True, "label": "Ventricular tachycardia"},
+    "brady_severe": {"tier": "high",   "loop": True, "label": "Extreme bradycardia"},
+    "tachy_severe": {"tier": "high",   "loop": True, "label": "Extreme tachycardia"},
+    "spo2_low":     {"tier": "high",   "loop": True, "label": "SpO2 low / desaturation"},
+    "apnea":        {"tier": "high",   "loop": True, "label": "Apnea"},
+    "brady":        {"tier": "medium", "loop": True, "label": "Bradycardia"},
+    "tachy":        {"tier": "medium", "loop": True, "label": "Tachycardia"},
+    "rr_high":      {"tier": "medium", "loop": True, "label": "Respiratory rate high"},
+    "nibp_high":    {"tier": "medium", "loop": True, "label": "NIBP high"},
+    "nibp_low":     {"tier": "medium", "loop": True, "label": "NIBP low"},
+    "pvc_frequent": {"tier": "low",    "loop": True, "label": "Frequent PVCs"},
+    "afib":         {"tier": "low",    "loop": True, "label": "Atrial fibrillation"},
+    "leads_off":    {"tier": "low",    "loop": True, "label": "Leads off / artifact"},
+}
+
+# FR-012 — ventilator alarm catalogue (shared by vent_monitor + ventilator).
+VENT_ALARMS: dict[str, dict[str, Any]] = {
+    "high_pressure":      {"tier": "high",   "loop": True, "label": "High airway pressure"},
+    "low_pressure":       {"tier": "high",   "loop": True, "label": "Low pressure / disconnect"},
+    "low_minute_volume":  {"tier": "high",   "loop": True, "label": "Low minute volume"},
+    "apnea":              {"tier": "high",   "loop": True, "label": "Apnea / no breath"},
+    "o2_supply":          {"tier": "high",   "loop": True, "label": "O2 supply failure"},
+    "vent_inop":          {"tier": "high",   "loop": True, "label": "Ventilator inoperative"},
+    "power_fail":         {"tier": "high",   "loop": True, "label": "Power / battery"},
+    "low_tidal_volume":   {"tier": "medium", "loop": True, "label": "Low tidal volume"},
+    "high_rr":            {"tier": "medium", "loop": True, "label": "Respiratory rate high"},
+    "high_minute_volume": {"tier": "medium", "loop": True, "label": "High minute volume"},
+    "peep_loss":          {"tier": "medium", "loop": True, "label": "PEEP not maintained"},
+    "auto_peep":          {"tier": "medium", "loop": True, "label": "Auto-PEEP / air trapping"},
+    "fio2_deviation":     {"tier": "medium", "loop": True, "label": "FiO2 deviation"},
+    "exhalation_valve":   {"tier": "medium", "loop": True, "label": "Exhalation valve leak"},
+}
+
+# Until bespoke monitor/vent WAVs are recorded (D3/D4), advanced-device tones
+# play the existing IEC priority tones, mapped by tier.
+_TIER_TO_GENERIC = {
+    "high":   "alarm_high_priority",
+    "medium": "alarm_medium_priority",
+    "low":    "alarm_low_priority",
+}
+_ADVANCED_KINDS = ("telemetry_monitor", "vent_monitor", "ventilator")
+
+
 def catalog_for(device_kind: str) -> dict[str, dict[str, Any]]:
     """All tones a device of this kind can play."""
     if device_kind in ("pump_iv", "pump_enteral"):
         return dict(PUMP_ALARMS)
     if device_kind == "cabinet":
         return dict(CABINET_ALERTS)
+    if device_kind == "telemetry_monitor":
+        return dict(MONITOR_ALARMS)
+    if device_kind in ("vent_monitor", "ventilator"):
+        return dict(VENT_ALARMS)
     return {}
 
 
@@ -69,4 +121,7 @@ def audio_url(device_kind: str, tone_id: str) -> str:
     """URL the device front-end uses to fetch the WAV file."""
     if device_kind == "cabinet":
         return f"/static/devices/audio/alerts/{tone_id}.wav"
+    if device_kind in _ADVANCED_KINDS:
+        tier = (catalog_for(device_kind).get(tone_id) or {}).get("tier", "high")
+        return f"/static/devices/audio/alarms/{_TIER_TO_GENERIC.get(tier, 'alarm_high_priority')}.wav"
     return f"/static/devices/audio/alarms/{tone_id}.wav"

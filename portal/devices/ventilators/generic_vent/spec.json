@@ -1,0 +1,33 @@
+{
+  "device_kind": "ventilator",
+  "device_model": "generic_vent",
+  "display_name": "Ventilator (controls)",
+  "manufacturer": "Generic",
+  "category": "advanced",
+  "screens": ["standby", "running", "settings", "alarms", "maneuver"],
+  "controls": {
+    "touch_targets": ["btn-mode", "btn-accept", "btn-silence",
+                       "btn-hold-insp", "btn-hold-exp", "btn-100o2"],
+    "screen_fields": ["scr-mode", "scr-fio2", "scr-peep", "scr-vt", "scr-rr",
+                       "scr-ie", "scr-psupport", "scr-ppeak-meas", "scr-vt-meas",
+                       "wave-paw", "wave-flow", "wave-vol"]
+  },
+  "modes": ["VC-CMV", "PC-CMV", "PRVC", "SIMV", "PSV", "CPAP"],
+  "default_settings": {
+    "mode": "VC-CMV", "fio2": 0.40, "peep": 5.0, "tidal_volume_ml": 450,
+    "rr": 14, "ie_ratio": 2.0, "psupport": 10.0
+  },
+  "alarm_map": {
+    "high_pressure": "high_pressure", "low_pressure": "low_pressure",
+    "low_minute_volume": "low_minute_volume", "low_tidal_volume": "low_tidal_volume",
+    "high_rr": "high_rr", "high_minute_volume": "high_minute_volume",
+    "apnea": "apnea", "peep_loss": "peep_loss", "auto_peep": "auto_peep",
+    "fio2_deviation": "fio2_deviation", "o2_supply": "o2_supply",
+    "exhalation_valve": "exhalation_valve", "vent_inop": "vent_inop",
+    "power_fail": "power_fail"
+  },
+  "default_alarm_limits": {
+    "ppeak": [5, 35], "vt": [300, 700], "rr": [6, 35], "mv": [3, 12]
+  },
+  "_note": "FR-012 D1 scaffold. D5 wires mode-aware ranges (VC0), set-vs-measured, maneuvers, and physiology coupling (VC1); D6 wires fault injection."
+}

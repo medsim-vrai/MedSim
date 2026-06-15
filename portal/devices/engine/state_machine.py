@@ -161,6 +161,23 @@ def make_engine(*, session_id: str, station_id: str,
     if device_kind == "patient_integrated_alarm":
         return PiaEngine(session_id=session_id, station_id=station_id,
                           device_model=device_model)
+    # FR-012 — Advanced clinical devices.
+    if device_kind == "telemetry_monitor":
+        from portal.devices.monitors.generic_tele.engine import (
+            TelemetryMonitorEngine)
+        return TelemetryMonitorEngine(session_id=session_id,
+                                      station_id=station_id,
+                                      device_model=device_model)
+    if device_kind == "vent_monitor":
+        from portal.devices.vent_monitors.generic_vent_display.engine import (
+            VentMonitorEngine)
+        return VentMonitorEngine(session_id=session_id, station_id=station_id,
+                                 device_model=device_model)
+    if device_kind == "ventilator":
+        from portal.devices.ventilators.generic_vent.engine import (
+            VentilatorEngine)
+        return VentilatorEngine(session_id=session_id, station_id=station_id,
+                                device_model=device_model)
     raise KeyError(f"no engine for device_kind={device_kind!r}")
 
 

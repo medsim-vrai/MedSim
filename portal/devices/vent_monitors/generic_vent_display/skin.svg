@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 600" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1024" height="600" fill="#05070b"/>
+  <rect x="0" y="0" width="1024" height="38" fill="#10151e"/>
+  <text x="16" y="25" fill="#cfe8ff" font-size="17" font-weight="bold">Ventilator Display</text>
+  <text x="1008" y="25" fill="#8aa0b6" font-size="13" text-anchor="end">VC-CMV</text>
+
+  <!-- airway pressure / flow / volume scalars (static placeholders; D4 streams) -->
+  <text x="14" y="70" fill="#f2c14e" font-size="12">Paw (cmH2O)</text>
+  <polyline id="wave-paw" fill="none" stroke="#f2c14e" stroke-width="2"
+    points="0,150 40,150 60,70 180,70 200,150 360,150 380,70 500,70 520,150 680,150 700,70 820,70 840,150 1024,150"/>
+  <text x="14" y="210" fill="#39d353" font-size="12">Flow (L/s)</text>
+  <polyline id="wave-flow" fill="none" stroke="#39d353" stroke-width="2"
+    points="0,250 60,250 60,210 180,230 200,250 200,290 260,255 360,250 380,210 500,230 520,250 520,290 580,255 680,250 700,210 820,230 840,250 1024,250"/>
+  <text x="14" y="350" fill="#33d6e6" font-size="12">Volume (mL)</text>
+  <polyline id="wave-vol" fill="none" stroke="#33d6e6" stroke-width="2"
+    points="0,400 60,400 130,330 200,400 360,400 430,330 500,400 680,400 750,330 820,400 1024,400"/>
+
+  <!-- numerics row -->
+  <g font-weight="bold">
+    <text x="60"  y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">Ppeak</text>
+    <text x="60"  y="510" fill="#f2c14e" font-size="34" text-anchor="middle" id="scr-ppeak">18</text>
+    <text x="190" y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">Pplat</text>
+    <text x="190" y="510" fill="#f2c14e" font-size="34" text-anchor="middle" id="scr-pplat">14</text>
+    <text x="320" y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">PEEP</text>
+    <text x="320" y="510" fill="#e6e6e6" font-size="34" text-anchor="middle" id="scr-peep">5</text>
+    <text x="450" y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">Vt</text>
+    <text x="450" y="510" fill="#33d6e6" font-size="34" text-anchor="middle" id="scr-vt">450</text>
+    <text x="580" y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">RR</text>
+    <text x="580" y="510" fill="#39d353" font-size="34" text-anchor="middle" id="scr-rr">14</text>
+    <text x="710" y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">MV</text>
+    <text x="710" y="510" fill="#39d353" font-size="34" text-anchor="middle" id="scr-mv">6.3</text>
+    <text x="840" y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">FiO2</text>
+    <text x="840" y="510" fill="#33d6e6" font-size="34" text-anchor="middle" id="scr-fio2">40%</text>
+    <text x="960" y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">I:E</text>
+    <text x="960" y="510" fill="#e6e6e6" font-size="34" text-anchor="middle" id="scr-ie">1:2</text>
+  </g>
+</svg>

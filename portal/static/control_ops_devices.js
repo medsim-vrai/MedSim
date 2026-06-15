@@ -39,6 +39,11 @@
       pump_iv:      'IV pump',
       pump_enteral: 'Enteral pump',
       cabinet:      'Dispensing cabinet',
+      patient_integrated_alarm: 'Patient alarm (PIA)',
+      // FR-012 advanced devices
+      telemetry_monitor: 'Telemetry monitor',
+      vent_monitor:      'Vent monitor',
+      ventilator:        'Ventilator (controls)',
     })[kind] || kind;
   }
   function modelLabel(model) {
@@ -46,8 +51,13 @@
       alaris:        'BD Alaris',
       kangaroo_omni: 'Kangaroo OMNI',
       pyxis:         'BD Pyxis MedStation',
+      generic_tele:         'Bedside telemetry monitor',
+      generic_vent_display: 'Ventilator display',
+      generic_vent:         'Ventilator (controls)',
     })[model] || model.replace(/_/g, ' ');
   }
+  // FR-012 — kinds that live under the "Advanced devices" group.
+  const ADVANCED_KINDS = new Set(['telemetry_monitor', 'vent_monitor', 'ventilator']);
   function escapeHtml(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -99,6 +109,20 @@
       'witness_required', 'inventory_low', 'ekit_expiration',
       'drawer_open', 'drawer_failure', 'network_offline', 'security_alert',
     ];
+    // FR-012 advanced-device alarm catalogues (mirror portal/devices/engine/alarms.py).
+    const MONITOR = [
+      'asystole', 'vfib', 'vtach', 'brady_severe', 'tachy_severe',
+      'spo2_low', 'apnea', 'brady', 'tachy', 'rr_high',
+      'nibp_high', 'nibp_low', 'pvc_frequent', 'afib', 'leads_off',
+    ];
+    const VENT = [
+      'high_pressure', 'low_pressure', 'low_minute_volume', 'apnea',
+      'o2_supply', 'vent_inop', 'power_fail', 'low_tidal_volume', 'high_rr',
+      'high_minute_volume', 'peep_loss', 'auto_peep', 'fio2_deviation',
+      'exhalation_valve',
+    ];
+    if (kind === 'telemetry_monitor') { alarmCatalogByKind[kind] = MONITOR; return MONITOR; }
+    if (kind === 'vent_monitor' || kind === 'ventilator') { alarmCatalogByKind[kind] = VENT; return VENT; }
     alarmCatalogByKind[kind] = (kind === 'cabinet') ? CABINET : PUMP;
     return alarmCatalogByKind[kind];
   }
@@ -282,8 +306,18 @@
     const kinds = embed
       ? allKinds.filter(k => k !== 'cabinet')
       : allKinds;
-    sel.innerHTML = kinds.map((k) =>
-      `<option value="${escapeHtml(k)}">${escapeHtml(kindLabel(k))}</option>`).join('');
+    // FR-012 — split the picker into Basic / Advanced groups. Unknown future
+    // kinds default to Basic; the advanced clinical devices get their own group.
+    const basic = kinds.filter(k => !ADVANCED_KINDS.has(k));
+    const advanced = kinds.filter(k => ADVANCED_KINDS.has(k));
+    const opt = (k) =>
+      `<option value="${escapeHtml(k)}">${escapeHtml(kindLabel(k))}</option>`;
+    let html = '';
+    if (basic.length)
+      html += `<optgroup label="Basic devices">${basic.map(opt).join('')}</optgroup>`;
+    if (advanced.length)
+      html += `<optgroup label="Advanced devices">${advanced.map(opt).join('')}</optgroup>`;
+    sel.innerHTML = html;
     // Refresh the help text under the Add button so the operator
     // sees why the cabinet option isn't there.
     const note = document.getElementById('devices-card-kinds-note');

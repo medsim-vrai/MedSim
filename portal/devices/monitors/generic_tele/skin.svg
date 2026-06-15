@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 600" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1024" height="600" fill="#05070b"/>
+  <rect x="0" y="0" width="1024" height="38" fill="#10151e"/>
+  <text x="16" y="25" fill="#cfe8ff" font-size="17" font-weight="bold">Bedside Monitor</text>
+  <text x="1008" y="25" fill="#8aa0b6" font-size="13" text-anchor="end" id="scr-rhythm">Sinus rhythm</text>
+
+  <!-- waveform lanes (static placeholder traces; D3 streams live) -->
+  <text x="14" y="70" fill="#39d353" font-size="12">II</text>
+  <polyline id="wave-ecg" fill="none" stroke="#39d353" stroke-width="2"
+    points="0,110 150,110 165,110 175,78 185,138 195,110 360,110 375,110 385,78 395,138 405,110 570,110 585,110 595,78 605,138 615,110 760,110 775,110 785,78 795,138 805,110 760,110 1024,110"/>
+  <text x="14" y="210" fill="#33d6e6" font-size="12">Pleth</text>
+  <polyline id="wave-pleth" fill="none" stroke="#33d6e6" stroke-width="2"
+    points="0,250 60,210 120,250 180,210 240,250 300,210 360,250 420,210 480,250 540,210 600,250 660,210 720,250 1024,250"/>
+  <text x="14" y="350" fill="#f2c14e" font-size="12">Resp</text>
+  <polyline id="wave-resp" fill="none" stroke="#f2c14e" stroke-width="2"
+    points="0,390 120,360 240,390 360,360 480,390 600,360 720,390 840,360 1024,390"/>
+
+  <!-- numerics column -->
+  <g font-weight="bold">
+    <text x="720" y="80" fill="#8aa0b6" font-size="15">HR</text>
+    <text x="1008" y="100" fill="#39d353" font-size="64" text-anchor="end" id="scr-hr">78</text>
+    <text x="720" y="200" fill="#8aa0b6" font-size="15">SpO2</text>
+    <text x="1008" y="220" fill="#33d6e6" font-size="64" text-anchor="end" id="scr-spo2">98</text>
+    <text x="720" y="320" fill="#8aa0b6" font-size="15">RR</text>
+    <text x="1008" y="340" fill="#f2c14e" font-size="56" text-anchor="end" id="scr-rr">16</text>
+    <text x="720" y="440" fill="#8aa0b6" font-size="15">NIBP</text>
+    <text x="1008" y="460" fill="#e6e6e6" font-size="40" text-anchor="end" id="scr-nibp">118/74</text>
+    <text x="720" y="540" fill="#8aa0b6" font-size="15">etCO2</text>
+    <text x="1008" y="560" fill="#d99be6" font-size="40" text-anchor="end" id="scr-etco2">38</text>
+  </g>
+  <rect x="700" y="46" width="2" height="520" fill="#1b232f"/>
+</svg>

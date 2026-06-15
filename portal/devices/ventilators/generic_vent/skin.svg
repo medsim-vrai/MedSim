@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 600" font-family="Arial, Helvetica, sans-serif">
+  <rect width="1024" height="600" fill="#0b0f16"/>
+  <rect x="0" y="0" width="1024" height="40" fill="#16202c"/>
+  <text x="16" y="27" fill="#cfe8ff" font-size="17" font-weight="bold">Ventilator</text>
+  <rect x="120" y="8" width="120" height="24" rx="4" fill="#1f3550"/>
+  <text x="180" y="25" fill="#bcd8ff" font-size="14" text-anchor="middle" id="scr-mode">VC-CMV</text>
+
+  <!-- live scalar strip (static placeholder; D4/D5 stream) -->
+  <text x="14" y="70" fill="#f2c14e" font-size="12">Paw</text>
+  <polyline id="wave-paw" fill="none" stroke="#f2c14e" stroke-width="2"
+    points="0,150 40,150 60,80 200,80 220,150 400,150 420,80 560,80 580,150 760,150 780,80 920,80 940,150 1024,150"/>
+
+  <!-- control tiles -->
+  <g>
+    <rect x="24"  y="230" width="220" height="150" rx="10" fill="#121a25" stroke="#26344a"/>
+    <text x="44" y="262" fill="#8aa0b6" font-size="15">FiO2</text>
+    <text x="134" y="330" fill="#33d6e6" font-size="52" text-anchor="middle" id="scr-fio2">40%</text>
+
+    <rect x="266" y="230" width="220" height="150" rx="10" fill="#121a25" stroke="#26344a"/>
+    <text x="286" y="262" fill="#8aa0b6" font-size="15">PEEP</text>
+    <text x="376" y="330" fill="#e6e6e6" font-size="52" text-anchor="middle" id="scr-peep">5</text>
+
+    <rect x="508" y="230" width="220" height="150" rx="10" fill="#121a25" stroke="#26344a"/>
+    <text x="528" y="262" fill="#8aa0b6" font-size="15">Vt (mL)</text>
+    <text x="618" y="330" fill="#33d6e6" font-size="52" text-anchor="middle" id="scr-vt">450</text>
+
+    <rect x="750" y="230" width="220" height="150" rx="10" fill="#121a25" stroke="#26344a"/>
+    <text x="770" y="262" fill="#8aa0b6" font-size="15">Rate</text>
+    <text x="860" y="330" fill="#39d353" font-size="52" text-anchor="middle" id="scr-rr">14</text>
+  </g>
+
+  <!-- maneuver / action soft-keys -->
+  <g font-size="15" text-anchor="middle">
+    <rect id="btn-hold-insp" x="24"  y="430" width="220" height="60" rx="8" fill="#1a2636" stroke="#2c3e57"/>
+    <text x="134" y="467" fill="#cfe0f2">Insp hold</text>
+    <rect id="btn-hold-exp"  x="266" y="430" width="220" height="60" rx="8" fill="#1a2636" stroke="#2c3e57"/>
+    <text x="376" y="467" fill="#cfe0f2">Exp hold</text>
+    <rect id="btn-100o2"     x="508" y="430" width="220" height="60" rx="8" fill="#1a2636" stroke="#2c3e57"/>
+    <text x="618" y="467" fill="#cfe0f2">100% O2</text>
+    <rect id="btn-silence"   x="750" y="430" width="220" height="60" rx="8" fill="#3a2730" stroke="#6a3b46"/>
+    <text x="860" y="467" fill="#f3c4cd">Silence</text>
+  </g>
+  <text x="512" y="560" fill="#5a6b7e" font-size="13" text-anchor="middle">Set-vs-measured, ranges &amp; maneuvers activate in D5.</text>
+</svg>

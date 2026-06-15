@@ -1,0 +1,28 @@
+{
+  "device_kind": "vent_monitor",
+  "device_model": "generic_vent_display",
+  "display_name": "Ventilator Display",
+  "manufacturer": "Generic",
+  "category": "advanced",
+  "screens": ["monitoring", "loops", "alarms", "setup"],
+  "controls": {
+    "touch_targets": ["btn-silence", "btn-loops", "btn-alarms"],
+    "screen_fields": ["scr-ppeak", "scr-pplat", "scr-peep", "scr-vt", "scr-rr",
+                       "scr-mv", "scr-fio2", "scr-ie",
+                       "wave-paw", "wave-flow", "wave-vol", "loop-pv", "loop-fv"]
+  },
+  "alarm_map": {
+    "high_pressure": "high_pressure", "low_pressure": "low_pressure",
+    "low_minute_volume": "low_minute_volume", "low_tidal_volume": "low_tidal_volume",
+    "high_rr": "high_rr", "high_minute_volume": "high_minute_volume",
+    "apnea": "apnea", "peep_loss": "peep_loss", "auto_peep": "auto_peep",
+    "fio2_deviation": "fio2_deviation", "o2_supply": "o2_supply",
+    "exhalation_valve": "exhalation_valve", "vent_inop": "vent_inop",
+    "power_fail": "power_fail"
+  },
+  "default_alarm_limits": {
+    "ppeak": [5, 35], "vt": [300, 700], "rr": [6, 35],
+    "mv": [3, 12], "fio2": [0.18, 1.0]
+  },
+  "_note": "FR-012 D1 scaffold. D4 wires airway P/flow/V waveforms + P-V/F-V loops + numerics from the vent-state contract."
+}

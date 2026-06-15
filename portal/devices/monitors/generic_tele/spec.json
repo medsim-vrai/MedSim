@@ -1,0 +1,26 @@
+{
+  "device_kind": "telemetry_monitor",
+  "device_model": "generic_tele",
+  "display_name": "Bedside Telemetry Monitor",
+  "manufacturer": "Generic",
+  "category": "advanced",
+  "screens": ["monitoring", "nibp", "alarms", "setup"],
+  "controls": {
+    "touch_targets": ["btn-silence", "btn-nibp", "btn-alarms", "btn-setup"],
+    "screen_fields": ["scr-hr", "scr-spo2", "scr-rr", "scr-nibp", "scr-etco2",
+                       "scr-rhythm", "wave-ecg", "wave-pleth", "wave-resp"]
+  },
+  "alarm_map": {
+    "asystole": "asystole", "vfib": "vfib", "vtach": "vtach",
+    "brady_severe": "brady_severe", "tachy_severe": "tachy_severe",
+    "spo2_low": "spo2_low", "apnea": "apnea",
+    "brady": "brady", "tachy": "tachy", "rr_high": "rr_high",
+    "nibp_high": "nibp_high", "nibp_low": "nibp_low",
+    "pvc_frequent": "pvc_frequent", "afib": "afib", "leads_off": "leads_off"
+  },
+  "default_alarm_limits": {
+    "hr": [50, 120], "spo2": [90, 100], "rr": [8, 30],
+    "sbp": [90, 180], "etco2": [25, 60]
+  },
+  "_note": "FR-012 D1 scaffold. D3 wires live vitals (portal/physiology.py) + auto-fire-on-threshold alarms."
+}
