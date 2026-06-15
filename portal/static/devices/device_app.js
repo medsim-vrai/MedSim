@@ -25,7 +25,7 @@
   // so the device display advances even when the client-side interpolator
   // can't run (e.g. cached old JS, very slow tablet). Bumping the build
   // marker confirms on the tablet which JS is actually executing.
-  const DEVICE_JS_BUILD = 'v6.2.2';   // FR-012 D5b — ventilator control screen + vent waveforms
+  const DEVICE_JS_BUILD = 'v6.2.3';   // FR-012 — vent waveforms grow; controls drop lower
   console.log('[MEDSIM device] booting build', DEVICE_JS_BUILD);
   const body = document.body;
   const JOIN  = body.dataset.joinCode;
@@ -1433,7 +1433,8 @@
     const banner = _vel('div', 'display:none'); banner.id = 'vent-alarm-banner';
     panel.appendChild(banner);
     const sc = document.createElement('canvas'); sc.id = 'vent-scalars';
-    sc.style.cssText = 'width:100%;height:240px;display:block;background:#05070b';
+    // FR-012 — grow to fill the panel so the waveforms open up; controls sit below.
+    sc.style.cssText = 'width:100%;flex:1 1 auto;min-height:200px;display:block;background:#05070b';
     panel.appendChild(sc);
     const num = _vel('div', 'display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;background:#0b0f16');
     num.id = 'vent-numerics';
@@ -1453,7 +1454,7 @@
       lc.style.cssText = 'width:100%;height:190px;display:block;background:#05070b';
       panel.appendChild(lc);
     }
-    const ac = _vel('div', 'display:flex;gap:8px;padding:8px 12px;margin-top:auto');
+    const ac = _vel('div', 'display:flex;gap:8px;padding:8px 12px');
     const sil = _vel('button', _ventBtnCss('#3a2730', '#f3c4cd'), 'Silence');
     sil.addEventListener('click', silenceActive);
     const clr = _vel('button', _ventBtnCss('#1a2636'), 'Clear');
@@ -1592,8 +1593,14 @@
   function ventFrame(now) {
     _ventRAF = requestAnimationFrame(ventFrame);
     const cx = _ventScalarsCx; if (!cx) return;
+    const c = cx.canvas, dpr = window.devicePixelRatio || 1;
+    // Keep the backing store matched to the flex-computed client box (so the
+    // waveforms fill the grown canvas + survive rotation/resize).
+    if (c.width !== Math.round(c.clientWidth * dpr) || c.height !== Math.round(c.clientHeight * dpr)) {
+      _sizeVentCanvas(c);
+    }
     if (SESSION_STATE !== 'running') return;
-    const c = cx.canvas, W = c.clientWidth, H = c.clientHeight;
+    const W = c.clientWidth, H = c.clientHeight;
     cx.clearRect(0, 0, W, H);
     const s = _settings(), d = _ventDerived(s), vt = +s.tidal_volume_ml || 450;
     const lanes = _VENT_LANES.map((l) => (l.k === 'v' ? { ...l, hi: vt * 1.2 } : l));
