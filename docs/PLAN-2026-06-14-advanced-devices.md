@@ -228,3 +228,4 @@ commit + push; templates serve live, Python changes need a portal restart (now r
   full gas-exchange model — labeled as such (training representation), exactly as PhysioBridge labels its own
   stub/TV fidelity.
 - **One module per PR**, each gated, consistent with the MedSim modular discipline.
+- **Versioning (decided 2026-06-14):** physiology is built as **maturing v8 on the existing git repo**, NOT a `medsim_v9` folder fork (v1–v7 were pre-git snapshots; v8 is the first real repo). A `v9.0` git tag + `medsim8`→`medsim9` package bump is cut as a **release marker** only when physiology is real end-to-end (FR-012 complete + a working PhysioBridge Shape-B round-trip).
