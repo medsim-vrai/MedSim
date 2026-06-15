@@ -132,6 +132,52 @@ def maneuver(encounter_id: str, kind: str) -> dict[str, Any]:
     return {"maneuver": kind, "error": "unknown maneuver"}
 
 
+# ── State presets — pick a clinical state, everything aligns ─────────────────
+# The instructor selects a state and the ventilator settings + patient mechanics
+# + physiology condition + vitals all snap to a coherent picture; per-parameter
+# injects / control changes then fine-tune. Conditions match physiology.CONDITIONS.
+STATE_PRESETS: dict[str, dict[str, Any]] = {
+    "stable": {"label": "Stable / normal lungs", "condition": "normal",
+               "settings": {"mode": "VC-CMV", "fio2": 0.40, "peep": 5, "tidal_volume_ml": 450,
+                            "rr": 14, "ie_ratio": 2.0, "compliance_ml_cmh2o": 50, "resistance_cmh2o_l_s": 10}},
+    "ards": {"label": "ARDS — lung-protective", "condition": "ards",
+             "settings": {"mode": "PC-CMV", "fio2": 0.70, "peep": 12, "tidal_volume_ml": 360,
+                          "rr": 22, "pip": 28, "compliance_ml_cmh2o": 28, "resistance_cmh2o_l_s": 12}},
+    "copd": {"label": "COPD — obstructive", "condition": "copd",
+             "settings": {"mode": "VC-CMV", "fio2": 0.40, "peep": 5, "tidal_volume_ml": 420,
+                          "rr": 12, "ie_ratio": 3.0, "compliance_ml_cmh2o": 55, "resistance_cmh2o_l_s": 22}},
+    "pneumonia": {"label": "Pneumonia", "condition": "pneumonia",
+                  "settings": {"mode": "VC-CMV", "fio2": 0.55, "peep": 8, "tidal_volume_ml": 420,
+                               "rr": 18, "ie_ratio": 2.0, "compliance_ml_cmh2o": 38, "resistance_cmh2o_l_s": 14}},
+    "weaning": {"label": "Weaning / spontaneous (PSV)", "condition": "normal",
+                "settings": {"mode": "PSV", "fio2": 0.35, "peep": 5, "psupport": 8,
+                             "rr": 16, "compliance_ml_cmh2o": 50, "resistance_cmh2o_l_s": 10}},
+}
+
+
+def state_presets() -> list[dict[str, Any]]:
+    return [{"id": k, "label": v["label"], "condition": v.get("condition")}
+            for k, v in STATE_PRESETS.items()]
+
+
+def apply_state(encounter_id: str, state_id: str):
+    """Apply a clinical-state preset: set the physiology condition + the full
+    ventilator settings, which couples aligned SpO2/EtCO2 + re-evaluates vent
+    alarms. Returns (controls_view, error)."""
+    preset = STATE_PRESETS.get(state_id)
+    if not preset:
+        return None, f"unknown ventilator state {state_id!r}"
+    cond = preset.get("condition")
+    if cond:
+        try:
+            from . import physiology
+            physiology.set_condition(encounter_id, cond)
+        except Exception:  # noqa: BLE001
+            pass
+    set_settings(encounter_id, preset.get("settings", {}))   # couples vitals + re-evaluates
+    return controls_view(encounter_id), None
+
+
 def faults_for(encounter_id: str) -> dict[str, Any]:
     return dict(_faults.get(encounter_id, {}))
 

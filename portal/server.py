@@ -5149,7 +5149,15 @@ async def api_encounter_ecg_set(
         rid = str(body["rhythm_id"])
         if not ecg_mod.is_valid_id(rid):
             raise HTTPException(400, f"Unknown rhythm_id {rid!r}.")
-        enc.ecg_rhythm_id = rid
+        # FR-012 — selecting a waveform ALIGNS the vitals to it (HR from the
+        # catalog default_rate + a perfusion crash for arrest rhythms), carrying
+        # to the monitor + nurse station. Pass align_vitals=false for rhythm-only;
+        # the per-parameter telemetry inject still fine-tunes either way.
+        if bool(body.get("align_vitals", True)):
+            from portal import physiology
+            physiology.apply_rhythm(encounter_id, rid)
+        else:
+            enc.ecg_rhythm_id = rid
     if "enabled" in body:
         enc.ecg_enabled = bool(body["enabled"])
     return JSONResponse({
@@ -5157,6 +5165,37 @@ async def api_encounter_ecg_set(
         "rhythm_id":   enc.ecg_rhythm_id,
         "rhythm":      ecg_mod.get(enc.ecg_rhythm_id),
     })
+
+
+@app.get("/api/vent/state_presets")
+async def api_vent_state_presets(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-012 — ventilator clinical-state presets the instructor can select."""
+    from portal import vent_state
+    return JSONResponse({"presets": vent_state.state_presets()})
+
+
+@app.post("/api/encounter/{encounter_id}/vent_state")
+async def api_encounter_vent_state(
+    encounter_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """FR-012 — instructor selects a ventilator clinical state; the vent settings
+    + patient condition + vitals all align. Body: ``{"state_id": "ards"}``."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    room = _require_active_room()
+    if encounter_id not in room.encounters:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    from portal import vent_state
+    view, err = vent_state.apply_state(encounter_id, str(body.get("state_id", "")))
+    if err:
+        raise HTTPException(400, err)
+    return JSONResponse({"ok": True, "vent": view})
 
 
 # =====================================================================

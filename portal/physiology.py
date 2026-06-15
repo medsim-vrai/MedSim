@@ -45,9 +45,9 @@ CONDITIONS: dict[str, dict[str, float]] = {
 
 # Hard physiologic clamps — a delta can never drive a metric outside these.
 _RANGES: dict[str, tuple[float, float]] = {
-    "hr": (0, 300), "sbp": (20, 300), "dbp": (10, 220), "spo2": (0, 100),
+    "hr": (0, 300), "sbp": (0, 300), "dbp": (0, 220), "spo2": (0, 100),
     "rr": (0, 80), "temp_f": (75.0, 113.0), "etco2": (0, 150),
-}
+}   # BP floors at 0 so arrest rhythms (VF/asystole/PEA) read no-pulse
 _CORE = ("hr", "sbp", "dbp", "spo2", "rr", "temp_f")   # telemetry's metric set
 _EXTRA = ("etco2",)                                    # physiology superset adds
 _DEFAULT_ETCO2 = 38
@@ -248,6 +248,33 @@ def set_rhythm(encounter_id: str, rhythm_id: str, *, source: str = "virtual") ->
     enc = _encounter(encounter_id)
     if enc is not None:
         enc.ecg_rhythm_id = rhythm_id
+    return rhythm_id
+
+
+# Rhythm classes with no effective cardiac output → crash BP + SpO2 (arrest).
+_ARREST_CLASSES = {"flatline", "chaotic", "organized_no_pulse"}
+
+
+def apply_rhythm(encounter_id: str, rhythm_id: str, *, source: str = "virtual") -> str:
+    """Select an ECG rhythm AND align the vitals to it — HR from the catalog's
+    ``default_rate``, plus a perfusion crash (BP/SpO2) for non-perfusing arrest
+    rhythms (VF / asystole / PEA), and hypotension for wide-complex VT. Carries to
+    the monitor + nurse station (shared ecg_rhythm_id + the vitals.record). The
+    per-parameter inject still fine-tunes afterward."""
+    from . import ecg
+    entry = ecg.get(rhythm_id)
+    if entry is None:
+        raise ValueError(f"unknown rhythm_id {rhythm_id!r}")
+    set_rhythm(encounter_id, rhythm_id, source=source)
+    rate = int(entry.get("default_rate") or 0)
+    cls = entry.get("class", "")
+    if cls in _ARREST_CLASSES:
+        vitals = {"hr": rate, "sbp": 0, "dbp": 0, "spo2": 60}
+    elif cls == "wide_tachy":          # VT — unstable, hypotensive but perfusing
+        vitals = {"hr": rate, "sbp": 82, "dbp": 50}
+    else:
+        vitals = {"hr": rate}
+    set_vitals(encounter_id, vitals, source=source, cause="rhythm:" + rhythm_id)
     return rhythm_id
 
 

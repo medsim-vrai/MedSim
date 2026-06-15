@@ -97,6 +97,30 @@
     mountECG(await r.json());
   }
 
+  // ── FR-012 — ventilator clinical-state picker ───────────────────
+  // Pick a state and the vent settings + patient condition + vitals all align
+  // (the telemetry strip + monitor + nurse station follow). Per-parameter
+  // injects / vent controls still fine-tune.
+  async function bootVentState() {
+    const picker = $('vent-state-picker');
+    if (!picker) return;
+    try {
+      const r = await fetch('/api/vent/state_presets', {credentials: 'same-origin'});
+      if (!r.ok) return;
+      const presets = (await r.json()).presets || [];
+      picker.innerHTML = '<option value="">— select a state —</option>'
+        + presets.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
+      picker.disabled = false;
+      picker.addEventListener('change', async () => {
+        if (!picker.value) return;
+        await fetch(`/api/encounter/${encodeURIComponent(cfg.encounterId)}/vent_state`,
+          {method: 'POST', credentials: 'same-origin',
+           headers: {'Content-Type': 'application/json'},
+           body: JSON.stringify({state_id: picker.value})});
+      });
+    } catch (e) { /* best effort */ }
+  }
+
   // ── Telemetry strip ─────────────────────────────────────────────
   //
   // M48 — Per-metric refresh cadence. The server poll runs every 1 s
@@ -1031,6 +1055,7 @@
 
   document.addEventListener('DOMContentLoaded', async () => {
     await bootECG();
+    await bootVentState();    // FR-012 — ventilator clinical-state picker
     await bootDeviceKinds();
     await bootLeadStudent();
     await bootVoices();

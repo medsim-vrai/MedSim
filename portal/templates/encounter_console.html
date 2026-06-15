@@ -98,10 +98,26 @@
         Show ECG on Nursing Station strip
       </label>
     </p>
+    <p class="muted small">Selecting a waveform aligns the heart rate (and, for arrest rhythms, BP/SpO₂) and carries to the monitor + Nursing Station. Inject specific parameters for further adjustment.</p>
     <div class="ecg-canvas" id="ecg-canvas">
       <!-- M24 renderer paints SVG here -->
       <p class="muted small">ECG library loads in M24.</p>
     </div>
+  </article>
+
+  <!-- FR-012 — ventilator clinical-state preset: pick a state and the vent
+       settings + patient condition + vitals all align (per-parameter injects
+       still fine-tune). -->
+  <article class="console-card" id="card-vent-state">
+    <h2>Ventilator state</h2>
+    <p class="muted small">
+      <label>State
+        <select id="vent-state-picker" disabled>
+          <option value="">— loading… —</option>
+        </select>
+      </label>
+    </p>
+    <p class="muted small">Settings, lung condition, and vitals align to the selected state.</p>
   </article>
 
   <!-- Device list — M25/M30 surfaces bound devices with kind + state. M42 adds the inline manager modal. -->
