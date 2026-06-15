@@ -1047,6 +1047,60 @@ async def api_device_roster(
     return JSONResponse({"session_state": sess.state, "stations": out})
 
 
+@router.get("/api/device/{station_id}/vent/controls")
+async def api_vent_controls(station_id: str):
+    """FR-012 D5 — the ventilator control surface (mode + ranges + settings +
+    numerics + set-vs-measured). Device-origin trust, like bootstrap/state."""
+    station = ehr_db.get_device_station(station_id)
+    if station is None:
+        raise HTTPException(404, "Station not found.")
+    sess = _session_for_station(station)
+    if sess is None:
+        raise HTTPException(409, "No active session linked to this device station.")
+    from portal import vent_state
+    return JSONResponse(vent_state.controls_view(sess.id))
+
+
+@router.post("/api/device/{station_id}/vent/set")
+async def api_vent_set(station_id: str, request: Request):
+    """FR-012 D5 — apply one ventilator control change: validate + step-snap
+    (VC0), couple into patient physiology (VC1), re-evaluate vent alarms."""
+    station = ehr_db.get_device_station(station_id)
+    if station is None:
+        raise HTTPException(404, "Station not found.")
+    sess = _session_for_station(station)
+    if sess is None:
+        raise HTTPException(409, "No active session linked to this device station.")
+    body = await request.json()
+    param = (body.get("param") or "").strip()
+    if not param:
+        raise HTTPException(400, "Missing 'param'.")
+    from portal import vent_state
+    view, err = vent_state.apply_control(sess.id, param, body.get("value"))
+    if err:
+        raise HTTPException(400, err)
+    await devices_ws.manager.send_to_device(station_id, {"type": "vent", "vent": view})
+    await devices_ws.manager.broadcast_to_instructors({
+        "type": "device_event", "station_id": station_id, "event_type": "vent.set",
+        "payload": {"param": param, "value": body.get("value")}})
+    return JSONResponse({"ok": True, "vent": view})
+
+
+@router.post("/api/device/{station_id}/vent/maneuver")
+async def api_vent_maneuver(station_id: str, request: Request):
+    """FR-012 D5 — a diagnostic maneuver (insp_hold / exp_hold / o2_100)."""
+    station = ehr_db.get_device_station(station_id)
+    if station is None:
+        raise HTTPException(404, "Station not found.")
+    sess = _session_for_station(station)
+    if sess is None:
+        raise HTTPException(409, "No active session linked to this device station.")
+    body = await request.json()
+    from portal import vent_state
+    result = vent_state.maneuver(sess.id, (body.get("kind") or "").strip())
+    return JSONResponse({"ok": True, "result": result})
+
+
 @router.get("/api/device/models")
 async def api_device_models():
     """List all device kinds + the models we have skins/specs for. Used

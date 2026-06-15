@@ -49,7 +49,81 @@ def set_settings(encounter_id: str, values: dict[str, Any]) -> dict[str, Any]:
     cur = dict(_settings.get(encounter_id, {}))
     cur.update({k: v for k, v in (values or {}).items()})
     _settings[encounter_id] = cur
+    _couple_to_physiology(encounter_id)   # VC1 — settings drive SpO2/EtCO2
+    evaluate(encounter_id)                # vent alarms re-evaluate on the new numerics
     return settings_for(encounter_id)
+
+
+def _couple_to_physiology(encounter_id: str) -> None:
+    """VC1 — push the gas-exchange targets the current settings produce into the
+    physiology spine, so the monitor + nurse station show the response and the
+    telemetry alarms re-evaluate. Bounded by the patient's condition ceiling."""
+    try:
+        from . import physiology, vent_model
+        cond = physiology.condition_for(encounter_id)
+        tgt = vent_model.ventilator_targets(_state(encounter_id), cond)
+        physiology.set_vitals(encounter_id,
+                              {"spo2": tgt["spo2"], "etco2": tgt["etco2"]},
+                              cause="ventilator")
+    except Exception:  # noqa: BLE001 — coupling is best-effort, never blocks a setting change
+        log.debug("vent_state: physiology coupling failed for %s", encounter_id, exc_info=True)
+
+
+def controls_view(encounter_id: str) -> dict[str, Any]:
+    """The control surface the ventilator UI renders: mode, available controls,
+    per-control ranges, current settings, live numerics, and set-vs-measured."""
+    from . import vent_model
+    s = settings_for(encounter_id)
+    mode = s.get("mode", "VC-CMV")
+    num = numerics(encounter_id)
+    return {
+        "mode": mode,
+        "modes": vent_model.MODES,
+        "available": vent_model.controls_for(mode),
+        "ranges": {k: {"label": v.label, "unit": v.unit, "lo": v.lo, "hi": v.hi,
+                       "step": v.step, "default": v.default}
+                   for k, v in vent_model.RANGES.items()},
+        "settings": s,
+        "numerics": num,
+        "set_vs_measured": vent_model.set_vs_measured(s, num),
+    }
+
+
+def apply_control(encounter_id: str, param: str, value: Any):
+    """Validate (VC0) + apply one control change, couple to physiology (VC1), and
+    re-evaluate vent alarms. Returns (controls_view, error)."""
+    from . import vent_model
+    if param == "mode":
+        _snapped, err = vent_model.validate("mode", value)
+        if err:
+            return None, err
+        set_settings(encounter_id, {"mode": str(value)})
+        return controls_view(encounter_id), None
+    mode = settings_for(encounter_id).get("mode", "VC-CMV")
+    snapped, err = vent_model.validate(param, value, mode=mode)
+    if err:
+        return None, err
+    set_settings(encounter_id, {param: snapped})
+    return controls_view(encounter_id), None
+
+
+def maneuver(encounter_id: str, kind: str) -> dict[str, Any]:
+    """Diagnostic maneuvers: inspiratory hold → Pplateau; expiratory hold →
+    auto-PEEP estimate; 100% O2 → bump FiO2 to 1.0."""
+    state = _state(encounter_id)
+    num = numerics(encounter_id)
+    if kind == "insp_hold":
+        return {"maneuver": kind, "pplateau": num["pplateau"]}
+    if kind == "exp_hold":
+        tau = state.time_constant_s
+        ratio = (state.te_s / (2.5 * tau)) if tau else 9.0
+        auto = round(max(0.0, (1.0 - min(1.0, ratio)) * 8.0), 1)   # up to ~8 cmH2O
+        return {"maneuver": kind, "auto_peep": auto,
+                "total_peep": round(state.peep + auto, 1)}
+    if kind == "o2_100":
+        set_settings(encounter_id, {"fio2": 1.0})
+        return {"maneuver": kind, "fio2": 1.0}
+    return {"maneuver": kind, "error": "unknown maneuver"}
 
 
 def faults_for(encounter_id: str) -> dict[str, Any]:

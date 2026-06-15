@@ -175,3 +175,137 @@ def ventilator_numerics(state: VentState) -> dict:
         "cstat": round(cstat, 1),
         "raw": round(raw, 1),
     }
+
+
+# ── VC0: control surface — mode-aware ranges + validation + set-vs-measured ──
+# Ported from PhysioBridge waveform/vent/control_settings.py. Modes keyed by the
+# Chatburn concept so one vocabulary feeds the UI, the breath model, and coupling.
+
+@dataclass(frozen=True)
+class ControlSpec:
+    name: str
+    label: str
+    unit: str
+    lo: float
+    hi: float
+    step: float
+    default: float
+
+
+RANGES: dict[str, ControlSpec] = {
+    "fio2": ControlSpec("fio2", "FiO2", "", 0.21, 1.0, 0.01, 0.40),
+    "peep": ControlSpec("peep", "PEEP", "cmH2O", 0, 24, 1, 5),
+    "tidal_volume_ml": ControlSpec("tidal_volume_ml", "Vt", "mL", 200, 800, 10, 450),
+    "pip": ControlSpec("pip", "Pinsp", "cmH2O", 5, 50, 1, 18),
+    "rr": ControlSpec("rr", "RR", "/min", 4, 40, 1, 14),
+    "ie_ratio": ControlSpec("ie_ratio", "I:E (1:n)", "", 1.0, 4.0, 0.5, 2.0),
+    "psupport": ControlSpec("psupport", "P-support", "cmH2O", 0, 30, 1, 10),
+    "trigger_sensitivity": ControlSpec("trigger_sensitivity", "Trigger", "L/min", 0.5, 10, 0.5, 2.0),
+    "rise_time_ms": ControlSpec("rise_time_ms", "Rise", "ms", 0, 400, 50, 100),
+    "cycle_pct": ControlSpec("cycle_pct", "Cycle", "%", 10, 60, 5, 25),
+    "apnea_time_s": ControlSpec("apnea_time_s", "Apnea", "s", 10, 60, 5, 20),
+    "high_pressure_limit": ControlSpec("high_pressure_limit", "Phigh limit", "cmH2O", 10, 60, 1, 35),
+}
+
+MODES = ["VC-CMV", "PC-CMV", "PRVC", "SIMV", "PSV", "CPAP"]
+
+_MODE_CONTROLS: dict[str, list[str]] = {
+    "VC-CMV": ["fio2", "peep", "tidal_volume_ml", "rr", "ie_ratio",
+               "trigger_sensitivity", "high_pressure_limit", "apnea_time_s"],
+    "PC-CMV": ["fio2", "peep", "pip", "rr", "ie_ratio", "trigger_sensitivity",
+               "rise_time_ms", "high_pressure_limit", "apnea_time_s"],
+    "PRVC": ["fio2", "peep", "tidal_volume_ml", "rr", "ie_ratio",
+             "trigger_sensitivity", "high_pressure_limit", "apnea_time_s"],
+    "SIMV": ["fio2", "peep", "tidal_volume_ml", "rr", "psupport",
+             "trigger_sensitivity", "cycle_pct", "high_pressure_limit", "apnea_time_s"],
+    "PSV": ["fio2", "peep", "psupport", "trigger_sensitivity", "rise_time_ms",
+            "cycle_pct", "high_pressure_limit", "apnea_time_s"],
+    "CPAP": ["fio2", "peep", "trigger_sensitivity", "high_pressure_limit", "apnea_time_s"],
+}
+
+
+def controls_for(mode: str) -> list[str]:
+    """Ordered control names available in a Chatburn mode."""
+    return list(_MODE_CONTROLS.get(mode if mode in _MODE_CONTROLS else "VC-CMV"))
+
+
+def validate(param: str, value, *, mode: str | None = None):
+    """Validate + step-snap a control value. Returns (snapped_value, error)."""
+    if param == "mode":
+        return (None, None) if str(value) in _MODE_CONTROLS else (None, f"unknown mode {value!r}")
+    spec = RANGES.get(param)
+    if spec is None:
+        return None, f"unknown control {param!r}"
+    if mode is not None and param not in controls_for(mode):
+        return None, f"{param} is not available in {mode}"
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None, f"{param} must be numeric"
+    if v < spec.lo or v > spec.hi:
+        return None, f"{param}={v} out of range [{spec.lo}, {spec.hi}] {spec.unit}".strip()
+    snapped = round(round((v - spec.lo) / spec.step) * spec.step + spec.lo, 4)
+    return snapped, None
+
+
+def set_vs_measured(settings: dict, numerics: dict) -> list[dict]:
+    """Pair commanded (set) values with engine-measured values for the screen."""
+    rows = [
+        {"label": "Ppeak", "set": None, "measured": numerics.get("ppeak"), "unit": "cmH2O"},
+        {"label": "Pplateau", "set": None, "measured": numerics.get("pplateau"), "unit": "cmH2O"},
+    ]
+    for label, set_key, meas_key, unit in (
+        ("Vt", "tidal_volume_ml", "vt_exhaled_ml", "mL"),
+        ("RR", "rr", "rr", "/min"),
+        ("PEEP", "peep", "peep", "cmH2O"),
+        ("FiO2", "fio2", "fio2", ""),
+    ):
+        rows.append({"label": label, "set": settings.get(set_key),
+                     "measured": numerics.get(meas_key), "unit": unit})
+    return rows
+
+
+# ── VC1: ventilator → physiology coupling (closed-loop targets) ──────────────
+# Ported from PhysioBridge engine/vent_coupling.py. Monotonic + bounded: FiO2
+# raises oxygenation toward a shunt/condition-limited ceiling; PEEP recruits to
+# an optimum then overdistends; minute ventilation clears CO2; condition caps it.
+PEEP_OPTIMUM = 10.0
+OVERDISTENSION_PEEP = 16.0
+_COUPLING_ENV: dict[str, dict] = {
+    "normal":    {"spo2_ceiling": 100.0, "shunt": 0.05, "co2_production": 1.0},
+    "ards":      {"spo2_ceiling": 99.0,  "shunt": 0.35, "co2_production": 1.1},
+    "copd":      {"spo2_ceiling": 96.0,  "shunt": 0.15, "co2_production": 1.0},
+    "pneumonia": {"spo2_ceiling": 98.0,  "shunt": 0.22, "co2_production": 1.05},
+    "sepsis":    {"spo2_ceiling": 99.0,  "shunt": 0.10, "co2_production": 1.3},
+}
+
+
+def minute_ventilation(state: VentState) -> float:
+    if state.mode == "PC":
+        vt = max(50.0, (state.pip - state.peep) * state.compliance_ml_cmh2o)
+    else:
+        vt = state.tidal_volume_ml
+    return max(0.5, vt * state.rr / 1000.0)
+
+
+def ventilator_targets(state: VentState, condition: str = "normal") -> dict:
+    """The gas-exchange targets the current settings drive the patient toward."""
+    env = _COUPLING_ENV.get(condition, _COUPLING_ENV["normal"])
+    fio2_norm = max(0.0, (state.fio2 - 0.21) / 0.79)
+    peep_recruit = max(0.0, 1.0 - abs(state.peep - PEEP_OPTIMUM) / PEEP_OPTIMUM)
+    support = 0.6 * fio2_norm + 0.4 * peep_recruit
+    overdist = max(0.0, state.peep - OVERDISTENSION_PEEP) * 1.2
+    shunt_relief = min(0.7, 0.5 * fio2_norm + 0.4 * peep_recruit)
+    achievable = env["spo2_ceiling"] - env["shunt"] * 25.0 * (1.0 - shunt_relief) - overdist
+    spo2 = max(60.0, min(achievable, 96.0 + support * 4.0))
+    mv = minute_ventilation(state)
+    etco2 = max(15.0, min(90.0, 40.0 * env["co2_production"] * (5.5 / mv)))
+    return {
+        "spo2": round(spo2, 1),
+        "etco2": round(etco2, 1),
+        "minute_ventilation": round(mv, 1),
+        "overdistension": (state.peep > OVERDISTENSION_PEEP
+                           or (state.mode == "PC" and state.pip > 35.0)
+                           or (state.mode == "VC" and state.tidal_volume_ml > 560.0)),
+        "hyperoxia": state.fio2 > 0.6,
+    }
