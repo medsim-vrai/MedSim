@@ -25,7 +25,7 @@
   // so the device display advances even when the client-side interpolator
   // can't run (e.g. cached old JS, very slow tablet). Bumping the build
   // marker confirms on the tablet which JS is actually executing.
-  const DEVICE_JS_BUILD = 'v6.1.8';   // FR-012 D3b — telemetry-monitor rendering
+  const DEVICE_JS_BUILD = 'v6.1.9';   // FR-012 — monitor: no PROGRAM PUMP box + anti-flicker QRS
   console.log('[MEDSIM device] booting build', DEVICE_JS_BUILD);
   const body = document.body;
   const JOIN  = body.dataset.joinCode;
@@ -1157,8 +1157,8 @@
     pleth: { id: 'wave-pleth', x0: 12, x1: 690, base: 250, amp: 26 },
     resp:  { id: 'wave-resp',  x0: 12, x1: 690, base: 390, amp: 22 },
   };
-  const _MON_WINDOW_S = 5;     // seconds of trace visible across a lane
-  const _MON_STEP_PX = 4;      // x sampling resolution
+  const _MON_WINDOW_S = 4;     // seconds visible — narrower window = more px per beat
+  const _MON_STEP_PX = 2;      // fine x sampling so the sharp QRS peak never aliases/flickers
   const _MON_RHYTHM_LABEL = {
     nsr: 'Sinus rhythm', sinus: 'Sinus rhythm', asystole: 'ASYSTOLE',
     vfib: 'VF', vf: 'VF', vtach: 'VT', vt: 'VT', afib: 'A-fib',
@@ -1241,9 +1241,9 @@
     if (rhythm === 'vtach' || rhythm === 'vt') return 0.85 * Math.sin(phase * Math.PI * 2);
     let y = 0;
     y += 0.12 * Math.exp(-Math.pow((phase - 0.15) / 0.035, 2));   // P
-    y -= 0.10 * Math.exp(-Math.pow((phase - 0.255) / 0.012, 2));  // Q
-    y += 1.00 * Math.exp(-Math.pow((phase - 0.28) / 0.012, 2));   // R
-    y -= 0.18 * Math.exp(-Math.pow((phase - 0.305) / 0.014, 2));  // S
+    y -= 0.10 * Math.exp(-Math.pow((phase - 0.255) / 0.014, 2));  // Q
+    y += 1.00 * Math.exp(-Math.pow((phase - 0.28) / 0.016, 2));   // R (widened: anti-flicker)
+    y -= 0.18 * Math.exp(-Math.pow((phase - 0.305) / 0.016, 2));  // S
     y += 0.22 * Math.exp(-Math.pow((phase - 0.50) / 0.05, 2));    // T
     return y;
   }
@@ -1561,9 +1561,11 @@
   }
 
   // ── PROGRAM modal (student-facing pump programming) ────────────────
-  // Cabinets have their own touchscreen workflow; only pumps get this.
+  // ONLY real pumps get the on-screen programming workflow. Cabinets have their
+  // own touchscreen; monitors / ventilator / PIA must never show a PROGRAM PUMP
+  // button (FR-012 — it was leaking onto the advanced devices).
   function injectProgramButton() {
-    if (KIND === 'cabinet') return;
+    if (KIND !== 'pump_iv' && KIND !== 'pump_enteral') return;
     if (document.getElementById('device-program-btn')) return;
     const btn = document.createElement('button');
     btn.id = 'device-program-btn';
