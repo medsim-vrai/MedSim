@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission Control · Training Bridge VRAI-MedSim</title>
+  <link rel="stylesheet" href="/static/portal.css">
+  <link rel="stylesheet" href="/static/console.css">
+</head>
+<body class="console-body">
+  <div class="console" data-mode="{{ mode }}">
+
+    <!-- Top bar: brand · persistent readiness bar (G2) · classic fallback · logout -->
+    <header class="console-topbar">
+      <div class="ct-brand">Mission&nbsp;Control <span class="v-pill">v8</span></div>
+
+      <button type="button" id="readiness-bar" class="readiness-bar"
+              aria-live="polite" aria-expanded="false"
+              aria-label="System readiness — activate for detail"
+              title="System readiness — click for detail">
+        <span class="rb-overall" data-status="loading">
+          <span class="rb-glyph" aria-hidden="true">…</span>
+          <span class="rb-overall-text">Checking readiness…</span>
+        </span>
+        <span class="rb-checks" id="rb-checks"></span>
+      </button>
+
+      <div class="ct-actions">
+        <a class="ct-classic" href="/portal/control/setup">Switch to classic control room ↗</a>
+        <form action="/logout" method="post" class="logout-form">
+          <button type="submit" class="link">Log out</button>
+        </form>
+      </div>
+    </header>
+
+    <!-- expandable readiness detail (drops down from the bar; G4 promotes this to tiles) -->
+    <div id="readiness-detail" class="readiness-detail" hidden aria-label="Readiness detail"></div>
+
+    <!-- mode tabs -->
+    <nav class="console-tabs" role="tablist" aria-label="Mission control modes">
+      <a class="ct-tab" data-tab="setup"   role="tab" href="?mode=setup"   aria-selected="false">Set&nbsp;up</a>
+      <a class="ct-tab" data-tab="operate" role="tab" href="?mode=operate" aria-selected="false">Operate</a>
+      <a class="ct-tab" data-tab="debrief" role="tab" href="?mode=debrief" aria-selected="false">Debrief</a>
+    </nav>
+
+    <!-- mode panels (G4 Operate cockpit · G5 wizard · G6 ecosystem board fill these) -->
+    <main class="console-main">
+      <section class="console-panel" data-panel="setup" role="tabpanel" aria-label="Set up">
+        <div class="panel-placeholder">
+          <h2>Set up</h2>
+          <p>The launch wizard (G5) and the ecosystem board (G6) land here — scenario,
+             patients &amp; rooms, characters, devices — gated on a green readiness preview.</p>
+          <p class="muted">For now, configure in the
+             <a href="/portal/control/setup">classic control room ↗</a>.</p>
+        </div>
+      </section>
+
+      <section class="console-panel" data-panel="operate" role="tabpanel" aria-label="Operate">
+        <div class="panel-placeholder">
+          <h2>Operate</h2>
+          <p>The Readiness Cockpit (G4) lands here: a tile per subsystem with inline
+             actions, a Resume banner, and live meds / staged-errors / handoff cards.</p>
+          <p class="muted">Live readiness is in the bar above — click it for detail.</p>
+        </div>
+      </section>
+
+      <section class="console-panel" data-panel="debrief" role="tabpanel" aria-label="Debrief">
+        <div class="panel-placeholder">
+          <h2>Debrief</h2>
+          <p>End the scenario and review the run — alarm log, MAR, handoff coverage.</p>
+          <p class="muted"><a href="/portal/debrief">Open debriefs ↗</a></p>
+        </div>
+      </section>
+    </main>
+
+  </div>
+  <script src="/static/console.js"></script>
+</body>
+</html>

@@ -344,6 +344,21 @@ async def home_page(
     )
 
 
+@app.get("/portal/console", response_class=HTMLResponse)
+async def mission_control_console(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    mode: str = "operate",
+):
+    """FR-011 G3 — Mission Control: the 3-mode GUI shell (Set up · Operate ·
+    Debrief) over the SAME portal APIs, with a persistent readiness bar (G2) and
+    a 'Switch to classic control room' link on every screen. The classic room
+    stays the default; G4-G6 fill the mode panels. Mode lives in the URL."""
+    if mode not in ("setup", "operate", "debrief"):
+        mode = "operate"
+    return templates.TemplateResponse(request, "console.html", {"mode": mode})
+
+
 @app.post("/portal/examples/load")
 async def load_examples(
     _: Annotated[credentials.Vault, Depends(auth.require_vault)],

@@ -1,0 +1,146 @@
+/* FR-011 G3 — Mission Control shell.
+   Panel + tab visibility are driven purely from the root [data-mode] so the
+   server-rendered ?mode= is correct before console.js runs (progressive
+   enhancement). Traffic lights are always paired with a SHAPE glyph, never
+   colour alone (a11y — G8). */
+
+:root {
+  --rb-green: #1f9d55;
+  --rb-amber: #c77700;
+  --rb-red:   #cc2f2f;
+  --rb-loading: #888;
+  --console-bar-bg: #14202b;
+  --console-bar-fg: #eef4f8;
+  --console-panel-bg: #f6f8fa;
+}
+
+.console-body { margin: 0; background: var(--console-panel-bg); }
+
+.console {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #1b2733;
+}
+
+/* ── top bar ───────────────────────────────────────────────────────────── */
+.console-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--console-bar-bg);
+  color: var(--console-bar-fg);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.ct-brand { font-weight: 700; font-size: 15px; white-space: nowrap; }
+.ct-brand .v-pill {
+  background: #2b6cb0; color: #fff; border-radius: 10px;
+  padding: 1px 7px; font-size: 11px; margin-left: 4px;
+}
+.ct-actions { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.ct-classic {
+  color: #bfe0ff; text-decoration: none; font-size: 13px; white-space: nowrap;
+  border: 1px solid #2f4a5e; border-radius: 6px; padding: 5px 10px;
+}
+.ct-classic:hover { background: #1d2e3b; color: #fff; }
+.console-topbar .logout-form { margin: 0; }
+.console-topbar .link {
+  background: none; border: none; color: #9fb4c4; cursor: pointer;
+  font-size: 13px; padding: 0;
+}
+.console-topbar .link:hover { color: #fff; text-decoration: underline; }
+
+/* ── readiness bar ─────────────────────────────────────────────────────── */
+.readiness-bar {
+  display: flex; align-items: center; gap: 10px; flex: 1 1 auto;
+  min-width: 0; overflow: hidden;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px; padding: 5px 10px; cursor: pointer;
+  color: inherit; font: inherit; text-align: left;
+}
+.readiness-bar:hover { background: rgba(255,255,255,0.11); }
+.rb-overall { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.rb-glyph { font-size: 13px; line-height: 1; }
+.rb-overall-text { font-weight: 600; font-size: 13px; }
+.rb-overall[data-status="green"]   .rb-glyph,
+.rb-overall[data-status="green"]   .rb-overall-text { color: #7fe6a8; }
+.rb-overall[data-status="amber"]   .rb-glyph,
+.rb-overall[data-status="amber"]   .rb-overall-text { color: #ffd27d; }
+.rb-overall[data-status="red"]     .rb-glyph,
+.rb-overall[data-status="red"]     .rb-overall-text { color: #ff9a9a; }
+.rb-overall[data-status="loading"] .rb-overall-text { color: #aebfce; }
+
+.rb-checks { display: flex; gap: 6px; overflow: hidden; flex-wrap: nowrap; }
+.rb-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; padding: 2px 7px; border-radius: 11px; white-space: nowrap;
+  background: rgba(255,255,255,0.08);
+}
+.rb-chip[data-status="green"] { color: #7fe6a8; }
+.rb-chip[data-status="amber"] { color: #ffd27d; }
+.rb-chip[data-status="red"]   { color: #ff9a9a; background: rgba(204,47,47,0.22); }
+
+/* ── readiness detail (drops down from the bar) ────────────────────────── */
+.readiness-detail {
+  background: #fff; border-bottom: 1px solid #d7dee5;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.10);
+  padding: 10px 16px; display: grid; gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.rd-row {
+  border: 1px solid #e1e7ed; border-left-width: 4px; border-radius: 6px;
+  padding: 8px 10px; background: #fbfcfd;
+}
+.rd-row[data-status="green"] { border-left-color: var(--rb-green); }
+.rd-row[data-status="amber"] { border-left-color: var(--rb-amber); }
+.rd-row[data-status="red"]   { border-left-color: var(--rb-red); }
+.rd-head { font-weight: 600; margin-bottom: 2px; }
+.rd-detail { color: #4a5a68; font-size: 12.5px; }
+.rd-action {
+  margin-top: 7px; margin-right: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid #b9c4cf; border-radius: 5px; padding: 3px 9px;
+  background: #eef3f7;
+}
+.rd-action:hover { background: #e1ebf3; }
+.rd-action:disabled { opacity: 0.6; cursor: default; }
+
+/* ── mode tabs ─────────────────────────────────────────────────────────── */
+.console-tabs {
+  display: flex; gap: 2px; padding: 0 16px;
+  background: #fff; border-bottom: 1px solid #d7dee5;
+}
+.ct-tab {
+  padding: 10px 18px; text-decoration: none; color: #5a6b79; font-weight: 600;
+  border-bottom: 3px solid transparent;
+}
+.ct-tab:hover { color: #1b2733; }
+.console[data-mode="setup"]   .ct-tab[data-tab="setup"],
+.console[data-mode="operate"] .ct-tab[data-tab="operate"],
+.console[data-mode="debrief"] .ct-tab[data-tab="debrief"] {
+  color: #14202b; border-bottom-color: #2b6cb0;
+}
+
+/* ── mode panels (visibility from root [data-mode]) ────────────────────── */
+.console-main { flex: 1 1 auto; padding: 24px; }
+.console-panel { display: none; }
+.console[data-mode="setup"]   .console-panel[data-panel="setup"],
+.console[data-mode="operate"] .console-panel[data-panel="operate"],
+.console[data-mode="debrief"] .console-panel[data-panel="debrief"] { display: block; }
+
+.panel-placeholder {
+  max-width: 720px; background: #fff; border: 1px solid #e1e7ed;
+  border-radius: 10px; padding: 22px 26px;
+}
+.panel-placeholder h2 { margin: 0 0 8px; }
+.panel-placeholder p { margin: 6px 0; }
+.panel-placeholder .muted { color: #6b7a88; font-size: 13px; }
+.panel-placeholder a { color: #2b6cb0; }
+
+@media (max-width: 760px) {
+  .rb-checks { display: none; }          /* keep the overall pill on small screens */
+  .ct-classic { font-size: 12px; padding: 4px 7px; }
+}
