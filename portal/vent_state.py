@@ -35,8 +35,12 @@ _LOW_VT_ML = 300
 _LOW_MV_L = 3.0
 _AUTOPEEP_TAU_FACTOR = 2.5      # Te < factor*tau => incomplete exhalation (air-trapping)
 
-_settings: dict[str, dict] = {}   # encounter_id -> settings
-_faults:   dict[str, dict] = {}   # encounter_id -> abnormality flags
+_settings: dict[str, dict] = {}   # encounter_id -> STUDENT settings (mode/fio2/peep/...)
+_faults:   dict[str, dict] = {}   # encounter_id -> abnormality flags (leak/secretions/...)
+# FR-012 D6 — fault perturbations layered ON TOP of student settings (patient
+# mechanics + rr/fio2 overrides) and the gas-exchange penalty active faults impose.
+_fault_overrides: dict[str, dict] = {}   # encounter_id -> {key: value}
+_fault_penalty:   dict[str, dict] = {}   # encounter_id -> {"spo2": x, "etco2": y}
 
 
 # ── State ────────────────────────────────────────────────────────────────────
@@ -62,8 +66,10 @@ def _couple_to_physiology(encounter_id: str) -> None:
         from . import physiology, vent_model
         cond = physiology.condition_for(encounter_id)
         tgt = vent_model.ventilator_targets(_state(encounter_id), cond)
+        pen = fault_penalty_for(encounter_id)
         physiology.set_vitals(encounter_id,
-                              {"spo2": tgt["spo2"], "etco2": tgt["etco2"]},
+                              {"spo2": tgt["spo2"] - pen.get("spo2", 0.0),
+                               "etco2": tgt["etco2"] + pen.get("etco2", 0.0)},
                               cause="ventilator")
     except Exception:  # noqa: BLE001 — coupling is best-effort, never blocks a setting change
         log.debug("vent_state: physiology coupling failed for %s", encounter_id, exc_info=True)
@@ -141,8 +147,31 @@ def clear_faults(encounter_id: str) -> None:
     _faults.pop(encounter_id, None)
 
 
+def set_fault_overrides(encounter_id: str, overrides: dict[str, Any]) -> None:
+    """Replace the fault-applied setting overrides (mechanics + rr/fio2)."""
+    _fault_overrides[encounter_id] = dict(overrides or {})
+
+
+def set_fault_penalty(encounter_id: str, spo2: float = 0.0, etco2: float = 0.0) -> None:
+    """The aggregate gas-exchange penalty active faults impose (SpO2 down, EtCO2 up)
+    on top of what the ventilator settings alone would achieve."""
+    _fault_penalty[encounter_id] = {"spo2": float(spo2), "etco2": float(etco2)}
+
+
+def fault_penalty_for(encounter_id: str) -> dict[str, float]:
+    return dict(_fault_penalty.get(encounter_id, {"spo2": 0.0, "etco2": 0.0}))
+
+
+def effective_settings(encounter_id: str) -> dict[str, Any]:
+    """Student settings with active-fault overrides layered on top — the physics
+    input for numerics/waveforms/coupling. The control view keeps showing the
+    student's SET values, so set-vs-measured DIVERGES under a fault (e.g. set
+    Vt 450 but a leak measures 180)."""
+    return {**settings_for(encounter_id), **_fault_overrides.get(encounter_id, {})}
+
+
 def _state(encounter_id: str) -> vent_model.VentState:
-    return vent_model.state_from_settings(settings_for(encounter_id),
+    return vent_model.state_from_settings(effective_settings(encounter_id),
                                           faults_for(encounter_id))
 
 
@@ -181,6 +210,13 @@ def expected_alarms(num: dict[str, Any], state: vent_model.VentState) -> set[str
         out.add("apnea")
     if state.te_s < _AUTOPEEP_TAU_FACTOR * state.time_constant_s:
         out.add("auto_peep")
+    # FR-012 D6 — fault signatures the numerics alone don't capture:
+    if state.leak_fraction >= 0.5:
+        out.add("low_pressure")          # big leak / circuit disconnect
+    if state.leak_fraction >= 0.15:
+        out.add("peep_loss")             # PEEP not maintained
+    if state.fio2 < 0.25:
+        out.add("o2_supply")             # O2 supply / blender failure
     return out
 
 
@@ -225,12 +261,14 @@ def evaluate(encounter_id: str, *, surface: str = AUTO_SURFACE) -> dict[str, Any
 
 def snapshot() -> dict[str, Any]:
     return {"settings": {e: dict(s) for e, s in _settings.items()},
-            "faults": {e: dict(f) for e, f in _faults.items()}}
+            "faults": {e: dict(f) for e, f in _faults.items()},
+            "fault_overrides": {e: dict(o) for e, o in _fault_overrides.items()},
+            "fault_penalty": {e: dict(p) for e, p in _fault_penalty.items()}}
 
 
 def restore(blob: dict[str, Any] | None) -> None:
-    _settings.clear()
-    _faults.clear()
+    for d in (_settings, _faults, _fault_overrides, _fault_penalty):
+        d.clear()
     if not blob:
         return
     for e, s in (blob.get("settings") or {}).items():
@@ -239,3 +277,9 @@ def restore(blob: dict[str, Any] | None) -> None:
     for e, f in (blob.get("faults") or {}).items():
         if isinstance(f, dict):
             _faults[e] = dict(f)
+    for e, o in (blob.get("fault_overrides") or {}).items():
+        if isinstance(o, dict):
+            _fault_overrides[e] = dict(o)
+    for e, p in (blob.get("fault_penalty") or {}).items():
+        if isinstance(p, dict):
+            _fault_penalty[e] = dict(p)

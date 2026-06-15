@@ -1105,6 +1105,61 @@ async def api_vent_maneuver(station_id: str, request: Request):
     return JSONResponse({"ok": True, "result": result})
 
 
+@router.get("/api/device/{station_id}/vent/faults")
+async def api_vent_faults(
+    station_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-012 D6 — the ventilator fault catalog + the currently-armed faults."""
+    station = ehr_db.get_device_station(station_id)
+    if station is None:
+        raise HTTPException(404, "Station not found.")
+    sess = _session_for_station(station)
+    if sess is None:
+        raise HTTPException(409, "No active session linked to this device station.")
+    from portal import vent_faults
+    return JSONResponse({"catalog": vent_faults.catalog(),
+                         "active": vent_faults.active(sess.id)})
+
+
+@router.post("/api/device/{station_id}/vent/fault")
+async def api_vent_fault(
+    station_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-012 D6 — arm / clear a ventilator fault (instructor). The fault degrades
+    the vent state (waveforms + alarms) and patient physiology; clearing it lets
+    the coupling recover the patient."""
+    station = ehr_db.get_device_station(station_id)
+    if station is None:
+        raise HTTPException(404, "Station not found.")
+    sess = _session_for_station(station)
+    if sess is None:
+        raise HTTPException(409, "No active session linked to this device station.")
+    body = await request.json()
+    action = (body.get("action") or "arm").strip()
+    fault_id = (body.get("fault_id") or "").strip()
+    from portal import vent_faults, vent_state
+    if action == "clear_all":
+        vent_faults.clear_all(sess.id)
+    elif action == "clear":
+        vent_faults.clear(sess.id, fault_id)
+    else:
+        _active, err = vent_faults.arm(sess.id, fault_id)
+        if err:
+            raise HTTPException(400, err)
+    try:
+        await devices_ws.manager.send_to_device(
+            station_id, {"type": "vent", "vent": vent_state.view(sess.id)})
+        await devices_ws.manager.broadcast_to_instructors({
+            "type": "device_event", "station_id": station_id, "event_type": "vent.fault",
+            "payload": {"action": action, "fault_id": fault_id}})
+    except Exception:  # noqa: BLE001 — push is best-effort
+        pass
+    return JSONResponse({"ok": True, "active": vent_faults.active(sess.id)})
+
+
 @router.get("/api/device/models")
 async def api_device_models():
     """List all device kinds + the models we have skins/specs for. Used
