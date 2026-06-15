@@ -4,7 +4,7 @@
   "description": "TRAINING SIMULATION — not a real medical device. Pump / cabinet / monitor simulator that joins a Medsim scenario over LAN.",
   "start_url": "/device/join",
   "scope": "/device/",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "any",
   "background_color": "#0a234f",
   "theme_color": "#0a234f",

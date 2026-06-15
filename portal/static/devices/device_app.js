@@ -25,7 +25,7 @@
   // so the device display advances even when the client-side interpolator
   // can't run (e.g. cached old JS, very slow tablet). Bumping the build
   // marker confirms on the tablet which JS is actually executing.
-  const DEVICE_JS_BUILD = 'v6.2.0';   // FR-012 — monitor injects drive physiology (HR/ECG/rhythm)
+  const DEVICE_JS_BUILD = 'v6.2.1';   // FR-012 — device pages go full-screen (hide browser chrome)
   console.log('[MEDSIM device] booting build', DEVICE_JS_BUILD);
   const body = document.body;
   const JOIN  = body.dataset.joinCode;
@@ -81,6 +81,7 @@
       applySessionState(SESSION_STATE);
       if (IS_MONITOR) startMonitor();      // FR-012 D3b — live vitals + waveforms
       $loading.hidden = true;
+      _ensureFsButton();                   // FR-012 — fullscreen re-entry affordance
       // Show the audio-unlock overlay immediately on iOS — one tap there
       // primes every alarm tone so async inject .play() calls succeed
       // later. On desktop Chrome the autoplay policy is more permissive,
@@ -496,6 +497,7 @@
     // Called inside a user-gesture handler. Prime every known tone so
     // subsequent async .play() calls succeed under iOS autoplay rules.
     if (AUDIO_UNLOCKED) return Promise.resolve();
+    _enterFullscreen();   // FR-012 — bedside device goes chrome-less on the first tap
     const tones = Object.keys(AUDIO_URLS || {});
     const primes = tones.map((tone) => {
       const el = _audioFor(tone);
@@ -589,6 +591,46 @@
     const ov = document.getElementById('device-audio-unlock');
     if (ov) ov.remove();
   }
+
+  // ── Fullscreen — a bedside device should hide the browser chrome ────
+  // The Fullscreen API needs a user gesture, so we request it on the first
+  // "tap to enable" (Android Chrome + desktop honour it). iOS Safari doesn't
+  // support element fullscreen — there the chrome-less path is Add to Home
+  // Screen (the PWA manifest is display:fullscreen + apple-mobile-web-app-capable).
+  function _fsActive() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  function _enterFullscreen() {
+    if (_fsActive()) return;
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen
+             || el.webkitRequestFullScreen;
+    if (!req) return;                       // iOS Safari — no element fullscreen
+    try {
+      const p = req.call(el);
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (e) { /* best effort */ }
+  }
+  function _ensureFsButton() {
+    let b = document.getElementById('device-fs-btn');
+    if (!b) {
+      b = document.createElement('button');
+      b.id = 'device-fs-btn';
+      b.type = 'button';
+      b.textContent = '⛶';
+      b.title = 'Full screen';
+      b.setAttribute('aria-label', 'Enter full screen');
+      b.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:46;'
+        + 'width:46px;height:46px;border:0;border-radius:10px;padding:0;'
+        + 'background:rgba(20,30,45,.62);color:#cfe0f2;font-size:22px;'
+        + 'line-height:46px;cursor:pointer;';
+      b.addEventListener('click', _enterFullscreen);
+      document.body.appendChild(b);
+    }
+    b.hidden = _fsActive();                  // only show when NOT already fullscreen
+  }
+  document.addEventListener('fullscreenchange', _ensureFsButton);
+  document.addEventListener('webkitfullscreenchange', _ensureFsButton);
 
   // ── Input ───────────────────────────────────────────────────────────
   function onControlTap(id, el) {
