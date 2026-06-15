@@ -25,13 +25,14 @@
   // so the device display advances even when the client-side interpolator
   // can't run (e.g. cached old JS, very slow tablet). Bumping the build
   // marker confirms on the tablet which JS is actually executing.
-  const DEVICE_JS_BUILD = 'v6.1.7';
+  const DEVICE_JS_BUILD = 'v6.1.8';   // FR-012 D3b — telemetry-monitor rendering
   console.log('[MEDSIM device] booting build', DEVICE_JS_BUILD);
   const body = document.body;
   const JOIN  = body.dataset.joinCode;
   const STN   = body.dataset.stationId;
   const KIND  = body.dataset.deviceKind;
   const MODEL = body.dataset.deviceModel;
+  const IS_MONITOR = (KIND === 'telemetry_monitor');   // FR-012 advanced device
 
   const $loading = document.getElementById('device-loading');
   const $skin    = document.getElementById('device-skin');
@@ -45,6 +46,7 @@
   let CHECKLIST_DISMISSED = false; // user tapped X — don't auto-show until next assignment change
   let AUDIO_URLS = {};         // tone_id → /static/devices/audio/.../tone.wav
   let STATE = null;            // last engine fold
+  let PHYS = null;             // FR-012 — last physiology snapshot (advanced devices)
   let SESSION_STATE = 'running';
   let WS = null;
   let WS_BACKOFF = 1000;
@@ -72,10 +74,12 @@
       ASSIGNED_CHAR_ID = b.character_id || null;   // V6.1.7 — instructor-assigned patient
       AUDIO_URLS = b.audio_urls || {};
       STATE = b.state || {};
+      PHYS = b.physiology || null;         // FR-012 — advanced-device physiology
       SESSION_STATE = b.session_state || 'running';
       mountSkin(b.skin_svg || '');
       renderFold(STATE);
       applySessionState(SESSION_STATE);
+      if (IS_MONITOR) startMonitor();      // FR-012 D3b — live vitals + waveforms
       $loading.hidden = true;
       // Show the audio-unlock overlay immediately on iOS — one tap there
       // primes every alarm tone so async inject .play() calls succeed
@@ -1141,6 +1145,139 @@
     if (WS && WS.readyState === 1) WS.send(JSON.stringify({ type: 'heartbeat' }));
     else fetch(`/api/device/${STN}/heartbeat`, { method: 'POST' }).catch(() => {});
   }, 15000);
+
+  // ── FR-012 D3b — telemetry-monitor live rendering ───────────────────
+  // The monitor is not button-driven: it paints live vitals + scrolling
+  // waveforms from the `physiology` snapshot the server attaches to
+  // bootstrap/state. Numerics + the alarm fold refresh on a light 1.5 s
+  // poll (which also surfaces auto-fired alarms); waveforms animate
+  // locally via requestAnimationFrame (HR/RR-driven) and freeze on pause.
+  const _MON_LANES = {
+    ecg:   { id: 'wave-ecg',   x0: 12, x1: 690, base: 110, amp: 34 },
+    pleth: { id: 'wave-pleth', x0: 12, x1: 690, base: 250, amp: 26 },
+    resp:  { id: 'wave-resp',  x0: 12, x1: 690, base: 390, amp: 22 },
+  };
+  const _MON_WINDOW_S = 5;     // seconds of trace visible across a lane
+  const _MON_STEP_PX = 4;      // x sampling resolution
+  const _MON_RHYTHM_LABEL = {
+    nsr: 'Sinus rhythm', sinus: 'Sinus rhythm', asystole: 'ASYSTOLE',
+    vfib: 'VF', vf: 'VF', vtach: 'VT', vt: 'VT', afib: 'A-fib',
+  };
+  const _MON_ALARM_LABEL = {
+    asystole: 'ASYSTOLE', vfib: 'VF', vtach: 'VT', brady_severe: 'SEVERE BRADY',
+    tachy_severe: 'SEVERE TACHY', spo2_low: 'SpO2 LOW', apnea: 'APNEA',
+    brady: 'BRADY', tachy: 'TACHY', rr_high: 'RR HIGH', nibp_high: 'NIBP HIGH',
+    nibp_low: 'NIBP LOW', pvc_frequent: 'PVCs', afib: 'A-FIB', leads_off: 'LEADS OFF',
+  };
+  let _monPhysTimer = null, _monRAF = null, _monT0 = 0;
+
+  function startMonitor() {
+    _monT0 = performance.now();
+    bindMonitorNumerics();
+    renderMonitorAlarmBanner();
+    if (_monPhysTimer) clearInterval(_monPhysTimer);
+    _monPhysTimer = setInterval(pollMonitorPhysiology, 1500);
+    if (!_monRAF) _monRAF = requestAnimationFrame(monitorFrame);
+  }
+
+  async function pollMonitorPhysiology() {
+    try {
+      const r = await fetch(`/api/device/${STN}/state?_t=${Date.now()}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.session_state) applySessionState(j.session_state);
+      if (j.physiology) PHYS = j.physiology;
+      if (j.state) renderFold(j.state);          // surfaces auto-fired alarms
+      bindMonitorNumerics();
+      renderMonitorAlarmBanner();
+    } catch (e) { /* offline — keep last values until next poll */ }
+  }
+
+  function _monVital(k, dflt) {
+    const v = (PHYS && PHYS.vitals) ? PHYS.vitals[k] : null;
+    return (typeof v === 'number' && isFinite(v)) ? v : dflt;
+  }
+  function _monSetText(svg, id, txt) {
+    const e = svg && svg.querySelector('#' + id);
+    if (e) e.textContent = txt;
+  }
+  function bindMonitorNumerics() {
+    const svg = $skin && $skin.querySelector('svg'); if (!svg) return;
+    const hr = _monVital('hr', null), spo2 = _monVital('spo2', null);
+    const rr = _monVital('rr', null), etco2 = _monVital('etco2', null);
+    const sbp = _monVital('sbp', null), dbp = _monVital('dbp', null);
+    _monSetText(svg, 'scr-hr',    hr    != null ? String(Math.round(hr))    : '--');
+    _monSetText(svg, 'scr-spo2',  spo2  != null ? String(Math.round(spo2))  : '--');
+    _monSetText(svg, 'scr-rr',    rr    != null ? String(Math.round(rr))    : '--');
+    _monSetText(svg, 'scr-etco2', etco2 != null ? String(Math.round(etco2)) : '--');
+    _monSetText(svg, 'scr-nibp',
+      (sbp != null && dbp != null) ? `${Math.round(sbp)}/${Math.round(dbp)}` : '--/--');
+    const rhy = (PHYS && PHYS.rhythm) ? String(PHYS.rhythm).toLowerCase() : 'nsr';
+    _monSetText(svg, 'scr-rhythm', _MON_RHYTHM_LABEL[rhy] || rhy);
+  }
+
+  function renderMonitorAlarmBanner() {
+    const tones = ((STATE && STATE.active_alarms) || [])
+      .map((a) => (typeof a === 'string' ? a : a.tone));
+    let el = document.getElementById('monitor-alarm-banner');
+    if (!tones.length) { if (el) el.hidden = true; return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'monitor-alarm-banner';
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:40;'
+        + 'background:#c0271d;color:#fff;font:700 16px/1.25 -apple-system,Helvetica,Arial;'
+        + 'letter-spacing:.08em;padding:8px 14px;text-align:center;';
+      document.body.appendChild(el);
+    }
+    el.hidden = false;
+    el.textContent = '⚠ ' + tones.map((t) => _MON_ALARM_LABEL[t] || t.toUpperCase()).join('   ·   ');
+  }
+
+  // Waveform morphology (phase in [0,1) within one cycle).
+  function _ecgShape(phase, rhythm) {
+    if (rhythm === 'asystole') return 0;
+    if (rhythm === 'vfib' || rhythm === 'vf')
+      return 0.45 * Math.sin(phase * Math.PI * 17) + 0.30 * Math.sin(phase * Math.PI * 29 + 1);
+    if (rhythm === 'vtach' || rhythm === 'vt') return 0.85 * Math.sin(phase * Math.PI * 2);
+    let y = 0;
+    y += 0.12 * Math.exp(-Math.pow((phase - 0.15) / 0.035, 2));   // P
+    y -= 0.10 * Math.exp(-Math.pow((phase - 0.255) / 0.012, 2));  // Q
+    y += 1.00 * Math.exp(-Math.pow((phase - 0.28) / 0.012, 2));   // R
+    y -= 0.18 * Math.exp(-Math.pow((phase - 0.305) / 0.014, 2));  // S
+    y += 0.22 * Math.exp(-Math.pow((phase - 0.50) / 0.05, 2));    // T
+    return y;
+  }
+  function _plethShape(phase) {
+    return Math.exp(-Math.pow((phase - 0.18) / 0.12, 2))
+         + 0.28 * Math.exp(-Math.pow((phase - 0.42) / 0.09, 2));
+  }
+  function _respShape(phase) { return 0.5 * (1 - Math.cos(phase * Math.PI * 2)); }
+
+  function _monDrawLane(svg, lane, freqHz, shapeFn, tNow) {
+    const el = svg.querySelector('#' + lane.id); if (!el) return;
+    const w = lane.x1 - lane.x0;
+    const pts = [];
+    for (let x = lane.x0; x <= lane.x1; x += _MON_STEP_PX) {
+      const frac = (x - lane.x0) / w;
+      const lt = tNow - _MON_WINDOW_S * (1 - frac);   // older samples to the left
+      let phase = (lt * freqHz) % 1; if (phase < 0) phase += 1;
+      const y = lane.base - lane.amp * shapeFn(phase);
+      pts.push(x.toFixed(0) + ',' + y.toFixed(1));
+    }
+    el.setAttribute('points', pts.join(' '));
+  }
+  function monitorFrame(now) {
+    _monRAF = requestAnimationFrame(monitorFrame);
+    const svg = $skin && $skin.querySelector('svg'); if (!svg) return;
+    if (SESSION_STATE !== 'running') return;   // freeze on pause / ended / configured
+    const tNow = (now - _monT0) / 1000;
+    const hrHz = Math.max(20, _monVital('hr', 72)) / 60;
+    const rrHz = Math.max(4, _monVital('rr', 14)) / 60;
+    const rhythm = (PHYS && PHYS.rhythm) ? String(PHYS.rhythm).toLowerCase() : 'nsr';
+    _monDrawLane(svg, _MON_LANES.ecg,   hrHz, (p) => _ecgShape(p, rhythm), tNow);
+    _monDrawLane(svg, _MON_LANES.pleth, hrHz, _plethShape, tNow);
+    _monDrawLane(svg, _MON_LANES.resp,  rrHz, _respShape, tNow);
+  }
 
   // ── V6.1.6 / V6.1.7 / M60 — Cabinet (med-cart) patient picker + MAR
   // Hidden by default so the chassis SVG stays visible. The 👤 PATIENT
