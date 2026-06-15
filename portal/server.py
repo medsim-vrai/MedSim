@@ -5241,6 +5241,17 @@ async def api_control_readiness_action(
     return JSONResponse(result)
 
 
+@app.post("/api/control/session/resume")
+async def api_control_session_resume(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-011 G4 — restore the last saved session (the G1 snapshot) on demand, for
+    the cockpit's Resume banner. ok=False when there's nothing to resume."""
+    from portal import session_state
+    summary = session_state.resume()
+    return JSONResponse({"ok": bool(summary), "summary": summary})
+
+
 # =====================================================================
 # V7 M30 — Per-encounter parity (transcript / voice / lead student)
 # =====================================================================

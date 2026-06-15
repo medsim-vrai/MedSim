@@ -56,11 +56,38 @@
       </section>
 
       <section class="console-panel" data-panel="operate" role="tabpanel" aria-label="Operate">
-        <div class="panel-placeholder">
-          <h2>Operate</h2>
-          <p>The Readiness Cockpit (G4) lands here: a tile per subsystem with inline
-             actions, a Resume banner, and live meds / staged-errors / handoff cards.</p>
-          <p class="muted">Live readiness is in the bar above — click it for detail.</p>
+
+        <div id="resume-banner" class="resume-banner" hidden>
+          <div class="rs-text">
+            <strong>A saved session can be resumed.</strong>
+            <span id="resume-detail" class="muted"></span>
+          </div>
+          <button type="button" id="resume-btn" class="rs-btn">Resume session</button>
+        </div>
+
+        <div class="cockpit-head">
+          <h2 class="cockpit-title">Readiness</h2>
+          <button type="button" id="test-all-btn" class="ct-testall">Test all</button>
+        </div>
+        <div id="readiness-tiles" class="readiness-tiles" aria-live="polite"></div>
+
+        <h2 class="cockpit-title cockpit-title--sub">Live session</h2>
+        <div class="mgmt-cards">
+          <div class="mgmt-card" data-mgmt="meds">
+            <div class="mc-label">Medications</div>
+            <div class="mc-state" id="mc-meds">—</div>
+            <a class="mc-link" href="/portal/control/setup">Manage&nbsp;↗</a>
+          </div>
+          <div class="mgmt-card" data-mgmt="errors">
+            <div class="mc-label">Staged errors</div>
+            <div class="mc-state" id="mc-errors">—</div>
+            <a class="mc-link" href="/portal/control/errors">Manage&nbsp;↗</a>
+          </div>
+          <div class="mgmt-card" data-mgmt="handoff">
+            <div class="mc-label">Handoff</div>
+            <div class="mc-state" id="mc-handoff">—</div>
+            <a class="mc-link" href="/portal/control">Open&nbsp;↗</a>
+          </div>
         </div>
       </section>
 

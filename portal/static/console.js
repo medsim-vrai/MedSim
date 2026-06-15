@@ -18,6 +18,27 @@
 
   function $(sel, root) { return (root || document).querySelector(sel); }
 
+  function makeActionBtn(action, cls) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = cls;
+    btn.textContent = action.label;
+    btn.addEventListener("click", function () { runAction(action.id, btn); });
+    return btn;
+  }
+
+  function sessionCheck(snap) {
+    var checks = (snap && snap.checks) || [];
+    for (var i = 0; i < checks.length; i++) {
+      if (checks[i].id === "session") return checks[i];
+    }
+    return null;
+  }
+  function isResumable(snap) {
+    var s = sessionCheck(snap);
+    return !!(s && (s.actions || []).some(function (a) { return a.id === "resume_session"; }));
+  }
+
   // ── modes ───────────────────────────────────────────────────────────────
   function currentMode() {
     var m = new URLSearchParams(location.search).get("mode");
@@ -72,6 +93,9 @@
       });
     }
     renderDetail(checks);
+    renderTiles(checks);
+    renderResumeBanner(snap);
+    renderMgmt(snap);
   }
 
   function renderDetail(checks) {
@@ -93,16 +117,78 @@
       detail.textContent = c.detail || "";
       row.appendChild(detail);
 
-      (c.actions || []).forEach(function (a) {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "rd-action";
-        btn.textContent = a.label;
-        btn.addEventListener("click", function () { runAction(a.id, btn); });
-        row.appendChild(btn);
-      });
+      (c.actions || []).forEach(function (a) { row.appendChild(makeActionBtn(a, "rd-action")); });
       box.appendChild(row);
     });
+  }
+
+  // ── G4 Operate cockpit ────────────────────────────────────────────────────
+  function renderTiles(checks) {
+    var grid = $("#readiness-tiles");
+    if (!grid) return;
+    grid.textContent = "";
+    checks.forEach(function (c) {
+      var tile = document.createElement("div");
+      tile.className = "tile";
+      tile.setAttribute("data-status", c.status);
+
+      var head = document.createElement("div");
+      head.className = "tile-head";
+      var g = document.createElement("span");
+      g.className = "tile-glyph";
+      g.textContent = GLYPH[c.status] || "";
+      var lab = document.createElement("span");
+      lab.textContent = c.label;
+      head.appendChild(g);
+      head.appendChild(lab);
+      tile.appendChild(head);
+
+      var det = document.createElement("div");
+      det.className = "tile-detail";
+      det.textContent = c.detail || "";
+      tile.appendChild(det);
+
+      if ((c.actions || []).length) {
+        var acts = document.createElement("div");
+        acts.className = "tile-actions";
+        c.actions.forEach(function (a) { acts.appendChild(makeActionBtn(a, "tile-action")); });
+        tile.appendChild(acts);
+      }
+      grid.appendChild(tile);
+    });
+  }
+
+  function renderResumeBanner(snap) {
+    var banner = $("#resume-banner");
+    if (!banner) return;
+    if (isResumable(snap)) {
+      var s = sessionCheck(snap);
+      var det = $("#resume-detail");
+      if (det) det.textContent = s ? s.detail : "";
+      banner.hidden = false;
+    } else {
+      banner.hidden = true;
+    }
+  }
+
+  function renderMgmt(snap) {
+    var s = sessionCheck(snap);
+    var active = !!(s && s.status === "green");
+    ["#mc-meds", "#mc-errors", "#mc-handoff"].forEach(function (sel) {
+      var el = $(sel);
+      if (!el) return;
+      el.setAttribute("data-on", active ? "yes" : "no");
+      el.textContent = active ? "Active" : "No session";
+    });
+  }
+
+  function resumeSession(btn) {
+    if (btn) btn.disabled = true;
+    fetch("/api/control/session/resume", { method: "POST", credentials: "same-origin" })
+      .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
+      .then(function () { poll(); })
+      .catch(function () { poll(); })
+      .then(function () { if (btn) btn.disabled = false; });
   }
 
   function handle401(r) {
@@ -156,6 +242,14 @@
   document.addEventListener("DOMContentLoaded", function () {
     wireTabs();
     wireDetailToggle();
+    var testAllBtn = $("#test-all-btn");
+    if (testAllBtn) {
+      testAllBtn.addEventListener("click", function () { runAction("test_all", testAllBtn); });
+    }
+    var resumeBtn = $("#resume-btn");
+    if (resumeBtn) {
+      resumeBtn.addEventListener("click", function () { resumeSession(resumeBtn); });
+    }
     applyMode(currentMode());
     poll();
     setInterval(poll, POLL_MS);
