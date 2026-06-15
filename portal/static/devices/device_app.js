@@ -25,7 +25,7 @@
   // so the device display advances even when the client-side interpolator
   // can't run (e.g. cached old JS, very slow tablet). Bumping the build
   // marker confirms on the tablet which JS is actually executing.
-  const DEVICE_JS_BUILD = 'v6.2.1';   // FR-012 — device pages go full-screen (hide browser chrome)
+  const DEVICE_JS_BUILD = 'v6.2.2';   // FR-012 D5b — ventilator control screen + vent waveforms
   console.log('[MEDSIM device] booting build', DEVICE_JS_BUILD);
   const body = document.body;
   const JOIN  = body.dataset.joinCode;
@@ -33,6 +33,9 @@
   const KIND  = body.dataset.deviceKind;
   const MODEL = body.dataset.deviceModel;
   const IS_MONITOR = (KIND === 'telemetry_monitor');   // FR-012 advanced device
+  const IS_VENTILATOR = (KIND === 'ventilator');
+  const IS_VENT_MONITOR = (KIND === 'vent_monitor');
+  const IS_VENT = IS_VENTILATOR || IS_VENT_MONITOR;
 
   const $loading = document.getElementById('device-loading');
   const $skin    = document.getElementById('device-skin');
@@ -47,6 +50,7 @@
   let AUDIO_URLS = {};         // tone_id → /static/devices/audio/.../tone.wav
   let STATE = null;            // last engine fold
   let PHYS = null;             // FR-012 — last physiology snapshot (advanced devices)
+  let VENT = null;             // FR-012 — last ventilator / vent-monitor view
   let SESSION_STATE = 'running';
   let WS = null;
   let WS_BACKOFF = 1000;
@@ -75,11 +79,13 @@
       AUDIO_URLS = b.audio_urls || {};
       STATE = b.state || {};
       PHYS = b.physiology || null;         // FR-012 — advanced-device physiology
+      VENT = b.vent || null;               // FR-012 — ventilator / vent-monitor view
       SESSION_STATE = b.session_state || 'running';
       mountSkin(b.skin_svg || '');
       renderFold(STATE);
       applySessionState(SESSION_STATE);
       if (IS_MONITOR) startMonitor();      // FR-012 D3b — live vitals + waveforms
+      if (IS_VENT) startVent();            // FR-012 D5b — vent display + controls
       $loading.hidden = true;
       _ensureFsButton();                   // FR-012 — fullscreen re-entry affordance
       // Show the audio-unlock overlay immediately on iOS — one tap there
@@ -1324,6 +1330,311 @@
     _monDrawLane(svg, _MON_LANES.ecg,   hrHz, (p) => _ecgShape(p, rhythm), tNow);
     _monDrawLane(svg, _MON_LANES.pleth, hrHz, _plethShape, tNow);
     _monDrawLane(svg, _MON_LANES.resp,  rrHz, _respShape, tNow);
+  }
+
+  // ── FR-012 D5b — ventilator + vent-monitor client ───────────────────
+  // Vent devices render a dedicated DOM screen (not the SVG skin): scrolling
+  // airway pressure/flow/volume scalars + numerics; for the ventilator, the
+  // mode + setting controls POST /vent/set (the physiology coupling then moves
+  // the patient) plus maneuvers; for the vent monitor, P-V/F-V loops. Alarms get
+  // a banner + Silence/Clear (the SVG key-* buttons are hidden in this mode).
+  let _ventScalarsCx = null, _ventLoopsCx = null, _ventRAF = null, _ventT0 = 0, _ventPollTimer = null;
+
+  function _ventMode(s) {
+    return /^(PC-CMV|PRVC|PSV|CPAP|PC)$/i.test((s && s.mode) || '') ? 'PC' : 'VC';
+  }
+  function _ventDerived(s) {
+    const rr = Math.max(1, +s.rr || 14);
+    const period = 60 / rr;
+    const ti = s.inspiratory_time_s ? +s.inspiratory_time_s : period / (1 + (+s.ie_ratio || 2));
+    const tau = Math.max(0.05, (+s.resistance_cmh2o_l_s || 10) * ((+s.compliance_ml_cmh2o || 50) / 1000));
+    return { period, ti, tau, mode: _ventMode(s) };
+  }
+  function _ventPoint(s, d, tb) {
+    const vt = +s.tidal_volume_ml || 450, peep = +s.peep || 5;
+    const r = +s.resistance_cmh2o_l_s || 10, c = +s.compliance_ml_cmh2o || 50;
+    const inspFlow = (vt / 1000) / d.ti, leak = (+s.leak_fraction || 0) * vt;
+    if (tb <= d.ti) {
+      const frac = d.ti > 0 ? tb / d.ti : 1;
+      let v, f, p;
+      if (d.mode === 'PC') {
+        const rise = Math.max(0.05, 0.5 * d.tau);
+        v = vt * (1 - Math.exp(-tb / rise));
+        f = (vt / 1000) / rise * Math.exp(-tb / rise);
+        p = peep + ((+s.pip || 18) - peep);
+      } else {
+        v = vt * frac; f = inspFlow; p = peep + f * r + v / c;
+        if (s.flow_starvation) p -= 4 * Math.sin(Math.PI * frac);
+      }
+      if (s.overdistension && frac > 0.7) p += 80 * Math.pow(frac - 0.7, 2);
+      return { p, f, v };
+    }
+    const te = tb - d.ti, decay = Math.exp(-te / d.tau);
+    const v = leak + (vt - leak) * decay;
+    let f = -((vt - leak) / 1000) / d.tau * decay;
+    const p = peep + (vt / c) * decay;
+    if (s.secretions) f += 0.06 * Math.sin(2 * Math.PI * 8 * te) * decay;
+    return { p, f, v };
+  }
+
+  function _settings() { return (VENT && VENT.settings) || {}; }
+
+  function startVent() {
+    if ($skin) $skin.style.display = 'none';
+    buildVentPanel();
+    _ventT0 = performance.now();
+    if (!_ventRAF) _ventRAF = requestAnimationFrame(ventFrame);
+    if (_ventPollTimer) clearInterval(_ventPollTimer);
+    _ventPollTimer = setInterval(pollVent, 1500);
+  }
+
+  async function pollVent() {
+    try {
+      const r = await fetch(`/api/device/${STN}/state?_t=${Date.now()}`);
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.session_state) applySessionState(j.session_state);
+      if (j.vent) VENT = j.vent;
+      if (j.state) renderFold(j.state);
+      renderVentNumerics(); renderVentAlarms();
+      if (IS_VENTILATOR) { renderVentModes(); renderVentControls(); } else { drawVentLoops(); }
+    } catch (e) { /* offline — keep last */ }
+  }
+
+  function _vel(tag, css, html) {
+    const e = document.createElement(tag);
+    if (css) e.style.cssText = css;
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  function _ventBtnCss(bg, fg) {
+    return 'border:0;border-radius:8px;padding:12px 16px;font-size:15px;font-weight:600;'
+      + 'background:' + bg + ';color:' + (fg || '#cfe0f2') + ';cursor:pointer;';
+  }
+  function _sizeVentCanvas(c) {
+    if (!c) return;
+    const dpr = window.devicePixelRatio || 1;
+    c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+    c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function buildVentPanel() {
+    if (document.getElementById('device-vent')) return;
+    const panel = _vel('div', 'position:fixed;inset:0;z-index:5;background:#05070b;color:#e6e6e6;'
+      + 'font-family:-apple-system,Helvetica,Arial;display:flex;flex-direction:column;overflow:auto;');
+    panel.id = 'device-vent';
+    const head = _vel('div', 'display:flex;align-items:center;gap:10px;padding:8px 14px;background:#10151e;');
+    head.innerHTML = '<strong style="color:#cfe8ff;font-size:16px">'
+      + (IS_VENTILATOR ? 'Ventilator' : 'Ventilator Display') + '</strong>';
+    const modeWrap = _vel('span', 'margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end');
+    modeWrap.id = 'vent-modes';
+    head.appendChild(modeWrap);
+    panel.appendChild(head);
+    const banner = _vel('div', 'display:none'); banner.id = 'vent-alarm-banner';
+    panel.appendChild(banner);
+    const sc = document.createElement('canvas'); sc.id = 'vent-scalars';
+    sc.style.cssText = 'width:100%;height:240px;display:block;background:#05070b';
+    panel.appendChild(sc);
+    const num = _vel('div', 'display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;background:#0b0f16');
+    num.id = 'vent-numerics';
+    panel.appendChild(num);
+    if (IS_VENTILATOR) {
+      const ctl = _vel('div', 'padding:8px 12px'); ctl.id = 'vent-controls';
+      panel.appendChild(ctl);
+      const man = _vel('div', 'display:flex;gap:8px;flex-wrap:wrap;padding:0 12px 8px');
+      [['insp_hold', 'Insp hold'], ['exp_hold', 'Exp hold'], ['o2_100', '100% O2']].forEach(([kind, label]) => {
+        const b = _vel('button', _ventBtnCss('#1a2636'), label);
+        b.addEventListener('click', () => ventManeuver(kind));
+        man.appendChild(b);
+      });
+      panel.appendChild(man);
+    } else {
+      const lc = document.createElement('canvas'); lc.id = 'vent-loops';
+      lc.style.cssText = 'width:100%;height:190px;display:block;background:#05070b';
+      panel.appendChild(lc);
+    }
+    const ac = _vel('div', 'display:flex;gap:8px;padding:8px 12px;margin-top:auto');
+    const sil = _vel('button', _ventBtnCss('#3a2730', '#f3c4cd'), 'Silence');
+    sil.addEventListener('click', silenceActive);
+    const clr = _vel('button', _ventBtnCss('#1a2636'), 'Clear');
+    clr.addEventListener('click', clearActive);
+    ac.appendChild(sil); ac.appendChild(clr);
+    panel.appendChild(ac);
+    document.body.appendChild(panel);
+    _ventScalarsCx = sc.getContext('2d');
+    _sizeVentCanvas(sc);
+    if (!IS_VENTILATOR) { _ventLoopsCx = document.getElementById('vent-loops').getContext('2d'); _sizeVentCanvas(document.getElementById('vent-loops')); }
+    window.addEventListener('resize', () => {
+      _sizeVentCanvas(sc); _sizeVentCanvas(document.getElementById('vent-loops'));
+    });
+    renderVentModes(); renderVentNumerics(); renderVentAlarms();
+    if (IS_VENTILATOR) renderVentControls(); else drawVentLoops();
+  }
+
+  function renderVentModes() {
+    const wrap = document.getElementById('vent-modes'); if (!wrap) return;
+    const cur = _settings().mode || '';
+    if (!IS_VENTILATOR) { wrap.textContent = cur; wrap.style.color = '#bcd8ff'; return; }
+    wrap.innerHTML = '';
+    ((VENT && VENT.modes) || []).forEach((m) => {
+      const on = m === cur;
+      const b = _vel('button', 'border:0;border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;cursor:pointer;'
+        + (on ? 'background:#1f3550;color:#bcd8ff' : 'background:#16202c;color:#8aa0b6'), m);
+      b.addEventListener('click', () => setVentControl('mode', m));
+      wrap.appendChild(b);
+    });
+  }
+  function renderVentNumerics() {
+    const host = document.getElementById('vent-numerics'); if (!host) return;
+    const n = (VENT && VENT.numerics) || {};
+    const fio2 = n.fio2 != null ? Math.round(n.fio2 * 100) + '%' : '—';
+    const tiles = [['Ppeak', n.ppeak, '#f2c14e'], ['Pplat', n.pplateau, '#f2c14e'],
+      ['PEEP', n.peep, '#e6e6e6'], ['Vt', n.vt_exhaled_ml, '#33d6e6'], ['RR', n.rr, '#39d353'],
+      ['MV', n.minute_vent_l, '#39d353'], ['FiO2', fio2, '#33d6e6'], ['I:E', n.ie, '#e6e6e6']];
+    host.innerHTML = tiles.map(([lab, val, col]) =>
+      '<div style="min-width:62px;background:#10151e;border-radius:6px;padding:4px 8px">'
+      + '<div style="font-size:11px;color:#8aa0b6">' + lab + '</div>'
+      + '<div style="font-size:21px;font-weight:700;color:' + col + '">' + (val == null ? '—' : val) + '</div></div>').join('');
+  }
+  function renderVentControls() {
+    const host = document.getElementById('vent-controls'); if (!host) return;
+    const avail = (VENT && VENT.available) || [], ranges = (VENT && VENT.ranges) || {}, s = _settings();
+    host.innerHTML = '';
+    const grid = _vel('div', 'display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px');
+    avail.forEach((k) => {
+      const spec = ranges[k]; if (!spec) return;
+      const val = s[k];
+      const disp = (k === 'fio2' && val != null) ? Math.round(val * 100) + '%' : (val == null ? '—' : val);
+      const tile = _vel('div', 'background:#121a25;border:1px solid #26344a;border-radius:10px;padding:8px');
+      tile.innerHTML = '<div style="font-size:12px;color:#8aa0b6">' + spec.label
+        + (spec.unit ? ' (' + spec.unit + ')' : '') + '</div>'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-top:4px">'
+        + '<button data-d="-1" style="' + _stepCss() + '">−</button>'
+        + '<div style="flex:1;text-align:center;font-size:22px;font-weight:700;color:#cfe0f2">' + disp + '</div>'
+        + '<button data-d="1" style="' + _stepCss() + '">+</button></div>';
+      tile.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => {
+        const cur = (typeof s[k] === 'number') ? s[k] : spec.default;
+        const next = Math.min(spec.hi, Math.max(spec.lo, cur + (+btn.dataset.d) * spec.step));
+        setVentControl(k, Math.round(next * 10000) / 10000);
+      }));
+      grid.appendChild(tile);
+    });
+    host.appendChild(grid);
+  }
+  function _stepCss() {
+    return 'width:46px;height:46px;border:0;border-radius:8px;background:#1f3550;color:#cfe0f2;'
+      + 'font-size:24px;font-weight:700;cursor:pointer';
+  }
+  function renderVentAlarms() {
+    const tones = ((STATE && STATE.active_alarms) || []).map((a) => typeof a === 'string' ? a : a.tone);
+    const el = document.getElementById('vent-alarm-banner'); if (!el) return;
+    if (!tones.length) { el.style.display = 'none'; return; }
+    el.style.cssText = 'display:block;background:#c0271d;color:#fff;font-weight:700;'
+      + 'letter-spacing:.06em;padding:8px 14px;text-align:center';
+    el.textContent = '⚠ ' + tones.map((t) => t.replace(/_/g, ' ').toUpperCase()).join('   ·   ');
+  }
+
+  async function setVentControl(param, value) {
+    try {
+      const r = await fetch(`/api/device/${STN}/vent/set`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ param, value }),
+      });
+      const j = await r.json();
+      if (j && j.vent) { VENT = j.vent; renderVentModes(); renderVentNumerics(); renderVentControls(); }
+    } catch (e) { /* ignore */ }
+  }
+  async function ventManeuver(kind) {
+    try {
+      const r = await fetch(`/api/device/${STN}/vent/maneuver`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind }),
+      });
+      const res = ((await r.json()) || {}).result || {};
+      let msg = kind;
+      if (res.pplateau != null) msg = 'Pplateau ' + res.pplateau + ' cmH2O';
+      else if (res.auto_peep != null) msg = 'Auto-PEEP ' + res.auto_peep + ' (total ' + res.total_peep + ')';
+      else if (res.fio2 != null) msg = 'FiO2 → 100%';
+      _ventToast(msg); pollVent();
+    } catch (e) { /* ignore */ }
+  }
+  function _ventToast(text) {
+    let t = document.getElementById('vent-toast');
+    if (!t) {
+      t = _vel('div', 'position:fixed;left:50%;top:14%;transform:translateX(-50%);background:#143b8a;'
+        + 'color:#fff;padding:12px 20px;border-radius:10px;font-weight:700;z-index:60;transition:opacity .3s');
+      t.id = 'vent-toast'; document.body.appendChild(t);
+    }
+    t.textContent = text; t.style.opacity = '1';
+    clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, 2600);
+  }
+
+  function _audibleTone() {
+    const now = Date.now() / 1000, alarms = (STATE && STATE.active_alarms) || [];
+    const a = alarms.find((x) => (x.silenced_until || 0) <= now);
+    return (a && a.tone) || [...CURRENTLY_LOOPING][0] || (alarms[0] && alarms[0].tone) || null;
+  }
+  function silenceActive() {
+    const tone = _audibleTone(); if (!tone) return;
+    stopLoop(tone);
+    sendEvent('alarm.silenced', { tone, until: Date.now() / 1000 + (SPEC.silence_seconds || 120) });
+  }
+  function clearActive() {
+    const a = ((STATE && STATE.active_alarms) || [])[0]; if (!a) return;
+    sendEvent('alarm.cleared', { tone: a.tone });
+  }
+
+  const _VENT_LANES = [
+    { k: 'p', label: 'Paw  cmH2O', color: '#f2c14e', lo: -2, hi: 45 },
+    { k: 'f', label: 'Flow  L/s', color: '#39d353', lo: -1.3, hi: 1.3 },
+    { k: 'v', label: 'Vol  mL', color: '#33d6e6', lo: 0, hi: 1 },
+  ];
+  function ventFrame(now) {
+    _ventRAF = requestAnimationFrame(ventFrame);
+    const cx = _ventScalarsCx; if (!cx) return;
+    if (SESSION_STATE !== 'running') return;
+    const c = cx.canvas, W = c.clientWidth, H = c.clientHeight;
+    cx.clearRect(0, 0, W, H);
+    const s = _settings(), d = _ventDerived(s), vt = +s.tidal_volume_ml || 450;
+    const lanes = _VENT_LANES.map((l) => (l.k === 'v' ? { ...l, hi: vt * 1.2 } : l));
+    const laneH = H / lanes.length, win = Math.max(6, d.period * 2.2), tNow = (now - _ventT0) / 1000;
+    lanes.forEach((lane, i) => {
+      const y0 = i * laneH;
+      cx.strokeStyle = '#1b232f'; cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(0, y0 + laneH); cx.lineTo(W, y0 + laneH); cx.stroke();
+      cx.fillStyle = '#8aa0b6'; cx.font = '11px Arial'; cx.fillText(lane.label, 6, y0 + 14);
+      cx.strokeStyle = lane.color; cx.lineWidth = 2; cx.beginPath();
+      for (let x = 0; x <= W; x += 2) {
+        const lt = tNow - win * (1 - x / W);
+        let tb = lt % d.period; if (tb < 0) tb += d.period;
+        const norm = (_ventPoint(s, d, tb)[lane.k] - lane.lo) / (lane.hi - lane.lo);
+        const y = (y0 + laneH) - Math.max(0, Math.min(1, norm)) * laneH * 0.9;
+        if (x === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+      }
+      cx.stroke();
+    });
+  }
+  function drawVentLoops() {
+    const cx = _ventLoopsCx; if (!cx) return;
+    const c = cx.canvas, W = c.clientWidth, H = c.clientHeight;
+    cx.clearRect(0, 0, W, H);
+    const s = _settings(), d = _ventDerived(s), vt = +s.tidal_volume_ml || 450, half = W / 2;
+    const pts = [];
+    for (let i = 0; i <= 120; i++) pts.push(_ventPoint(s, d, (i / 120) * d.period));
+    cx.fillStyle = '#8aa0b6'; cx.font = '11px Arial';
+    cx.fillText('P–V', 8, 14); cx.fillText('F–V', half + 8, 14);
+    cx.strokeStyle = '#33d6e6'; cx.lineWidth = 2; cx.beginPath();
+    pts.forEach((pt, i) => {
+      const x = 10 + (pt.p / 45) * (half - 24), y = H - 12 - (pt.v / (vt * 1.1)) * (H - 30);
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    });
+    cx.stroke();
+    cx.strokeStyle = '#39d353'; cx.beginPath();
+    pts.forEach((pt, i) => {
+      const x = half + 10 + (pt.v / (vt * 1.1)) * (half - 24), y = H / 2 - (pt.f / 1.3) * (H / 2 - 18);
+      if (i === 0) cx.moveTo(x, y); else cx.lineTo(x, y);
+    });
+    cx.stroke();
   }
 
   // ── V6.1.6 / V6.1.7 / M60 — Cabinet (med-cart) patient picker + MAR

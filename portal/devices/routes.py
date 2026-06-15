@@ -197,6 +197,10 @@ def _vent_view(device_kind: str, encounter_id: str, *,
         from portal import vent_state
         if evaluate:
             vent_state.evaluate(encounter_id)
+        # The ventilator client needs the full control surface (ranges + modes +
+        # set-vs-measured); the vent monitor only displays numerics + faults.
+        if device_kind == "ventilator":
+            return vent_state.controls_view(encounter_id)
         return vent_state.view(encounter_id)
     except Exception:  # noqa: BLE001 — vent view is best-effort
         return None
