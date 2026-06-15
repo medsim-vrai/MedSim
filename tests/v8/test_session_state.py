@@ -110,6 +110,37 @@ def test_resume_is_none_without_a_snapshot(isolated_store):
     assert session_state.resume() is None
 
 
+def test_existing_v6_db_gets_session_state_via_migration_7(tmp_path):
+    """Regression: a DB created before FR-011 sits at schema_version 6 (telemetry
+    overrides) WITHOUT a session_state table. The migration runner MUST create it
+    as v7 — the original bug numbered session_state 6, colliding with telemetry's
+    dynamic v6, so on a real (pre-existing) DB it never ran and resumability
+    silently fell back to in-process memory only."""
+    import sqlite3
+    from portal import ehr_db
+    conn = sqlite3.connect(str(tmp_path / "old.db"))
+    # Reconstruct the pre-FR-011 schema: every migration up to and including 6.
+    conn.execute("CREATE TABLE schema_version "
+                 "(version INTEGER PRIMARY KEY, applied_at REAL NOT NULL)")
+    for version, sql in ehr_db.SCHEMA_MIGRATIONS:
+        if version <= 6:
+            conn.executescript(sql)
+            conn.execute("INSERT INTO schema_version VALUES (?, 0)", (version,))
+    tabs = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "session_state" not in tabs                       # the broken state
+    assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 6
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(ehr_session)")}
+    assert "telemetry_overrides_json" in cols                # 6 == telemetry overrides
+    # Run the real runner — it must add session_state without re-running 6.
+    ehr_db._run_migrations(conn)
+    tabs = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    assert "session_state" in tabs
+    assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 7
+    conn.close()
+
+
 def test_version_mismatch_and_corrupt_blob_are_safe(isolated_store, monkeypatch):
     from portal import ehr_db
     # Future/incompatible version → no restore (clean start), never raises.

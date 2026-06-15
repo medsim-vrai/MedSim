@@ -238,10 +238,25 @@ SCHEMA_MIGRATIONS: list[tuple[int, str]] = [
     CREATE INDEX IF NOT EXISTS ix_student_role ON student(role);
     """),
     (6, """
+    -- V7 Phase 7 M23 — telemetry overrides per encounter. Historically this
+    -- was registered DYNAMICALLY by portal/telemetry.py (_register_v6_migration);
+    -- it is baked into the literal here so its version is DETERMINISTIC and never
+    -- collides with the FR-011 migration below. telemetry._register_v6_migration
+    -- now sees v==6 already present and no-ops. Existing DBs already at
+    -- schema_version >= 6 skip this (column already present); fresh DBs get it here.
+    ALTER TABLE ehr_session ADD COLUMN telemetry_overrides_json TEXT;
+    """),
+    (7, """
     -- FR-011 G1 (ADR-0039) — portal resumability: ONE versioned, PHI-free
     -- structured snapshot of the live control session (config + med board +
     -- staged errors + handoff config) so a portal restart / crash / pause
     -- resumes instead of wiping. Single row (id=1) = the latest snapshot.
+    --
+    -- ⚠️ MUST stay > the telemetry-overrides migration (6). It was briefly
+    -- numbered 6, which COLLIDED with telemetry.py's dynamic v6 on every
+    -- pre-existing DB (already at schema_version 6) — so `session_state` was
+    -- never created on a real DB and resumability silently fell back to
+    -- in-process memory only. Moving it to 7 makes it run on those DBs.
     CREATE TABLE IF NOT EXISTS session_state (
       id         INTEGER PRIMARY KEY CHECK (id = 1),
       saved_at   REAL NOT NULL,
