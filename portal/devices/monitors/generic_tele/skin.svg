@@ -29,4 +29,13 @@
     <text x="1008" y="560" fill="#d99be6" font-size="40" text-anchor="end" id="scr-etco2">38</text>
   </g>
   <rect x="700" y="46" width="2" height="520" fill="#1b232f"/>
+  <!-- Alarm controls — device_app.js binds key-silence / key-clear taps. -->
+  <g id="key-silence">
+    <rect x="20" y="528" width="210" height="54" rx="9" fill="#3a2730" stroke="#6a3b46"/>
+    <text x="125" y="563" fill="#f3c4cd" font-size="21" font-weight="bold" text-anchor="middle">Silence</text>
+  </g>
+  <g id="key-clear">
+    <rect x="246" y="528" width="180" height="54" rx="9" fill="#1a2636" stroke="#2c3e57"/>
+    <text x="336" y="563" fill="#cfe0f2" font-size="21" font-weight="bold" text-anchor="middle">Clear</text>
+  </g>
 </svg>

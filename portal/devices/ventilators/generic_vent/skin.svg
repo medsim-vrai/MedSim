@@ -37,8 +37,14 @@
     <text x="376" y="467" fill="#cfe0f2">Exp hold</text>
     <rect id="btn-100o2"     x="508" y="430" width="220" height="60" rx="8" fill="#1a2636" stroke="#2c3e57"/>
     <text x="618" y="467" fill="#cfe0f2">100% O2</text>
-    <rect id="btn-silence"   x="750" y="430" width="220" height="60" rx="8" fill="#3a2730" stroke="#6a3b46"/>
-    <text x="860" y="467" fill="#f3c4cd">Silence</text>
+    <g id="key-silence">
+      <rect x="750" y="430" width="220" height="60" rx="8" fill="#3a2730" stroke="#6a3b46"/>
+      <text x="860" y="467" fill="#f3c4cd">Silence</text>
+    </g>
   </g>
-  <text x="512" y="560" fill="#5a6b7e" font-size="13" text-anchor="middle">Set-vs-measured, ranges &amp; maneuvers activate in D5.</text>
+  <g id="key-clear">
+    <rect x="750" y="500" width="220" height="42" rx="8" fill="#1a2636" stroke="#2c3e57"/>
+    <text x="860" y="527" fill="#cfe0f2" font-size="15" text-anchor="middle">Clear</text>
+  </g>
+  <text x="430" y="525" fill="#5a6b7e" font-size="13" text-anchor="middle">Set-vs-measured, ranges &amp; maneuvers activate in D5.</text>
 </svg>

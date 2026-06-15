@@ -34,4 +34,13 @@
     <text x="960" y="470" fill="#8aa0b6" font-size="13" text-anchor="middle">I:E</text>
     <text x="960" y="510" fill="#e6e6e6" font-size="34" text-anchor="middle" id="scr-ie">1:2</text>
   </g>
+  <!-- Alarm controls — device_app.js binds key-silence / key-clear taps. -->
+  <g id="key-silence">
+    <rect x="20" y="544" width="200" height="48" rx="9" fill="#3a2730" stroke="#6a3b46"/>
+    <text x="120" y="575" fill="#f3c4cd" font-size="20" font-weight="bold" text-anchor="middle">Silence</text>
+  </g>
+  <g id="key-clear">
+    <rect x="236" y="544" width="170" height="48" rx="9" fill="#1a2636" stroke="#2c3e57"/>
+    <text x="321" y="575" fill="#cfe0f2" font-size="20" font-weight="bold" text-anchor="middle">Clear</text>
+  </g>
 </svg>
