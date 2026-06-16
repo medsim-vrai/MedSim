@@ -381,6 +381,14 @@ def test_ecosystem_board_present(client):
         assert mount in html
 
 
+def test_cockpit_wires_resumed_note():
+    """G7 — the cockpit confirms an auto-restored session."""
+    html = (_STATIC.parent / "templates" / "console.html").read_text()
+    assert 'id="resumed-note"' in html
+    js = (_STATIC / "console.js").read_text()
+    assert "function renderResumedNote" in js and "renderResumedNote(snap)" in js
+
+
 def test_scenario_character_variants():
     """Duplicate-titled scenario characters (e.g. a 'concerned wife' in two beds)
     get V1..Vn designations so each is unique to its patient — never shared."""

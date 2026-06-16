@@ -177,8 +177,22 @@ def _session(vault: Any = None) -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         active = None
     if active is not None:
-        return _check("session", "Control session", GREEN,
-                      f"Active: {getattr(active, 'scenario_name', '') or active.id}.")
+        chk = _check("session", "Control session", GREEN,
+                     f"Active: {getattr(active, 'scenario_name', '') or active.id}.")
+        # FR-011 G7 — if this session was auto-restored on boot (or via Resume),
+        # confirm it so the operator trusts the restore + sees how fresh it is.
+        try:
+            lr = session_state.last_resume()
+        except Exception:  # noqa: BLE001
+            lr = None
+        if lr and lr.get("saved_at"):
+            import time as _t
+            hhmm = _t.strftime("%H:%M", _t.localtime(lr["saved_at"]))
+            names = ", ".join(n for n in (lr.get("names") or []) if n) or "last session"
+            chk["detail"] = f"Resumed '{names}' (saved {hhmm})."
+            chk["resumed"] = True
+            chk["saved_at"] = lr["saved_at"]
+        return chk
     snap = None
     try:
         snap = session_state.load_latest()

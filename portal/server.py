@@ -1370,6 +1370,7 @@ async def control_start(
     # instructor just built instead of dropping them at a fresh Setup wizard.
     try:
         from . import session_state
+        session_state.clear_last_resume()   # G7 — a fresh launch isn't a resume
         session_state.persist()
     except Exception:  # noqa: BLE001 — resumability must never block configure
         pass
@@ -3082,6 +3083,11 @@ async def api_room_start(
     # FR-007 — the universal/shared cast (already merged into each encounter's
     # roster by the wizard); kept room-level so surfaces can separate it out.
     room.shared_personas = [p for p in (body.get("shared_personas") or []) if p]
+    try:                                        # a fresh launch isn't a resume (G7)
+        from . import session_state as _ss
+        _ss.clear_last_resume()
+    except Exception:  # noqa: BLE001
+        pass
 
     anthropic_key = (vault.get("ANTHROPIC_API_KEY") or "").strip()
     elevenlabs_key = (vault.get("ELEVENLABS_API_KEY") or "").strip()

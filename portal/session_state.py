@@ -20,6 +20,19 @@ from typing import Any, Callable
 
 VERSION = 1
 
+# FR-011 G7 — the most recent resume() summary (boot or manual), so the cockpit
+# can confirm "Resumed 'X' (saved HH:MM)". Cleared on a fresh launch / clear().
+_last_resume: dict[str, Any] | None = None
+
+
+def last_resume() -> dict[str, Any] | None:
+    return _last_resume
+
+
+def clear_last_resume() -> None:
+    global _last_resume
+    _last_resume = None
+
 
 def _safe(fn: Callable[[], Any]) -> Any:
     try:
@@ -94,14 +107,17 @@ def resume() -> dict[str, Any] | None:
     _safe(lambda: vent_state.restore(blob.get("vent_state") or {}))
     _safe(lambda: vent_faults.restore(blob.get("vent_faults") or {}))
     encs = (blob.get("control_session") or {}).get("encounters") or []
-    return {
+    global _last_resume
+    _last_resume = {
         "saved_at": blob.get("saved_at"),
         "n_encounters": len(encs),
         "names": [e.get("scenario_name") for e in encs if isinstance(e, dict)],
     }
+    return dict(_last_resume)
 
 
 def clear() -> None:
+    clear_last_resume()
     try:
         from . import ehr_db
         ehr_db.clear_session_state()

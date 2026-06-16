@@ -95,6 +95,7 @@
     renderDetail(checks);
     renderTiles(checks);
     renderResumeBanner(snap);
+    renderResumedNote(snap);
     renderMgmt(snap);
     wizSetReadiness(overall);            // keep the wizard's launch gate live
   }
@@ -169,6 +170,20 @@
       banner.hidden = false;
     } else {
       banner.hidden = true;
+    }
+  }
+
+  // G7 — confirm an auto-restored session ("Resumed 'X' (saved HH:MM)").
+  function renderResumedNote(snap) {
+    var note = $("#resumed-note");
+    if (!note) return;
+    var s = sessionCheck(snap);
+    if (s && s.resumed) {
+      var txt = $("#resumed-text");
+      if (txt) txt.textContent = s.detail || "Session resumed.";
+      note.hidden = false;
+    } else {
+      note.hidden = true;
     }
   }
 

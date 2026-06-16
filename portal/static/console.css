@@ -16,6 +16,14 @@
 
 .console-body { margin: 0; background: var(--console-panel-bg); }
 
+/* a11y (G8) — visible keyboard focus on every interactive control. Traffic lights
+   are already shape+colour (glyphs ● ▲ ■), never colour alone. */
+.console a:focus-visible, .console button:focus-visible, .console input:focus-visible,
+.console select:focus-visible, .console textarea:focus-visible, .console [role="tab"]:focus-visible {
+  outline: 3px solid #4c9ffe; outline-offset: 2px; border-radius: 3px;
+}
+.dev-opt, .wiz-persona { min-height: 32px; }   /* comfortable tablet touch targets */
+
 .console {
   display: flex;
   flex-direction: column;
@@ -154,6 +162,13 @@
 }
 .rs-btn:hover { background: #245d99; }
 .rs-btn:disabled { opacity: 0.6; cursor: default; }
+
+.resumed-note {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 16px;
+  background: #e6f5ec; border: 1px solid #b7dcc6; border-left: 4px solid #1f9d55;
+  border-radius: 8px; padding: 9px 14px; font-size: 13px; color: #1b5e3a;
+}
+.resumed-note .rn-icon { font-size: 15px; line-height: 1; }
 
 .cockpit-head { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
 .cockpit-title { font-size: 16px; margin: 0; flex: 1 1 auto; }

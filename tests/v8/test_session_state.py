@@ -131,6 +131,22 @@ def test_resume_restores_physiology_and_vent(isolated_store):
     assert any(f["id"] == "air_leak" for f in vent_faults.active(sid))
 
 
+def test_resume_sets_and_clears_last_resume_marker(isolated_store):
+    """FR-011 G7 — resume() records a marker (saved_at + names) the cockpit uses to
+    confirm the restore; clear_last_resume() (a fresh launch) wipes it."""
+    session_state.clear_last_resume()
+    _populate()
+    assert session_state.persist() is True
+    from portal import control_room
+    control_room.end_active_room()
+    assert session_state.last_resume() is None
+    assert session_state.resume() is not None
+    lr = session_state.last_resume()
+    assert lr and lr["saved_at"] and "ED · Mr. Hayes" in (lr["names"] or [])
+    session_state.clear_last_resume()
+    assert session_state.last_resume() is None
+
+
 def test_nothing_to_save_with_no_active_session(isolated_store):
     assert session_state.snapshot() is None
     assert session_state.persist() is False

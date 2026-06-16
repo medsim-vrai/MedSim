@@ -170,6 +170,20 @@ def test_session_offers_resume_when_a_snapshot_exists(isolated_store):
     assert sess.scenario_name in out["detail"]
 
 
+def test_session_check_confirms_a_resume(monkeypatch):
+    """FR-011 G7 — an auto-restored session is confirmed: 'Resumed X (saved HH:MM)'."""
+    import time
+    import types
+    from portal import control_session, session_state
+    monkeypatch.setattr(control_session, "get_active",
+                        lambda: types.SimpleNamespace(id="s1", scenario_name="ED · Hayes"))
+    monkeypatch.setattr(session_state, "last_resume",
+                        lambda: {"saved_at": time.time(), "names": ["ED · Hayes"]})
+    out = readiness._session()
+    assert out["status"] == readiness.GREEN
+    assert out.get("resumed") is True and "Resumed" in out["detail"] and "Hayes" in out["detail"]
+
+
 def test_session_active_is_green(isolated_store):
     control_session.create_session(
         scenario_name="ED · Live", selected_personas=["P-014"],
