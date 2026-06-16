@@ -174,8 +174,8 @@ def test_patients_rooms_step_comes_first(client):
     html = client.get("/portal/console").text
     first_pill = html.split('data-pill="1"', 1)[1].split("</li>", 1)[0]
     assert "Patients" in first_pill                         # step 1 is patients & rooms
-    # patients pill precedes the scenario pill, which precedes the characters pill
-    assert html.find('data-pill="1"') < html.find("Scenario") < html.find("Characters")
+    # patients pill precedes the scenario pill, which precedes the common-characters pill
+    assert html.find('data-pill="1"') < html.find("Scenario") < html.find("Common characters")
 
 
 def test_ehr_options_rendered_server_side(client):
@@ -237,13 +237,14 @@ def test_bootstrap_samples_carry_a_derived_patient(client):
 def test_devices_step_present(client):
     html = client.get("/portal/console").text
     assert 'data-pill="4"' in html and "Devices" in html      # the 5-step wizard
-    assert 'id="wiz-devices"' in html and 'id="wiz-group"' in html
-    assert 'id="wiz-nurse-station"' in html                    # group resource
+    assert 'id="wiz-devices"' in html and 'id="wiz-common"' in html
+    assert 'id="wiz-nurse-station"' in html                    # common resource
 
 
 def test_bootstrap_carries_device_catalog(client):
     """Devices step reuses the SAME registry: 7 kinds, grouped Basic/Advanced,
-    each with a default model to mint at launch."""
+    each with a default model to mint at launch; med cart flagged common; the PIA
+    relabeled to the call/intercom/alarm name."""
     boot = _bootstrap(client.get("/portal/console").text)
     devs = {d["kind"]: d for d in boot["devices"]}
     assert set(devs) == {"pump_iv", "pump_enteral", "cabinet", "patient_integrated_alarm",
@@ -252,6 +253,27 @@ def test_bootstrap_carries_device_catalog(client):
     assert devs["pump_iv"]["group"] == "Basic"
     assert devs["telemetry_monitor"]["model"] == "generic_tele"   # default model present
     assert all(d["model"] for d in boot["devices"])
+    assert devs["cabinet"]["common"] is True and devs["cabinet"]["name"] == "Med cart"
+    assert devs["patient_integrated_alarm"]["name"] == "Integrated Com & Alarm"
+    assert devs["patient_integrated_alarm"]["common"] is False     # PIA stays per-bed
+
+
+def test_common_devices_section_present(client):
+    html = client.get("/portal/console").text
+    assert "Common characters" in html                            # step relabel
+    for mount in ('id="wiz-common"', 'id="wiz-med-cart"', 'id="wiz-med-cart-mars"',
+                  'id="wiz-ehr-terminal"', 'id="wiz-nurse-station"', 'id="wiz-ehr-confirm-name"'):
+        assert mount in html
+    assert "medical records" in html.lower()                      # patient-in-records confirmation
+
+
+def test_client_wires_common_devices():
+    js = (_STATIC / "console.js").read_text()
+    assert "/api/room/med_cart/register" in js                    # shared cart linked to beds
+    assert "/launch_ehr" in js                                    # medical-records terminal
+    assert "/portal/control/launch_nurse_station" in js           # nursing station
+    assert "function launchRoomCommon" in js and "function commonPlan" in js
+    assert "!d.common" in js                                       # med cart excluded from per-bed
 
 
 def test_client_mints_devices_at_launch():

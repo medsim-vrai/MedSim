@@ -56,7 +56,7 @@
           <ol class="wiz-pills">
             <li class="wiz-pill active" data-pill="1">1&nbsp;·&nbsp;Patients &amp; rooms</li>
             <li class="wiz-pill" data-pill="2">2&nbsp;·&nbsp;Scenario</li>
-            <li class="wiz-pill" data-pill="3">3&nbsp;·&nbsp;Characters</li>
+            <li class="wiz-pill" data-pill="3">3&nbsp;·&nbsp;Common characters</li>
             <li class="wiz-pill" data-pill="4">4&nbsp;·&nbsp;Devices</li>
             <li class="wiz-pill" data-pill="5">5&nbsp;·&nbsp;Review</li>
           </ol>
@@ -87,7 +87,7 @@
           </div>
 
           <div class="wiz-step" data-step="3" hidden>
-            <h2>Characters</h2>
+            <h2>Common characters</h2>
             <p class="muted">Core characters from the chosen scenario(s) are pre-selected — add or
                remove any. In a multi-bed room the non-patient characters here are
                <strong>universal</strong> — a common doctor, allied-health team, etc. shared at
@@ -100,10 +100,20 @@
             <p class="muted">Assign devices to each bed — basic and advanced. They're minted (QR
                codes) at launch and appear in the cockpit ready to scan on the bedside tablets.</p>
             <div id="wiz-devices" class="wiz-devices"></div>
-            <div id="wiz-group" class="wiz-group" hidden>
-              <h3 class="wiz-group-h">Group resources</h3>
-              <label class="wiz-group-opt"><input type="checkbox" id="wiz-nurse-station">
+            <div id="wiz-common" class="wiz-group">
+              <h3 class="wiz-group-h">Common devices</h3>
+              <label class="wiz-group-opt"><input type="checkbox" id="wiz-med-cart">
+                Med cart <span class="muted">— shared dispensing cart</span></label>
+              <label class="wiz-group-sub" id="wiz-med-cart-mars-row" hidden>
+                <input type="checkbox" id="wiz-med-cart-mars" checked>
+                Stock each patient's medication drawer + MAR</label>
+              <label class="wiz-group-opt"><input type="checkbox" id="wiz-ehr-terminal">
+                Medical-records terminal <span class="muted">— shared workstation for patient charts</span></label>
+              <label class="wiz-group-opt" id="wiz-nurse-row" hidden>
+                <input type="checkbox" id="wiz-nurse-station">
                 Nursing station <span class="muted">— one station monitoring every bed</span></label>
+              <p class="muted wiz-ehr-confirm">✓ Each patient is added to
+                <strong id="wiz-ehr-confirm-name">the EHR</strong> medical records on launch.</p>
             </div>
           </div>
 

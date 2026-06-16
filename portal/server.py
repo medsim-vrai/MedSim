@@ -390,17 +390,19 @@ async def mission_control_console(
     from portal.devices import registry as _dev_reg
     _dev_labels = {
         "pump_iv": "IV pump", "pump_enteral": "Enteral pump",
-        "cabinet": "Dispensing cabinet (med cart)", "patient_integrated_alarm": "Patient alarm",
+        "cabinet": "Med cart", "patient_integrated_alarm": "Integrated Com & Alarm",
         "telemetry_monitor": "Telemetry monitor", "vent_monitor": "Vent monitor",
         "ventilator": "Ventilator (controls)",
     }
     _dev_advanced = {"telemetry_monitor", "vent_monitor", "ventilator"}
+    _dev_common = {"cabinet"}      # the med cart is a shared/common device, not per-bed
     devices_catalog = []
     for k in _dev_reg.list_kinds():
         models = _dev_reg.REFERENCE_MODELS.get(k) or []
         devices_catalog.append({
             "kind": k, "name": _dev_labels.get(k, k),
             "group": "Advanced" if k in _dev_advanced else "Basic",
+            "common": k in _dev_common,
             "model": models[0] if models else "",
         })
 

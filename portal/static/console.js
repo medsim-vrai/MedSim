@@ -207,7 +207,11 @@
     WIZ.boot = boot;
     fillPersonas(boot.personas || []);   // EHR + sample <option>s are server-rendered
     var ehrSel = $("#wiz-ehr");
-    if (ehrSel) ehrSel.addEventListener("change", refreshReview);
+    if (ehrSel) ehrSel.addEventListener("change", function () { syncCommonUI(); refreshReview(); });
+    ["wiz-med-cart", "wiz-med-cart-mars", "wiz-ehr-terminal"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener("change", function () { syncCommonUI(); refreshReview(); });
+    });
     var back = $("#wiz-back"), next = $("#wiz-next"), launch = $("#wiz-launch");
     if (back) back.addEventListener("click", function () { wizGoto(WIZ.step - 1); });
     if (next) next.addEventListener("click", function () { wizGoto(WIZ.step + 1); });
@@ -340,7 +344,8 @@
     if (!box) return;
     var prev = bedDevices();                  // preserve per-bed selections by index
     box.textContent = "";
-    var cat = (WIZ.boot && WIZ.boot.devices) || [];
+    var cat = ((WIZ.boot && WIZ.boot.devices) || [])
+      .filter(function (d) { return !d.common; });   // med cart is common, not per-bed
     var n = bedCount();
     for (var i = 0; i < n; i++) {
       var block = document.createElement("div");
@@ -371,9 +376,21 @@
       block.appendChild(grid);
       box.appendChild(block);
     }
-    var group = $("#wiz-group");
-    if (group) group.hidden = !isMulti();     // nursing station = a room (multi) resource
+    syncCommonUI();
     refreshReview();
+  }
+
+  function syncCommonUI() {
+    var nurseRow = $("#wiz-nurse-row");
+    if (nurseRow) nurseRow.hidden = !isMulti();   // nursing station = a room (multi) resource
+    var cart = $("#wiz-med-cart");
+    var marsRow = $("#wiz-med-cart-mars-row");
+    if (marsRow) marsRow.hidden = !(cart && cart.checked);
+    var ehrName = $("#wiz-ehr-confirm-name");
+    var ehrSel = $("#wiz-ehr");
+    if (ehrName && ehrSel && ehrSel.selectedIndex >= 0) {
+      ehrName.textContent = ehrSel.options[ehrSel.selectedIndex].textContent;
+    }
   }
 
   function bedDevices() {
@@ -402,6 +419,63 @@
       });
     });
     return chain;
+  }
+
+  // ── common devices (shared across the session): med cart, records terminal,
+  //    nursing station — minted at launch via existing endpoints. ────────────
+  function commonPlan() {
+    function on(id) { var e = document.getElementById(id); return !!(e && e.checked); }
+    return { medCart: on("wiz-med-cart"), mars: on("wiz-med-cart-mars"),
+             ehrTerminal: on("wiz-ehr-terminal"), nurse: on("wiz-nurse-station") };
+  }
+
+  function launchRoomCommon(encs) {
+    var p = commonPlan();
+    var chain = Promise.resolve();
+    if (p.medCart) {
+      chain = chain.then(function () {
+        if (p.mars) {                                  // one cart linked to every bed -> per-patient MARs
+          return fetch("/api/room/med_cart/register", {
+            method: "POST", credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label: "Med cart",
+              encounter_ids: encs.map(function (e) { return e.encounter_id; }) })
+          }).catch(function () {});
+        }
+        var j = encs[0] && encs[0].join_code;          // plain cart on bed 1
+        return j ? registerDevices(j, ["cabinet"]) : null;
+      });
+    }
+    if (p.ehrTerminal) {
+      encs.forEach(function (e) {                       // registers each patient + an EHR station
+        chain = chain.then(function () {
+          return fetch("/portal/room/encounter/" + encodeURIComponent(e.encounter_id) + "/launch_ehr",
+            { method: "POST", credentials: "same-origin" }).catch(function () {});
+        });
+      });
+    }
+    if (p.nurse) {
+      chain = chain.then(function () {
+        return fetch("/portal/control/launch_nurse_station",
+          { credentials: "same-origin" }).catch(function () {});
+      });
+    }
+    return chain;
+  }
+
+  function launchSingleCommon(joinCode) {
+    var p = commonPlan();
+    var chain = Promise.resolve();
+    if (p.medCart && joinCode) {
+      chain = chain.then(function () { return registerDevices(joinCode, ["cabinet"]); });
+    }
+    if (p.ehrTerminal) {
+      chain = chain.then(function () {                  // registers the patient + an EHR station
+        return fetch("/portal/control/launch_ehr",
+          { method: "POST", credentials: "same-origin" }).catch(function () {});
+      });
+    }
+    return chain;                                       // nursing station = rooms only
   }
 
   // Pre-select the core characters of the chosen scenario(s); never auto-uncheck
@@ -487,8 +561,12 @@
       if (totalDev) {
         rev.appendChild(reviewRow("Devices", totalDev + " across " + devs.length + " bed(s)"));
       }
-      var nsEl = $("#wiz-nurse-station");
-      if (nsEl && nsEl.checked) rev.appendChild(reviewRow("Group", "Nursing station"));
+      var cp = commonPlan();
+      var common = [];
+      if (cp.medCart) common.push("med cart" + (cp.mars ? " + MARs" : ""));
+      if (cp.ehrTerminal) common.push("records terminal");
+      if (cp.nurse && isMulti()) common.push("nursing station");
+      if (common.length) rev.appendChild(reviewRow("Common", common.join(", ")));
     }
     var pill = $("#wiz-readiness-pill");
     if (pill) {
@@ -623,8 +701,11 @@
         if (data && data.ok && data.redirect_url) {
           var kinds = bedDevices()[0] || [];          // mint bed 1's planned devices
           var go = function () { window.location = data.redirect_url; };
-          if (data.join_code && kinds.length) registerDevices(data.join_code, kinds).then(go);
-          else go();
+          var chain = Promise.resolve();
+          if (data.join_code && kinds.length) {
+            chain = chain.then(function () { return registerDevices(data.join_code, kinds); });
+          }
+          chain.then(function () { return launchSingleCommon(data.join_code); }).then(go);
           return;
         }
         var msg = $("#wiz-launch-msg");
@@ -683,13 +764,7 @@
               chain = chain.then(function () { return registerDevices(e.join_code, kinds); });
             }
           });
-          var ns = $("#wiz-nurse-station");
-          if (ns && ns.checked) {                     // group resource: nursing station
-            chain = chain.then(function () {
-              return fetch("/portal/control/launch_nurse_station",
-                { credentials: "same-origin" }).catch(function () {});
-            });
-          }
+          chain = chain.then(function () { return launchRoomCommon(encs); });  // common devices
           chain.then(function () { window.location = "/portal/room"; });
           return;
         }
