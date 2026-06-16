@@ -331,7 +331,7 @@
           <div class="device-qr-grid">
             {% for c in enc.scenario_chars %}
               <div class="device-qr-block">
-                <p class="device-qr-block-label">{{ c.name }}</p>
+                <p class="device-qr-block-label">{{ c.name }}{% if c.variant %} · {{ c.variant }}{% endif %}</p>
                 <p class="device-qr-block-sublabel">{{ c.role }} · {% if c.is_avatar %}avatar (animated){% else %}voice{% endif %}</p>
                 <img class="device-qr-block-img"
                      src="/qr/face/{{ c.id }}.svg?scenario={{ enc.id }}{% if not c.is_avatar %}&amp;mode=audio{% endif %}"

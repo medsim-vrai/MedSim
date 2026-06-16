@@ -321,6 +321,37 @@ def test_room_start_stores_shared_personas_and_qr_sheet_groups(monkeypatch):
         ehr_db._mem_session_state = None
 
 
+def test_qr_sheet_numbers_duplicate_scenario_chars(monkeypatch):
+    """V1..Vn on the live QR sheet: a non-shared character in two beds' scenarios
+    prints as distinct people (· V1 / · V2)."""
+    from portal import server, ehr_db, control_room, auth
+    monkeypatch.setattr(ehr_db, "_conn", lambda: None)
+    ehr_db._mem_session_state = None
+    _ensure_vault()
+    c = TestClient(server.app)
+    c.post("/login", data={"password": TEST_PASSWORD})
+    for v in auth._active_vaults.values():
+        v._data["ANTHROPIC_API_KEY"] = "dummy-key"
+    if control_room.get_active_room() is not None:
+        control_room.end_active_room()
+    try:
+        r = c.post("/api/room/start", json={        # P-004 in BOTH beds, NOT shared
+            "label": "Ward",
+            "encounters": [
+                {"scenario_name": "Bed 1", "persona_id": "P-014",
+                 "personas": ["P-014", "P-004"], "ehr_id": "cyrus"},
+                {"scenario_name": "Bed 2", "persona_id": "P-013",
+                 "personas": ["P-013", "P-004"], "ehr_id": "cyrus"},
+            ]})
+        assert r.status_code == 200 and r.json()["ok"] is True
+        html = c.get("/portal/control/qr_print").text
+        assert "Charge Nurse Kim · V1" in html and "Charge Nurse Kim · V2" in html
+    finally:
+        if control_room.get_active_room() is not None:
+            control_room.end_active_room()
+        ehr_db._mem_session_state = None
+
+
 def test_client_builds_shared_cast():
     """FR-007: the non-patient checked characters become a universal cast added to
     every bed's roster; client sends each encounter a `personas` roster."""

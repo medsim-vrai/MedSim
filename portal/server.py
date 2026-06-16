@@ -4099,6 +4099,25 @@ async def portal_control_qr_print(
         return {"id": pid, "name": pp.get("name") or pid, "role": pp.get("role") or "",
                 "is_avatar": pid in avatar_set}        # avatar (animated) vs voice-only
 
+    # V1..Vn for duplicate scenario-char NAMES across beds (a "concerned wife" in
+    # two patients' scenarios = two people), mirroring the wizard's designation.
+    def _scen_pids(enc):
+        return [pid for pid in (enc.selected_personas or [])
+                if pid != enc.patient_persona_id and pid not in shared_set]
+    _name_count: dict[str, int] = {}
+    for enc in target_encs:
+        for pid in _scen_pids(enc):
+            nm = (library.get_persona(pid) or {}).get("name") or pid
+            _name_count[nm] = _name_count.get(nm, 0) + 1
+    _seen: dict[str, int] = {}
+    _sc_variant: dict[tuple, str] = {}
+    for enc in target_encs:
+        for pid in _scen_pids(enc):
+            nm = (library.get_persona(pid) or {}).get("name") or pid
+            if _name_count[nm] > 1:
+                _seen[nm] = _seen.get(nm, 0) + 1
+                _sc_variant[(enc.id, pid)] = "V" + str(_seen[nm])
+
     enc_views: list[dict[str, Any]] = []
     for enc in target_encs:
         p = library.get_persona(enc.patient_persona_id) if enc.patient_persona_id else None
@@ -4112,10 +4131,11 @@ async def portal_control_qr_print(
                 "device_model": ds.device_model,
                 "label":        ds.label or ds.device_model,
             })
-        scenario_chars = [
-            _char_view(pid) for pid in (enc.selected_personas or [])
-            if pid != enc.patient_persona_id and pid not in shared_set
-        ]
+        scenario_chars = []
+        for pid in _scen_pids(enc):
+            cv = _char_view(pid)
+            cv["variant"] = _sc_variant.get((enc.id, pid), "")
+            scenario_chars.append(cv)
         enc_views.append({
             "id":                  enc.id,
             "join_code":           enc.join_code,
