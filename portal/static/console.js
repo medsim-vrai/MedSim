@@ -205,9 +205,7 @@
     var boot = readBootstrap();
     if (!boot || !document.getElementById("launch-wizard")) return;
     WIZ.boot = boot;
-    fillOptions("#wiz-sample", boot.samples || [], "id", "name");
-    fillOptions("#wiz-ehr", boot.ehrs || [], "id", "name", boot.default_ehr);
-    fillPersonas(boot.personas || []);
+    fillPersonas(boot.personas || []);   // sample + EHR <option>s are server-rendered
     var sampleSel = $("#wiz-sample");
     if (sampleSel) sampleSel.addEventListener("change", function () { applySample(sampleSel.value); });
     var ehrSel = $("#wiz-ehr");
@@ -219,18 +217,6 @@
     if (next) next.addEventListener("click", function () { wizGoto(WIZ.step + 1); });
     if (launch) launch.addEventListener("click", launchScenario);
     wizGoto(1);
-  }
-
-  function fillOptions(sel, rows, idKey, labelKey, selectedId) {
-    var el = $(sel);
-    if (!el) return;
-    rows.forEach(function (r) {
-      var o = document.createElement("option");
-      o.value = r[idKey];
-      o.textContent = r[labelKey];
-      if (selectedId && r[idKey] === selectedId) o.selected = true;
-      el.appendChild(o);
-    });
   }
 
   function fillPersonas(personas) {

@@ -48,16 +48,31 @@
       <section class="console-panel" data-panel="setup" role="tabpanel" aria-label="Set up">
         <div class="wizard" id="launch-wizard">
           <ol class="wiz-pills">
-            <li class="wiz-pill active" data-pill="1">1&nbsp;·&nbsp;Scenario</li>
-            <li class="wiz-pill" data-pill="2">2&nbsp;·&nbsp;Patients &amp; rooms</li>
+            <li class="wiz-pill active" data-pill="1">1&nbsp;·&nbsp;Patients &amp; rooms</li>
+            <li class="wiz-pill" data-pill="2">2&nbsp;·&nbsp;Scenario</li>
             <li class="wiz-pill" data-pill="3">3&nbsp;·&nbsp;Characters</li>
             <li class="wiz-pill" data-pill="4">4&nbsp;·&nbsp;Review</li>
           </ol>
 
           <div class="wiz-step" data-step="1">
+            <h2>Patients &amp; rooms</h2>
+            <label class="wiz-field">EHR for this patient
+              <select id="wiz-ehr">
+                {% for e in ehrs %}<option value="{{ e.id }}"{% if e.id == default_ehr %} selected{% endif %}>{{ e.name }}</option>{% endfor %}
+              </select>
+            </label>
+            <p class="muted">Single-patient launch — one patient, one EHR. Multi-patient rooms
+               are built in the ecosystem board (G6) or the
+               <a href="/portal/control/setup">classic room ↗</a>.</p>
+          </div>
+
+          <div class="wiz-step" data-step="2" hidden>
             <h2>Scenario</h2>
             <label class="wiz-field">Start from a sample
-              <select id="wiz-sample"><option value="">— blank scenario —</option></select>
+              <select id="wiz-sample">
+                <option value="">— blank scenario —</option>
+                {% for s in samples %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+              </select>
             </label>
             <label class="wiz-field">Scenario name
               <input id="wiz-name" type="text" placeholder="e.g. ED · Mr. Hayes">
@@ -65,15 +80,6 @@
             <label class="wiz-field">Instructor notes <span class="muted">(not shown to trainees)</span>
               <textarea id="wiz-notes" rows="3"></textarea>
             </label>
-          </div>
-
-          <div class="wiz-step" data-step="2" hidden>
-            <h2>Patients &amp; rooms</h2>
-            <label class="wiz-field">EHR
-              <select id="wiz-ehr"></select>
-            </label>
-            <p class="muted">Single-patient launch. Multi-patient rooms are configured in the
-               ecosystem board (G6) or the <a href="/portal/control/setup">classic room ↗</a>.</p>
           </div>
 
           <div class="wiz-step" data-step="3" hidden>

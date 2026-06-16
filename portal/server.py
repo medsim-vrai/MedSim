@@ -358,19 +358,21 @@ async def mission_control_console(
         mode = "operate"
     # FR-011 G5 — bootstrap the Launch Wizard from the SAME catalogs the classic
     # control room uses (each sample carries its FULL persona roster), so there's
-    # no divergent data source. Samples + EHRs have no GET API (template-injected,
-    # exactly like control.html); personas trimmed to what the picker shows.
-    bootstrap = {
-        "samples": library.list_sample_scenarios(),
-        "ehrs": [{"id": e["id"], "name": e["name"]} for e in ehr_registry.REGISTRY],
-        "default_ehr": ehr_registry.default_id(),
-        "personas": [
-            {"id": p["id"], "name": p.get("name", ""), "role": p.get("role", "")}
-            for p in library.list_personas()
-        ],
-    }
-    return templates.TemplateResponse(
-        request, "console.html", {"mode": mode, "bootstrap": bootstrap})
+    # no divergent data source. The sample + EHR <option>s are rendered SERVER-SIDE
+    # (so the pickers work even with stale/blocked console.js); the JSON blob below
+    # carries the full sample objects (for roster auto-fill) + the persona catalog.
+    samples = library.list_sample_scenarios()
+    ehrs = [{"id": e["id"], "name": e["name"]} for e in ehr_registry.REGISTRY]
+    default_ehr = ehr_registry.default_id()
+    personas = [
+        {"id": p["id"], "name": p.get("name", ""), "role": p.get("role", "")}
+        for p in library.list_personas()
+    ]
+    bootstrap = {"samples": samples, "ehrs": ehrs,
+                 "default_ehr": default_ehr, "personas": personas}
+    return templates.TemplateResponse(request, "console.html", {
+        "mode": mode, "bootstrap": bootstrap,
+        "samples": samples, "ehrs": ehrs, "default_ehr": default_ehr})
 
 
 @app.post("/portal/examples/load")

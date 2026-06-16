@@ -168,6 +168,28 @@ def test_wizard_mounts_and_bootstrap_present(client):
         assert mount in html
 
 
+def test_patients_rooms_step_comes_first(client):
+    """Per field feedback: patients & rooms must precede scenario + characters."""
+    html = client.get("/portal/console").text
+    first_pill = html.split('data-pill="1"', 1)[1].split("</li>", 1)[0]
+    assert "Patients" in first_pill                         # step 1 is patients & rooms
+    # patients pill precedes the scenario pill, which precedes the characters pill
+    assert html.find('data-pill="1"') < html.find("Scenario") < html.find("Characters")
+
+
+def test_ehr_and_sample_options_rendered_server_side(client):
+    """The fix for 'no place to select the EHR': options are rendered server-side,
+    so the pickers work even with stale/blocked console.js (not JS-populated)."""
+    html = client.get("/portal/console").text
+    for ehr in ("helix", "cyrus", "meridian"):
+        assert 'value="%s"' % ehr in html                  # EHR <option>s present
+    assert "Helix Health" in html
+    boot = _bootstrap(html)
+    assert 'value="%s"' % boot["samples"][0]["id"] in html  # sample <option>s present
+    # the EHR select is no longer populated by JS (would double the options)
+    assert "fillOptions" not in (_STATIC / "console.js").read_text()
+
+
 def test_bootstrap_carries_full_sample_roster(client):
     """The wizard auto-fills from the SAME sample catalog the classic room uses,
     and each sample carries its FULL persona roster (not just a seed)."""
