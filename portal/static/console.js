@@ -216,6 +216,13 @@
     if (back) back.addEventListener("click", function () { wizGoto(WIZ.step - 1); });
     if (next) next.addEventListener("click", function () { wizGoto(WIZ.step + 1); });
     if (launch) launch.addEventListener("click", launchScenario);
+    var radios = document.querySelectorAll('input[name="wiz-mode"]');
+    for (var i = 0; i < radios.length; i++) {
+      radios[i].addEventListener("change", function () { setMode(this.value); });
+    }
+    var addBed = $("#wiz-add-bed");
+    if (addBed) addBed.addEventListener("click", function () { addBedRow(); });
+    setMode("single");
     wizGoto(1);
   }
 
@@ -243,18 +250,108 @@
     });
   }
 
+  // ── single ↔ multi-patient mode ───────────────────────────────────────────
+  function toggleHidden(sel, hidden) {
+    var el = $(sel);
+    if (el) el.hidden = !!hidden;
+  }
+
+  function setMode(mode) {
+    WIZ.mode = (mode === "multi") ? "multi" : "single";
+    var multi = WIZ.mode === "multi";
+    toggleHidden("#wiz-single", multi);
+    toggleHidden("#wiz-multi", !multi);
+    toggleHidden("#wiz-name-field", multi);            // each bed names itself
+    toggleHidden("#wiz-scenario-multi-note", !multi);
+    toggleHidden("#wiz-personas", multi);
+    toggleHidden("#wiz-chars-single-note", multi);
+    toggleHidden("#wiz-chars-multi-note", !multi);
+    var radios = document.querySelectorAll('input[name="wiz-mode"]');
+    for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === WIZ.mode);
+    if (multi && roomBeds().length === 0) addBedRow();
+    refreshReview();
+  }
+
+  function buildSelect(cls, rows, labelFn, selectedId) {
+    var sel = document.createElement("select");
+    sel.className = cls;
+    rows.forEach(function (r) {
+      var o = document.createElement("option");
+      o.value = r.id;
+      o.textContent = labelFn(r);
+      if (selectedId && r.id === selectedId) o.selected = true;
+      sel.appendChild(o);
+    });
+    return sel;
+  }
+
+  function addBedRow(preset) {
+    var box = $("#wiz-beds");
+    if (!box) return;
+    var boot = WIZ.boot || {};
+    var n = box.querySelectorAll(".wiz-bed").length + 1;
+    var row = document.createElement("div");
+    row.className = "wiz-bed";
+
+    var name = document.createElement("input");
+    name.type = "text"; name.className = "bed-name";
+    name.placeholder = "Bed " + n + " — name";
+    name.value = (preset && preset.name) || "";
+    name.addEventListener("input", refreshReview);
+
+    var persona = buildSelect("bed-persona", boot.personas || [],
+      function (p) { return p.name + (p.role ? " — " + p.role : ""); }, preset && preset.persona);
+    persona.addEventListener("change", refreshReview);
+
+    var ehr = buildSelect("bed-ehr", boot.ehrs || [],
+      function (e) { return e.name; }, (preset && preset.ehr) || boot.default_ehr);
+    ehr.addEventListener("change", refreshReview);
+
+    var rm = document.createElement("button");
+    rm.type = "button"; rm.className = "bed-remove";
+    rm.setAttribute("aria-label", "Remove bed"); rm.textContent = "×";
+    rm.addEventListener("click", function () {
+      if (row.parentNode) row.parentNode.removeChild(row);
+      refreshReview();
+    });
+
+    row.appendChild(name); row.appendChild(persona); row.appendChild(ehr); row.appendChild(rm);
+    box.appendChild(row);
+    refreshReview();
+  }
+
+  function roomBeds() {
+    return Array.prototype.slice.call(document.querySelectorAll("#wiz-beds .wiz-bed"))
+      .map(function (row) {
+        return {
+          name: (row.querySelector(".bed-name").value || "").trim(),
+          persona: row.querySelector(".bed-persona").value,
+          ehr: row.querySelector(".bed-ehr").value
+        };
+      });
+  }
+  function validBeds() {
+    return roomBeds().filter(function (b) { return b.name && b.persona; });
+  }
+
   function applySample(id) {
     var boot = WIZ.boot || {};
     var found = (boot.samples || []).filter(function (x) { return x.id === id; });
     var s = found.length ? found[0] : null;
     WIZ.sample = s;
-    var nameEl = $("#wiz-name"), notesEl = $("#wiz-notes");
-    if (nameEl) nameEl.value = s ? (s.name || "") : "";
+    var notesEl = $("#wiz-notes");
     if (notesEl) notesEl.value = s ? (s.notes || "") : "";
-    var ids = s ? (s.personas || []) : [];          // FULL roster from the sample
-    document.querySelectorAll(".wp-sel").forEach(function (cb) {
-      cb.checked = ids.indexOf(cb.value) >= 0;
-    });
+    if (WIZ.mode === "multi") {
+      var labelEl = $("#wiz-room-label");                 // suggest the room label
+      if (labelEl && s && !labelEl.value) labelEl.value = s.name || "";
+    } else {
+      var nameEl = $("#wiz-name");
+      if (nameEl) nameEl.value = s ? (s.name || "") : "";
+      var ids = s ? (s.personas || []) : [];              // FULL roster from the sample
+      document.querySelectorAll(".wp-sel").forEach(function (cb) {
+        cb.checked = ids.indexOf(cb.value) >= 0;
+      });
+    }
     refreshReview();
   }
 
@@ -269,17 +366,20 @@
       .filter(function (id) { return chosen.indexOf(id) >= 0; });
   }
 
-  function wizardValid() {
+  function wizardValid() {                              // single-patient validity
     var nameEl = $("#wiz-name");
     var name = (nameEl && nameEl.value || "").trim();
     return !!name && selectedPersonas().length > 0;
+  }
+  function modeValid() {
+    return WIZ.mode === "multi" ? validBeds().length > 0 : wizardValid();
   }
 
   // Launch gate (unit-checkable rule): a red readiness check blocks launch; a
   // complete form + non-red readiness allows it (amber = caution, not a blocker —
   // e.g. a cert-SAN drift must not permanently bar a local sim from starting).
   function launchAllowed(overall) {
-    return overall !== "red" && wizardValid();
+    return overall !== "red" && modeValid();
   }
 
   function reviewRow(k, v) {
@@ -293,17 +393,28 @@
   function refreshReview() {
     var rev = $("#wiz-review");
     if (rev) {
-      var nameEl = $("#wiz-name");
-      var name = (nameEl && nameEl.value || "").trim() || "—";
-      var ehrEl = $("#wiz-ehr");
-      var ehr = ehrEl ? ehrEl.value : "";
-      var n = selectedPersonas().length;
       rev.textContent = "";
-      rev.appendChild(reviewRow("Scenario", name));
-      rev.appendChild(reviewRow("EHR", ehr || "—"));
-      rev.appendChild(reviewRow("Characters", n ? (n + " selected") : "none — pick at least one"));
-      var avs = selectedAvatars().length;
-      if (avs) rev.appendChild(reviewRow("Avatars", avs + " with a face"));
+      if (WIZ.mode === "multi") {
+        var labelEl = $("#wiz-room-label");
+        rev.appendChild(reviewRow("Mode", "Multi-patient room"));
+        rev.appendChild(reviewRow("Room", (labelEl && labelEl.value || "").trim() || "Room"));
+        var beds = validBeds();
+        if (!beds.length) rev.appendChild(reviewRow("Beds", "add at least one bed (name + patient)"));
+        beds.forEach(function (b, i) {
+          rev.appendChild(reviewRow("Bed " + (i + 1), b.name + " · " + b.persona + " · " + b.ehr));
+        });
+      } else {
+        var nameEl = $("#wiz-name");
+        var name = (nameEl && nameEl.value || "").trim() || "—";
+        var ehrEl = $("#wiz-ehr");
+        var n = selectedPersonas().length;
+        rev.appendChild(reviewRow("Mode", "Single patient"));
+        rev.appendChild(reviewRow("Scenario", name));
+        rev.appendChild(reviewRow("EHR", (ehrEl ? ehrEl.value : "") || "—"));
+        rev.appendChild(reviewRow("Characters", n ? (n + " selected") : "none — pick at least one"));
+        var avs = selectedAvatars().length;
+        if (avs) rev.appendChild(reviewRow("Avatars", avs + " with a face"));
+      }
     }
     var pill = $("#wiz-readiness-pill");
     if (pill) {
@@ -314,10 +425,17 @@
     if (btn) btn.disabled = !launchAllowed(WIZ.overall);
     var msg = $("#wiz-launch-msg");
     if (msg) {
-      if (!wizardValid()) msg.textContent = "Add a scenario name and select at least one character.";
-      else if (WIZ.overall === "red") msg.textContent = "Readiness is red — resolve the blocking check before launching.";
-      else if (WIZ.overall === "amber") msg.textContent = "Readiness amber — you can launch; review the warnings in the cockpit.";
-      else msg.textContent = "Ready to launch.";
+      if (!modeValid()) {
+        msg.textContent = WIZ.mode === "multi"
+          ? "Add at least one bed with a name and a patient."
+          : "Add a scenario name and select at least one character.";
+      } else if (WIZ.overall === "red") {
+        msg.textContent = "Readiness is red — resolve the blocking check before launching.";
+      } else if (WIZ.overall === "amber") {
+        msg.textContent = "Readiness amber — you can launch; review the warnings in the cockpit.";
+      } else {
+        msg.textContent = "Ready to launch.";
+      }
     }
   }
 
@@ -328,6 +446,7 @@
 
   function launchScenario() {
     if (!launchAllowed(WIZ.overall)) return;
+    if (WIZ.mode === "multi") { launchRoom(); return; }
     var btn = $("#wiz-launch");
     if (btn) { btn.disabled = true; btn.textContent = "Launching…"; }
     var s = WIZ.sample;
@@ -355,6 +474,43 @@
       .catch(function () {
         var msg = $("#wiz-launch-msg");
         if (msg) msg.textContent = "Launch failed (network).";
+        if (btn) { btn.disabled = false; btn.textContent = "Launch scenario"; }
+      });
+  }
+
+  function launchRoom() {
+    var btn = $("#wiz-launch");
+    if (btn) { btn.disabled = true; btn.textContent = "Launching…"; }
+    var s = WIZ.sample;
+    var notes = ($("#wiz-notes") && $("#wiz-notes").value || "").trim();
+    var label = ($("#wiz-room-label") && $("#wiz-room-label").value || "").trim() || "Room";
+    var encounters = validBeds().map(function (b) {
+      var enc = { scenario_name: b.name, persona_id: b.persona,
+                  ehr_id: b.ehr, scenario_notes: notes };
+      if (s) {
+        enc.scenario_text = s.scenario_text || "";
+        if (s.program_id) enc.program_id = s.program_id;
+        if (s.week !== undefined && s.week !== null) enc.week = s.week;
+        enc.modules = s.modules || [];
+      }
+      return enc;
+    });
+    fetch("/api/room/start", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: label, encounters: encounters })
+    })
+      .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && data.ok) { window.location = "/portal/room"; return; }
+        var msg = $("#wiz-launch-msg");
+        if (msg) msg.textContent = (data && data.message) || "Room launch failed.";
+        if (btn) { btn.disabled = false; btn.textContent = "Launch scenario"; }
+      })
+      .catch(function () {
+        var msg = $("#wiz-launch-msg");
+        if (msg) msg.textContent = "Room launch failed (network).";
         if (btn) { btn.disabled = false; btn.textContent = "Launch scenario"; }
       });
   }

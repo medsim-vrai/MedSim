@@ -237,6 +237,31 @@
 }
 .wiz-persona input { margin: 0; }
 
+.wiz-mode { display: flex; gap: 8px; margin: 0 0 16px; }
+.wiz-mode-opt {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: #3a4855;
+  border: 1px solid #c4cfd9; border-radius: 8px; padding: 8px 14px;
+}
+.wiz-mode-opt input { margin: 0; }
+
+.wiz-beds { display: grid; gap: 8px; margin: 0 0 12px; }
+.wiz-bed {
+  display: grid; gap: 8px; align-items: center;
+  grid-template-columns: 1.3fr 1.3fr 1fr auto;
+  border: 1px solid #e1e7ed; border-radius: 8px; padding: 8px 10px; background: #fbfcfd;
+}
+.wiz-bed input, .wiz-bed select {
+  font: inherit; font-weight: 400; color: #1b2733;
+  border: 1px solid #c4cfd9; border-radius: 6px; padding: 7px 9px; width: 100%; box-sizing: border-box;
+}
+.wiz-bed .bed-remove {
+  cursor: pointer; border: 1px solid #d9b9b9; background: #fbedec; color: #a32d2d;
+  border-radius: 6px; width: 30px; height: 30px; font-size: 16px; line-height: 1;
+}
+.wiz-bed .bed-remove:hover { background: #f6dcda; }
+@media (max-width: 640px) { .wiz-bed { grid-template-columns: 1fr 1fr; } }
+
 .wiz-review { display: grid; gap: 6px; margin: 0 0 16px; }
 .wr-row { display: flex; gap: 12px; font-size: 13px; border-bottom: 1px solid #eef2f5; padding-bottom: 6px; }
 .wr-k { width: 110px; color: #6b7a88; font-weight: 600; }

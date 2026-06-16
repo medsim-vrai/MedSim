@@ -56,14 +56,28 @@
 
           <div class="wiz-step" data-step="1">
             <h2>Patients &amp; rooms</h2>
-            <label class="wiz-field">EHR for this patient
-              <select id="wiz-ehr">
-                {% for e in ehrs %}<option value="{{ e.id }}"{% if e.id == default_ehr %} selected{% endif %}>{{ e.name }}</option>{% endfor %}
-              </select>
-            </label>
-            <p class="muted">Single-patient launch — one patient, one EHR. Multi-patient rooms
-               are built in the ecosystem board (G6) or the
-               <a href="/portal/control/setup">classic room ↗</a>.</p>
+            <div class="wiz-mode" role="radiogroup" aria-label="Patient mode">
+              <label class="wiz-mode-opt"><input type="radio" name="wiz-mode" value="single" checked> Single patient</label>
+              <label class="wiz-mode-opt"><input type="radio" name="wiz-mode" value="multi"> Multi-patient room</label>
+            </div>
+
+            <div id="wiz-single">
+              <label class="wiz-field">EHR for this patient
+                <select id="wiz-ehr">
+                  {% for e in ehrs %}<option value="{{ e.id }}"{% if e.id == default_ehr %} selected{% endif %}>{{ e.name }}</option>{% endfor %}
+                </select>
+              </label>
+              <p class="muted">One patient with a supporting cast (set in Characters), in one EHR.</p>
+            </div>
+
+            <div id="wiz-multi" hidden>
+              <label class="wiz-field">Room label
+                <input id="wiz-room-label" type="text" placeholder="e.g. Morning shift — Ward A">
+              </label>
+              <div id="wiz-beds" class="wiz-beds"></div>
+              <button type="button" id="wiz-add-bed" class="wiz-btn">+ Add bed</button>
+              <p class="muted">Each bed is one patient placed in its own EHR; each gets its own join code.</p>
+            </div>
           </div>
 
           <div class="wiz-step" data-step="2" hidden>
@@ -74,19 +88,23 @@
                 {% for s in samples %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
               </select>
             </label>
-            <label class="wiz-field">Scenario name
+            <label class="wiz-field" id="wiz-name-field">Scenario name
               <input id="wiz-name" type="text" placeholder="e.g. ED · Mr. Hayes">
             </label>
             <label class="wiz-field">Instructor notes <span class="muted">(not shown to trainees)</span>
               <textarea id="wiz-notes" rows="3"></textarea>
             </label>
+            <p class="muted" id="wiz-scenario-multi-note" hidden>Shared across every bed in the
+               room — each bed is named in Patients &amp; rooms.</p>
           </div>
 
           <div class="wiz-step" data-step="3" hidden>
             <h2>Characters</h2>
-            <p class="muted">Pre-filled from the sample's roster — adjust as needed. Toggle
-               “avatar” to give a character a face.</p>
+            <p class="muted" id="wiz-chars-single-note">Pre-filled from the sample's roster — adjust
+               as needed. Toggle “avatar” to give a character a face.</p>
             <div id="wiz-personas" class="wiz-personas"></div>
+            <p class="muted" id="wiz-chars-multi-note" hidden>Each bed's patient is set in
+               Patients &amp; rooms. Add supporting characters as device stations in the cockpit.</p>
           </div>
 
           <div class="wiz-step" data-step="4" hidden>
