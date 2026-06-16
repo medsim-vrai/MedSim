@@ -218,26 +218,35 @@ def test_wizard_posts_the_same_body_as_classic_start():
     assert "function launchAllowed" in js and '"red"' in js
 
 
-def test_multi_patient_toggle_and_bed_builder_present(client):
+def test_multi_patient_toggle_and_bed_count_present(client):
     html = client.get("/portal/console").text
     assert 'name="wiz-mode"' in html and 'value="single"' in html and 'value="multi"' in html
-    for mount in ('id="wiz-single"', 'id="wiz-multi"', 'id="wiz-beds"',
-                  'id="wiz-add-bed"', 'id="wiz-room-label"'):
+    for mount in ('id="wiz-single"', 'id="wiz-multi"', 'id="wiz-room-label"',
+                  'id="wiz-bed-count"', 'id="wiz-scenario-multi"', 'id="wiz-bed-scenarios"'):
         assert mount in html
+
+
+def test_bootstrap_samples_carry_a_derived_patient(client):
+    """Patients come from scenario selection: each sample exposes its patient_id
+    (the roleGroup=Patient persona), so picking a bed's scenario picks its patient."""
+    boot = _bootstrap(client.get("/portal/console").text)
+    sepsis = [s for s in boot["samples"] if s["id"] == "ed-sepsis-delirium"]
+    assert sepsis and sepsis[0]["patient_id"] == "P-014"     # Mr. Hayes
+    assert all(s.get("patient_id") for s in boot["samples"])
 
 
 def test_client_wires_multi_room_launch():
     js = (_STATIC / "console.js").read_text()
     assert "/api/room/start" in js                 # multi launches via the room endpoint
-    for fn in ("function launchRoom", "function addBedRow", "function setMode",
-               "function validBeds", "function modeValid"):
+    for fn in ("function launchRoom", "function rebuildBedScenarios", "function setMode",
+               "function validBeds", "function modeValid", "function bedCount"):
         assert fn in js
-    assert "persona_id" in js and "encounters" in js and "ehr_id" in js
+    assert "persona_id" in js and "patient_id" in js and "encounters" in js
 
 
 def test_multi_patient_room_launch_creates_room(monkeypatch):
-    """End-to-end: a multi-bed payload posted to /api/room/start (per-bed patient +
-    EHR) creates a room with one encounter per bed."""
+    """End-to-end: a multi-bed payload posted to /api/room/start — one shared EHR
+    for the session, one patient per bed — creates a room with one encounter/bed."""
     from portal import server, ehr_db, control_room, auth
     monkeypatch.setattr(ehr_db, "_conn", lambda: None)
     ehr_db._mem_session_state = None
@@ -252,15 +261,15 @@ def test_multi_patient_room_launch_creates_room(monkeypatch):
         r = c.post("/api/room/start", json={
             "label": "Test ward",
             "encounters": [
-                {"scenario_name": "Bed 1 — Diaz", "persona_id": "P-001", "ehr_id": "helix"},
-                {"scenario_name": "Bed 2 — Kano", "persona_id": "P-004", "ehr_id": "cyrus"},
+                {"scenario_name": "Bed 1 · ED sepsis", "persona_id": "P-014", "ehr_id": "cyrus"},
+                {"scenario_name": "Bed 2 · Geri GOC", "persona_id": "P-013", "ehr_id": "cyrus"},
             ],
         })
         assert r.status_code == 200 and r.json()["ok"] is True
         room = control_room.get_active_room()
         assert room is not None and len(room.encounters) == 2
         encs = room.encounters.values() if hasattr(room.encounters, "values") else room.encounters
-        assert {e.ehr_id for e in encs} == {"helix", "cyrus"}   # per-bed EHR
+        assert {e.ehr_id for e in encs} == {"cyrus"}          # one EHR for the session
     finally:
         if control_room.get_active_room() is not None:
             control_room.end_active_room()

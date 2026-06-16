@@ -361,12 +361,29 @@ async def mission_control_console(
     # no divergent data source. The sample + EHR <option>s are rendered SERVER-SIDE
     # (so the pickers work even with stale/blocked console.js); the JSON blob below
     # carries the full sample objects (for roster auto-fill) + the persona catalog.
-    samples = library.list_sample_scenarios()
+    persona_recs = library.list_personas()
+    by_id = {p["id"]: p for p in persona_recs}
+
+    def _patient_of(sample):
+        # Each sample's patient = its persona with roleGroup "Patient" (exactly one
+        # in the catalog); used so picking a scenario for a bed picks its patient.
+        for pid in (sample.get("personas") or []):
+            if (by_id.get(pid, {}).get("roleGroup") or "") == "Patient":
+                return pid
+        ids = sample.get("personas") or []
+        return ids[0] if ids else None
+
+    samples = []
+    for s in library.list_sample_scenarios():
+        s2 = dict(s)
+        s2["patient_id"] = _patient_of(s)
+        samples.append(s2)
     ehrs = [{"id": e["id"], "name": e["name"]} for e in ehr_registry.REGISTRY]
     default_ehr = ehr_registry.default_id()
     personas = [
-        {"id": p["id"], "name": p.get("name", ""), "role": p.get("role", "")}
-        for p in library.list_personas()
+        {"id": p["id"], "name": p.get("name", ""), "role": p.get("role", ""),
+         "roleGroup": p.get("roleGroup", "")}
+        for p in persona_recs
     ]
     bootstrap = {"samples": samples, "ehrs": ehrs,
                  "default_ehr": default_ehr, "personas": personas}

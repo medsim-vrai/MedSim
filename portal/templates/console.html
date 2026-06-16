@@ -56,46 +56,54 @@
 
           <div class="wiz-step" data-step="1">
             <h2>Patients &amp; rooms</h2>
+            <label class="wiz-field">EHR for this session
+              <select id="wiz-ehr">
+                {% for e in ehrs %}<option value="{{ e.id }}"{% if e.id == default_ehr %} selected{% endif %}>{{ e.name }}</option>{% endfor %}
+              </select>
+            </label>
+            <p class="muted">One EHR for the whole training session — every patient is in it.</p>
+
             <div class="wiz-mode" role="radiogroup" aria-label="Patient mode">
               <label class="wiz-mode-opt"><input type="radio" name="wiz-mode" value="single" checked> Single patient</label>
               <label class="wiz-mode-opt"><input type="radio" name="wiz-mode" value="multi"> Multi-patient room</label>
             </div>
 
             <div id="wiz-single">
-              <label class="wiz-field">EHR for this patient
-                <select id="wiz-ehr">
-                  {% for e in ehrs %}<option value="{{ e.id }}"{% if e.id == default_ehr %} selected{% endif %}>{{ e.name }}</option>{% endfor %}
-                </select>
-              </label>
-              <p class="muted">One patient with a supporting cast (set in Characters), in one EHR.</p>
+              <p class="muted">One patient with a supporting cast (chosen in Characters).</p>
             </div>
 
             <div id="wiz-multi" hidden>
               <label class="wiz-field">Room label
                 <input id="wiz-room-label" type="text" placeholder="e.g. Morning shift — Ward A">
               </label>
-              <div id="wiz-beds" class="wiz-beds"></div>
-              <button type="button" id="wiz-add-bed" class="wiz-btn">+ Add bed</button>
-              <p class="muted">Each bed is one patient placed in its own EHR; each gets its own join code.</p>
+              <label class="wiz-field">Number of beds
+                <input id="wiz-bed-count" type="number" min="1" max="12" value="2">
+              </label>
+              <p class="muted">All beds use the EHR above. Pick each bed's patient in the next step
+                 (Scenario) — each bed gets its own join code.</p>
             </div>
           </div>
 
           <div class="wiz-step" data-step="2" hidden>
             <h2>Scenario</h2>
-            <label class="wiz-field">Start from a sample
-              <select id="wiz-sample">
-                <option value="">— blank scenario —</option>
-                {% for s in samples %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-              </select>
-            </label>
-            <label class="wiz-field" id="wiz-name-field">Scenario name
-              <input id="wiz-name" type="text" placeholder="e.g. ED · Mr. Hayes">
-            </label>
+            <div id="wiz-scenario-single">
+              <label class="wiz-field">Start from a sample
+                <select id="wiz-sample">
+                  <option value="">— blank scenario —</option>
+                  {% for s in samples %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+                </select>
+              </label>
+              <label class="wiz-field" id="wiz-name-field">Scenario name
+                <input id="wiz-name" type="text" placeholder="e.g. ED · Mr. Hayes">
+              </label>
+            </div>
+            <div id="wiz-scenario-multi" hidden>
+              <p class="muted">Pick a patient scenario for each bed — that selects the bed's patient.</p>
+              <div id="wiz-bed-scenarios" class="wiz-bed-scenarios"></div>
+            </div>
             <label class="wiz-field">Instructor notes <span class="muted">(not shown to trainees)</span>
               <textarea id="wiz-notes" rows="3"></textarea>
             </label>
-            <p class="muted" id="wiz-scenario-multi-note" hidden>Shared across every bed in the
-               room — each bed is named in Patients &amp; rooms.</p>
           </div>
 
           <div class="wiz-step" data-step="3" hidden>

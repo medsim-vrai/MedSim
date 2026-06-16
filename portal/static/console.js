@@ -220,8 +220,11 @@
     for (var i = 0; i < radios.length; i++) {
       radios[i].addEventListener("change", function () { setMode(this.value); });
     }
-    var addBed = $("#wiz-add-bed");
-    if (addBed) addBed.addEventListener("click", function () { addBedRow(); });
+    var bedCountEl = $("#wiz-bed-count");
+    if (bedCountEl) {
+      bedCountEl.addEventListener("change", rebuildBedScenarios);
+      bedCountEl.addEventListener("input", rebuildBedScenarios);
+    }
     setMode("single");
     wizGoto(1);
   }
@@ -261,97 +264,85 @@
     var multi = WIZ.mode === "multi";
     toggleHidden("#wiz-single", multi);
     toggleHidden("#wiz-multi", !multi);
-    toggleHidden("#wiz-name-field", multi);            // each bed names itself
-    toggleHidden("#wiz-scenario-multi-note", !multi);
+    toggleHidden("#wiz-scenario-single", multi);
+    toggleHidden("#wiz-scenario-multi", !multi);
     toggleHidden("#wiz-personas", multi);
     toggleHidden("#wiz-chars-single-note", multi);
     toggleHidden("#wiz-chars-multi-note", !multi);
     var radios = document.querySelectorAll('input[name="wiz-mode"]');
     for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === WIZ.mode);
-    if (multi && roomBeds().length === 0) addBedRow();
+    if (multi) rebuildBedScenarios();
     refreshReview();
   }
 
-  function buildSelect(cls, rows, labelFn, selectedId) {
+  function bedCount() {
+    var el = $("#wiz-bed-count");
+    var n = el ? parseInt(el.value, 10) : 1;
+    if (!(n >= 1)) n = 1;
+    if (n > 12) n = 12;
+    return n;
+  }
+
+  function buildSampleSelect(selectedId) {
+    var boot = WIZ.boot || {};
     var sel = document.createElement("select");
-    sel.className = cls;
-    rows.forEach(function (r) {
+    sel.className = "bed-scn-sel";
+    var blank = document.createElement("option");
+    blank.value = ""; blank.textContent = "— pick a patient scenario —";
+    sel.appendChild(blank);
+    (boot.samples || []).forEach(function (s) {
       var o = document.createElement("option");
-      o.value = r.id;
-      o.textContent = labelFn(r);
-      if (selectedId && r.id === selectedId) o.selected = true;
+      o.value = s.id; o.textContent = s.name;
+      if (selectedId && s.id === selectedId) o.selected = true;
       sel.appendChild(o);
     });
     return sel;
   }
 
-  function addBedRow(preset) {
-    var box = $("#wiz-beds");
+  // One scenario picker per bed; the bed's patient is derived from the sample.
+  function rebuildBedScenarios() {
+    var box = $("#wiz-bed-scenarios");
     if (!box) return;
-    var boot = WIZ.boot || {};
-    var n = box.querySelectorAll(".wiz-bed").length + 1;
-    var row = document.createElement("div");
-    row.className = "wiz-bed";
-
-    var name = document.createElement("input");
-    name.type = "text"; name.className = "bed-name";
-    name.placeholder = "Bed " + n + " — name";
-    name.value = (preset && preset.name) || "";
-    name.addEventListener("input", refreshReview);
-
-    var persona = buildSelect("bed-persona", boot.personas || [],
-      function (p) { return p.name + (p.role ? " — " + p.role : ""); }, preset && preset.persona);
-    persona.addEventListener("change", refreshReview);
-
-    var ehr = buildSelect("bed-ehr", boot.ehrs || [],
-      function (e) { return e.name; }, (preset && preset.ehr) || boot.default_ehr);
-    ehr.addEventListener("change", refreshReview);
-
-    var rm = document.createElement("button");
-    rm.type = "button"; rm.className = "bed-remove";
-    rm.setAttribute("aria-label", "Remove bed"); rm.textContent = "×";
-    rm.addEventListener("click", function () {
-      if (row.parentNode) row.parentNode.removeChild(row);
-      refreshReview();
-    });
-
-    row.appendChild(name); row.appendChild(persona); row.appendChild(ehr); row.appendChild(rm);
-    box.appendChild(row);
+    var prev = bedScenarios();                 // preserve selections by bed index
+    box.textContent = "";
+    var n = bedCount();
+    for (var i = 0; i < n; i++) {
+      var row = document.createElement("div");
+      row.className = "wiz-bed-scn";
+      var lab = document.createElement("span");
+      lab.className = "wbs-label"; lab.textContent = "Bed " + (i + 1);
+      var sel = buildSampleSelect(prev[i] && prev[i].sample);
+      sel.addEventListener("change", refreshReview);
+      row.appendChild(lab); row.appendChild(sel);
+      box.appendChild(row);
+    }
     refreshReview();
   }
 
-  function roomBeds() {
-    return Array.prototype.slice.call(document.querySelectorAll("#wiz-beds .wiz-bed"))
-      .map(function (row) {
-        return {
-          name: (row.querySelector(".bed-name").value || "").trim(),
-          persona: row.querySelector(".bed-persona").value,
-          ehr: row.querySelector(".bed-ehr").value
-        };
-      });
+  function bedScenarios() {
+    return Array.prototype.slice.call(document.querySelectorAll("#wiz-bed-scenarios .bed-scn-sel"))
+      .map(function (sel) { return { sample: sel.value }; });
   }
   function validBeds() {
-    return roomBeds().filter(function (b) { return b.name && b.persona; });
+    return bedScenarios().filter(function (b) { return b.sample; });
+  }
+  function sampleById(id) {
+    var boot = WIZ.boot || {};
+    var f = (boot.samples || []).filter(function (s) { return s.id === id; });
+    return f.length ? f[0] : null;
   }
 
-  function applySample(id) {
-    var boot = WIZ.boot || {};
-    var found = (boot.samples || []).filter(function (x) { return x.id === id; });
-    var s = found.length ? found[0] : null;
+  function applySample(id) {                     // single-patient sample auto-fill
+    var s = sampleById(id);
     WIZ.sample = s;
     var notesEl = $("#wiz-notes");
     if (notesEl) notesEl.value = s ? (s.notes || "") : "";
-    if (WIZ.mode === "multi") {
-      var labelEl = $("#wiz-room-label");                 // suggest the room label
-      if (labelEl && s && !labelEl.value) labelEl.value = s.name || "";
-    } else {
-      var nameEl = $("#wiz-name");
-      if (nameEl) nameEl.value = s ? (s.name || "") : "";
-      var ids = s ? (s.personas || []) : [];              // FULL roster from the sample
-      document.querySelectorAll(".wp-sel").forEach(function (cb) {
-        cb.checked = ids.indexOf(cb.value) >= 0;
-      });
-    }
+    var nameEl = $("#wiz-name");
+    if (nameEl) nameEl.value = s ? (s.name || "") : "";
+    var ids = s ? (s.personas || []) : [];        // FULL roster from the sample
+    document.querySelectorAll(".wp-sel").forEach(function (cb) {
+      cb.checked = ids.indexOf(cb.value) >= 0;
+    });
     refreshReview();
   }
 
@@ -396,12 +387,16 @@
       rev.textContent = "";
       if (WIZ.mode === "multi") {
         var labelEl = $("#wiz-room-label");
+        var mEhr = $("#wiz-ehr");
         rev.appendChild(reviewRow("Mode", "Multi-patient room"));
+        rev.appendChild(reviewRow("EHR", (mEhr ? mEhr.value : "") || "—"));
         rev.appendChild(reviewRow("Room", (labelEl && labelEl.value || "").trim() || "Room"));
         var beds = validBeds();
-        if (!beds.length) rev.appendChild(reviewRow("Beds", "add at least one bed (name + patient)"));
+        if (!beds.length) rev.appendChild(reviewRow("Beds", "pick a scenario for at least one bed"));
         beds.forEach(function (b, i) {
-          rev.appendChild(reviewRow("Bed " + (i + 1), b.name + " · " + b.persona + " · " + b.ehr));
+          var bs = sampleById(b.sample) || {};
+          rev.appendChild(reviewRow("Bed " + (i + 1),
+            (bs.name || b.sample) + " · patient " + (bs.patient_id || "?")));
         });
       } else {
         var nameEl = $("#wiz-name");
@@ -427,7 +422,7 @@
     if (msg) {
       if (!modeValid()) {
         msg.textContent = WIZ.mode === "multi"
-          ? "Add at least one bed with a name and a patient."
+          ? "Pick a patient scenario for at least one bed."
           : "Add a scenario name and select at least one character.";
       } else if (WIZ.overall === "red") {
         msg.textContent = "Readiness is red — resolve the blocking check before launching.";
@@ -481,18 +476,22 @@
   function launchRoom() {
     var btn = $("#wiz-launch");
     if (btn) { btn.disabled = true; btn.textContent = "Launching…"; }
-    var s = WIZ.sample;
     var notes = ($("#wiz-notes") && $("#wiz-notes").value || "").trim();
     var label = ($("#wiz-room-label") && $("#wiz-room-label").value || "").trim() || "Room";
-    var encounters = validBeds().map(function (b) {
-      var enc = { scenario_name: b.name, persona_id: b.persona,
-                  ehr_id: b.ehr, scenario_notes: notes };
-      if (s) {
-        enc.scenario_text = s.scenario_text || "";
-        if (s.program_id) enc.program_id = s.program_id;
-        if (s.week !== undefined && s.week !== null) enc.week = s.week;
-        enc.modules = s.modules || [];
-      }
+    var ehrEl = $("#wiz-ehr");
+    var ehr = ehrEl ? ehrEl.value : "";                 // one EHR for the whole session
+    var encounters = validBeds().map(function (b, i) {
+      var s = sampleById(b.sample) || {};
+      var enc = {
+        scenario_name: "Bed " + (i + 1) + " · " + (s.name || "Scenario"),
+        persona_id: s.patient_id || "",                 // patient derived from the scenario
+        ehr_id: ehr,
+        scenario_notes: notes,
+        scenario_text: s.scenario_text || ""
+      };
+      if (s.program_id) enc.program_id = s.program_id;
+      if (s.week !== undefined && s.week !== null) enc.week = s.week;
+      enc.modules = s.modules || [];
       return enc;
     });
     fetch("/api/room/start", {
