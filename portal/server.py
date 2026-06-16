@@ -3079,6 +3079,9 @@ async def api_room_start(
     room = control_room.create_room(label=label)
     room.haiku_rate_cap = body.get("haiku_rate_cap")
     room.voice_char_cap = body.get("voice_char_cap")
+    # FR-007 — the universal/shared cast (already merged into each encounter's
+    # roster by the wizard); kept room-level so surfaces can separate it out.
+    room.shared_personas = [p for p in (body.get("shared_personas") or []) if p]
 
     anthropic_key = (vault.get("ANTHROPIC_API_KEY") or "").strip()
     elevenlabs_key = (vault.get("ELEVENLABS_API_KEY") or "").strip()
@@ -4077,17 +4080,36 @@ async def portal_control_qr_print(
     # M46 — also include the encounter's bound device stations so the
     # print sheet can show each device's QR (operators can stick the
     # QR on the actual hardware or hand the sheet to the bedside).
+    # FR-007 — separate the shared/universal cast from per-bed scenario cast so
+    # the sheet can group patient items under each character and print common
+    # items (shared characters + common devices) once.
+    shared_set = set(getattr(room, "shared_personas", []) or [])
+    avatar_set: set[str] = set()
+    for enc in target_encs:
+        avatar_set.update(enc.avatar_personas or [])
+
+    def _char_view(pid: str) -> dict[str, Any]:
+        pp = library.get_persona(pid) or {}
+        return {"id": pid, "name": pp.get("name") or pid, "role": pp.get("role") or "",
+                "is_avatar": pid in avatar_set}        # avatar (animated) vs voice-only
+
     enc_views: list[dict[str, Any]] = []
     for enc in target_encs:
         p = library.get_persona(enc.patient_persona_id) if enc.patient_persona_id else None
         devices_view: list[dict[str, str]] = []
         for sid, ds in enc.device_stations.items():
+            if ds.device_kind == "cabinet":            # the med cart prints under Common
+                continue
             devices_view.append({
                 "station_id":   sid,
                 "device_kind":  ds.device_kind,
                 "device_model": ds.device_model,
                 "label":        ds.label or ds.device_model,
             })
+        scenario_chars = [
+            _char_view(pid) for pid in (enc.selected_personas or [])
+            if pid != enc.patient_persona_id and pid not in shared_set
+        ]
         enc_views.append({
             "id":                  enc.id,
             "join_code":           enc.join_code,
@@ -4098,14 +4120,35 @@ async def portal_control_qr_print(
             "patient_name":        p.get("name") if p else "",
             "patient_role":        p.get("role") if p else "",
             "devices":             devices_view,
+            "scenario_chars":      scenario_chars,
+        })
+
+    # Common characters (shared cast) + common carts (M47 cart links).
+    common_characters = [_char_view(pid) for pid in (getattr(room, "shared_personas", []) or [])]
+    common_scenario_id = target_encs[0].id if target_encs else ""
+    target_ids = {e.id for e in target_encs}
+    common_carts: list[dict[str, str]] = []
+    for sid, linked in (getattr(room, "cart_links", {}) or {}).items():
+        if not linked or (encounter_id and not (set(linked) & target_ids)):
+            continue
+        primary = room.encounters.get(linked[0])
+        if primary is None:
+            continue
+        common_carts.append({
+            "station_id": sid,
+            "label":      (room.cart_labels or {}).get(sid) or "Med cart",
+            "join_code":  primary.join_code,
         })
     return templates.TemplateResponse(
         request, "qr_print.html",
         {
-            "room_code":    room.room_code,
-            "encounters":   enc_views,
-            "base_url":     _base_url_for_qr(request),
-            "scope_label":  scope_label,
+            "room_code":          room.room_code,
+            "encounters":         enc_views,
+            "common_characters":  common_characters,
+            "common_scenario_id": common_scenario_id,
+            "common_carts":       common_carts,
+            "base_url":           _base_url_for_qr(request),
+            "scope_label":        scope_label,
         },
     )
 

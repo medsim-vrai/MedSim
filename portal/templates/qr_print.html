@@ -322,15 +322,25 @@
           <code class="qr-block-url">{{ base_url }}/device/join?code={{ enc.join_code }}</code>
         </div>
 
-        <div class="qr-block nurse">
-          <p class="qr-block-label">🩺 Nursing Station</p>
-          <p class="qr-block-sublabel">Supervisor view — uses the <strong>room code</strong>, not the bed join code.</p>
-          <img class="qr-block-img"
-               src="/api/qr.svg?data={{ (base_url ~ '/portal/students/join?code=' ~ room_code) | urlencode }}"
-               alt="Nursing Station QR for room {{ room_code }}">
-          <code class="qr-block-url">{{ base_url }}/portal/students/join?code={{ room_code }}</code>
-        </div>
       </div>
+
+      {# Scenario characters for THIS patient (the bed's own cast — family, etc.). Avatar (animated face) or voice-only station QR. #}
+      {% if enc.scenario_chars %}
+        <div class="device-qr-section">
+          <h3 class="device-qr-section-title">🎭 Scenario characters ({{ enc.scenario_chars | length }})</h3>
+          <div class="device-qr-grid">
+            {% for c in enc.scenario_chars %}
+              <div class="device-qr-block">
+                <p class="device-qr-block-label">{{ c.name }}</p>
+                <p class="device-qr-block-sublabel">{{ c.role }} · {% if c.is_avatar %}avatar (animated){% else %}voice{% endif %}</p>
+                <img class="device-qr-block-img"
+                     src="/qr/face/{{ c.id }}.svg?scenario={{ enc.id }}{% if not c.is_avatar %}&amp;mode=audio{% endif %}"
+                     alt="Character QR for {{ c.name }}">
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
 
       {# M46 — per-encounter device QRs. One small block per bound device so the operator can print the sheet and stick each QR on the actual hardware (or hand to the bedside). #}
       {% if enc.devices %}
@@ -352,6 +362,57 @@
       {% endif %}
     </section>
   {% endfor %}
+
+  {% if encounters %}
+    <section class="qr-page">
+      <header class="qr-page-header">
+        <h1 class="brand-title">Training Bridge VRAI- MedSim</h1>
+        <p class="brand-subtitle">Common — shared characters &amp; devices</p>
+      </header>
+
+      {% if common_characters %}
+        <div class="device-qr-section">
+          <h3 class="device-qr-section-title">👥 Common characters ({{ common_characters | length }}) — avatars &amp; voice</h3>
+          <p class="device-qr-block-sublabel">Universal cast available at every bed.</p>
+          <div class="device-qr-grid">
+            {% for c in common_characters %}
+              <div class="device-qr-block">
+                <p class="device-qr-block-label">{{ c.name }}</p>
+                <p class="device-qr-block-sublabel">{{ c.role }} · {% if c.is_avatar %}avatar (animated){% else %}voice{% endif %}</p>
+                <img class="device-qr-block-img"
+                     src="/qr/face/{{ c.id }}.svg?scenario={{ common_scenario_id }}{% if not c.is_avatar %}&amp;mode=audio{% endif %}"
+                     alt="Common character QR for {{ c.name }}">
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="device-qr-section">
+        <h3 class="device-qr-section-title">🏥 Common devices</h3>
+        <div class="device-qr-grid">
+          <div class="device-qr-block">
+            <p class="device-qr-block-label">🩺 Nursing Station</p>
+            <p class="device-qr-block-sublabel">Supervisor view — monitors every bed (room code).</p>
+            <img class="device-qr-block-img"
+                 src="/api/qr.svg?data={{ (base_url ~ '/portal/students/join?code=' ~ room_code) | urlencode }}"
+                 alt="Nursing Station QR for room {{ room_code }}">
+            <code class="device-qr-block-url">{{ base_url }}/portal/students/join?code={{ room_code }}</code>
+          </div>
+          {% for cart in common_carts %}
+            <div class="device-qr-block">
+              <p class="device-qr-block-label">🛒 {{ cart.label }}</p>
+              <p class="device-qr-block-sublabel">Med cart — every patient's MAR drawer.</p>
+              <img class="device-qr-block-img"
+                   src="/api/qr.svg?data={{ (base_url ~ '/device/join?code=' ~ cart.join_code ~ '&station=' ~ cart.station_id) | urlencode }}"
+                   alt="Med cart QR {{ cart.label }}">
+              <code class="device-qr-block-url">{{ base_url }}/device/join?code={{ cart.join_code }}&amp;station={{ cart.station_id }}</code>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  {% endif %}
 
 </body>
 </html>

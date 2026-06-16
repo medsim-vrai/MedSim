@@ -405,7 +405,9 @@ def snapshot() -> dict[str, Any] | None:
             for s in room.encounters.values()]
     if not encs:
         return None
-    return {"room_label": getattr(room, "label", ""), "encounters": encs}
+    return {"room_label": getattr(room, "label", ""),
+            "shared_personas": list(getattr(room, "shared_personas", []) or []),
+            "encounters": encs}
 
 
 def restore(blob: dict[str, Any] | None) -> bool:
@@ -418,6 +420,7 @@ def restore(blob: dict[str, Any] | None) -> bool:
     if control_room.get_active_room() is not None:
         control_room.end_active_room()
     room = control_room.create_room(label=str(blob.get("room_label") or ""))
+    room.shared_personas = list(blob.get("shared_personas") or [])
     made = 0
     for snap in blob["encounters"]:
         if not isinstance(snap, dict) or not snap.get("id"):

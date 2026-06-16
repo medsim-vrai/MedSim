@@ -825,7 +825,7 @@
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: label, encounters: encounters })
+      body: JSON.stringify({ label: label, encounters: encounters, shared_personas: shared })
     })
       .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
       .then(function (data) {

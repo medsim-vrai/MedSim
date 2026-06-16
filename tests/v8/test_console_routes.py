@@ -284,6 +284,43 @@ def test_client_mints_devices_at_launch():
         assert fn in js
 
 
+def test_room_start_stores_shared_personas_and_qr_sheet_groups(monkeypatch):
+    """room.shared_personas is stored, and the QR sheet groups patient items under
+    each character + prints common characters (avatars/voice) and common devices."""
+    from portal import server, ehr_db, control_room, auth
+    monkeypatch.setattr(ehr_db, "_conn", lambda: None)
+    ehr_db._mem_session_state = None
+    _ensure_vault()
+    c = TestClient(server.app)
+    c.post("/login", data={"password": TEST_PASSWORD})
+    for v in auth._active_vaults.values():
+        v._data["ANTHROPIC_API_KEY"] = "dummy-key"
+    if control_room.get_active_room() is not None:
+        control_room.end_active_room()
+    try:
+        r = c.post("/api/room/start", json={
+            "label": "Ward", "shared_personas": ["P-001"],   # Dr. Reyes shared
+            "encounters": [
+                {"scenario_name": "Bed 1", "persona_id": "P-014",
+                 "personas": ["P-014", "P-004", "P-001"], "ehr_id": "cyrus"},  # P-004 = bed cast
+                {"scenario_name": "Bed 2", "persona_id": "P-013",
+                 "personas": ["P-013", "P-001"], "ehr_id": "cyrus"},
+            ]})
+        assert r.status_code == 200 and r.json()["ok"] is True
+        room = control_room.get_active_room()
+        assert room.shared_personas == ["P-001"]
+        html = c.get("/portal/control/qr_print").text
+        assert "Common characters" in html and "Dr. Reyes" in html        # shared cast, common
+        assert "Common devices" in html and "Nursing Station" in html     # nursing station = common
+        assert "Scenario characters" in html and "Charge Nurse Kim" in html  # per-bed cast
+        assert "Mr. Hayes" in html                                        # patient heading
+        assert "/qr/face/P-001.svg" in html                               # avatar/voice QR
+    finally:
+        if control_room.get_active_room() is not None:
+            control_room.end_active_room()
+        ehr_db._mem_session_state = None
+
+
 def test_client_builds_shared_cast():
     """FR-007: the non-patient checked characters become a universal cast added to
     every bed's roster; client sends each encounter a `personas` roster."""
@@ -291,6 +328,7 @@ def test_client_builds_shared_cast():
     for fn in ("function sharedCast", "function isPatientPersona"):
         assert fn in js
     assert "personas: roster" in js                    # each bed gets patient + shared roster
+    assert "shared_personas: shared" in js             # shared cast sent to room/start (room-level)
     html = (_STATIC.parent / "templates" / "console.html").read_text()
     assert "universal" in html.lower()                 # the Characters-step hint
 

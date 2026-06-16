@@ -128,6 +128,11 @@ class ControlRoom:
     # keyed by station_id so the dashboard + encounter console can
     # display them without round-tripping through ehr_db.
     cart_labels: dict[str, str] = field(default_factory=dict)
+    # FR-007 — the universal/shared cast (common doctor, allied-health team)
+    # available at every bed. Each encounter's selected_personas already
+    # includes these; this room-level list lets surfaces (e.g. the QR sheet)
+    # separate "common characters" from per-bed scenario cast.
+    shared_personas: list[str] = field(default_factory=list)
     # M48 — Operator-settable alarm thresholds. Room-level (applies to
     # every encounter in the room) — operators rarely need per-bed
     # thresholds in a teaching scenario, and the simpler UX is one
