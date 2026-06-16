@@ -343,6 +343,15 @@ def test_ecosystem_board_present(client):
         assert mount in html
 
 
+def test_scenario_character_variants():
+    """Duplicate-titled scenario characters (e.g. a 'concerned wife' in two beds)
+    get V1..Vn designations so each is unique to its patient — never shared."""
+    js = (_STATIC / "console.js").read_text()
+    assert "function scenarioCharList" in js
+    assert '"V" + nameSeen[nm]' in js          # V1..Vn numbering for recurring names
+    assert "scenarioCharList()" in js          # used by the wizard + board scenario layer
+
+
 def test_board_shares_the_wizard_builder():
     """No logic divergence: the board reads the wizard's state and its Launch reuses
     the same launchScenario (it does not post via a separate path)."""

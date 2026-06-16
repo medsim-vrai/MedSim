@@ -266,16 +266,44 @@
     });
   }
 
+  // Every scenario-character occurrence across all beds, with a V1…Vn designation
+  // when the SAME name recurs (e.g. a "concerned wife" in two patients' scenarios
+  // is two different people — never shared, each unique to its patient).
+  function scenarioCharList() {
+    var beds = bedScenarios(), nameCount = {}, nameSeen = {}, out = [];
+    beds.forEach(function (b) {
+      if (!b.sample) return;
+      var s = sampleById(b.sample); if (!s) return;
+      (s.personas || []).forEach(function (pid) {
+        var p = personaById(pid); var nm = (p && p.name) || pid;
+        nameCount[nm] = (nameCount[nm] || 0) + 1;
+      });
+    });
+    beds.forEach(function (b, i) {
+      if (!b.sample) return;
+      var s = sampleById(b.sample); if (!s) return;
+      (s.personas || []).forEach(function (pid) {
+        var p = personaById(pid) || { id: pid, name: pid };
+        var nm = p.name || pid, variant = "";
+        if (nameCount[nm] > 1) { nameSeen[nm] = (nameSeen[nm] || 0) + 1; variant = "V" + nameSeen[nm]; }
+        out.push({ bed: i, id: pid, name: nm, role: p.role || "",
+                   patient: isPatientPersona(pid), variant: variant });
+      });
+    });
+    return out;
+  }
+
   // Scenario characters — per bed, from each scenario's roster (patient locked in).
   function rebuildScenarioChars() {
     var box = $("#wiz-scenario-chars");
     if (!box) return;
     box.textContent = "";
+    var list = scenarioCharList();
+    var beds = bedScenarios();
     var firstNotes = "", any = false;
-    bedScenarios().forEach(function (b, i) {
+    beds.forEach(function (b, i) {
       if (!b.sample) return;
-      var s = sampleById(b.sample);
-      if (!s) return;
+      var s = sampleById(b.sample); if (!s) return;
       any = true;
       if (!firstNotes) firstNotes = s.notes || "";
       var group = document.createElement("div");
@@ -283,11 +311,11 @@
       var h = document.createElement("div");
       h.className = "sc-group-h"; h.textContent = "Bed " + (i + 1) + " · " + (s.name || b.sample);
       group.appendChild(h);
-      (s.personas || []).forEach(function (pid) {
-        var p = personaById(pid) || { id: pid, name: pid };
-        var pat = isPatientPersona(pid);
-        group.appendChild(characterRow(p, "sc-sel", "sc-av", true, pat,
-          pat ? " — Patient" : (p.role ? " — " + p.role : "")));
+      list.filter(function (c) { return c.bed === i; }).forEach(function (c) {
+        var p = personaById(c.id) || { id: c.id, name: c.name };
+        var suffix = (c.variant ? " · " + c.variant : "") +
+                     (c.patient ? " — Patient" : (c.role ? " — " + c.role : ""));
+        group.appendChild(characterRow(p, "sc-sel", "sc-av", true, c.patient, suffix));
       });
       box.appendChild(group);
     });
@@ -650,17 +678,15 @@
     var scen = $("#board-scenario");
     if (scen) {
       scen.textContent = "";
-      var anyScen = false;
-      bedScenarios().forEach(function (b, i) {
-        if (!b.sample) return;
-        scenarioCastFor(i).forEach(function (id) {
-          if (isPatientPersona(id)) return;            // patients live in the Rooms layer
-          anyScen = true;
-          var p = personaById(id) || {};
-          scen.appendChild(boardCard(p.name || id, "Bed " + (i + 1), "green", 3));
+      var cast = scenarioCharList().filter(function (c) { return !c.patient; });  // patients live in Rooms
+      if (!cast.length) {
+        scen.appendChild(boardCard("No scenario cast", "pick scenarios", "amber", 2));
+      } else {
+        cast.forEach(function (c) {
+          scen.appendChild(boardCard(c.name + (c.variant ? " · " + c.variant : ""),
+            "Bed " + (c.bed + 1), "green", 3));
         });
-      });
-      if (!anyScen) scen.appendChild(boardCard("No scenario cast", "pick scenarios", "amber", 2));
+      }
     }
     var sc = $("#board-shared");
     if (sc) {
