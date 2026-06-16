@@ -56,7 +56,7 @@
           <ol class="wiz-pills">
             <li class="wiz-pill active" data-pill="1">1&nbsp;·&nbsp;Patients &amp; rooms</li>
             <li class="wiz-pill" data-pill="2">2&nbsp;·&nbsp;Scenario</li>
-            <li class="wiz-pill" data-pill="3">3&nbsp;·&nbsp;Common characters</li>
+            <li class="wiz-pill" data-pill="3">3&nbsp;·&nbsp;Characters</li>
             <li class="wiz-pill" data-pill="4">4&nbsp;·&nbsp;Devices</li>
             <li class="wiz-pill" data-pill="5">5&nbsp;·&nbsp;Review</li>
           </ol>
@@ -87,12 +87,14 @@
           </div>
 
           <div class="wiz-step" data-step="3" hidden>
-            <h2>Common characters</h2>
-            <p class="muted">Core characters from the chosen scenario(s) are pre-selected — add or
-               remove any. In a multi-bed room the non-patient characters here are
-               <strong>universal</strong> — a common doctor, allied-health team, etc. shared at
-               every bed (each bed's patient comes from its scenario). Toggle “avatar” for a face.</p>
-            <div id="wiz-personas" class="wiz-personas"></div>
+            <h2>Characters</h2>
+            <h3 class="wiz-sub-h">Scenario characters</h3>
+            <p class="muted">The cast that comes with each bed's scenario — they stay at that bed.
+               The patient is always included; uncheck to drop a cast member. Toggle “avatar” for a face.</p>
+            <div id="wiz-scenario-chars" class="wiz-scenario-chars"></div>
+            <h3 class="wiz-sub-h">Shared characters <span class="muted">— universal, at every bed</span></h3>
+            <p class="muted">A common doctor, allied-health team, etc. available across all beds.</p>
+            <div id="wiz-shared-chars" class="wiz-personas"></div>
           </div>
 
           <div class="wiz-step" data-step="4" hidden>
@@ -137,6 +139,10 @@
 
         <div id="setup-board-view" hidden>
           <div class="board">
+            <div class="board-layer">
+              <h3 class="board-layer-h">Scenario characters</h3>
+              <div class="board-cards" id="board-scenario"></div>
+            </div>
             <div class="board-layer">
               <h3 class="board-layer-h">Shared characters</h3>
               <div class="board-cards" id="board-shared"></div>

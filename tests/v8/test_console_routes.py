@@ -164,8 +164,8 @@ def _bootstrap(html: str):
 def test_wizard_mounts_and_bootstrap_present(client):
     html = client.get("/portal/console").text
     for mount in ('id="launch-wizard"', 'id="wiz-ehr"', 'id="wiz-bed-count"',
-                  'id="wiz-bed-scenarios"', 'id="wiz-personas"', 'id="wiz-launch"',
-                  'id="console-bootstrap"'):
+                  'id="wiz-bed-scenarios"', 'id="wiz-scenario-chars"', 'id="wiz-shared-chars"',
+                  'id="wiz-launch"', 'id="console-bootstrap"'):
         assert mount in html
 
 
@@ -175,7 +175,7 @@ def test_patients_rooms_step_comes_first(client):
     first_pill = html.split('data-pill="1"', 1)[1].split("</li>", 1)[0]
     assert "Patients" in first_pill                         # step 1 is patients & rooms
     # patients pill precedes the scenario pill, which precedes the common-characters pill
-    assert html.find('data-pill="1"') < html.find("Scenario") < html.find("Common characters")
+    assert html.find('data-pill="1"') < html.find("Scenario") < html.find("Characters")
 
 
 def test_ehr_options_rendered_server_side(client):
@@ -260,7 +260,7 @@ def test_bootstrap_carries_device_catalog(client):
 
 def test_common_devices_section_present(client):
     html = client.get("/portal/console").text
-    assert "Common characters" in html                            # step relabel
+    assert "Scenario characters" in html and "Shared characters" in html   # two character sections
     for mount in ('id="wiz-common"', 'id="wiz-med-cart"', 'id="wiz-med-cart-mars"',
                   'id="wiz-ehr-terminal"', 'id="wiz-nurse-station"', 'id="wiz-ehr-confirm-name"'):
         assert mount in html
@@ -337,7 +337,8 @@ def test_ecosystem_board_present(client):
     Wizard|Board toggle."""
     html = client.get("/portal/console").text
     assert 'data-view="wizard"' in html and 'data-view="board"' in html   # the toggle
-    for mount in ('id="setup-wizard-view"', 'id="setup-board-view"', 'id="board-shared"',
+    for mount in ('id="setup-wizard-view"', 'id="setup-board-view"',
+                  'id="board-scenario"', 'id="board-shared"',
                   'id="board-resources"', 'id="board-rooms"', 'id="board-launch-btn"'):
         assert mount in html
 
@@ -359,10 +360,13 @@ def test_client_wires_unified_room_flow():
     assert "/api/room/start" in js and "/portal/control/start" in js   # >1 bed vs 1 bed
     for fn in ("function launchRoom", "function rebuildBedScenarios", "function isMulti",
                "function validBeds", "function modeValid", "function bedCount",
-               "function prefillCharacters"):
+               "function rebuildScenarioChars", "function fillSharedChars",
+               "function scenarioCastFor"):
         assert fn in js
     assert "setMode" not in js                      # single/multi toggle machinery removed
     assert "persona_id" in js and "patient_id" in js and "encounters" in js
+    # scenario cast routed per-bed (incl. patient), shared cast added to every bed
+    assert "scenarioCastFor(i).concat(shared)" in js
 
 
 def test_multi_patient_room_launch_creates_room(monkeypatch):

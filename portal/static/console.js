@@ -205,7 +205,7 @@
     var boot = readBootstrap();
     if (!boot || !document.getElementById("launch-wizard")) return;
     WIZ.boot = boot;
-    fillPersonas(boot.personas || []);   // EHR + sample <option>s are server-rendered
+    fillSharedChars(boot.personas || []);   // shared/universal picker (built once)
     var ehrSel = $("#wiz-ehr");
     if (ehrSel) ehrSel.addEventListener("change", function () { syncCommonUI(); refreshReview(); });
     ["wiz-med-cart", "wiz-med-cart-mars", "wiz-ehr-terminal"].forEach(function (id) {
@@ -233,28 +233,72 @@
     wizGoto(1);
   }
 
-  function fillPersonas(personas) {
-    var box = $("#wiz-personas");
+  function characterRow(p, selClass, avClass, checked, disabled, suffix) {
+    var row = document.createElement("label");
+    row.className = "wiz-persona";
+    var sel = document.createElement("input");
+    sel.type = "checkbox"; sel.className = selClass; sel.value = p.id;
+    if (checked) sel.checked = true;
+    if (disabled) sel.disabled = true;
+    sel.addEventListener("change", refreshReview);
+    var lab = document.createElement("span");
+    lab.className = "wp-label";
+    lab.textContent = (p.name || p.id) + (suffix != null ? suffix : (p.role ? " — " + p.role : ""));
+    var av = document.createElement("span");
+    av.className = "wp-avatar";
+    var avcb = document.createElement("input");
+    avcb.type = "checkbox"; avcb.className = avClass; avcb.value = p.id;
+    avcb.addEventListener("change", refreshReview);
+    var avt = document.createElement("span"); avt.textContent = "avatar";
+    av.appendChild(avcb); av.appendChild(avt);
+    row.appendChild(sel); row.appendChild(lab); row.appendChild(av);
+    return row;
+  }
+
+  // Shared/universal characters — built once; the picker excludes patients.
+  function fillSharedChars(personas) {
+    var box = $("#wiz-shared-chars");
     if (!box) return;
     box.textContent = "";
     personas.forEach(function (p) {
-      var row = document.createElement("label");
-      row.className = "wiz-persona";
-      var sel = document.createElement("input");
-      sel.type = "checkbox"; sel.value = p.id; sel.className = "wp-sel";
-      sel.addEventListener("change", refreshReview);
-      var lab = document.createElement("span");
-      lab.className = "wp-label";
-      lab.textContent = p.name + (p.role ? " — " + p.role : "");
-      var av = document.createElement("span");
-      av.className = "wp-avatar";
-      var avcb = document.createElement("input");
-      avcb.type = "checkbox"; avcb.value = p.id; avcb.className = "wp-avatar-cb";
-      var avtxt = document.createElement("span"); avtxt.textContent = "avatar";
-      av.appendChild(avcb); av.appendChild(avtxt);
-      row.appendChild(sel); row.appendChild(lab); row.appendChild(av);
-      box.appendChild(row);
+      if (p.roleGroup === "Patient") return;
+      box.appendChild(characterRow(p, "sh-sel", "sh-av", false, false));
     });
+  }
+
+  // Scenario characters — per bed, from each scenario's roster (patient locked in).
+  function rebuildScenarioChars() {
+    var box = $("#wiz-scenario-chars");
+    if (!box) return;
+    box.textContent = "";
+    var firstNotes = "", any = false;
+    bedScenarios().forEach(function (b, i) {
+      if (!b.sample) return;
+      var s = sampleById(b.sample);
+      if (!s) return;
+      any = true;
+      if (!firstNotes) firstNotes = s.notes || "";
+      var group = document.createElement("div");
+      group.className = "sc-group"; group.setAttribute("data-bed", String(i));
+      var h = document.createElement("div");
+      h.className = "sc-group-h"; h.textContent = "Bed " + (i + 1) + " · " + (s.name || b.sample);
+      group.appendChild(h);
+      (s.personas || []).forEach(function (pid) {
+        var p = personaById(pid) || { id: pid, name: pid };
+        var pat = isPatientPersona(pid);
+        group.appendChild(characterRow(p, "sc-sel", "sc-av", true, pat,
+          pat ? " — Patient" : (p.role ? " — " + p.role : "")));
+      });
+      box.appendChild(group);
+    });
+    if (!any) {
+      var empty = document.createElement("p");
+      empty.className = "muted"; empty.textContent = "Pick a scenario for each bed first.";
+      box.appendChild(empty);
+    }
+    var notesEl = $("#wiz-notes");
+    if (notesEl && !notesEl.value && firstNotes) notesEl.value = firstNotes;
+    refreshReview();
   }
 
   // Beds drive everything: 1 bed = single patient (rich roster), >1 = a room.
@@ -297,12 +341,12 @@
       var lab = document.createElement("span");
       lab.className = "wbs-label"; lab.textContent = "Bed " + (i + 1);
       var sel = buildSampleSelect(prev[i] && prev[i].sample);
-      sel.addEventListener("change", prefillCharacters);
+      sel.addEventListener("change", rebuildScenarioChars);
       row.appendChild(lab); row.appendChild(sel);
       box.appendChild(row);
     }
     rebuildDevices();
-    prefillCharacters();
+    rebuildScenarioChars();
   }
 
   function bedScenarios() {
@@ -327,10 +371,27 @@
     var p = personaById(id);
     return !!(p && p.roleGroup === "Patient");
   }
-  // The universal/shared cast = every checked NON-patient persona (a common
-  // doctor, allied-health team, family) — added to every bed alongside its patient.
+  // Scenario cast for one bed = its scenario's checked roster (patient locked in).
+  function scenarioCastFor(bedIdx) {
+    var g = document.querySelector('#wiz-scenario-chars .sc-group[data-bed="' + bedIdx + '"]');
+    if (!g) return [];
+    return Array.prototype.slice.call(g.querySelectorAll(".sc-sel:checked"))
+      .map(function (cb) { return cb.value; });
+  }
+  function scenarioAvatarsFor(bedIdx) {
+    var g = document.querySelector('#wiz-scenario-chars .sc-group[data-bed="' + bedIdx + '"]');
+    if (!g) return [];
+    return Array.prototype.slice.call(g.querySelectorAll(".sc-av:checked"))
+      .map(function (cb) { return cb.value; });
+  }
+  // Shared/universal cast = the explicit picker, added to every bed.
   function sharedCast() {
-    return selectedPersonas().filter(function (id) { return !isPatientPersona(id); });
+    return Array.prototype.slice.call(document.querySelectorAll("#wiz-shared-chars .sh-sel:checked"))
+      .map(function (cb) { return cb.value; });
+  }
+  function sharedAvatars() {
+    return Array.prototype.slice.call(document.querySelectorAll("#wiz-shared-chars .sh-av:checked"))
+      .map(function (cb) { return cb.value; });
   }
   function uniq(arr) {
     return arr.filter(function (x, i, a) { return x && a.indexOf(x) === i; });
@@ -478,40 +539,8 @@
     return chain;                                       // nursing station = rooms only
   }
 
-  // Pre-select the core characters of the chosen scenario(s); never auto-uncheck
-  // (the instructor adds/removes freely). Also seeds notes from the first scenario.
-  function prefillCharacters() {
-    var core = {};
-    var firstNotes = "";
-    bedScenarios().forEach(function (b) {
-      if (!b.sample) return;
-      var s = sampleById(b.sample);
-      if (!s) return;
-      if (!firstNotes) firstNotes = s.notes || "";
-      (s.personas || []).forEach(function (pid) { core[pid] = true; });
-    });
-    document.querySelectorAll(".wp-sel").forEach(function (cb) {
-      if (core[cb.value]) cb.checked = true;
-    });
-    var notesEl = $("#wiz-notes");
-    if (notesEl && !notesEl.value && firstNotes) notesEl.value = firstNotes;
-    refreshReview();
-  }
-
-  function selectedPersonas() {
-    return Array.prototype.slice.call(document.querySelectorAll(".wp-sel:checked"))
-      .map(function (cb) { return cb.value; });
-  }
-  function selectedAvatars() {
-    var chosen = selectedPersonas();
-    return Array.prototype.slice.call(document.querySelectorAll(".wp-avatar-cb:checked"))
-      .map(function (cb) { return cb.value; })
-      .filter(function (id) { return chosen.indexOf(id) >= 0; });
-  }
-
   function modeValid() {
-    if (validBeds().length < 1) return false;            // need a scenario per used bed
-    return isMulti() || selectedPersonas().length > 0;   // single also needs a character roster
+    return validBeds().length >= 1;   // a scenario per used bed → patient + cast in the roster
   }
 
   // Launch gate (unit-checkable rule): a red readiness check blocks launch; a
@@ -549,11 +578,11 @@
         if (sc.length) rev.appendChild(reviewRow("Shared cast", sc.length + " at every bed"));
       } else {
         var bs0 = sampleById(beds[0].sample) || {};
-        var n = selectedPersonas().length;
         rev.appendChild(reviewRow("Mode", "Single patient"));
         rev.appendChild(reviewRow("Scenario", bs0.name || beds[0].sample));
-        rev.appendChild(reviewRow("Characters", n ? (n + " selected") : "none — pick at least one"));
-        var avs = selectedAvatars().length;
+        rev.appendChild(reviewRow("Characters",
+          scenarioCastFor(0).length + " scenario + " + sharedCast().length + " shared"));
+        var avs = uniq(scenarioAvatarsFor(0).concat(sharedAvatars())).length;
         if (avs) rev.appendChild(reviewRow("Avatars", avs + " with a face"));
       }
       var devs = bedDevices();
@@ -618,6 +647,21 @@
   }
 
   function renderBoard() {
+    var scen = $("#board-scenario");
+    if (scen) {
+      scen.textContent = "";
+      var anyScen = false;
+      bedScenarios().forEach(function (b, i) {
+        if (!b.sample) return;
+        scenarioCastFor(i).forEach(function (id) {
+          if (isPatientPersona(id)) return;            // patients live in the Rooms layer
+          anyScen = true;
+          var p = personaById(id) || {};
+          scen.appendChild(boardCard(p.name || id, "Bed " + (i + 1), "green", 3));
+        });
+      });
+      if (!anyScen) scen.appendChild(boardCard("No scenario cast", "pick scenarios", "amber", 2));
+    }
     var sc = $("#board-shared");
     if (sc) {
       sc.textContent = "";
@@ -690,9 +734,10 @@
       if (s.week !== undefined && s.week !== null) fd.append("week", String(s.week));
       (s.modules || []).forEach(function (m) { fd.append("modules", m); });
     }
-    var roster = uniq([(s && s.patient_id) || ""].concat(selectedPersonas()));  // patient + cast
+    var roster = uniq(scenarioCastFor(0).concat(sharedCast()));   // bed-1 scenario cast (incl. patient) + shared
     roster.forEach(function (p) { fd.append("personas", p); });
-    selectedAvatars().forEach(function (p) { if (roster.indexOf(p) >= 0) fd.append("avatar_personas", p); });
+    var avs = uniq(scenarioAvatarsFor(0).concat(sharedAvatars()));
+    avs.forEach(function (p) { if (roster.indexOf(p) >= 0) fd.append("avatar_personas", p); });
     var ehrEl = $("#wiz-ehr");
     if (ehrEl) fd.append("ehr_id", ehrEl.value);
     fetch("/portal/control/start", { method: "POST", credentials: "same-origin", body: fd })
@@ -727,11 +772,15 @@
     var ehrEl = $("#wiz-ehr");
     var ehr = ehrEl ? ehrEl.value : "";                 // one EHR for the whole session
     var shared = sharedCast();                          // universal cast across every bed
-    var encounters = validBeds().map(function (b, i) {
+    var sharedAv = sharedAvatars();
+    var encounters = [];
+    bedScenarios().forEach(function (b, i) {            // original bed index (matches sc-group)
+      if (!b.sample) return;
       var s = sampleById(b.sample) || {};
       var patient = s.patient_id || "";
-      var roster = uniq([patient].concat(shared));      // this bed's patient + the shared cast
-      var avatars = selectedAvatars().filter(function (id) { return roster.indexOf(id) >= 0; });
+      var roster = uniq(scenarioCastFor(i).concat(shared));   // bed's scenario cast (incl. patient) + shared
+      var avatars = uniq(scenarioAvatarsFor(i).concat(sharedAv))
+        .filter(function (id) { return roster.indexOf(id) >= 0; });
       var enc = {
         scenario_name: "Bed " + (i + 1) + " · " + (s.name || "Scenario"),
         persona_id: patient,                            // patient derived from the scenario
@@ -744,7 +793,7 @@
       if (s.program_id) enc.program_id = s.program_id;
       if (s.week !== undefined && s.week !== null) enc.week = s.week;
       enc.modules = s.modules || [];
-      return enc;
+      encounters.push(enc);
     });
     fetch("/api/room/start", {
       method: "POST",
