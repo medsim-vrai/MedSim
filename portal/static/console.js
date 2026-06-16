@@ -219,6 +219,12 @@
     }
     var ns = $("#wiz-nurse-station");
     if (ns) ns.addEventListener("change", refreshReview);
+    var viewBtns = document.querySelectorAll(".setup-view-btn");
+    for (var b = 0; b < viewBtns.length; b++) {
+      viewBtns[b].addEventListener("click", function () { setView(this.getAttribute("data-view")); });
+    }
+    var boardLaunch = $("#board-launch-btn");
+    if (boardLaunch) boardLaunch.addEventListener("click", launchScenario);
     rebuildBedScenarios();               // default: one bed (also builds device rows)
     wizGoto(1);
   }
@@ -505,11 +511,89 @@
         msg.textContent = "Ready to launch.";
       }
     }
+    var bv = $("#setup-board-view");          // keep the board in sync when it's showing
+    if (bv && !bv.hidden) renderBoard();
   }
 
   function wizSetReadiness(overall) {
     WIZ.overall = overall || "amber";
     if (document.getElementById("launch-wizard")) refreshReview();
+  }
+
+  // ── G6 ecosystem board — an alternate VIEW of the same wizard state ───────
+  function boardCard(title, sub, status, gotoStep) {
+    var card = document.createElement("button");
+    card.type = "button";
+    card.className = "board-card";
+    card.setAttribute("data-status", status || "green");
+    var dot = document.createElement("span"); dot.className = "bc-dot";
+    var body = document.createElement("span"); body.className = "bc-body";
+    var t = document.createElement("span"); t.className = "bc-title"; t.textContent = title;
+    body.appendChild(t);
+    if (sub) {
+      var s = document.createElement("span"); s.className = "bc-sub"; s.textContent = sub;
+      body.appendChild(s);
+    }
+    card.appendChild(dot); card.appendChild(body);
+    if (gotoStep) card.addEventListener("click", function () { setView("wizard"); wizGoto(gotoStep); });
+    return card;
+  }
+
+  function renderBoard() {
+    var sc = $("#board-shared");
+    if (sc) {
+      sc.textContent = "";
+      var shared = sharedCast();
+      if (!shared.length) {
+        sc.appendChild(boardCard("Add shared characters", "common doctor / allied health", "amber", 3));
+      } else {
+        shared.forEach(function (id) {
+          var p = personaById(id) || {};
+          sc.appendChild(boardCard(p.name || id, p.role || "", "green", 3));
+        });
+      }
+    }
+    var res = $("#board-resources");
+    if (res) {
+      res.textContent = "";
+      var ehrEl = $("#wiz-ehr");
+      res.appendChild(boardCard("EHR", (ehrEl ? ehrEl.value : "") || "—", "green", 1));
+      var ns = $("#wiz-nurse-station");
+      res.appendChild(boardCard("Nursing station", (ns && ns.checked) ? "on" : "off",
+        (ns && ns.checked) ? "green" : "amber", 4));
+    }
+    var rooms = $("#board-rooms");
+    if (rooms) {
+      rooms.textContent = "";
+      var n = bedCount(), scn = bedScenarios(), devs = bedDevices();
+      for (var i = 0; i < n; i++) {
+        var sel = scn[i] && scn[i].sample;
+        var s = sel ? sampleById(sel) : null;
+        var sub = s ? ((s.name || sel) + " · " + ((devs[i] && devs[i].length) || 0) + " device(s)")
+                    : "no scenario yet";
+        rooms.appendChild(boardCard("Bed " + (i + 1), sub, s ? "green" : "amber", 2));
+      }
+    }
+    var pill = $("#board-readiness");
+    if (pill) {
+      pill.setAttribute("data-status", WIZ.overall);
+      pill.textContent = WIZ.overall === "loading" ? "checking…" : WIZ.overall;
+    }
+    var lb = $("#board-launch-btn");
+    if (lb) lb.disabled = !launchAllowed(WIZ.overall);
+    var lm = $("#board-launch-msg");
+    if (lm) lm.textContent = modeValid() ? "" : "Pick a scenario for at least one bed.";
+  }
+
+  function setView(view) {
+    var isBoard = view === "board";
+    var wiz = $("#setup-wizard-view"), board = $("#setup-board-view");
+    if (wiz) wiz.hidden = isBoard;
+    if (board) board.hidden = !isBoard;
+    document.querySelectorAll(".setup-view-btn").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-view") === view);
+    });
+    if (isBoard) renderBoard();
   }
 
   function launchScenario() {

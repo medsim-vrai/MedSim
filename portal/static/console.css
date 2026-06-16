@@ -199,6 +199,42 @@
 .mc-link { font-size: 12.5px; color: #2b6cb0; text-decoration: none; }
 .mc-link:hover { text-decoration: underline; }
 
+/* ── G6 ecosystem board (alternate view of the same Set-up state) ──────── */
+.setup-views { display: flex; gap: 4px; margin: 0 0 16px; }
+.setup-view-btn {
+  cursor: pointer; font-size: 13px; font-weight: 600; color: #5a6b79;
+  background: #fff; border: 1px solid #c4cfd9; border-radius: 7px; padding: 6px 16px;
+}
+.setup-view-btn.active { color: #14202b; background: #e4eefa; border-color: #2b6cb0; }
+
+.board {
+  max-width: 760px; background: #fff; border: 1px solid #e1e7ed;
+  border-radius: 10px; padding: 18px 22px; display: grid; gap: 18px;
+}
+.board-layer-h { font-size: 13px; margin: 0 0 8px; color: #5a6b79; text-transform: uppercase; letter-spacing: 0.03em; }
+.board-cards { display: flex; flex-wrap: wrap; gap: 10px; }
+.board-cards:empty::after { content: "—"; color: #9aa7b2; }
+.board-card {
+  display: inline-flex; align-items: center; gap: 9px; cursor: pointer; text-align: left;
+  background: #fbfcfd; border: 1px solid #e1e7ed; border-left-width: 4px; border-radius: 8px;
+  padding: 9px 12px; font: inherit; min-width: 150px;
+}
+.board-card:hover { background: #f1f5f9; }
+.board-card[data-status="green"] { border-left-color: var(--rb-green); }
+.board-card[data-status="amber"] { border-left-color: var(--rb-amber); }
+.board-card[data-status="red"]   { border-left-color: var(--rb-red); }
+.bc-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.board-card[data-status="green"] .bc-dot { background: var(--rb-green); }
+.board-card[data-status="amber"] .bc-dot { background: var(--rb-amber); }
+.board-card[data-status="red"]   .bc-dot { background: var(--rb-red); }
+.bc-body { display: flex; flex-direction: column; }
+.bc-title { font-size: 13px; font-weight: 600; color: #1b2733; }
+.bc-sub { font-size: 12px; color: #6b7a88; }
+.board-launch {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border-top: 1px solid #eef2f5; padding-top: 14px;
+}
+
 /* ── G5 Launch Wizard ──────────────────────────────────────────────────── */
 .wizard {
   max-width: 720px; background: #fff; border: 1px solid #e1e7ed;

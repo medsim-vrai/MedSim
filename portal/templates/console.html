@@ -46,6 +46,12 @@
     <!-- mode panels (G4 Operate cockpit · G5 wizard · G6 ecosystem board fill these) -->
     <main class="console-main">
       <section class="console-panel" data-panel="setup" role="tabpanel" aria-label="Set up">
+        <div class="setup-views" role="tablist" aria-label="Set up view">
+          <button type="button" class="setup-view-btn active" data-view="wizard">Wizard</button>
+          <button type="button" class="setup-view-btn" data-view="board">Board</button>
+        </div>
+
+        <div id="setup-wizard-view">
         <div class="wizard" id="launch-wizard">
           <ol class="wiz-pills">
             <li class="wiz-pill active" data-pill="1">1&nbsp;·&nbsp;Patients &amp; rooms</li>
@@ -115,6 +121,30 @@
           <div class="wiz-nav">
             <button type="button" id="wiz-back" class="wiz-btn" hidden>Back</button>
             <button type="button" id="wiz-next" class="wiz-btn wiz-btn--primary">Next</button>
+          </div>
+        </div>
+        </div><!-- /setup-wizard-view -->
+
+        <div id="setup-board-view" hidden>
+          <div class="board">
+            <div class="board-layer">
+              <h3 class="board-layer-h">Shared characters</h3>
+              <div class="board-cards" id="board-shared"></div>
+            </div>
+            <div class="board-layer">
+              <h3 class="board-layer-h">Shared resources</h3>
+              <div class="board-cards" id="board-resources"></div>
+            </div>
+            <div class="board-layer">
+              <h3 class="board-layer-h">Rooms &amp; patients</h3>
+              <div class="board-cards" id="board-rooms"></div>
+            </div>
+            <div class="board-launch">
+              <span class="muted">Readiness</span>
+              <span id="board-readiness" class="wiz-rpill" data-status="loading">checking…</span>
+              <button type="button" id="board-launch-btn" class="rs-btn" disabled>Launch</button>
+              <span id="board-launch-msg" class="wiz-launch-msg muted"></span>
+            </div>
           </div>
         </div>
       </section>

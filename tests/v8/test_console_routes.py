@@ -310,6 +310,28 @@ def test_room_start_shares_cast_across_every_bed(monkeypatch):
         ehr_db._mem_session_state = None
 
 
+def test_ecosystem_board_present(client):
+    """G6: a Board view of the SAME setup state — 3 layers + a launch bar + the
+    Wizard|Board toggle."""
+    html = client.get("/portal/console").text
+    assert 'data-view="wizard"' in html and 'data-view="board"' in html   # the toggle
+    for mount in ('id="setup-wizard-view"', 'id="setup-board-view"', 'id="board-shared"',
+                  'id="board-resources"', 'id="board-rooms"', 'id="board-launch-btn"'):
+        assert mount in html
+
+
+def test_board_shares_the_wizard_builder():
+    """No logic divergence: the board reads the wizard's state and its Launch reuses
+    the same launchScenario (it does not post via a separate path)."""
+    js = (_STATIC / "console.js").read_text()
+    for fn in ("function renderBoard", "function setView", "function boardCard"):
+        assert fn in js
+    # board launch is wired to the shared launchScenario, not a new launcher
+    assert 'boardLaunch.addEventListener("click", launchScenario)' in js
+    # the board reads the same state helpers as the wizard
+    assert "sharedCast()" in js and "bedScenarios()" in js and "bedDevices()" in js
+
+
 def test_client_wires_unified_room_flow():
     js = (_STATIC / "console.js").read_text()
     assert "/api/room/start" in js and "/portal/control/start" in js   # >1 bed vs 1 bed
