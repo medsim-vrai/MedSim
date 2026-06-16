@@ -193,7 +193,7 @@
   }
 
   // ── G5 Launch Wizard ──────────────────────────────────────────────────────
-  var WIZ = { step: 1, max: 4, sample: null, boot: null, overall: "loading" };
+  var WIZ = { step: 1, max: 4, boot: null, overall: "loading" };
 
   function readBootstrap() {
     var el = document.getElementById("console-bootstrap");
@@ -205,27 +205,19 @@
     var boot = readBootstrap();
     if (!boot || !document.getElementById("launch-wizard")) return;
     WIZ.boot = boot;
-    fillPersonas(boot.personas || []);   // sample + EHR <option>s are server-rendered
-    var sampleSel = $("#wiz-sample");
-    if (sampleSel) sampleSel.addEventListener("change", function () { applySample(sampleSel.value); });
+    fillPersonas(boot.personas || []);   // EHR + sample <option>s are server-rendered
     var ehrSel = $("#wiz-ehr");
     if (ehrSel) ehrSel.addEventListener("change", refreshReview);
-    var nameEl = $("#wiz-name");
-    if (nameEl) nameEl.addEventListener("input", refreshReview);
     var back = $("#wiz-back"), next = $("#wiz-next"), launch = $("#wiz-launch");
     if (back) back.addEventListener("click", function () { wizGoto(WIZ.step - 1); });
     if (next) next.addEventListener("click", function () { wizGoto(WIZ.step + 1); });
     if (launch) launch.addEventListener("click", launchScenario);
-    var radios = document.querySelectorAll('input[name="wiz-mode"]');
-    for (var i = 0; i < radios.length; i++) {
-      radios[i].addEventListener("change", function () { setMode(this.value); });
-    }
     var bedCountEl = $("#wiz-bed-count");
     if (bedCountEl) {
       bedCountEl.addEventListener("change", rebuildBedScenarios);
       bedCountEl.addEventListener("input", rebuildBedScenarios);
     }
-    setMode("single");
+    rebuildBedScenarios();               // default: one bed
     wizGoto(1);
   }
 
@@ -253,27 +245,8 @@
     });
   }
 
-  // ── single ↔ multi-patient mode ───────────────────────────────────────────
-  function toggleHidden(sel, hidden) {
-    var el = $(sel);
-    if (el) el.hidden = !!hidden;
-  }
-
-  function setMode(mode) {
-    WIZ.mode = (mode === "multi") ? "multi" : "single";
-    var multi = WIZ.mode === "multi";
-    toggleHidden("#wiz-single", multi);
-    toggleHidden("#wiz-multi", !multi);
-    toggleHidden("#wiz-scenario-single", multi);
-    toggleHidden("#wiz-scenario-multi", !multi);
-    toggleHidden("#wiz-personas", multi);
-    toggleHidden("#wiz-chars-single-note", multi);
-    toggleHidden("#wiz-chars-multi-note", !multi);
-    var radios = document.querySelectorAll('input[name="wiz-mode"]');
-    for (var i = 0; i < radios.length; i++) radios[i].checked = (radios[i].value === WIZ.mode);
-    if (multi) rebuildBedScenarios();
-    refreshReview();
-  }
+  // Beds drive everything: 1 bed = single patient (rich roster), >1 = a room.
+  function isMulti() { return bedCount() > 1; }
 
   function bedCount() {
     var el = $("#wiz-bed-count");
@@ -312,11 +285,11 @@
       var lab = document.createElement("span");
       lab.className = "wbs-label"; lab.textContent = "Bed " + (i + 1);
       var sel = buildSampleSelect(prev[i] && prev[i].sample);
-      sel.addEventListener("change", refreshReview);
+      sel.addEventListener("change", prefillCharacters);
       row.appendChild(lab); row.appendChild(sel);
       box.appendChild(row);
     }
-    refreshReview();
+    prefillCharacters();
   }
 
   function bedScenarios() {
@@ -332,17 +305,23 @@
     return f.length ? f[0] : null;
   }
 
-  function applySample(id) {                     // single-patient sample auto-fill
-    var s = sampleById(id);
-    WIZ.sample = s;
-    var notesEl = $("#wiz-notes");
-    if (notesEl) notesEl.value = s ? (s.notes || "") : "";
-    var nameEl = $("#wiz-name");
-    if (nameEl) nameEl.value = s ? (s.name || "") : "";
-    var ids = s ? (s.personas || []) : [];        // FULL roster from the sample
-    document.querySelectorAll(".wp-sel").forEach(function (cb) {
-      cb.checked = ids.indexOf(cb.value) >= 0;
+  // Pre-select the core characters of the chosen scenario(s); never auto-uncheck
+  // (the instructor adds/removes freely). Also seeds notes from the first scenario.
+  function prefillCharacters() {
+    var core = {};
+    var firstNotes = "";
+    bedScenarios().forEach(function (b) {
+      if (!b.sample) return;
+      var s = sampleById(b.sample);
+      if (!s) return;
+      if (!firstNotes) firstNotes = s.notes || "";
+      (s.personas || []).forEach(function (pid) { core[pid] = true; });
     });
+    document.querySelectorAll(".wp-sel").forEach(function (cb) {
+      if (core[cb.value]) cb.checked = true;
+    });
+    var notesEl = $("#wiz-notes");
+    if (notesEl && !notesEl.value && firstNotes) notesEl.value = firstNotes;
     refreshReview();
   }
 
@@ -357,13 +336,9 @@
       .filter(function (id) { return chosen.indexOf(id) >= 0; });
   }
 
-  function wizardValid() {                              // single-patient validity
-    var nameEl = $("#wiz-name");
-    var name = (nameEl && nameEl.value || "").trim();
-    return !!name && selectedPersonas().length > 0;
-  }
   function modeValid() {
-    return WIZ.mode === "multi" ? validBeds().length > 0 : wizardValid();
+    if (validBeds().length < 1) return false;            // need a scenario per used bed
+    return isMulti() || selectedPersonas().length > 0;   // single also needs a character roster
   }
 
   // Launch gate (unit-checkable rule): a red readiness check blocks launch; a
@@ -385,27 +360,23 @@
     var rev = $("#wiz-review");
     if (rev) {
       rev.textContent = "";
-      if (WIZ.mode === "multi") {
-        var labelEl = $("#wiz-room-label");
-        var mEhr = $("#wiz-ehr");
-        rev.appendChild(reviewRow("Mode", "Multi-patient room"));
-        rev.appendChild(reviewRow("EHR", (mEhr ? mEhr.value : "") || "—"));
-        rev.appendChild(reviewRow("Room", (labelEl && labelEl.value || "").trim() || "Room"));
-        var beds = validBeds();
-        if (!beds.length) rev.appendChild(reviewRow("Beds", "pick a scenario for at least one bed"));
+      var ehrEl = $("#wiz-ehr");
+      rev.appendChild(reviewRow("EHR", (ehrEl ? ehrEl.value : "") || "—"));
+      var beds = validBeds();
+      if (!beds.length) {
+        rev.appendChild(reviewRow("Beds", "pick a scenario for at least one bed"));
+      } else if (isMulti()) {
+        rev.appendChild(reviewRow("Mode", beds.length + "-bed room"));
         beds.forEach(function (b, i) {
           var bs = sampleById(b.sample) || {};
           rev.appendChild(reviewRow("Bed " + (i + 1),
             (bs.name || b.sample) + " · patient " + (bs.patient_id || "?")));
         });
       } else {
-        var nameEl = $("#wiz-name");
-        var name = (nameEl && nameEl.value || "").trim() || "—";
-        var ehrEl = $("#wiz-ehr");
+        var bs0 = sampleById(beds[0].sample) || {};
         var n = selectedPersonas().length;
         rev.appendChild(reviewRow("Mode", "Single patient"));
-        rev.appendChild(reviewRow("Scenario", name));
-        rev.appendChild(reviewRow("EHR", (ehrEl ? ehrEl.value : "") || "—"));
+        rev.appendChild(reviewRow("Scenario", bs0.name || beds[0].sample));
         rev.appendChild(reviewRow("Characters", n ? (n + " selected") : "none — pick at least one"));
         var avs = selectedAvatars().length;
         if (avs) rev.appendChild(reviewRow("Avatars", avs + " with a face"));
@@ -421,9 +392,9 @@
     var msg = $("#wiz-launch-msg");
     if (msg) {
       if (!modeValid()) {
-        msg.textContent = WIZ.mode === "multi"
-          ? "Pick a patient scenario for at least one bed."
-          : "Add a scenario name and select at least one character.";
+        msg.textContent = (validBeds().length < 1)
+          ? "Pick a scenario for at least one bed."
+          : "Select at least one character.";
       } else if (WIZ.overall === "red") {
         msg.textContent = "Readiness is red — resolve the blocking check before launching.";
       } else if (WIZ.overall === "amber") {
@@ -441,12 +412,13 @@
 
   function launchScenario() {
     if (!launchAllowed(WIZ.overall)) return;
-    if (WIZ.mode === "multi") { launchRoom(); return; }
+    if (isMulti()) { launchRoom(); return; }
     var btn = $("#wiz-launch");
     if (btn) { btn.disabled = true; btn.textContent = "Launching…"; }
-    var s = WIZ.sample;
+    var bed = validBeds()[0];
+    var s = bed ? sampleById(bed.sample) : null;
     var fd = new FormData();
-    fd.append("scenario_name", ($("#wiz-name").value || "").trim());
+    fd.append("scenario_name", (s && s.name) || "Scenario");
     fd.append("scenario_notes", ($("#wiz-notes") && $("#wiz-notes").value || "").trim());
     if (s) {
       fd.append("scenario_text", s.scenario_text || "");
@@ -477,7 +449,7 @@
     var btn = $("#wiz-launch");
     if (btn) { btn.disabled = true; btn.textContent = "Launching…"; }
     var notes = ($("#wiz-notes") && $("#wiz-notes").value || "").trim();
-    var label = ($("#wiz-room-label") && $("#wiz-room-label").value || "").trim() || "Room";
+    var label = "Training room";
     var ehrEl = $("#wiz-ehr");
     var ehr = ehrEl ? ehrEl.value : "";                 // one EHR for the whole session
     var encounters = validBeds().map(function (b, i) {

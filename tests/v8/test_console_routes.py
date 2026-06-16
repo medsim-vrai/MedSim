@@ -163,8 +163,9 @@ def _bootstrap(html: str):
 
 def test_wizard_mounts_and_bootstrap_present(client):
     html = client.get("/portal/console").text
-    for mount in ('id="launch-wizard"', 'id="wiz-sample"', 'id="wiz-ehr"',
-                  'id="wiz-personas"', 'id="wiz-launch"', 'id="console-bootstrap"'):
+    for mount in ('id="launch-wizard"', 'id="wiz-ehr"', 'id="wiz-bed-count"',
+                  'id="wiz-bed-scenarios"', 'id="wiz-personas"', 'id="wiz-launch"',
+                  'id="console-bootstrap"'):
         assert mount in html
 
 
@@ -177,16 +178,13 @@ def test_patients_rooms_step_comes_first(client):
     assert html.find('data-pill="1"') < html.find("Scenario") < html.find("Characters")
 
 
-def test_ehr_and_sample_options_rendered_server_side(client):
-    """The fix for 'no place to select the EHR': options are rendered server-side,
-    so the pickers work even with stale/blocked console.js (not JS-populated)."""
+def test_ehr_options_rendered_server_side(client):
+    """The one session-wide EHR picker is rendered server-side, so it works even
+    with stale/blocked console.js (the original 'no place to select the EHR' fix)."""
     html = client.get("/portal/console").text
     for ehr in ("helix", "cyrus", "meridian"):
         assert 'value="%s"' % ehr in html                  # EHR <option>s present
     assert "Helix Health" in html
-    boot = _bootstrap(html)
-    assert 'value="%s"' % boot["samples"][0]["id"] in html  # sample <option>s present
-    # the EHR select is no longer populated by JS (would double the options)
     assert "fillOptions" not in (_STATIC / "console.js").read_text()
 
 
@@ -218,12 +216,13 @@ def test_wizard_posts_the_same_body_as_classic_start():
     assert "function launchAllowed" in js and '"red"' in js
 
 
-def test_multi_patient_toggle_and_bed_count_present(client):
+def test_bed_count_and_per_bed_scenario_present(client):
+    """One flow, no single/multi toggle: a bed count defaulting to 1, plus the
+    per-bed scenario container that the next step fills."""
     html = client.get("/portal/console").text
-    assert 'name="wiz-mode"' in html and 'value="single"' in html and 'value="multi"' in html
-    for mount in ('id="wiz-single"', 'id="wiz-multi"', 'id="wiz-room-label"',
-                  'id="wiz-bed-count"', 'id="wiz-scenario-multi"', 'id="wiz-bed-scenarios"'):
-        assert mount in html
+    assert 'id="wiz-bed-count"' in html and 'id="wiz-bed-scenarios"' in html
+    assert 'name="wiz-mode"' not in html                          # toggle removed
+    assert 'min="1" max="12" value="1"' in html                  # defaults to one bed
 
 
 def test_bootstrap_samples_carry_a_derived_patient(client):
@@ -235,12 +234,14 @@ def test_bootstrap_samples_carry_a_derived_patient(client):
     assert all(s.get("patient_id") for s in boot["samples"])
 
 
-def test_client_wires_multi_room_launch():
+def test_client_wires_unified_room_flow():
     js = (_STATIC / "console.js").read_text()
-    assert "/api/room/start" in js                 # multi launches via the room endpoint
-    for fn in ("function launchRoom", "function rebuildBedScenarios", "function setMode",
-               "function validBeds", "function modeValid", "function bedCount"):
+    assert "/api/room/start" in js and "/portal/control/start" in js   # >1 bed vs 1 bed
+    for fn in ("function launchRoom", "function rebuildBedScenarios", "function isMulti",
+               "function validBeds", "function modeValid", "function bedCount",
+               "function prefillCharacters"):
         assert fn in js
+    assert "setMode" not in js                      # single/multi toggle machinery removed
     assert "persona_id" in js and "patient_id" in js and "encounters" in js
 
 
