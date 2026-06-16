@@ -429,6 +429,17 @@ def test_scenario_character_variants():
     assert "scenarioCharList()" in js          # used by the wizard + board scenario layer
 
 
+def test_board_inline_popover_editing():
+    """G6 polish — board cards open an inline edit popover (bed scenario, EHR,
+    nursing station) that drives the live wizard control, not just a jump."""
+    js = (_STATIC / "console.js").read_text()
+    for fn in ("function openBoardPopover", "function bedScenarioPopover",
+               "function ehrPopover", "function nursePopover"):
+        assert fn in js
+    html = (_STATIC.parent / "templates" / "console.html").read_text()
+    assert 'id="board-popover"' in html
+
+
 def test_board_shares_the_wizard_builder():
     """No logic divergence: the board reads the wizard's state and its Launch reuses
     the same launchScenario (it does not post via a separate path)."""

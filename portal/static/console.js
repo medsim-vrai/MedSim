@@ -671,7 +671,11 @@
   }
 
   // ── G6 ecosystem board — an alternate VIEW of the same wizard state ───────
-  function boardCard(title, sub, status, gotoStep) {
+  // opts: a number (jump to that wizard step) OR {gotoStep, popover: fn(card)->node}.
+  // With a popover, clicking opens an inline editor; "Open in Set up →" still jumps.
+  function boardCard(title, sub, status, opts) {
+    if (typeof opts === "number") opts = { gotoStep: opts };
+    opts = opts || {};
     var card = document.createElement("button");
     card.type = "button";
     card.className = "board-card";
@@ -685,8 +689,106 @@
       body.appendChild(s);
     }
     card.appendChild(dot); card.appendChild(body);
-    if (gotoStep) card.addEventListener("click", function () { setView("wizard"); wizGoto(gotoStep); });
+    if (opts.popover || opts.gotoStep) {
+      card.addEventListener("click", function () {
+        if (opts.popover) {
+          var node = opts.popover(card);
+          if (node) { openBoardPopover(card, node); return; }
+        }
+        if (opts.gotoStep) { setView("wizard"); wizGoto(opts.gotoStep); }
+      });
+    }
     return card;
+  }
+
+  // ── board inline-edit popover ──────────────────────────────────────────────
+  function closeBoardPopover() {
+    var pop = $("#board-popover");
+    if (!pop) return;
+    pop.hidden = true; pop.textContent = "";
+    if (pop._onDoc) { document.removeEventListener("mousedown", pop._onDoc); pop._onDoc = null; }
+    if (pop._onKey) { document.removeEventListener("keydown", pop._onKey); pop._onKey = null; }
+  }
+
+  function openBoardPopover(anchor, content) {
+    var pop = $("#board-popover");
+    if (!pop) return;
+    closeBoardPopover();
+    pop.appendChild(content);
+    pop.hidden = false;
+    var r = anchor.getBoundingClientRect();
+    pop.style.top = (r.bottom + 6) + "px";
+    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 280)) + "px";
+    setTimeout(function () {
+      pop._onDoc = function (e) {
+        if (!pop.contains(e.target) && !anchor.contains(e.target)) closeBoardPopover();
+      };
+      pop._onKey = function (e) { if (e.key === "Escape") closeBoardPopover(); };
+      document.addEventListener("mousedown", pop._onDoc);
+      document.addEventListener("keydown", pop._onKey);
+    }, 0);
+  }
+
+  function popoverShell(label, control, gotoStep) {
+    var box = document.createElement("div");
+    box.className = "bp-inner";
+    var h = document.createElement("div"); h.className = "bp-label"; h.textContent = label;
+    box.appendChild(h);
+    if (control) box.appendChild(control);
+    if (gotoStep) {
+      var open = document.createElement("button");
+      open.type = "button"; open.className = "bp-open"; open.textContent = "Open in Set up →";
+      open.addEventListener("click", function () {
+        closeBoardPopover(); setView("wizard"); wizGoto(gotoStep);
+      });
+      box.appendChild(open);
+    }
+    return box;
+  }
+
+  // Edits drive the LIVE wizard control (dispatch change → prefill/review), then
+  // re-render the board — no divergent state.
+  function bedScenarioPopover(idx) {
+    var sel = buildSampleSelect(bedScenarios()[idx] && bedScenarios()[idx].sample);
+    sel.addEventListener("change", function () {
+      var live = document.querySelectorAll("#wiz-bed-scenarios .bed-scn-sel");
+      if (live[idx]) {
+        live[idx].value = sel.value;
+        live[idx].dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      renderBoard();
+    });
+    return popoverShell("Bed " + (idx + 1) + " — scenario", sel, 2);
+  }
+
+  function ehrPopover() {
+    var live = $("#wiz-ehr");
+    var sel = document.createElement("select");
+    if (live) Array.prototype.forEach.call(live.options, function (o) {
+      var opt = document.createElement("option");
+      opt.value = o.value; opt.textContent = o.textContent;
+      if (o.value === live.value) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener("change", function () {
+      if (live) { live.value = sel.value; live.dispatchEvent(new Event("change", { bubbles: true })); }
+      renderBoard();
+    });
+    return popoverShell("EHR for the session", sel, 1);
+  }
+
+  function nursePopover() {
+    var live = $("#wiz-nurse-station");
+    var lab = document.createElement("label"); lab.className = "bp-check";
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !!(live && live.checked);
+    var sp = document.createElement("span"); sp.textContent = "Nursing station on";
+    cb.addEventListener("change", function () {
+      if (live) { live.checked = cb.checked; live.dispatchEvent(new Event("change", { bubbles: true })); }
+      renderBoard();
+    });
+    lab.appendChild(cb); lab.appendChild(sp);
+    return popoverShell("Group resource", lab, 4);
   }
 
   function renderBoard() {
@@ -720,21 +822,25 @@
     if (res) {
       res.textContent = "";
       var ehrEl = $("#wiz-ehr");
-      res.appendChild(boardCard("EHR", (ehrEl ? ehrEl.value : "") || "—", "green", 1));
+      res.appendChild(boardCard("EHR", (ehrEl ? ehrEl.value : "") || "—", "green",
+        { gotoStep: 1, popover: ehrPopover }));
       var ns = $("#wiz-nurse-station");
       res.appendChild(boardCard("Nursing station", (ns && ns.checked) ? "on" : "off",
-        (ns && ns.checked) ? "green" : "amber", 4));
+        (ns && ns.checked) ? "green" : "amber", { gotoStep: 4, popover: nursePopover }));
     }
     var rooms = $("#board-rooms");
     if (rooms) {
       rooms.textContent = "";
       var n = bedCount(), scn = bedScenarios(), devs = bedDevices();
       for (var i = 0; i < n; i++) {
-        var sel = scn[i] && scn[i].sample;
-        var s = sel ? sampleById(sel) : null;
-        var sub = s ? ((s.name || sel) + " · " + ((devs[i] && devs[i].length) || 0) + " device(s)")
-                    : "no scenario yet";
-        rooms.appendChild(boardCard("Bed " + (i + 1), sub, s ? "green" : "amber", 2));
+        (function (idx) {
+          var sel = scn[idx] && scn[idx].sample;
+          var s = sel ? sampleById(sel) : null;
+          var sub = s ? ((s.name || sel) + " · " + ((devs[idx] && devs[idx].length) || 0) + " device(s)")
+                      : "no scenario yet";
+          rooms.appendChild(boardCard("Bed " + (idx + 1), sub, s ? "green" : "amber",
+            { gotoStep: 2, popover: function () { return bedScenarioPopover(idx); } }));
+        })(i);
       }
     }
     var pill = $("#board-readiness");
