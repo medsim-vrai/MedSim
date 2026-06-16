@@ -385,8 +385,27 @@ async def mission_control_console(
          "roleGroup": p.get("roleGroup", "")}
         for p in persona_recs
     ]
-    bootstrap = {"samples": samples, "ehrs": ehrs,
-                 "default_ehr": default_ehr, "personas": personas}
+    # Device catalog for the wizard's Devices step (Basic vs Advanced), built from
+    # the SAME registry the control room uses — kind + default model + group.
+    from portal.devices import registry as _dev_reg
+    _dev_labels = {
+        "pump_iv": "IV pump", "pump_enteral": "Enteral pump",
+        "cabinet": "Dispensing cabinet (med cart)", "patient_integrated_alarm": "Patient alarm",
+        "telemetry_monitor": "Telemetry monitor", "vent_monitor": "Vent monitor",
+        "ventilator": "Ventilator (controls)",
+    }
+    _dev_advanced = {"telemetry_monitor", "vent_monitor", "ventilator"}
+    devices_catalog = []
+    for k in _dev_reg.list_kinds():
+        models = _dev_reg.REFERENCE_MODELS.get(k) or []
+        devices_catalog.append({
+            "kind": k, "name": _dev_labels.get(k, k),
+            "group": "Advanced" if k in _dev_advanced else "Basic",
+            "model": models[0] if models else "",
+        })
+
+    bootstrap = {"samples": samples, "ehrs": ehrs, "default_ehr": default_ehr,
+                 "personas": personas, "devices": devices_catalog}
     return templates.TemplateResponse(request, "console.html", {
         "mode": mode, "bootstrap": bootstrap,
         "samples": samples, "ehrs": ehrs, "default_ehr": default_ehr})

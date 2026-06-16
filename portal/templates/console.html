@@ -51,7 +51,8 @@
             <li class="wiz-pill active" data-pill="1">1&nbsp;·&nbsp;Patients &amp; rooms</li>
             <li class="wiz-pill" data-pill="2">2&nbsp;·&nbsp;Scenario</li>
             <li class="wiz-pill" data-pill="3">3&nbsp;·&nbsp;Characters</li>
-            <li class="wiz-pill" data-pill="4">4&nbsp;·&nbsp;Review</li>
+            <li class="wiz-pill" data-pill="4">4&nbsp;·&nbsp;Devices</li>
+            <li class="wiz-pill" data-pill="5">5&nbsp;·&nbsp;Review</li>
           </ol>
 
           <div class="wiz-step" data-step="1">
@@ -87,6 +88,18 @@
           </div>
 
           <div class="wiz-step" data-step="4" hidden>
+            <h2>Devices</h2>
+            <p class="muted">Assign devices to each bed — basic and advanced. They're minted (QR
+               codes) at launch and appear in the cockpit ready to scan on the bedside tablets.</p>
+            <div id="wiz-devices" class="wiz-devices"></div>
+            <div id="wiz-group" class="wiz-group" hidden>
+              <h3 class="wiz-group-h">Group resources</h3>
+              <label class="wiz-group-opt"><input type="checkbox" id="wiz-nurse-station">
+                Nursing station <span class="muted">— one station monitoring every bed</span></label>
+            </div>
+          </div>
+
+          <div class="wiz-step" data-step="5" hidden>
             <h2>Review</h2>
             <div id="wiz-review" class="wiz-review"></div>
             <div class="wiz-readiness">

@@ -234,6 +234,34 @@ def test_bootstrap_samples_carry_a_derived_patient(client):
     assert all(s.get("patient_id") for s in boot["samples"])
 
 
+def test_devices_step_present(client):
+    html = client.get("/portal/console").text
+    assert 'data-pill="4"' in html and "Devices" in html      # the 5-step wizard
+    assert 'id="wiz-devices"' in html and 'id="wiz-group"' in html
+    assert 'id="wiz-nurse-station"' in html                    # group resource
+
+
+def test_bootstrap_carries_device_catalog(client):
+    """Devices step reuses the SAME registry: 7 kinds, grouped Basic/Advanced,
+    each with a default model to mint at launch."""
+    boot = _bootstrap(client.get("/portal/console").text)
+    devs = {d["kind"]: d for d in boot["devices"]}
+    assert set(devs) == {"pump_iv", "pump_enteral", "cabinet", "patient_integrated_alarm",
+                         "telemetry_monitor", "vent_monitor", "ventilator"}
+    assert devs["telemetry_monitor"]["group"] == "Advanced"
+    assert devs["pump_iv"]["group"] == "Basic"
+    assert devs["telemetry_monitor"]["model"] == "generic_tele"   # default model present
+    assert all(d["model"] for d in boot["devices"])
+
+
+def test_client_mints_devices_at_launch():
+    js = (_STATIC / "console.js").read_text()
+    assert "/api/device/register" in js                       # per-bed device minting
+    assert "/portal/control/launch_nurse_station" in js       # group nursing station
+    for fn in ("function rebuildDevices", "function bedDevices", "function registerDevices"):
+        assert fn in js
+
+
 def test_client_wires_unified_room_flow():
     js = (_STATIC / "console.js").read_text()
     assert "/api/room/start" in js and "/portal/control/start" in js   # >1 bed vs 1 bed

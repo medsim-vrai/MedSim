@@ -193,7 +193,7 @@
   }
 
   // ── G5 Launch Wizard ──────────────────────────────────────────────────────
-  var WIZ = { step: 1, max: 4, boot: null, overall: "loading" };
+  var WIZ = { step: 1, max: 5, boot: null, overall: "loading" };
 
   function readBootstrap() {
     var el = document.getElementById("console-bootstrap");
@@ -217,7 +217,9 @@
       bedCountEl.addEventListener("change", rebuildBedScenarios);
       bedCountEl.addEventListener("input", rebuildBedScenarios);
     }
-    rebuildBedScenarios();               // default: one bed
+    var ns = $("#wiz-nurse-station");
+    if (ns) ns.addEventListener("change", refreshReview);
+    rebuildBedScenarios();               // default: one bed (also builds device rows)
     wizGoto(1);
   }
 
@@ -289,6 +291,7 @@
       row.appendChild(lab); row.appendChild(sel);
       box.appendChild(row);
     }
+    rebuildDevices();
     prefillCharacters();
   }
 
@@ -303,6 +306,78 @@
     var boot = WIZ.boot || {};
     var f = (boot.samples || []).filter(function (s) { return s.id === id; });
     return f.length ? f[0] : null;
+  }
+
+  // ── devices ───────────────────────────────────────────────────────────────
+  // One device picker (basic + advanced) per bed; nursing station is a group
+  // resource (rooms only). Plans are minted into QR stations at launch.
+  function rebuildDevices() {
+    var box = $("#wiz-devices");
+    if (!box) return;
+    var prev = bedDevices();                  // preserve per-bed selections by index
+    box.textContent = "";
+    var cat = (WIZ.boot && WIZ.boot.devices) || [];
+    var n = bedCount();
+    for (var i = 0; i < n; i++) {
+      var block = document.createElement("div");
+      block.className = "wiz-dev-bed";
+      block.setAttribute("data-bed", String(i));
+      var head = document.createElement("div");
+      head.className = "wdb-head"; head.textContent = "Bed " + (i + 1);
+      block.appendChild(head);
+      var grid = document.createElement("div");
+      grid.className = "wdb-grid";
+      cat.forEach(function (d) {
+        var lab = document.createElement("label");
+        lab.className = "dev-opt";
+        var cb = document.createElement("input");
+        cb.type = "checkbox"; cb.className = "dev-cb"; cb.value = d.kind;
+        if (prev[i] && prev[i].indexOf(d.kind) >= 0) cb.checked = true;
+        cb.addEventListener("change", refreshReview);
+        var t = document.createElement("span");
+        t.textContent = d.name;
+        if (d.group === "Advanced") {
+          var badge = document.createElement("span");
+          badge.className = "dev-adv"; badge.textContent = "adv";
+          t.appendChild(badge);
+        }
+        lab.appendChild(cb); lab.appendChild(t);
+        grid.appendChild(lab);
+      });
+      block.appendChild(grid);
+      box.appendChild(block);
+    }
+    var group = $("#wiz-group");
+    if (group) group.hidden = !isMulti();     // nursing station = a room (multi) resource
+    refreshReview();
+  }
+
+  function bedDevices() {
+    return Array.prototype.slice.call(document.querySelectorAll("#wiz-devices .wiz-dev-bed"))
+      .map(function (block) {
+        return Array.prototype.slice.call(block.querySelectorAll(".dev-cb:checked"))
+          .map(function (cb) { return cb.value; });
+      });
+  }
+
+  // Mint a bed's planned devices (QR stations) once it has a join code at launch.
+  function registerDevices(join, kinds) {
+    var cat = (WIZ.boot && WIZ.boot.devices) || [];
+    var byKind = {};
+    cat.forEach(function (d) { byKind[d.kind] = d; });
+    var chain = Promise.resolve();
+    (kinds || []).forEach(function (k) {
+      var d = byKind[k];
+      if (!d) return;
+      chain = chain.then(function () {
+        return fetch("/api/device/register?join=" + encodeURIComponent(join), {
+          method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ device_kind: d.kind, device_model: d.model, label: d.name })
+        }).catch(function () { /* best-effort — still addable in the cockpit */ });
+      });
+    });
+    return chain;
   }
 
   // Pre-select the core characters of the chosen scenario(s); never auto-uncheck
@@ -381,6 +456,13 @@
         var avs = selectedAvatars().length;
         if (avs) rev.appendChild(reviewRow("Avatars", avs + " with a face"));
       }
+      var devs = bedDevices();
+      var totalDev = devs.reduce(function (a, b) { return a + b.length; }, 0);
+      if (totalDev) {
+        rev.appendChild(reviewRow("Devices", totalDev + " across " + devs.length + " bed(s)"));
+      }
+      var nsEl = $("#wiz-nurse-station");
+      if (nsEl && nsEl.checked) rev.appendChild(reviewRow("Group", "Nursing station"));
     }
     var pill = $("#wiz-readiness-pill");
     if (pill) {
@@ -433,7 +515,13 @@
     fetch("/portal/control/start", { method: "POST", credentials: "same-origin", body: fd })
       .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
       .then(function (data) {
-        if (data && data.ok && data.redirect_url) { window.location = data.redirect_url; return; }
+        if (data && data.ok && data.redirect_url) {
+          var kinds = bedDevices()[0] || [];          // mint bed 1's planned devices
+          var go = function () { window.location = data.redirect_url; };
+          if (data.join_code && kinds.length) registerDevices(data.join_code, kinds).then(go);
+          else go();
+          return;
+        }
         var msg = $("#wiz-launch-msg");
         if (msg) msg.textContent = (data && data.message) || "Launch failed.";
         if (btn) { btn.disabled = false; btn.textContent = "Launch scenario"; }
@@ -474,7 +562,26 @@
     })
       .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
       .then(function (data) {
-        if (data && data.ok) { window.location = "/portal/room"; return; }
+        if (data && data.ok) {
+          var encs = data.encounters || [];
+          var devs = bedDevices();
+          var chain = Promise.resolve();
+          encs.forEach(function (e, i) {              // mint each bed's planned devices
+            var kinds = devs[i] || [];
+            if (e.join_code && kinds.length) {
+              chain = chain.then(function () { return registerDevices(e.join_code, kinds); });
+            }
+          });
+          var ns = $("#wiz-nurse-station");
+          if (ns && ns.checked) {                     // group resource: nursing station
+            chain = chain.then(function () {
+              return fetch("/portal/control/launch_nurse_station",
+                { credentials: "same-origin" }).catch(function () {});
+            });
+          }
+          chain.then(function () { window.location = "/portal/room"; });
+          return;
+        }
         var msg = $("#wiz-launch-msg");
         if (msg) msg.textContent = (data && data.message) || "Room launch failed.";
         if (btn) { btn.disabled = false; btn.textContent = "Launch scenario"; }
