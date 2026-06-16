@@ -262,6 +262,54 @@ def test_client_mints_devices_at_launch():
         assert fn in js
 
 
+def test_client_builds_shared_cast():
+    """FR-007: the non-patient checked characters become a universal cast added to
+    every bed's roster; client sends each encounter a `personas` roster."""
+    js = (_STATIC / "console.js").read_text()
+    for fn in ("function sharedCast", "function isPatientPersona"):
+        assert fn in js
+    assert "personas: roster" in js                    # each bed gets patient + shared roster
+    html = (_STATIC.parent / "templates" / "console.html").read_text()
+    assert "universal" in html.lower()                 # the Characters-step hint
+
+
+def test_room_start_shares_cast_across_every_bed(monkeypatch):
+    """FR-007 end-to-end (no new backend): a per-encounter `personas` roster of
+    [patient + shared clinician] lands in each bed's selected_personas, which is
+    what runtime reads to make the shared character reachable at that bed."""
+    from portal import server, ehr_db, control_room, auth
+    monkeypatch.setattr(ehr_db, "_conn", lambda: None)
+    ehr_db._mem_session_state = None
+    _ensure_vault()
+    c = TestClient(server.app)
+    c.post("/login", data={"password": TEST_PASSWORD})
+    for v in auth._active_vaults.values():
+        v._data["ANTHROPIC_API_KEY"] = "dummy-key"
+    if control_room.get_active_room() is not None:
+        control_room.end_active_room()
+    try:
+        r = c.post("/api/room/start", json={
+            "label": "Test ward",
+            "encounters": [
+                {"scenario_name": "Bed 1", "persona_id": "P-014",
+                 "personas": ["P-014", "P-001"], "ehr_id": "cyrus"},   # P-001 = shared doctor
+                {"scenario_name": "Bed 2", "persona_id": "P-013",
+                 "personas": ["P-013", "P-001"], "ehr_id": "cyrus"},
+            ],
+        })
+        assert r.status_code == 200 and r.json()["ok"] is True
+        room = control_room.get_active_room()
+        encs = list(room.encounters.values() if hasattr(room.encounters, "values") else room.encounters)
+        assert len(encs) == 2
+        for e in encs:                                   # the shared doctor is at every bed
+            assert "P-001" in e.selected_personas
+        assert {e.patient_persona_id for e in encs} == {"P-014", "P-013"}   # patients still per-bed
+    finally:
+        if control_room.get_active_room() is not None:
+            control_room.end_active_room()
+        ehr_db._mem_session_state = None
+
+
 def test_client_wires_unified_room_flow():
     js = (_STATIC / "console.js").read_text()
     assert "/api/room/start" in js and "/portal/control/start" in js   # >1 bed vs 1 bed

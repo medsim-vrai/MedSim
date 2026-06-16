@@ -308,6 +308,24 @@
     return f.length ? f[0] : null;
   }
 
+  function personaById(id) {
+    var ps = (WIZ.boot && WIZ.boot.personas) || [];
+    for (var i = 0; i < ps.length; i++) { if (ps[i].id === id) return ps[i]; }
+    return null;
+  }
+  function isPatientPersona(id) {
+    var p = personaById(id);
+    return !!(p && p.roleGroup === "Patient");
+  }
+  // The universal/shared cast = every checked NON-patient persona (a common
+  // doctor, allied-health team, family) — added to every bed alongside its patient.
+  function sharedCast() {
+    return selectedPersonas().filter(function (id) { return !isPatientPersona(id); });
+  }
+  function uniq(arr) {
+    return arr.filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+  }
+
   // ── devices ───────────────────────────────────────────────────────────────
   // One device picker (basic + advanced) per bed; nursing station is a group
   // resource (rooms only). Plans are minted into QR stations at launch.
@@ -447,6 +465,8 @@
           rev.appendChild(reviewRow("Bed " + (i + 1),
             (bs.name || b.sample) + " · patient " + (bs.patient_id || "?")));
         });
+        var sc = sharedCast();
+        if (sc.length) rev.appendChild(reviewRow("Shared cast", sc.length + " at every bed"));
       } else {
         var bs0 = sampleById(beds[0].sample) || {};
         var n = selectedPersonas().length;
@@ -508,8 +528,9 @@
       if (s.week !== undefined && s.week !== null) fd.append("week", String(s.week));
       (s.modules || []).forEach(function (m) { fd.append("modules", m); });
     }
-    selectedPersonas().forEach(function (p) { fd.append("personas", p); });
-    selectedAvatars().forEach(function (p) { fd.append("avatar_personas", p); });
+    var roster = uniq([(s && s.patient_id) || ""].concat(selectedPersonas()));  // patient + cast
+    roster.forEach(function (p) { fd.append("personas", p); });
+    selectedAvatars().forEach(function (p) { if (roster.indexOf(p) >= 0) fd.append("avatar_personas", p); });
     var ehrEl = $("#wiz-ehr");
     if (ehrEl) fd.append("ehr_id", ehrEl.value);
     fetch("/portal/control/start", { method: "POST", credentials: "same-origin", body: fd })
@@ -540,11 +561,17 @@
     var label = "Training room";
     var ehrEl = $("#wiz-ehr");
     var ehr = ehrEl ? ehrEl.value : "";                 // one EHR for the whole session
+    var shared = sharedCast();                          // universal cast across every bed
     var encounters = validBeds().map(function (b, i) {
       var s = sampleById(b.sample) || {};
+      var patient = s.patient_id || "";
+      var roster = uniq([patient].concat(shared));      // this bed's patient + the shared cast
+      var avatars = selectedAvatars().filter(function (id) { return roster.indexOf(id) >= 0; });
       var enc = {
         scenario_name: "Bed " + (i + 1) + " · " + (s.name || "Scenario"),
-        persona_id: s.patient_id || "",                 // patient derived from the scenario
+        persona_id: patient,                            // patient derived from the scenario
+        personas: roster,                               // roster drives runtime availability
+        avatar_personas: avatars,
         ehr_id: ehr,
         scenario_notes: notes,
         scenario_text: s.scenario_text || ""
