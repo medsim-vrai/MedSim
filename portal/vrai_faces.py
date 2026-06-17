@@ -540,7 +540,7 @@ async def _voice_and_push_line(
     short lines or when no server voice is available (device speaks it locally)."""
     first, rest = _split_reply(line)
     if rest:
-        b64, fmt = await _synthesize_voice(sess, cid, first)
+        b64, fmt = await _synthesize_voice(sess, cid,first)
         if b64:
             spoken = await push_speech(scenario_id, cid, text=first, emotion=emotion,
                                        audio_b64=b64, audio_format=fmt,
@@ -550,7 +550,7 @@ async def _voice_and_push_line(
                 tail_b64: str | None = None
                 tail_fmt: str | None = None
                 try:
-                    tail_b64, tail_fmt = await _synthesize_voice(sess, cid, rest)
+                    tail_b64, tail_fmt = await _synthesize_voice(sess, cid,rest)
                 except Exception:  # noqa: BLE001 — text-only keeps the line audible
                     tail_b64, tail_fmt = None, None
                 try:
@@ -566,7 +566,7 @@ async def _voice_and_push_line(
             _speech_tail_tasks.add(t)
             t.add_done_callback(_speech_tail_tasks.discard)
             return {"streamed": True, **spoken}
-    b64, fmt = await _synthesize_voice(sess, cid, line)
+    b64, fmt = await _synthesize_voice(sess, cid,line)
     spoken = await push_speech(scenario_id, cid, text=line, emotion=emotion,
                                audio_b64=b64, audio_format=fmt)
     return {"streamed": False, **spoken}
@@ -627,7 +627,7 @@ async def _stream_reply_turn(
             cut_at = _first_sentence_cut(buf)
             if cut_at is not None:
                 first = buf[:cut_at].strip()
-                b64, fmt = await _synthesize_voice(sess, cid, first)
+                b64, fmt = await _synthesize_voice(sess, cid,first)
                 spoken = await push_speech(scenario_id, cid, text=first,
                                            audio_b64=b64, audio_format=fmt,
                                            end_of_utterance=False)
@@ -641,7 +641,7 @@ async def _stream_reply_turn(
         if stream_err is not None or not buf.strip():
             return None
         reply = buf.strip()
-        b64, fmt = await _synthesize_voice(sess, cid, reply)
+        b64, fmt = await _synthesize_voice(sess, cid,reply)
         spoken = await push_speech(scenario_id, cid, text=reply,
                                    audio_b64=b64, audio_format=fmt)
         _finish_streamed_turn(sess, sim_id, cid, persona_name, user_text, reply, None)
@@ -668,7 +668,7 @@ async def _stream_reply_turn(
             tail_b64: str | None = None
             tail_fmt: str | None = None
             try:
-                tail_b64, tail_fmt = await _synthesize_voice(sess, cid, rest)
+                tail_b64, tail_fmt = await _synthesize_voice(sess, cid,rest)
             except Exception:  # noqa: BLE001 — text-only frame keeps the turn audible
                 tail_b64, tail_fmt = None, None
             try:
@@ -1144,7 +1144,43 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         persona_name = str(card.get("name") or cid)
         reply = ""
         mode = "echo"
-        if sess is not None and getattr(sess, "api_key", ""):
+        vsess = sess   # the encounter to borrow voice + transcript from (room: a bed)
+
+        # FR-007 v2 — a SHARED character in a multi-patient room (get_active() is
+        # None) still answers, room-aware: ONE instance spanning every bed.
+        if sess is None:
+            try:
+                from . import control_room as _cr
+                _room = _cr.get_active_room()
+            except Exception:  # noqa: BLE001
+                _room = None
+            if _room is not None and cid in (getattr(_room, "shared_personas", []) or []):
+                _encs = list(_room.encounters.values())
+                _key = next((e.api_key for e in _encs if getattr(e, "api_key", "")), "")
+                vsess = next((e for e in _encs
+                              if cid in (getattr(e, "voice_assignments", {}) or {})),
+                             (_encs[0] if _encs else None))
+                if _key and _encs:
+                    _rps = [{"label": e.encounter_label or e.scenario_name or "patient",
+                             "history": e.scenario_text or ""} for e in _encs]
+                    _scn = {"id": getattr(vsess, "id", _room.room_id),
+                            "name": _room.label or "Shared care room", "room_patients": _rps}
+                    _sim = runtime.create_session_from_data(
+                        scenario=_scn, characters={cid: card}, api_key=_key)
+                    import asyncio as _aio0
+                    try:
+                        _res = await _aio0.wait_for(
+                            _aio0.to_thread(runtime.take_turn, _sim.id, cid, text), timeout=25.0)
+                    except _aio0.TimeoutError:
+                        _res = {"ok": False, "error": "character timed out"}
+                    runtime.end_session(_sim.id)
+                    if _res.get("ok"):
+                        reply = str(_res.get("reply") or "").strip(); mode = "ai"
+                    else:
+                        reply = f"(the character could not respond: {_res.get('error')})"
+                        mode = "error"
+
+        if not reply and sess is not None and getattr(sess, "api_key", ""):
             scenario = {
                 "id": sess.id,
                 "name": getattr(sess, "scenario_name", "") or scenario_id,
@@ -1192,6 +1228,10 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             if mode != "error":
                 mode = "echo"
 
+        # From here, the voice synth + operator log use vsess (the bed we borrowed
+        # in room mode; identical to sess in single-patient mode).
+        sess = vsess
+
         # Surface the exchange in the OPERATOR's control transcript. The turn above
         # runs in a throwaway runtime session, so without this the operator never
         # sees device-voice input/replies. log_turn appends the student utterance +
@@ -1229,7 +1269,7 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         audio_b64: str | None = None
         audio_format: str | None = None
         if rest:
-            audio_b64, audio_format = await _synthesize_voice(sess, cid, first)
+            audio_b64, audio_format = await _synthesize_voice(sess, cid,first)
         if rest and audio_b64:
             spoken = await push_speech(scenario_id, cid, text=first,
                                        audio_b64=audio_b64, audio_format=audio_format,
@@ -1241,7 +1281,7 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                 tail_b64: str | None = None
                 tail_fmt: str | None = None
                 try:
-                    tail_b64, tail_fmt = await _synthesize_voice(sess, cid, rest)
+                    tail_b64, tail_fmt = await _synthesize_voice(sess, cid,rest)
                 except Exception:  # noqa: BLE001 — fall through to the text-only frame
                     tail_b64, tail_fmt = None, None
                 try:
@@ -1261,7 +1301,7 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                  "streamed": True, **spoken})
 
         # Single-frame path (short reply, no split, or no server voice) — unchanged.
-        audio_b64, audio_format = await _synthesize_voice(sess, cid, reply)
+        audio_b64, audio_format = await _synthesize_voice(sess, cid,reply)
         spoken = await push_speech(scenario_id, cid, text=reply,
                                    audio_b64=audio_b64, audio_format=audio_format)
         return JSONResponse(

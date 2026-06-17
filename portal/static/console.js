@@ -892,7 +892,7 @@
       .then(function (data) {
         if (data && data.ok && data.redirect_url) {
           var kinds = bedDevices()[0] || [];          // mint bed 1's planned devices
-          var go = function () { window.location = data.redirect_url; };
+          var go = function () { window.location = "/portal/console?mode=operate"; };
           var chain = Promise.resolve();
           if (data.join_code && kinds.length) {
             chain = chain.then(function () { return registerDevices(data.join_code, kinds); });
@@ -961,7 +961,7 @@
             }
           });
           chain = chain.then(function () { return launchRoomCommon(encs); });  // common devices
-          chain.then(function () { window.location = "/portal/room"; });
+          chain.then(function () { window.location = "/portal/console?mode=operate"; });
           return;
         }
         var msg = $("#wiz-launch-msg");

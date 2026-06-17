@@ -60,9 +60,9 @@ linked top-right on every screen.
 
 | # | Step | Pass |
 |---|---|---|
-| 4b.1 | Launch a multi-bed room with a **shared character** (e.g. a common doctor in the Characters step). On the QR sheet's **Common characters**, scan the **chat** QR (`/portal/room/shared/<id>`) on one tablet. | ☐ |
-| 4b.2 | The shared-station page shows the character + "Covering <room>: <all beds>". Ask about **Bed 1's** patient → the reply is about that patient. | ☐ |
-| 4b.3 | In the SAME chat, ask about **Bed 2's** patient → one instance answers about the other patient (conversation spans beds; the doctor knows both). | ☐ |
+| 4b.1 | Launch a multi-bed room with a **shared character** (e.g. a common doctor in the Characters step; audio-only is fine). On the QR sheet's **Common characters**, scan the **one** shared-character QR (voice/avatar — "one tablet, all beds") on a single tablet. | ☐ |
+| 4b.2 | Push-to-talk / type about **Bed 1's** patient → the avatar/voice **replies with AI logic** (no longer an echo) about that patient, in its assigned voice. | ☐ |
+| 4b.3 | On the SAME tablet, ask about **Bed 2's** patient → one instance answers about the other patient (conversation spans beds; the doctor knows both). | ☐ |
 
 ## 5. Fallback + accessibility  *(G8)*
 

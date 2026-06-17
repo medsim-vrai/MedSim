@@ -378,14 +378,11 @@
             {% for c in common_characters %}
               <div class="device-qr-block">
                 <p class="device-qr-block-label">{{ c.name }}</p>
-                <p class="device-qr-block-sublabel">{{ c.role }} · {% if c.is_avatar %}avatar (animated){% else %}voice{% endif %} · shared</p>
+                <p class="device-qr-block-sublabel">{{ c.role }} · {% if c.is_avatar %}avatar (animated){% else %}voice{% endif %} · shared — ONE tablet, all beds</p>
                 <img class="device-qr-block-img"
                      src="/qr/face/{{ c.id }}.svg?scenario={{ common_scenario_id }}{% if not c.is_avatar %}&amp;mode=audio{% endif %}"
-                     alt="Avatar QR for {{ c.name }}">
-                <img class="device-qr-block-img"
-                     src="/api/qr.svg?data={{ (base_url ~ '/portal/room/shared/' ~ c.id) | urlencode }}"
-                     alt="Shared chat QR for {{ c.name }}">
-                <code class="device-qr-block-url">chat (one tablet, all beds): {{ base_url }}/portal/room/shared/{{ c.id }}</code>
+                     alt="Shared {{ c.name }} QR — one tablet, all beds">
+                <code class="device-qr-block-url">text chat (optional): {{ base_url }}/portal/room/shared/{{ c.id }}</code>
               </div>
             {% endfor %}
           </div>
