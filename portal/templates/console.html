@@ -208,6 +208,54 @@
           <span id="resumed-text"></span>
         </div>
 
+        <!-- Room controls — lifecycle parity with the classic room (start / pause /
+             resume / inject scene / print QR / end + debrief). Shown only when a room
+             is active; each button is enabled by the room's current state. -->
+        <div id="room-controls" class="room-controls" hidden>
+          <span class="rc-label">Room controls</span>
+          <button type="button" id="rc-start"  class="rc-btn rc-go">▶ Start all</button>
+          <button type="button" id="rc-pause"  class="rc-btn">⏸ Pause all</button>
+          <button type="button" id="rc-resume" class="rc-btn">▶ Resume all</button>
+          <button type="button" id="rc-scene"  class="rc-btn">⚡ Inject scene</button>
+          <button type="button" id="rc-qr"     class="rc-btn">🖨 Print QR</button>
+          <button type="button" id="rc-end"    class="rc-btn rc-danger">⏹ End all (debrief)</button>
+          <a id="rc-debrief" class="rc-btn rc-debrief" hidden target="_blank" rel="noopener">📋 Cohort debrief ↗</a>
+          <span id="rc-status" class="rc-status" aria-live="polite"></span>
+        </div>
+
+        <!-- Scene inject modal — room-level scene_broadcast (M7 palette) -->
+        <dialog id="scene-modal" class="readiness-modal scene-modal" aria-label="Inject scene">
+          <div class="rm-panel">
+            <div class="rm-head">
+              <strong>⚡ Inject scene</strong>
+              <button type="button" id="scene-close" class="rm-close" aria-label="Close">✕ Close</button>
+            </div>
+            <div class="rm-body scene-modal-body">
+              <label class="sc-field">Scene
+                <select id="scene-kind">
+                  <option value="vitals.drop">vitals.drop — hypotensive crash</option>
+                  <option value="vitals.rise">vitals.rise — sympathetic surge</option>
+                  <option value="lab.result">lab.result — new abnormal panel</option>
+                  <option value="family.arrives">family.arrives — visitor at bedside</option>
+                  <option value="pump.alarm">pump.alarm — IV occlusion</option>
+                  <option value="code.blue">code.blue — full arrest</option>
+                  <option value="note.instructor">note.instructor — free-text drop</option>
+                </select>
+              </label>
+              <label class="sc-field">Target
+                <select id="scene-target"><option value="all">All beds</option></select>
+              </label>
+              <label class="sc-field">Params <span class="muted small">(optional JSON)</span>
+                <textarea id="scene-params" rows="3" placeholder='{"note": "BP dropping"}'></textarea>
+              </label>
+              <div class="sc-actions">
+                <button type="button" id="scene-send" class="rc-btn rc-go">⚡ Inject</button>
+                <span id="scene-msg" class="muted small"></span>
+              </div>
+            </div>
+          </div>
+        </dialog>
+
         <!-- Operations — live entity cards (room-aware). Each opens in place or
              pops out onto another monitor for real-time, multi-screen ops. -->
         <div class="cockpit-head">

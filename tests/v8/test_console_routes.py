@@ -626,6 +626,9 @@ def test_operate_endpoint_live_session(client):
         patients = [e for e in data["entities"] if e["kind"] == "patient"]
         assert len(patients) == 1
         assert patients[0]["open_url"] and patients[0]["join"]
+        if data["mode"] == "room":      # room lifecycle fields for the Operate controls bar
+            assert data.get("room_id")
+            assert isinstance(data.get("states"), list) and data["states"]
     finally:
         if control_session.get_active() is not None:
             control_session.end_active()

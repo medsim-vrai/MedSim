@@ -118,6 +118,38 @@
   padding: 14px 18px; overflow-y: auto; display: grid; gap: 8px;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
+
+/* Room controls bar — lifecycle parity with the classic room */
+.room-controls {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid #e1e7ed; border-radius: 10px;
+  padding: 10px 14px; margin: 0 0 16px;
+}
+.rc-label { font-weight: 700; color: #14202b; margin-right: 4px; }
+.rc-btn {
+  cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none;
+  border: 1px solid #b9c4cf; border-radius: 6px; padding: 7px 14px;
+  background: #eef3f7; color: #27435a;
+}
+.rc-btn:hover:not(:disabled) { background: #e1ebf3; }
+.rc-btn:disabled { opacity: 0.45; cursor: default; }
+.rc-go { background: #1f7a3a; color: #fff; border-color: #1f7a3a; }
+.rc-go:hover:not(:disabled) { background: #1a6a33; }
+.rc-danger { background: #962d22; color: #fff; border-color: #962d22; }
+.rc-danger:hover:not(:disabled) { background: #7f2419; }
+.rc-debrief { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+.rc-status { color: #5a6b79; font-size: 12.5px; margin-left: 4px; }
+
+/* Scene-inject modal (narrower than the status modal; a form, not a grid) */
+.scene-modal { width: min(460px, 94vw); }
+.scene-modal-body { display: block; }
+.scene-modal-body .sc-field { display: block; margin: 8px 0; font-weight: 600; color: #3a4a58; font-size: 13px; }
+.scene-modal-body .sc-field select,
+.scene-modal-body .sc-field textarea {
+  display: block; width: 100%; margin-top: 4px; font-weight: 400;
+  padding: 7px 9px; border: 1px solid #c4cfd9; border-radius: 6px; font-size: 13px;
+}
+.sc-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .rd-row {
   border: 1px solid #e1e7ed; border-left-width: 4px; border-radius: 6px;
   padding: 6px 9px; background: #fff;

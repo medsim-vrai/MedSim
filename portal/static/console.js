@@ -272,6 +272,7 @@
   }
 
   function renderOpCards(data) {
+    renderRoomControls(data);            // room lifecycle bar (start/pause/end/…)
     var grid = $("#operate-cards");
     if (!grid) return;
     var ents = (data && data.entities) || [];
@@ -293,6 +294,84 @@
       .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
       .then(function (data) { if (data) renderOpCards(data); })
       .catch(function () { /* transient — keep the last rendered cards */ });
+  }
+
+  // ── Room controls — lifecycle parity with the classic room ────────────────
+  function rcPost(path, body) {
+    return fetch(path, {
+      method: "POST", credentials: "same-origin",
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(function (r) {
+      if (handle401(r)) return null;
+      return r.json().catch(function () { return { ok: r.ok }; });
+    }).catch(function () { return null; });
+  }
+  function rcStatus(msg) { var s = $("#rc-status"); if (s) s.textContent = msg || ""; }
+
+  function renderRoomControls(data) {
+    var bar = $("#room-controls");
+    if (!bar) return;
+    if (!data || data.mode !== "room" || !data.room_id) { bar.hidden = true; return; }
+    bar.hidden = false;
+    var states = data.states || [];
+    var anyConfigured = states.indexOf("configured") >= 0;
+    var anyRunning = states.indexOf("running") >= 0;
+    var anyPaused = states.indexOf("paused") >= 0;
+    var allEnded = states.length > 0 && states.every(function (s) { return s === "ended"; });
+    function en(id, on) { var b = $(id); if (b) b.disabled = !on; }
+    en("#rc-start", !allEnded && (anyConfigured || anyPaused));
+    en("#rc-pause", anyRunning);
+    en("#rc-resume", anyPaused);
+    en("#rc-scene", !allEnded);
+    en("#rc-end", !allEnded);
+    var dbf = $("#rc-debrief");
+    if (dbf) {
+      dbf.href = "/portal/debrief/cohort/" + encodeURIComponent(data.room_id);
+      dbf.hidden = !allEnded;
+    }
+    var sel = $("#scene-target");
+    if (sel) {
+      var pats = (data.entities || []).filter(function (e) { return e.kind === "patient"; });
+      sel.innerHTML = '<option value="all">All beds</option>' + pats.map(function (p) {
+        return '<option value="' + p.id + '">' + (p.title || p.id) + "</option>";
+      }).join("");
+    }
+  }
+
+  function wireRoomControls() {
+    var b;
+    if ((b = $("#rc-start")))  b.addEventListener("click", function () { rcStatus("Starting…"); rcPost("/api/room/start_all").then(function () { rcStatus(""); loadOperate(); }); });
+    if ((b = $("#rc-pause")))  b.addEventListener("click", function () { rcStatus("Pausing…");  rcPost("/api/room/freeze_all").then(function () { rcStatus(""); loadOperate(); }); });
+    if ((b = $("#rc-resume"))) b.addEventListener("click", function () { rcStatus("Resuming…"); rcPost("/api/room/resume_all").then(function () { rcStatus(""); loadOperate(); }); });
+    if ((b = $("#rc-qr")))     b.addEventListener("click", function () { window.open("/portal/control/qr_print", "_blank", "noopener"); });
+    if ((b = $("#rc-end")))    b.addEventListener("click", function () {
+      if (!window.confirm("End ALL beds and build the cohort debrief? Connected students are disconnected.")) return;
+      rcStatus("Ending…");
+      rcPost("/api/room/end").then(function (res) {
+        if (res && res.cohort_debrief_url) { window.location = res.cohort_debrief_url; }
+        else { rcStatus(""); loadOperate(); }
+      });
+    });
+    var dlg = $("#scene-modal");
+    if ((b = $("#rc-scene")) && dlg) b.addEventListener("click", function () { if (dlg.showModal) dlg.showModal(); });
+    var sx = $("#scene-close"); if (sx && dlg) sx.addEventListener("click", function () { dlg.close(); });
+    if (dlg) dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
+    var send = $("#scene-send");
+    if (send) send.addEventListener("click", function () {
+      var kind = ($("#scene-kind") || {}).value || "";
+      var tgt = ($("#scene-target") || {}).value || "all";
+      var raw = (($("#scene-params") || {}).value || "").trim();
+      var msg = $("#scene-msg");
+      var params = {};
+      if (raw) { try { params = JSON.parse(raw); } catch (e) { if (msg) msg.textContent = "Params must be valid JSON."; return; } }
+      if (msg) msg.textContent = "Injecting…";
+      rcPost("/api/room/scene_broadcast", { scene: { kind: kind, params: params }, targets: tgt === "all" ? "all" : [tgt] })
+        .then(function (res) {
+          if (msg) msg.textContent = (res && res.ok) ? "Injected ✓" : "Failed.";
+          if (res && res.ok && dlg) setTimeout(function () { dlg.close(); if (msg) msg.textContent = ""; }, 700);
+        });
+    });
   }
 
   // Collapsed-readiness summary line (the tiles live inside the <details>).
@@ -1231,6 +1310,7 @@
     if (opRefresh) {
       opRefresh.addEventListener("click", function () { loadOperate(); });
     }
+    wireRoomControls();           // room lifecycle bar (start/pause/resume/inject/QR/end)
     initWizard();
     applyMode(currentMode());
     poll();

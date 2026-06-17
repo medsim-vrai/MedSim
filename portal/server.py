@@ -5670,7 +5670,12 @@ async def api_control_operate(
                 "open_url": "/portal/control/launch_nurse_station",
             })
         return JSONResponse({"ok": True, "mode": "room",
-                             "label": room.label or "Care room", "entities": entities})
+                             "label": room.label or "Care room",
+                             # room lifecycle state for the Operate room-controls bar
+                             "room_id": room.room_id,
+                             "room_code": getattr(room, "room_code", ""),
+                             "states": [getattr(e, "state", "") for e in encs],
+                             "entities": entities})
 
     try:
         sess = control_session.get_active()
