@@ -378,6 +378,22 @@ async def mission_control_console(
         s2 = dict(s)
         s2["patient_id"] = _patient_of(s)
         samples.append(s2)
+    # FR-011 #51 — PARITY WITH CLASSIC SETUP: /portal/control/setup also lists saved
+    # v1 YAML scenarios (scenarios/*.yaml). Surface them here too so the wizard and
+    # the classic room never show a different set. v1 has no v2 persona roster, so
+    # there's no auto-patient/cast — the bed proceeds with manually-picked characters;
+    # flagged `legacy` so the picker can label it. (No-op when scenarios/ is empty.)
+    for v in scenarios.list_scenarios():
+        if v.get("error"):
+            continue
+        samples.append({
+            "id": "v1:" + str(v.get("id") or ""),
+            "name": v.get("name") or v.get("id") or "Untitled (v1)",
+            "personas": [],
+            "patient_id": None,
+            "scenario_text": v.get("patient_summary") or "",
+            "legacy": True,
+        })
     ehrs = [{"id": e["id"], "name": e["name"]} for e in ehr_registry.REGISTRY]
     default_ehr = ehr_registry.default_id()
     personas = [

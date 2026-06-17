@@ -94,6 +94,8 @@
 
 /* ── readiness detail (drops down from the bar) ────────────────────────── */
 .readiness-detail {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 60;
+  max-height: 72vh; overflow-y: auto;
   background: #fff; border-bottom: 1px solid #d7dee5;
   box-shadow: 0 6px 16px rgba(0,0,0,0.10);
   padding: 10px 16px; display: grid; gap: 8px;

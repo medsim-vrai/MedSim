@@ -693,3 +693,15 @@ def test_encounter_stations_unknown_or_no_room(client):
     from portal import control_room
     control_room.end_active_room()
     assert client.get("/api/encounter/nope/stations").status_code == 404
+
+
+def test_wizard_surfaces_v1_scenarios_like_classic(client, monkeypatch):
+    """#51 — the wizard's scenario list includes saved v1 YAML scenarios (parity
+    with the classic setup), tagged legacy with no patient roster."""
+    from portal import scenarios
+    monkeypatch.setattr(scenarios, "list_scenarios", lambda: [
+        {"id": "demo_v1", "name": "Demo V1", "patient_summary": "x", "characters": []},
+    ])
+    html = client.get("/portal/console?mode=setup").text
+    assert "v1:demo_v1" in html and "Demo V1" in html
+    assert "legacy" in html        # flagged so the picker can label it

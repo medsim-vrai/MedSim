@@ -525,7 +525,8 @@
     sel.appendChild(blank);
     (boot.samples || []).forEach(function (s) {
       var o = document.createElement("option");
-      o.value = s.id; o.textContent = s.name;
+      o.value = s.id;
+      o.textContent = s.name + (s.legacy ? "  · legacy (no patient roster)" : "");
       if (selectedId && s.id === selectedId) o.selected = true;
       sel.appendChild(o);
     });
