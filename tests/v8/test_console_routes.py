@@ -680,3 +680,16 @@ def test_encounter_operator_turn_unknown_encounter(client):
     r = client.post("/api/room/encounter/nope/operator/turn",
                     data={"persona_id": "P-001", "message": "hi"})
     assert r.status_code == 404
+
+
+def test_encounter_stations_requires_auth():
+    from portal import server
+    c = TestClient(server.app)
+    assert c.get("/api/encounter/nope/stations").status_code == 401
+
+
+def test_encounter_stations_unknown_or_no_room(client):
+    """Per-bed roster card feed (#54): no room / bad encounter -> 404, never 500."""
+    from portal import control_room
+    control_room.end_active_room()
+    assert client.get("/api/encounter/nope/stations").status_code == 404

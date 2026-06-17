@@ -1061,6 +1061,8 @@
     await bootLeadStudent();
     await bootVoices();
     bootPtt();                // operator push-to-talk (parity with classic ops)
+    bootHandoff();            // shift handoff (FR-009), scoped to this bed
+    bootStations();           // live student-station roster for this bed
     // M55 — medications card.
     wireMedsToggle();
     await bootMedications();
@@ -1442,5 +1444,146 @@
       }
       h.appendChild(tools);
     });
+  }
+
+  // ── Shift handoff (FR-009) — per-bed via ?bed=<encounterId> ───────────────
+  function hoApi(path, opts) {
+    var url = '/api/control/handoff' + (path || '');
+    url += (url.indexOf('?') >= 0 ? '&' : '?') + 'bed=' + encodeURIComponent(cfg.encounterId);
+    return fetch(url, opts).then(function (r) { return r.json(); });
+  }
+  function hoRenderActive(st) {
+    var cfgEl = $('ho-config'), a = $('ho-active'), evb = $('ho-eval');
+    if (!st || !st.active) {
+      if (cfgEl) cfgEl.hidden = false;
+      if (a) a.hidden = true;
+      if (evb) evb.hidden = true;
+      return;
+    }
+    if (cfgEl) cfgEl.hidden = true;
+    if (a) a.hidden = false;
+    var h = '<div class="muted small">Mode: ' + escapeHTML(st.mode)
+          + (st.dial ? ' · ' + escapeHTML(st.dial) : '') + ' · phase: ' + escapeHTML(st.phase) + '</div>';
+    if (st.n_patients > 1 && st.current_patient)
+      h += '<div class="small">Current patient: ' + escapeHTML(st.current_patient)
+         + ' (' + (st.cursor + 1) + '/' + st.n_patients + ')</div>';
+    h += '<div class="ho-actions">';
+    if (st.phase === 'handoff' && st.n_patients > 1) h += '<button type="button" data-act="advance">Next patient →</button>';
+    if (st.phase === 'handoff' || st.phase === 'prioritization') h += '<button type="button" data-act="evaluate">🧮 Score the handoff</button>';
+    h += '<button type="button" data-act="end">End handoff</button></div>';
+    a.innerHTML = h;
+    a.querySelectorAll('button[data-act]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var act = btn.getAttribute('data-act');
+        if (act === 'advance') hoApi('/advance', { method: 'POST' }).then(hoRefresh);
+        else if (act === 'evaluate') hoApi('/evaluate', { method: 'POST' })
+          .then(function (j) { hoRenderEval(j.evaluations || {}); });
+        else if (act === 'end') { if (confirm('End the handoff?')) hoApi('/end', { method: 'POST' }).then(hoRefresh); }
+      });
+    });
+  }
+  function hoRenderEval(evals) {
+    var box = $('ho-eval'); if (!box) return; box.hidden = false;
+    var html = '';
+    Object.keys(evals).forEach(function (pid) {
+      var ev = evals[pid]; if (!ev) return;
+      var d = ev.perception_delta || {};
+      html += '<div class="ho-evhead"><strong>' + escapeHTML((ev.patient && ev.patient.name) || pid)
+            + '</strong> — measured ' + (d.measured_pct != null ? d.measured_pct : '–') + '%</div>';
+      var comp = (d.rows || []).filter(function (r) { return r.q === 'completeness'; })[0];
+      if (comp) html += '<div class="small">Self ' + comp.self_pct + '% vs measured ' + comp.measured_pct
+            + '% → <strong>' + escapeHTML(comp.verdict) + '</strong></div>';
+      html += '<div class="muted small" style="margin-top:3px;">Tick to confirm (✗ = high-risk miss):</div>';
+      Object.keys(ev.coverage || {}).forEach(function (eid) {
+        var c = ev.coverage[eid];
+        var mark = c.said ? '✓' : (c.high_risk ? '✗' : '·');
+        html += '<label class="small ho-cov' + (c.high_risk && !c.said ? ' ho-miss' : '') + '">'
+              + '<input type="checkbox" data-confirm="' + escapeHTML(pid) + ':' + escapeHTML(eid) + '"'
+              + (c.confirmed ? ' checked' : '') + '> ' + mark + ' ' + escapeHTML(c.display) + '</label>';
+      });
+      if ((ev.auto_prompts || []).length) {
+        html += '<div class="small muted" style="margin-top:4px;">Debrief prompts:</div><ul class="small ho-prompts">';
+        ev.auto_prompts.forEach(function (p) { html += '<li>' + escapeHTML(p) + '</li>'; });
+        html += '</ul>';
+      }
+    });
+    html += '<div style="margin-top:8px;"><a href="/portal/debrief/current" target="_blank" rel="noopener">Open debrief ↗</a></div>';
+    box.innerHTML = html;
+    box.querySelectorAll('input[data-confirm]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var parts = cb.getAttribute('data-confirm').split(':');
+        hoApi('/confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ persona_id: parts[0], element_id: parts[1], confirmed: cb.checked }) });
+      });
+    });
+  }
+  function hoRefresh() {
+    return hoApi('').then(function (st) {
+      var sum = $('ho-summary');
+      if (sum) sum.textContent = st && st.active ? ('· ' + st.mode + ' · ' + st.phase) : '· not started';
+      hoRenderActive(st);
+      if (st && st.active) hoApi('/evaluation').then(function (j) {
+        if (j && j.evaluations && Object.keys(j.evaluations).length) hoRenderEval(j.evaluations);
+      });
+    }).catch(function () {});
+  }
+  function bootHandoff() {
+    var sel = $('ho-counterpart'); if (!sel) return;
+    var ps = pttPersonas();
+    sel.innerHTML = ps.map(function (p) {
+      return '<option value="' + escapeHTML(p.id) + '">'
+        + escapeHTML((p.name || p.id) + (p.role ? ' — ' + p.role : '')) + '</option>';
+    }).join('');
+    var mode = $('ho-mode'), dialWrap = $('ho-dial-wrap');
+    if (mode && dialWrap) mode.addEventListener('change', function () {
+      dialWrap.hidden = mode.value !== 'oncoming';
+    });
+    var start = $('ho-start');
+    if (start) start.addEventListener('click', function () {
+      var b = { mode: mode ? mode.value : 'offgoing', counterpart_id: sel.value };
+      if (b.mode === 'oncoming') b.dial = ($('ho-dial') || {}).value;
+      hoApi('/start', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(b) }).then(function (j) {
+        if (!j.ok) { var s = $('ho-status'); if (s) s.textContent = j.error || 'failed'; return; }
+        hoRefresh();
+      });
+    });
+    hoRefresh();
+    setInterval(hoRefresh, 6000);
+  }
+
+  // ── Connected student stations on this bed (FR-011 #54) ───────────────────
+  function renderEncStations(stations) {
+    var grid = $('enc-station-grid'), count = $('enc-station-count'), oc = $('enc-online-count');
+    if (!grid) return;
+    if (count) count.textContent = '(' + stations.length + ')';
+    var online = stations.filter(function (s) { return s.online; }).length;
+    if (oc) oc.textContent = stations.length ? ('· ' + online + '/' + stations.length + ' online') : '';
+    if (!stations.length) {
+      grid.innerHTML = '<p class="muted small">No stations connected yet — share the QR.</p>';
+      return;
+    }
+    grid.innerHTML = stations.map(function (s) {
+      var pill = s.online ? '<span class="pill good">🟢 online</span>'
+                          : '<span class="pill dim">⚪ ' + s.seconds_since_seen + 's ago</span>';
+      var plat = s.platform ? '<span class="tag">' + escapeHTML(s.platform) + '</span>' : '';
+      return '<article class="station-card"><header><strong>'
+        + escapeHTML(s.persona_name || '— unassigned —') + '</strong>' + pill + '</header>'
+        + '<p class="role">' + escapeHTML(s.persona_role || '') + '</p>'
+        + '<div class="station-meta">' + plat + '<span class="muted small">' + s.turns
+        + ' turn' + (s.turns === 1 ? '' : 's') + '</span></div>'
+        + '<code class="muted small">' + escapeHTML(s.station_id) + '</code></article>';
+    }).join('');
+  }
+  function pollEncStations() {
+    fetch('/api/encounter/' + encodeURIComponent(cfg.encounterId) + '/stations',
+          { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) renderEncStations(d.stations || []); })
+      .catch(function () {});
+  }
+  function bootStations() {
+    pollEncStations();
+    setInterval(pollEncStations, 3000);
   }
 })();

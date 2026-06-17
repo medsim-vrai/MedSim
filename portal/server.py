@@ -3319,6 +3319,43 @@ async def api_room_state(
     return JSONResponse(_room_summary(room))
 
 
+@app.get("/api/encounter/{encounter_id}/stations")
+async def api_encounter_stations(
+    encounter_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-011 #54 — per-encounter live student-station roster (online / platform /
+    turn count) for the encounter console's roster card; the room summary only
+    carries counts. Instructor 'Engage' stations are filtered out — this is the
+    connected STUDENTS on this bed."""
+    import time as _t
+    room = _require_active_room()
+    enc = room.encounters.get(encounter_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
+    out: list[dict[str, Any]] = []
+    for s in enc.stations.values():
+        if (s.user_agent or "") == _INSTRUCTOR_USER_AGENT:
+            continue                         # operator's own Engage stations, not students
+        persona = library.get_persona(s.persona_id) if s.persona_id else None
+        ua = (s.user_agent or "").lower()
+        platform = ("iPhone" if "iphone" in ua else "iPad" if "ipad" in ua
+                    else "Android" if "android" in ua else "Mac" if "macintosh" in ua
+                    else "Windows" if "windows" in ua else "Other")
+        out.append({
+            "station_id": s.station_id,
+            "persona_id": s.persona_id,
+            "persona_name": (persona or {}).get("name") if persona else None,
+            "persona_role": (persona or {}).get("role", "") if persona else "",
+            "platform": platform,
+            "online": s.online,
+            "turns": len(s.history or []),
+            "seconds_since_seen": int(_t.time() - s.last_seen),
+        })
+    out.sort(key=lambda x: (not x["online"], (x["persona_name"] or "").lower()))
+    return JSONResponse({"encounter_id": encounter_id, "stations": out})
+
+
 @app.post("/api/room/freeze_all")
 async def api_room_freeze_all(
     _: Annotated[credentials.Vault, Depends(auth.require_instructor)],

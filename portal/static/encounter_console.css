@@ -723,3 +723,30 @@ body.enc-solo .sidebar,
 body.enc-solo .console-header { display: none !important; }
 body.enc-solo .layout { display: block; }
 body.enc-solo .console-card { margin: 0; }
+
+/* #54 — shift handoff + connected-station roster cards */
+.ho-field { display: block; margin: 6px 0; font-weight: 600; color: #3a4a58; }
+.ho-field select {
+  display: block; width: 100%; max-width: 520px; margin-top: 3px; font-weight: 400;
+  padding: 6px 8px; border: 1px solid #c4cfd9; border-radius: 5px;
+}
+.ho-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ho-actions button {
+  cursor: pointer; font-size: 12.5px; border: 1px solid #c4cfd9; border-radius: 5px;
+  padding: 5px 11px; background: #eef3f7; color: #27435a;
+}
+.ho-actions button:hover { background: #e1ebf3; }
+.ho-evhead { border-top: 1px solid #dde2ee; margin-top: 8px; padding-top: 6px; }
+.ho-cov { display: block; }
+.ho-cov.ho-miss { color: #a02020; }
+.ho-prompts { margin: 2px 0 0 16px; }
+
+.station-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.station-card { border: 1px solid #e1e7ed; border-radius: 8px; padding: 10px 12px; background: #fff; }
+.station-card header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.station-card .role { color: #5a6b79; font-size: 12px; margin: 2px 0 6px; }
+.station-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.pill { font-size: 11px; font-weight: 600; border-radius: 10px; padding: 1px 8px; white-space: nowrap; }
+.pill.good { color: #1f7a45; background: #e6f5ec; }
+.pill.dim { color: #6b7a88; background: #eef2f5; }
+.tag { font-size: 11px; color: #4a5a68; background: #eef2f5; border-radius: 4px; padding: 1px 7px; }

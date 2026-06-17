@@ -334,6 +334,44 @@
     #card-ptt .op-interim { margin-top:6px; min-height:18px; color:#5a6b79; font-size:12.5px; font-style:italic; }
   </style>
 
+  <!-- Shift handoff (FR-009) — scoped to THIS bed via ?bed=<encounter_id> -->
+  <article class="console-card" id="card-handoff">
+    <h2>🔄 Shift handoff <span class="muted small" id="ho-summary"></span></h2>
+    <p class="muted small">Run a structured handoff for this patient — the student gives or
+      receives report, then <strong>Score</strong> shows SBAR coverage vs their self-rating.</p>
+    <div id="ho-config">
+      <label class="small ho-field">Mode
+        <select id="ho-mode">
+          <option value="offgoing">Student GIVES report (AI receives + probes gaps)</option>
+          <option value="oncoming">Student RECEIVES report (AI gives it)</option>
+        </select>
+      </label>
+      <label class="small ho-field" id="ho-dial-wrap" hidden>Report completeness
+        <select id="ho-dial">
+          <option value="complete">Complete</option>
+          <option value="typical_gaps">Typical gaps (drops watch-fors + a pending item)</option>
+          <option value="staged_error">Staged-error embedded (needs an armed error)</option>
+        </select>
+      </label>
+      <label class="small ho-field">AI counterpart (charge nurse / oncoming)
+        <select id="ho-counterpart"></select>
+      </label>
+      <button type="button" id="ho-start" class="primary-action">▶ Start handoff</button>
+    </div>
+    <div id="ho-active" hidden></div>
+    <div id="ho-eval" hidden></div>
+    <p class="muted small" id="ho-status"></p>
+  </article>
+
+  <!-- Connected student stations on THIS bed (FR-011 #54) -->
+  <article class="console-card" id="card-stations">
+    <h2>Connected stations <span class="muted small" id="enc-station-count">(0)</span></h2>
+    <p class="muted small">Live roster for this bed. <span class="muted small" id="enc-online-count"></span></p>
+    <div id="enc-station-grid" class="station-grid">
+      <p class="muted small">No stations connected yet — share the QR.</p>
+    </div>
+  </article>
+
   <!-- Telemetry overrides — M25 (instructor force-set per metric). -->
   <article class="console-card" id="card-overrides">
     <h2>Telemetry overrides</h2>
