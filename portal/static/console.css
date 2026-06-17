@@ -94,22 +94,22 @@
 
 /* ── readiness detail (drops down from the bar) ────────────────────────── */
 .readiness-detail {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 60;
-  max-height: 72vh; overflow-y: auto;
-  background: #fff; border-bottom: 1px solid #d7dee5;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.10);
-  padding: 10px 16px; display: grid; gap: 8px;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  max-height: 56vh; overflow-y: auto;
+  background: #fff; border-bottom: 2px solid #143b8a;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.18);
+  padding: 10px 16px; display: grid; gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 .rd-row {
   border: 1px solid #e1e7ed; border-left-width: 4px; border-radius: 6px;
-  padding: 8px 10px; background: #fbfcfd;
+  padding: 6px 9px; background: #fff;
 }
 .rd-row[data-status="green"] { border-left-color: var(--rb-green); }
 .rd-row[data-status="amber"] { border-left-color: var(--rb-amber); }
 .rd-row[data-status="red"]   { border-left-color: var(--rb-red); }
-.rd-head { font-weight: 600; margin-bottom: 2px; }
-.rd-detail { color: #4a5a68; font-size: 12.5px; }
+.rd-head { font-weight: 600; font-size: 12.5px; color: #1b2733; margin-bottom: 2px; }
+.rd-detail { color: #4a5a68; font-size: 11.5px; line-height: 1.35; }
 .rd-action {
   margin-top: 7px; margin-right: 6px; font-size: 12px; cursor: pointer;
   border: 1px solid #b9c4cf; border-radius: 5px; padding: 3px 9px;
