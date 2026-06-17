@@ -2,6 +2,7 @@
 {% block title %}Control room — ops{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="{{ static_v('control.css') }}">
+<link rel="stylesheet" href="{{ static_v('card_strategy.css') }}">
 
 <header class="page-header" id="ops-header" style="position:sticky;top:0;z-index:40;background:#fff;border-bottom:2px solid #143b8a;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:10px 16px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
   <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
@@ -953,6 +954,10 @@
 <script src="{{ static_v('control_ops_ehr.js') }}"></script>
 <script src="{{ static_v('control_ops_voices.js') }}"></script>
 <script src="{{ static_v('control_ops_devices.js') }}"></script>
+<!-- #56 — card strategy: collapse + pop-out each card (handoff/errors self-collapse,
+     so they get pop-out only). -->
+<script>window.CARD_STRATEGY = {selector: ".check-card", chrome: "#ops-header", noCollapse: "#handoff-card, #errors-card"};</script>
+<script src="{{ static_v('card_strategy.js') }}"></script>
 <script>
   // V8 — on-the-fly avatar skin assignment from the device cells. Tapping a face
   // thumbnail POSTs the assignment (same endpoint as the Personas page) and

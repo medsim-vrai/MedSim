@@ -2,6 +2,7 @@
 {% block title %}Multi-Patient Control{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="{{ static_v('control_room.css') }}">
+<link rel="stylesheet" href="{{ static_v('card_strategy.css') }}">
 
 <header class="room-topbar">
   <div class="room-topbar-left">
@@ -283,4 +284,8 @@
 </dialog>
 
 <script src="{{ static_v('control_room.js') }}"></script>
+<!-- #56 — card strategy: collapse + pop-out the room's panels (the per-bed cards
+     already carry their own ↗ Pop out to the encounter console). -->
+<script>window.CARD_STRATEGY = {selector: ".med-carts-panel, .lead-assign-panel, .mr-ws-launch-panel, .nurse-station-launch, .room-grid-wrap", chrome: ".room-topbar"};</script>
+<script src="{{ static_v('card_strategy.js') }}"></script>
 {% endblock %}

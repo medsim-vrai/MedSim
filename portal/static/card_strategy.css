@@ -1,0 +1,19 @@
+/* FR-011 #56 — shared card-strategy styles (collapse + pop-out + solo window).
+   Loaded by the classic control board + the multi-patient room. Class names match
+   the encounter console's inline version so behaviour reads the same everywhere. */
+.cc-tools { float: right; display: inline-flex; gap: 4px; margin-left: 8px; }
+.cc-clickable { cursor: pointer; }
+.cc-pop, .cc-caret {
+  float: none; cursor: pointer; font-size: 12px; line-height: 1; font-weight: 600;
+  border: 1px solid #c4cfd9; border-radius: 5px; padding: 3px 8px;
+  background: #fff; color: #27435a;
+}
+.cc-pop:hover, .cc-caret:hover { background: #eef3f7; }
+
+/* collapse — the JS hides every direct child except the header's block */
+.cc-hidden { display: none !important; }
+
+/* solo (popped) window — show just the one card, drop the page chrome */
+body.cc-solo .topbar,
+body.cc-solo .sidebar { display: none !important; }
+body.cc-solo .layout { display: block; }
