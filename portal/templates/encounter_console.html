@@ -5,7 +5,7 @@
 
 <header class="console-header">
   <div class="console-header-left">
-    <a href="/portal/room" class="back-link">← Back to Multi-Patient Control</a>
+    <a href="{{ back_url | default('/portal/room') }}" class="back-link">{{ back_label | default('← Back to Multi-Patient Control') }}</a>
     <h1>
       {{ encounter.encounter_label or encounter.scenario_name }}
       <span class="encounter-join">{{ encounter.join_code }}</span>

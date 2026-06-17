@@ -5106,6 +5106,12 @@ async def portal_room_encounter_console(
     ]
     # Shows per-character device QRs — ensure the avatar app is up + LAN-reachable.
     _ensure_vrai_app_for_qr(request)
+    # FR-011 — context-aware Back: opened from the new Mission Control card
+    # (?return=console) → return to the card pages; otherwise the classic room.
+    if (request.query_params.get("return") or "") == "console":
+        back_url, back_label = "/portal/console?mode=operate", "← Back to Mission Control"
+    else:
+        back_url, back_label = "/portal/room", "← Back to Multi-Patient Control"
     return templates.TemplateResponse(
         request, "encounter_console.html",
         {
@@ -5119,6 +5125,8 @@ async def portal_room_encounter_console(
             # station's join URL is LAN-reachable (matches v6 ops
             # view's QR rendering).
             "base_url": _base_url_for_qr(request),
+            "back_url": back_url,
+            "back_label": back_label,
         },
     )
 
@@ -5630,7 +5638,9 @@ async def api_control_operate(
                 "join": enc.join_code,
                 "stats": [f"{_dev_count(enc.id)} device(s)",
                           f"{len(chars)} character(s)"],
-                "open_url": f"/portal/room/encounter/{enc.id}",
+                # ?return=console so the encounter console's Back returns to the new
+                # Mission Control card pages, not the classic room.
+                "open_url": f"/portal/room/encounter/{enc.id}?return=console",
             })
         for pid in shared:
             p = library.get_persona(pid) or {}
