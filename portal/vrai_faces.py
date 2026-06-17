@@ -1186,6 +1186,15 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                                 "name": getattr(_bed, "scenario_name", "") or scenario_id,
                                 "patient": ({"history": _bed.scenario_text}
                                             if getattr(_bed, "scenario_text", "") else {})}
+                # Last resort in a LIVE room: answer room-aware (all beds) rather than
+                # echo — covers a character that's neither flagged shared nor matched to
+                # a bed roster (e.g. shared_personas didn't survive a resume).
+                if _scn is None and _encs:
+                    vsess = _encs[0]
+                    _rps = [{"label": e.encounter_label or e.scenario_name or "patient",
+                             "history": e.scenario_text or ""} for e in _encs]
+                    _scn = {"id": _encs[0].id, "name": _room.label or "Care room",
+                            "room_patients": _rps}
                 if _scn is not None and _key:
                     _sim = runtime.create_session_from_data(
                         scenario=_scn, characters={cid: card}, api_key=_key)
@@ -1202,6 +1211,13 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                         reply = f"(the character could not respond: {_res.get('error')})"
                         mode = "error"
 
+        if not reply and sess is not None:
+            # cache-first key: a room/resumed encounter carries NO stamped api_key, but
+            # the process cache (kept fresh by the readiness poll) does. Stamp it so the
+            # branch below + _stream_reply_turn + create_session all use a live key
+            # instead of echoing.
+            from .server import _resolve_anthropic_key as _rkey2
+            sess.api_key = _rkey2(sess) or getattr(sess, "api_key", "")
         if not reply and sess is not None and getattr(sess, "api_key", ""):
             scenario = {
                 "id": sess.id,

@@ -705,3 +705,23 @@ def test_wizard_surfaces_v1_scenarios_like_classic(client, monkeypatch):
     html = client.get("/portal/console?mode=setup").text
     assert "v1:demo_v1" in html and "Demo V1" in html
     assert "legacy" in html        # flagged so the picker can label it
+
+
+def test_readiness_poll_refreshes_anthropic_key_cache(client):
+    """REGRESSION GUARD (recurring shared-character echo): the LAN /api/face/{id}/listen
+    route gets its Anthropic key from a process-wide cache. That cache is populated ONLY
+    by room-start / single-start / credentials-save — so a restart + auto-resume (which
+    restores the room WITHOUT going through start) leaves it EMPTY, and the tablet echoes
+    STT->TTS instead of calling the model. The readiness poll (the console hits it every
+    15s with the vault) must re-populate the cache so it self-heals. If this test fails,
+    the echo bug is back."""
+    from portal import auth, server
+    for v in auth._active_vaults.values():        # in-memory only
+        v._data["ANTHROPIC_API_KEY"] = "sk-test-key-xyz"
+    server._anthropic_runtime_key = ""            # simulate the post-resume empty cache
+    try:
+        assert server._resolve_anthropic_key(None) == ""
+        assert client.get("/api/control/readiness").status_code == 200
+        assert server._resolve_anthropic_key(None) == "sk-test-key-xyz"   # self-healed
+    finally:
+        server._anthropic_runtime_key = ""

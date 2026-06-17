@@ -5549,6 +5549,17 @@ async def api_control_readiness(
     storage / EHR / vault / session / devices) for the mission-control readiness
     bar + Setup board. The vault lets the voice check verify stored provider keys."""
     from portal import readiness
+    # FR-011 — keep the process-wide Anthropic key cache fresh while the operator
+    # console is open. The cache is otherwise populated ONLY by room-start /
+    # single-start / credentials-save; a restart + auto-resume restores the room
+    # WITHOUT going through start, leaving the cache EMPTY — which made the LAN
+    # /api/face/{id}/listen route fall back to ECHO (room encounters carry no
+    # stamped api_key, so it had nothing to use). The console polls this every 15s
+    # with the vault, so the key self-heals as soon as the operator has it open.
+    try:
+        _capture_anthropic_key(vault.get("ANTHROPIC_API_KEY") or "")
+    except Exception:  # noqa: BLE001
+        pass
     return JSONResponse(readiness.snapshot(vault))
 
 
