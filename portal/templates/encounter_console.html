@@ -295,6 +295,45 @@
     <p class="muted small" id="voice-status"></p>
   </article>
 
+  <!-- Operator PTT — engage a bed's character by voice (parity with classic ops) -->
+  <article class="console-card" id="card-ptt">
+    <h2>🎤 Engage a character (push-to-talk)</h2>
+    <p class="muted small">Pick a character, then <strong>hold the button and speak</strong> — they
+      reply in their assigned voice and the turn is logged. Voice capture needs Chrome/Edge;
+      otherwise type a line and press Enter.</p>
+    <div class="op-chips" id="op-chips"><p class="muted small">Loading…</p></div>
+    <button type="button" class="op-talk-btn" id="op-talk-btn">
+      <span class="op-talk-label">Hold to talk</span>
+      <span class="op-talk-status" id="op-talk-status">Idle</span>
+    </button>
+    <div class="op-type-row">
+      <input type="text" id="op-type" class="op-type" placeholder="…or type a line and press Enter">
+    </div>
+    <div id="op-interim" class="op-interim" aria-live="polite"></div>
+    <div id="op-ptt-banner" class="banner warn small" hidden>Voice input needs Chrome/Edge — type the line instead.</div>
+    <p class="muted small" id="op-ptt-status"></p>
+    <p class="muted small">Need handoff scoring, the live station roster, or session-wide tools?
+      <a href="/portal/control/ops?join={{ encounter.join_code }}" target="_blank" rel="noopener">Open the full control board for this bed ↗</a></p>
+  </article>
+  <style>
+    #card-ptt .op-chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+    #card-ptt .op-chip {
+      cursor:pointer; font-size:12.5px; border:1px solid #c4cfd9; border-radius:14px;
+      padding:5px 12px; background:#fff; color:#27435a;
+    }
+    #card-ptt .op-chip.active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; }
+    #card-ptt .op-talk-btn {
+      width:100%; min-height:64px; border-radius:10px; cursor:pointer; user-select:none;
+      border:2px solid #2b6cb0; background:#eaf2fb; color:#13395f; font-weight:600;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    }
+    #card-ptt .op-talk-btn.listening { background:#fde9e9; border-color:#cc2f2f; color:#7a1d1d; }
+    #card-ptt .op-talk-status { font-size:11.5px; font-weight:400; opacity:.8; }
+    #card-ptt .op-type-row { margin-top:8px; }
+    #card-ptt .op-type { width:100%; padding:8px 10px; border:1px solid #c4cfd9; border-radius:6px; font-size:13px; }
+    #card-ptt .op-interim { margin-top:6px; min-height:18px; color:#5a6b79; font-size:12.5px; font-style:italic; }
+  </style>
+
   <!-- Telemetry overrides — M25 (instructor force-set per metric). -->
   <article class="console-card" id="card-overrides">
     <h2>Telemetry overrides</h2>

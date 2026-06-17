@@ -1059,6 +1059,7 @@
     await bootDeviceKinds();
     await bootLeadStudent();
     await bootVoices();
+    bootPtt();                // operator push-to-talk (parity with classic ops)
     // M55 — medications card.
     wireMedsToggle();
     await bootMedications();
@@ -1244,5 +1245,146 @@
     if (window.CSS && window.CSS.escape) return window.CSS.escape(s);
     return String(s).replace(/[^a-zA-Z0-9_-]/g, ch =>
       '\\' + ch.charCodeAt(0).toString(16) + ' ');
+  }
+
+  // ── Operator push-to-talk — parity with the classic control room ──────────
+  // Reuses the personas + ElevenLabs voice assignments bootVoices() already
+  // loaded (encVoiceBody). Hold-to-talk uses the browser SpeechRecognition; the
+  // transcribed line POSTs to the per-encounter operator-turn endpoint and the
+  // reply is spoken in the character's assigned voice (same /api/tts path as the
+  // voice "Test" button). A type box covers browsers without STT (e.g. Safari).
+  var pttActive = null, pttBusy = false, pttRecog = null, pttListening = false;
+
+  function pttPersonas() {
+    var ps = (encVoiceBody && encVoiceBody.personas) || [];
+    if (ps.length) return ps;
+    return ((encVoiceBody && encVoiceBody.selected_personas) || [])
+      .map(function (pid) { return { id: pid, name: pid, role: '' }; });
+  }
+  function pttVoiceFor(pid) {
+    var a = (encVoiceBody && encVoiceBody.voice_assignments) || {};
+    return a[pid] || '';
+  }
+  function pttStatus(msg) { var s = $('op-ptt-status'); if (s) s.textContent = msg || ''; }
+
+  function speakLine(voiceId, text) {
+    if (!text) return Promise.resolve();
+    if (!voiceId) {
+      if (window.speechSynthesis) {
+        var u = new SpeechSynthesisUtterance(text);
+        window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+      }
+      return Promise.resolve();
+    }
+    return fetch('/api/tts', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text, voice_id: voiceId }),
+    }).then(function (r) { return r.ok ? r.blob() : null; })
+      .then(function (blob) {
+        if (!blob) return;
+        var url = URL.createObjectURL(blob);
+        var audio = new Audio(url);
+        audio.addEventListener('ended', function () { URL.revokeObjectURL(url); });
+        return audio.play();
+      });
+  }
+
+  function sendPttTurn(message) {
+    if (!message || !message.trim() || pttBusy || !pttActive) return;
+    pttBusy = true;
+    var st = $('op-talk-status'); if (st) st.textContent = 'Sending…';
+    var fd = new FormData();
+    fd.append('persona_id', pttActive.id);
+    fd.append('message', message);
+    fetch('/api/room/encounter/' + encodeURIComponent(cfg.encounterId) + '/operator/turn',
+          { method: 'POST', credentials: 'same-origin', body: fd })
+      .then(function (r) {
+        return r.ok ? r.json()
+          : r.json().then(function (j) { throw new Error((j && j.error) || r.status); });
+      })
+      .then(function (data) {
+        if (data && data.ok) {
+          if (st) st.textContent = 'Speaking…';
+          pttStatus(pttActive.name + ': ' + (data.reply || ''));
+          return speakLine(pttVoiceFor(pttActive.id), data.reply);
+        }
+        pttStatus('Error: ' + ((data && data.error) || 'unknown'));
+      })
+      .catch(function (e) { pttStatus('Error: ' + (e.message || e)); })
+      .then(function () {
+        pttBusy = false;
+        if (st) setTimeout(function () { if (!pttListening) st.textContent = 'Idle'; }, 600);
+      });
+  }
+
+  function bootPtt() {
+    var chips = $('op-chips'), talk = $('op-talk-btn'), typeBox = $('op-type');
+    if (!chips || !talk) return;
+    var ps = pttPersonas();
+    if (!ps.length) { chips.innerHTML = '<p class="muted small">No characters on this bed.</p>'; return; }
+    chips.textContent = '';
+    ps.forEach(function (p, i) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'op-chip' + (i === 0 ? ' active' : '');
+      b.textContent = p.name || p.id;
+      b.addEventListener('click', function () {
+        var all = chips.querySelectorAll('.op-chip');
+        for (var k = 0; k < all.length; k++) all[k].classList.remove('active');
+        b.classList.add('active');
+        pttActive = { id: p.id, name: p.name || p.id };
+      });
+      chips.appendChild(b);
+    });
+    pttActive = { id: ps[0].id, name: ps[0].name || ps[0].id };
+
+    if (typeBox) {
+      typeBox.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && typeBox.value.trim()) {
+          sendPttTurn(typeBox.value.trim()); typeBox.value = '';
+        }
+      });
+    }
+
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      var ban = $('op-ptt-banner'); if (ban) ban.hidden = false;
+      talk.disabled = true; talk.style.opacity = '0.55';
+      return;
+    }
+    var interim = $('op-interim'), finalText = '';
+    function startListen() {
+      if (pttListening || pttBusy) return;
+      pttRecog = new SR();
+      pttRecog.lang = 'en-US'; pttRecog.interimResults = true; pttRecog.continuous = true;
+      finalText = '';
+      pttRecog.onresult = function (ev) {
+        var intr = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) {
+          var tr = ev.results[i][0].transcript;
+          if (ev.results[i].isFinal) finalText += tr; else intr += tr;
+        }
+        if (interim) interim.textContent = intr || finalText;
+      };
+      pttRecog.onerror = function () { stopListen(true); };
+      try {
+        pttRecog.start(); pttListening = true; talk.classList.add('listening');
+        var s = $('op-talk-status'); if (s) s.textContent = 'Listening…';
+      } catch (e) { /* already started */ }
+    }
+    function stopListen(abort) {
+      if (!pttListening) return;
+      pttListening = false; talk.classList.remove('listening');
+      try { pttRecog && pttRecog.stop(); } catch (e) {}
+      var s = $('op-talk-status'); if (s) s.textContent = 'Idle';
+      var said = finalText.trim();
+      if (interim) interim.textContent = '';
+      if (!abort && said) sendPttTurn(said);
+    }
+    talk.addEventListener('mousedown', startListen);
+    talk.addEventListener('touchstart', function (e) { e.preventDefault(); startListen(); }, { passive: false });
+    talk.addEventListener('mouseup', function () { stopListen(false); });
+    talk.addEventListener('mouseleave', function () { if (pttListening) stopListen(false); });
+    talk.addEventListener('touchend', function (e) { e.preventDefault(); stopListen(false); });
   }
 })();

@@ -373,7 +373,62 @@
     var avt = document.createElement("span"); avt.textContent = "avatar";
     av.appendChild(avcb); av.appendChild(avt);
     row.appendChild(sel); row.appendChild(lab); row.appendChild(av);
+    row.appendChild(skinPicker(p));      // per-character image (flat portrait + rig source)
     return row;
+  }
+
+  // Per-character IMAGE picker — one image serves the flat audio portrait AND the
+  // 3D rig's source photo. Reads/writes the persona's global skin (works pre-launch
+  // via /api/control/personas/skin). No skins yet → a link to upload one.
+  function skinPicker(p) {
+    var wrap = document.createElement("span");
+    wrap.className = "wp-skins"; wrap.title = "Character image";
+    wrap.addEventListener("click", function (e) { e.stopPropagation(); });
+    var skins = (WIZ.boot && WIZ.boot.skins) || [];
+    if (!skins.length) {
+      var up = document.createElement("a");
+      up.className = "wp-skin-upload"; up.href = "/portal/skins";
+      up.target = "_blank"; up.rel = "noopener"; up.textContent = "＋ image";
+      up.title = "Upload a portrait image, then reopen the wizard";
+      wrap.appendChild(up);
+      return wrap;
+    }
+    var pj = personaById(p.id) || {};
+    var cur = pj.avatar_skin || "";
+    function thumb(skinId, label, bg) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "wp-skin" + (cur === skinId ? " sel" : "") + (bg ? "" : " none");
+      b.title = label;
+      if (bg) b.style.backgroundImage = "url('" + bg + "')"; else b.textContent = "∅";
+      b.addEventListener("click", function (e) {
+        e.preventDefault(); e.stopPropagation();
+        assignSkin(p.id, skinId, wrap, b);
+      });
+      return b;
+    }
+    wrap.appendChild(thumb("", "No image", ""));
+    skins.forEach(function (s) {
+      wrap.appendChild(thumb(s.id, s.label || s.id,
+        "/portal/skins/" + encodeURIComponent(s.id) + "/image"));
+    });
+    return wrap;
+  }
+
+  function assignSkin(personaId, skinId, wrap, btn) {
+    fetch("/api/control/personas/skin", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ persona_id: personaId, skin_id: skinId })
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (res) {
+        if (!res || !res.ok) return;
+        var sibs = wrap.querySelectorAll(".wp-skin");
+        for (var i = 0; i < sibs.length; i++) sibs[i].classList.remove("sel");
+        btn.classList.add("sel");
+        var pj = personaById(personaId);      // persist the choice across re-renders
+        if (pj) pj.avatar_skin = skinId;
+      }).catch(function () { /* best-effort; still set at launch via the QR */ });
   }
 
   // Shared/universal characters — built once; the picker excludes patients.

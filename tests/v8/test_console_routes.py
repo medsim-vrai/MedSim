@@ -641,3 +641,42 @@ def test_console_operate_panel_has_operations_buildout(client):
     assert 'id="op-empty"' in html             # empty-state copy
     assert 'class="readiness-block"' in html   # collapsible readiness
     assert 'id="readiness-mini"' in html       # collapsed summary status line
+
+
+def test_persona_skin_endpoint_requires_auth():
+    from portal import server
+    c = TestClient(server.app)
+    r = c.post("/api/control/personas/skin", json={"persona_id": "P-001"})
+    assert r.status_code == 401
+
+
+def test_persona_skin_endpoint_validates_and_clears(client):
+    """The wizard image picker: missing persona_id -> 400; an empty skin_id
+    clears the assignment and returns ok (works pre-launch, global per persona)."""
+    assert client.post("/api/control/personas/skin", json={}).status_code == 400
+    r = client.post("/api/control/personas/skin",
+                    json={"persona_id": "ZZZ-test-persona", "skin_id": ""})
+    assert r.status_code == 200 and r.json()["ok"] is True
+
+
+def test_console_bootstrap_exposes_skins(client):
+    """The wizard image picker reads bootstrap.skins to render swatches."""
+    assert '"skins"' in client.get("/portal/console").text
+
+
+def test_encounter_operator_turn_requires_auth():
+    from portal import server
+    c = TestClient(server.app)
+    r = c.post("/api/room/encounter/nope/operator/turn",
+               data={"persona_id": "P-001", "message": "hi"})
+    assert r.status_code == 401
+
+
+def test_encounter_operator_turn_unknown_encounter(client):
+    """Per-encounter operator PTT (parity port): a bad encounter id -> 404,
+    never a 500."""
+    from portal import control_room
+    control_room.end_active_room()
+    r = client.post("/api/room/encounter/nope/operator/turn",
+                    data={"persona_id": "P-001", "message": "hi"})
+    assert r.status_code == 404

@@ -382,9 +382,13 @@ async def mission_control_console(
     default_ehr = ehr_registry.default_id()
     personas = [
         {"id": p["id"], "name": p.get("name", ""), "role": p.get("role", ""),
-         "roleGroup": p.get("roleGroup", "")}
+         "roleGroup": p.get("roleGroup", ""),
+         # current portrait/skin assignment (drives the wizard's image picker;
+         # one image serves the flat audio portrait AND the 3D rig source photo)
+         "avatar_skin": vrai_faces.assigned_skin_id(p["id"]) or ""}
         for p in persona_recs
     ]
+    skins = vrai_faces.list_skins()
     # Device catalog for the wizard's Devices step (Basic vs Advanced), built from
     # the SAME registry the control room uses — kind + default model + group.
     from portal.devices import registry as _dev_reg
@@ -407,7 +411,7 @@ async def mission_control_console(
         })
 
     bootstrap = {"samples": samples, "ehrs": ehrs, "default_ehr": default_ehr,
-                 "personas": personas, "devices": devices_catalog}
+                 "personas": personas, "devices": devices_catalog, "skins": skins}
     return templates.TemplateResponse(request, "console.html", {
         "mode": mode, "bootstrap": bootstrap,
         "samples": samples, "ehrs": ehrs, "default_ehr": default_ehr})
@@ -1728,6 +1732,29 @@ async def api_control_persona_avatar(
     return JSONResponse({"ok": True, "persona_id": pid, "avatar": want})
 
 
+@app.post("/api/control/personas/skin")
+async def api_control_persona_skin(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-011 — assign (or clear) a character's portrait/skin from the wizard's
+    image picker. Global per-persona, so it works before launch: the chosen image
+    becomes the flat audio portrait AND the 3D rig's source photo (both read by
+    the face page via vrai_faces.resolve_portrait). Empty skin_id clears it."""
+    body = await request.json()
+    pid = str((body or {}).get("persona_id") or "").strip()
+    skin_id = str((body or {}).get("skin_id") or "").strip()
+    if not pid:
+        return JSONResponse({"ok": False, "error": "persona_id required"},
+                            status_code=400)
+    if skin_id:
+        ok = vrai_faces.assign_skin(skin_id, pid)
+    else:
+        vrai_faces.clear_portrait(pid)
+        ok = True
+    return JSONResponse({"ok": bool(ok), "persona_id": pid, "skin_id": skin_id})
+
+
 @app.post("/api/control/state")
 async def api_control_set_state(
     state: Annotated[str, Form()],
@@ -1936,6 +1963,54 @@ async def api_control_operator_turn(
             character_text=result["reply"],
             latency_ms=latency_ms,
         )
+        result["latency_ms"] = latency_ms
+    return JSONResponse(result)
+
+
+@app.post("/api/room/encounter/{encounter_id}/operator/turn")
+async def api_room_encounter_operator_turn(
+    encounter_id: str,
+    persona_id: Annotated[str, Form()],
+    message: Annotated[str, Form()],
+    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Operator PTT scoped to ONE bed in a multi-patient room — the instructor
+    engages a character on this encounter from the new console (parity with the
+    classic control room's operator PTT). Mirrors /api/control/operator/turn but
+    resolves the encounter (get_active() is None in a room) and uses the cache-
+    first key (room encounters carry no stamped api_key)."""
+    from portal import control_room as _cr
+    room = _cr.get_active_room()
+    enc = room.encounters.get(encounter_id) if room else None
+    if enc is None:
+        return JSONResponse({"ok": False, "error": "Unknown encounter."}, status_code=404)
+    if persona_id not in enc.selected_personas:
+        return JSONResponse({"ok": False, "error": f"Persona {persona_id} is not on this bed."},
+                            status_code=400)
+    if not message.strip():
+        return JSONResponse({"ok": False, "error": "Empty message."}, status_code=400)
+    persona = library.get_persona(persona_id)
+    if persona is None:
+        return JSONResponse({"ok": False, "error": f"Unknown persona {persona_id}."}, status_code=400)
+    char = library.persona_as_character(persona)
+    scenario = {
+        "id": enc.id,
+        "name": enc.scenario_name,
+        "patient": {"history": enc.scenario_text} if enc.scenario_text else {},
+    }
+    import time as _time
+    live_key = _resolve_anthropic_key(enc) or (vault.get("ANTHROPIC_API_KEY") or "")
+    sim_sess = runtime.create_session_from_data(
+        scenario=scenario, characters={persona_id: char}, api_key=live_key)
+    turn_start = _time.time()
+    result = runtime.take_turn(sim_sess.id, persona_id, message)
+    latency_ms = int((_time.time() - turn_start) * 1000)
+    runtime.end_session(sim_sess.id)
+    if result.get("ok"):
+        enc.log_turn(
+            source="operator", source_label="Operator (encounter console)",
+            persona_id=persona_id, persona_name=persona.get("name", persona_id),
+            student_text=message, character_text=result["reply"], latency_ms=latency_ms)
         result["latency_ms"] = latency_ms
     return JSONResponse(result)
 
