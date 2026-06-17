@@ -1054,6 +1054,7 @@
   });
 
   document.addEventListener('DOMContentLoaded', async () => {
+    enhanceCards();           // per-card collapse + pop-out (card strategy)
     await bootECG();
     await bootVentState();    // FR-012 — ventilator clinical-state picker
     await bootDeviceKinds();
@@ -1386,5 +1387,60 @@
     talk.addEventListener('mouseup', function () { stopListen(false); });
     talk.addEventListener('mouseleave', function () { if (pttListening) stopListen(false); });
     talk.addEventListener('touchend', function (e) { e.preventDefault(); stopListen(false); });
+  }
+
+  // ── Card strategy — collapse + pop-out every console card ──────────────────
+  // Mirrors the Operate cockpit: each card can collapse (save space) and pop out
+  // (window.open ?card=<id>) onto another monitor. The popped window is the SAME
+  // console in "solo" mode (one card, no page chrome) so it stays fully live off
+  // the existing telemetry/voice/state polls — no separate per-card route needed.
+  function toggleCard(card, caret) {
+    var collapsed = card.classList.toggle('cc-collapsed');
+    if (caret) {
+      caret.textContent = collapsed ? '▸' : '▾';
+      caret.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+  }
+
+  function enhanceCards() {
+    var solo = new URLSearchParams(location.search).get('card');
+    var cards = document.querySelectorAll('.console-card');
+    if (solo) {
+      document.body.classList.add('enc-solo');
+      cards.forEach(function (c) { if (c.id !== solo) c.style.display = 'none'; });
+      var t = document.getElementById(solo);
+      if (t) t.classList.remove('cc-collapsed', 'meds-collapsed');  // expanded in its window
+      return;     // popped window: just the live card, no collapse/pop controls
+    }
+    cards.forEach(function (c) {
+      var h = c.querySelector('h2');
+      if (!h || h.querySelector('.cc-tools')) return;
+      var tools = document.createElement('span');
+      tools.className = 'cc-tools';
+      var pop = document.createElement('button');
+      pop.type = 'button'; pop.className = 'cc-pop'; pop.textContent = '⧉';
+      pop.title = 'Pop out to its own window (another monitor)';
+      pop.addEventListener('click', function (e) {
+        e.stopPropagation();
+        window.open(location.pathname + '?card=' + encodeURIComponent(c.id),
+          'enc_' + c.id, 'width=560,height=760,menubar=no,toolbar=no,location=no');
+      });
+      tools.appendChild(pop);
+      // card-medications manages its own collapse (wireMedsToggle) — give it
+      // pop-out only, so the two collapse mechanisms never fight.
+      if (c.id !== 'card-medications') {
+        var caret = document.createElement('button');
+        caret.type = 'button'; caret.className = 'cc-caret'; caret.textContent = '▾';
+        caret.title = 'Collapse / expand'; caret.setAttribute('aria-expanded', 'true');
+        caret.addEventListener('click', function (e) { e.stopPropagation(); toggleCard(c, caret); });
+        tools.appendChild(caret);
+        h.addEventListener('click', function (e) {
+          if (e.target.closest && e.target.closest('.cc-tools')) return;
+          toggleCard(c, caret);
+        });
+        h.classList.add('cc-clickable');
+      }
+      h.appendChild(tools);
+    });
   }
 })();

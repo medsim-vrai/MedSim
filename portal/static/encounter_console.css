@@ -705,3 +705,21 @@
 }
 .lead-empty-hint[hidden] { display: none; }
 .lead-empty-hint strong { color: #3d2f8a; }
+
+/* ── Card strategy — per-card collapse + pop-out (matches the Operate cockpit) ── */
+.console-card > h2 { display: flex; align-items: center; gap: 8px; }
+.console-card > h2.cc-clickable { cursor: pointer; }
+.cc-tools { margin-left: auto; display: inline-flex; gap: 4px; }
+.cc-pop, .cc-caret {
+  border: 1px solid #c4cfd9; background: #fff; border-radius: 5px; cursor: pointer;
+  font-size: 12px; line-height: 1; padding: 3px 8px; color: #27435a; font-weight: 600;
+}
+.cc-pop:hover, .cc-caret:hover { background: #eef3f7; }
+.console-card.cc-collapsed > :not(h2) { display: none; }
+
+/* solo (popped) window — show just the one card, drop the page chrome */
+body.enc-solo .topbar,
+body.enc-solo .sidebar,
+body.enc-solo .console-header { display: none !important; }
+body.enc-solo .layout { display: block; }
+body.enc-solo .console-card { margin: 0; }
