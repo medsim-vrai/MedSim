@@ -316,6 +316,19 @@ def _build_system_prompt(character: dict[str, Any], scenario: dict[str, Any]) ->
         if vitals:
             lines.append("Baseline vitals: " + ", ".join(f"{k} {v}" for k, v in vitals.items()))
 
+    # FR-007 v2 — a shared "one tablet, many patients" character covers the whole
+    # room: give it every bed's patient so it answers as ONE instance spanning beds.
+    room_patients = scenario.get("room_patients") or []
+    if room_patients:
+        lines.append("")
+        lines.append("You are covering MULTIPLE patients in this room. When the student")
+        lines.append("refers to a patient, answer about THAT patient; ask which patient")
+        lines.append("if it's unclear. PATIENTS IN THIS ROOM:")
+        for rp in room_patients[:12]:
+            lbl = rp.get("label") or rp.get("name") or "patient"
+            hist = (rp.get("history") or "").strip()
+            lines.append(f"  - {lbl}" + (f": {hist}" if hist else ""))
+
     curriculum = scenario.get("curriculum") or {}
     touchpoints = curriculum.get("touchpoints") or []
     if touchpoints:

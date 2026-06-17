@@ -452,6 +452,54 @@ def test_board_shares_the_wizard_builder():
     assert "sharedCast()" in js and "bedScenarios()" in js and "bedDevices()" in js
 
 
+def test_room_aware_system_prompt():
+    """FR-007 v2 — a shared character's prompt lists EVERY bed's patient, so one
+    instance answers across the room."""
+    from portal import runtime
+    sp = runtime._build_system_prompt(
+        {"name": "Dr. Patel", "role": "Hospitalist"},
+        {"name": "Ward", "room_patients": [
+            {"label": "Bed 1 — Hayes", "history": "septic"},
+            {"label": "Bed 2 — Diaz", "history": "postop"}]})
+    assert "PATIENTS IN THIS ROOM" in sp
+    assert "Bed 1 — Hayes" in sp and "Bed 2 — Diaz" in sp
+
+
+def test_shared_station_is_room_scoped(monkeypatch):
+    """FR-007 v2 — one room-level station per shared persona (idempotent), with a
+    LAN-reachable chat surface + a room-scoped turn guard."""
+    from portal import server, ehr_db, control_room, auth
+    monkeypatch.setattr(ehr_db, "_conn", lambda: None)
+    ehr_db._mem_session_state = None
+    _ensure_vault()
+    c = TestClient(server.app)
+    c.post("/login", data={"password": TEST_PASSWORD})
+    for v in auth._active_vaults.values():
+        v._data["ANTHROPIC_API_KEY"] = "dummy-key"
+    if control_room.get_active_room() is not None:
+        control_room.end_active_room()
+    try:
+        c.post("/api/room/start", json={
+            "label": "Ward", "shared_personas": ["P-001"],
+            "encounters": [
+                {"scenario_name": "Bed 1", "persona_id": "P-014",
+                 "personas": ["P-014", "P-001"], "ehr_id": "cyrus"},
+                {"scenario_name": "Bed 2", "persona_id": "P-013",
+                 "personas": ["P-013", "P-001"], "ehr_id": "cyrus"},
+            ]})
+        room = control_room.get_active_room()
+        st1 = room.shared_station("P-001"); st2 = room.shared_station("P-001")
+        assert st1 is st2 and st1.persona_id == "P-001"             # one instance, idempotent
+        assert c.get("/portal/room/shared/P-001").status_code == 200   # the chat surface renders
+        assert c.get("/portal/room/shared/P-014").status_code == 404   # a patient is not a shared char
+        assert c.post("/api/room/shared/P-014/turn",
+                      data={"message": "hi"}).status_code == 404       # turn guards on membership
+    finally:
+        if control_room.get_active_room() is not None:
+            control_room.end_active_room()
+        ehr_db._mem_session_state = None
+
+
 def test_client_wires_unified_room_flow():
     js = (_STATIC / "console.js").read_text()
     assert "/api/room/start" in js and "/portal/control/start" in js   # >1 bed vs 1 bed

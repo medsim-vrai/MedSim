@@ -133,6 +133,10 @@ class ControlRoom:
     # includes these; this room-level list lets surfaces (e.g. the QR sheet)
     # separate "common characters" from per-bed scenario cast.
     shared_personas: list[str] = field(default_factory=list)
+    # FR-007 v2 — "one tablet, many patients": a single room-level chat station
+    # per shared persona (NOT bound to a bed), with one transcript (Station.history)
+    # that spans the room. Not snapshotted (transcript is trainee PHI, ADR-0014).
+    room_stations: dict = field(default_factory=dict)   # persona_id -> Station
     # M48 — Operator-settable alarm thresholds. Room-level (applies to
     # every encounter in the room) — operators rarely need per-bed
     # thresholds in a teaching scenario, and the simpler UX is one
@@ -211,6 +215,17 @@ class ControlRoom:
             if enc.join_code.upper() == target:
                 return enc
         return None
+
+    def shared_station(self, persona_id: str):
+        """FR-007 v2 — the single room-level chat station for a shared persona
+        (created on demand, one transcript spanning the room)."""
+        st = self.room_stations.get(persona_id)
+        if st is None:
+            import secrets
+            from .control_session import Station
+            st = Station(station_id="rs_" + secrets.token_urlsafe(6), persona_id=persona_id)
+            self.room_stations[persona_id] = st
+        return st
 
     def clone_encounter(self, template_id: str,
                          *, label_suffix: str = "") -> Encounter:

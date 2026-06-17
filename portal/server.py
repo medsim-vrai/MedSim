@@ -2133,6 +2133,83 @@ async def api_station_turn(
     return JSONResponse(result)
 
 
+# ── FR-007 v2 — shared "one tablet, many patients" character station ──────────
+def _room_shared_scenario(room) -> dict[str, Any]:
+    """A room-level scenario: the shared character sees EVERY bed's patient, so it
+    answers as ONE instance spanning the room (not a per-bed context)."""
+    rps: list[dict[str, Any]] = []
+    for e in room.encounters.values():
+        pp = library.get_persona(e.patient_persona_id) if e.patient_persona_id else None
+        rps.append({
+            "label": e.encounter_label or e.scenario_name or (pp.get("name") if pp else "patient"),
+            "name": (pp.get("name") if pp else ""),
+            "history": e.scenario_text or "",
+        })
+    return {"id": room.room_id, "name": room.label or "Shared care room",
+            "patient": {}, "room_patients": rps, "curriculum": {"touchpoints": []}}
+
+
+@app.get("/portal/room/shared/{persona_id}", response_class=HTMLResponse)
+async def portal_room_shared_station(request: Request, persona_id: str):
+    """The shared character's chat surface — reachable on the LAN (a tablet), like a
+    device station; one instance covering the whole room."""
+    room = control_room.get_active_room()
+    if room is None or persona_id not in (room.shared_personas or []):
+        raise HTTPException(404, "No such shared character in the active room.")
+    persona = library.get_persona(persona_id) or {}
+    patients = [(e.encounter_label or e.scenario_name or "Bed")
+                for e in room.encounters.values()]
+    return templates.TemplateResponse(request, "shared_station.html", {
+        "persona_id": persona_id,
+        "persona_name": persona.get("name") or persona_id,
+        "persona_role": persona.get("role") or "",
+        "room_label": room.label or "Room",
+        "patients": patients,
+    })
+
+
+@app.post("/api/room/shared/{persona_id}/turn")
+async def api_room_shared_turn(persona_id: str, message: Annotated[str, Form()]):
+    room = control_room.get_active_room()
+    if room is None:
+        return JSONResponse({"ok": False, "error": "No active room."}, status_code=404)
+    if persona_id not in (room.shared_personas or []):
+        return JSONResponse({"ok": False, "error": "Not a shared character."}, status_code=404)
+    persona = library.get_persona(persona_id)
+    if persona is None:
+        return JSONResponse({"ok": False, "error": "Unknown persona."}, status_code=400)
+    station = room.shared_station(persona_id)
+    station.touch()
+    encs = list(room.encounters.values())
+    live_key = _resolve_anthropic_key(encs[0]) if encs else None
+    if not live_key:
+        return JSONResponse({"ok": False, "error": "No Anthropic API key configured. "
+                             "Open /portal/credentials to add it, then try again."},
+                            status_code=200)
+    char = library.persona_as_character(persona)
+    scenario = _room_shared_scenario(room)
+    sim_sess = runtime.create_session_from_data(
+        scenario=scenario, characters={persona["id"]: char}, api_key=live_key)
+    import time as _time
+    for h in station.history[-runtime.HISTORY_WINDOW:]:
+        sim_sess.history.append(runtime.TurnRecord(
+            addressee=persona["id"], student_utterance=h.get("user", ""),
+            character_response=h.get("character", ""), timestamp=h.get("ts", _time.time())))
+    try:
+        result = runtime.take_turn(sim_sess.id, persona["id"], message)
+    except Exception as exc:  # noqa: BLE001
+        runtime.end_session(sim_sess.id)
+        return JSONResponse({"ok": False, "error": f"Turn failed: {exc}"}, status_code=200)
+    runtime.end_session(sim_sess.id)
+    if result.get("ok"):
+        station.history.append({
+            "user": message, "character": result["reply"],
+            "character_name": result.get("character_name", persona.get("name", "")),
+            "ts": _time.time(),
+        })
+    return JSONResponse(result)
+
+
 @app.post("/api/station/{join_code}/{station_id}/heartbeat")
 async def api_station_heartbeat(join_code: str, station_id: str):
     sess = control_session.get_by_join_code(join_code)

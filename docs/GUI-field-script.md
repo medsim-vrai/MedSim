@@ -56,6 +56,14 @@ linked top-right on every screen.
 | 4.2 | Open the **QR sheet** (`/portal/control/qr_print`): each patient page groups under the **character name** (chat/EHR/device + that bed's **scenario-character** avatar/voice QRs + bedside devices). | ☐ |
 | 4.3 | A final **Common** page: **common characters** (shared cast — avatar vs voice) + **common devices** (Nursing Station + med cart). Nursing Station is NOT repeated on each patient page. | ☐ |
 
+## 4b. Shared character — one tablet, many patients  *(FR-007 v2)*
+
+| # | Step | Pass |
+|---|---|---|
+| 4b.1 | Launch a multi-bed room with a **shared character** (e.g. a common doctor in the Characters step). On the QR sheet's **Common characters**, scan the **chat** QR (`/portal/room/shared/<id>`) on one tablet. | ☐ |
+| 4b.2 | The shared-station page shows the character + "Covering <room>: <all beds>". Ask about **Bed 1's** patient → the reply is about that patient. | ☐ |
+| 4b.3 | In the SAME chat, ask about **Bed 2's** patient → one instance answers about the other patient (conversation spans beds; the doctor knows both). | ☐ |
+
 ## 5. Fallback + accessibility  *(G8)*
 
 | # | Step | Pass |
