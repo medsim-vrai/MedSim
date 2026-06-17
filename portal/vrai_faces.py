@@ -1140,31 +1140,53 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         # Borrow the running scenario's Anthropic key for a real character reply.
         # No active session (device opened standalone) → echo, so the avatar
         # still speaks and the voice→avatar pipeline can be exercised live.
-        sess = control_session.get_active()
+        try:
+            sess = control_session.get_active()
+        except Exception:  # noqa: BLE001 — multi-encounter room: no single active session
+            sess = None
         persona_name = str(card.get("name") or cid)
         reply = ""
         mode = "echo"
         vsess = sess   # the encounter to borrow voice + transcript from (room: a bed)
 
-        # FR-007 v2 — a SHARED character in a multi-patient room (get_active() is
-        # None) still answers, room-aware: ONE instance spanning every bed.
+        # FR-007 v2 — in a multi-patient room there is no single active session, so a
+        # character on a tablet would otherwise ECHO. Resolve it room-aware: a SHARED
+        # persona answers as ONE instance spanning every bed; any other character answers
+        # for its specific bed (the QR's scenario id, else its roster). The Anthropic key
+        # comes from the process cache (room start populates it) — room encounters do NOT
+        # carry a stamped api_key, which is exactly why the old `e.api_key` path echoed.
         if sess is None:
             try:
                 from . import control_room as _cr
                 _room = _cr.get_active_room()
             except Exception:  # noqa: BLE001
                 _room = None
-            if _room is not None and cid in (getattr(_room, "shared_personas", []) or []):
+            if _room is not None:
                 _encs = list(_room.encounters.values())
-                _key = next((e.api_key for e in _encs if getattr(e, "api_key", "")), "")
-                vsess = next((e for e in _encs
-                              if cid in (getattr(e, "voice_assignments", {}) or {})),
-                             (_encs[0] if _encs else None))
-                if _key and _encs:
+                from .server import _resolve_anthropic_key as _rkey
+                _key = _rkey(_encs[0] if _encs else None)
+                _scn = None
+                if cid in (getattr(_room, "shared_personas", []) or []):
+                    # shared character: one instance, aware of every bed in the room
+                    vsess = next((e for e in _encs
+                                  if cid in (getattr(e, "voice_assignments", {}) or {})),
+                                 (_encs[0] if _encs else None))
                     _rps = [{"label": e.encounter_label or e.scenario_name or "patient",
                              "history": e.scenario_text or ""} for e in _encs]
                     _scn = {"id": getattr(vsess, "id", _room.room_id),
                             "name": _room.label or "Shared care room", "room_patients": _rps}
+                else:
+                    # a per-bed character: bind to its bed (QR scenario id, else roster)
+                    _bed = next((e for e in _encs if e.id == scenario_id), None) \
+                        or next((e for e in _encs
+                                 if cid in (getattr(e, "selected_personas", []) or [])), None)
+                    if _bed is not None:
+                        vsess = _bed
+                        _scn = {"id": _bed.id,
+                                "name": getattr(_bed, "scenario_name", "") or scenario_id,
+                                "patient": ({"history": _bed.scenario_text}
+                                            if getattr(_bed, "scenario_text", "") else {})}
+                if _scn is not None and _key:
                     _sim = runtime.create_session_from_data(
                         scenario=_scn, characters={cid: card}, api_key=_key)
                     import asyncio as _aio0
