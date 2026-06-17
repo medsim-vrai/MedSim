@@ -429,6 +429,14 @@ def test_scenario_character_variants():
     assert "scenarioCharList()" in js          # used by the wizard + board scenario layer
 
 
+def test_avatar_hardware_info_and_audio_default(client):
+    """Audio-only is the default; an info disclosure explains the avatar rig's
+    hardware (so instructors understand the cost before opting in)."""
+    html = client.get("/portal/console").text
+    assert "audio-only" in html.lower()                     # default stated in the UI
+    assert "Avatar hardware" in html and "WebGPU" in html   # the info disclosure
+
+
 def test_board_inline_popover_editing():
     """G6 polish — board cards open an inline edit popover (bed scenario, EHR,
     nursing station) that drives the live wizard control, not just a jump."""
