@@ -238,10 +238,23 @@ async def auth_redirect_handler(request: Request, exc: HTTPException):
 # Auth
 # ---------------------------------------------------------------------------
 
+def _default_landing() -> str:
+    """Where a logged-in operator lands. The classic home stays the out-of-box
+    default; the v7.1 'card launch' sets MEDSIM_DEFAULT_VIEW=console to boot straight
+    into the Mission Control card system instead. Classic is always reachable — the
+    card UI has 'Switch to classic control room', and the classic nav links to the
+    card system the other way."""
+    import os as _os
+    v = (_os.environ.get("MEDSIM_DEFAULT_VIEW") or "").strip().lower()
+    if v in ("console", "cards", "card", "mission", "v8", "7.1"):
+        return "/portal/console?mode=operate"
+    return "/portal/home"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root(medsim_session: Annotated[str | None, Cookie()] = None):
     if auth.verify_session(medsim_session):
-        return RedirectResponse("/portal/home", status_code=303)
+        return RedirectResponse(_default_landing(), status_code=303)
     return RedirectResponse("/login", status_code=303)
 
 
@@ -266,7 +279,7 @@ async def login_submit(password: Annotated[str, Form()],
         vault = credentials.unlock(password)
     except (ValueError, FileNotFoundError):
         return RedirectResponse("/login?error=invalid", status_code=303)
-    response = RedirectResponse("/portal/home", status_code=303)
+    response = RedirectResponse(_default_landing(), status_code=303)
     response.set_cookie(
         auth.COOKIE_NAME,
         auth.issue_session_token(vault, role=role),
@@ -290,7 +303,7 @@ async def initialize_submit(
         return RedirectResponse("/login?error=exists", status_code=303)
     credentials.initialize(password)
     vault = credentials.unlock(password)
-    response = RedirectResponse("/portal/home", status_code=303)
+    response = RedirectResponse(_default_landing(), status_code=303)
     response.set_cookie(
         auth.COOKIE_NAME,
         auth.issue_session_token(vault),
@@ -316,7 +329,7 @@ async def logout(medsim_session: Annotated[str | None, Cookie()] = None):
 @app.get("/portal", response_class=HTMLResponse)
 async def portal_root(medsim_session: Annotated[str | None, Cookie()] = None):
     if auth.verify_session(medsim_session):
-        return RedirectResponse("/portal/home", status_code=303)
+        return RedirectResponse(_default_landing(), status_code=303)
     return RedirectResponse("/login", status_code=303)
 
 

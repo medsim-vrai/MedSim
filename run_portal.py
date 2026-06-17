@@ -272,6 +272,12 @@ def _open_browser() -> None:
     time.sleep(1.5)
     scheme = "https" if _tls_files() else "http"
     url = f"{scheme}://127.0.0.1:{PORT}"
+    # v7.1 card launch — open straight into the Mission Control card system when
+    # MEDSIM_DEFAULT_VIEW=console. (The "/" route also redirects there, but this
+    # puts the card URL in the address bar from the first paint.)
+    if (os.environ.get("MEDSIM_DEFAULT_VIEW") or "").strip().lower() in (
+            "console", "cards", "card", "mission", "v8", "7.1"):
+        url += "/portal/console?mode=operate"
     if _open_in_chrome(url):
         print("  → Opened in Chrome.")
     else:
