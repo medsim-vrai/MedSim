@@ -94,11 +94,9 @@
 
 /* ── readiness detail (drops down from the bar) ────────────────────────── */
 .readiness-detail {
-  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
-  max-height: 56vh; overflow-y: auto;
-  background: #fff; border-bottom: 2px solid #143b8a;
-  box-shadow: 0 10px 22px rgba(0,0,0,0.18);
-  padding: 10px 16px; display: grid; gap: 6px;
+  max-height: 60vh; overflow-y: auto;
+  background: #f6f8fa; border-bottom: 2px solid #143b8a;
+  padding: 12px 16px; display: grid; gap: 6px;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 .rd-row {

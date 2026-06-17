@@ -1200,17 +1200,9 @@
       box.hidden = !open;
       bar.setAttribute("aria-expanded", open ? "true" : "false");
     }
-    bar.addEventListener("click", function (e) {
-      e.stopPropagation();          // don't let the document handler immediately re-close
-      setOpen(box.hidden);
-    });
-    // It's an OVERLAY dropdown — dismiss on outside-click or Escape so it never
-    // lingers over the wizard / Operations content beneath it.
-    document.addEventListener("click", function (e) {
-      if (box.hidden) return;
-      if (box.contains(e.target) || bar.contains(e.target)) return;
-      setOpen(false);
-    });
+    // In-flow panel: the bar toggles it; Esc closes it. (No outside-click close —
+    // that would collapse the panel and shift content when you click into the form.)
+    bar.addEventListener("click", function () { setOpen(box.hidden); });
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && !box.hidden) setOpen(false);
     });

@@ -31,11 +31,12 @@
           <button type="submit" class="link">Log out</button>
         </form>
       </div>
-
-      <!-- expandable readiness detail — OVERLAYS content (absolute; does NOT push
-           the tabs/Operations down). Toggled by the readiness bar. -->
-      <div id="readiness-detail" class="readiness-detail" hidden aria-label="Readiness detail"></div>
     </header>
+
+    <!-- expandable readiness detail — IN-FLOW: closed by default; opening it pushes
+         the tabs/panel down (never overlaps) and it scrolls away under the sticky
+         bar. The readiness bar toggles it; Esc closes it. -->
+    <div id="readiness-detail" class="readiness-detail" hidden aria-label="Readiness detail"></div>
 
     <!-- mode tabs -->
     <nav class="console-tabs" role="tablist" aria-label="Mission control modes">
