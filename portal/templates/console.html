@@ -195,13 +195,34 @@
           <span id="resumed-text"></span>
         </div>
 
+        <!-- Operations — live entity cards (room-aware). Each opens in place or
+             pops out onto another monitor for real-time, multi-screen ops. -->
         <div class="cockpit-head">
-          <h2 class="cockpit-title">Readiness</h2>
-          <button type="button" id="test-all-btn" class="ct-testall">Test all</button>
+          <h2 class="cockpit-title">Operations<span id="op-label" class="op-label"></span></h2>
+          <button type="button" id="op-refresh" class="ct-testall"
+                  title="Refresh live operations">Refresh</button>
         </div>
-        <div id="readiness-tiles" class="readiness-tiles" aria-live="polite"></div>
+        <div id="operate-cards" class="op-cards" aria-live="polite"></div>
+        <p id="op-empty" class="op-empty" hidden>No live session yet — launch one in
+          <a href="?mode=setup">Set&nbsp;up</a>; patients, characters and devices then
+          appear here as cards you can open or pop out to another screen.</p>
 
-        <h2 class="cockpit-title cockpit-title--sub">Live session</h2>
+        <!-- Readiness — collapsible to save room for operations (default closed) -->
+        <details id="readiness-block" class="readiness-block">
+          <summary class="readiness-summary">
+            <span class="rs-caret" aria-hidden="true">▸</span>
+            <span class="cockpit-title">Readiness</span>
+            <span id="readiness-mini" class="readiness-mini" aria-live="polite"></span>
+          </summary>
+          <div class="readiness-body">
+            <div class="cockpit-subhead">
+              <button type="button" id="test-all-btn" class="ct-testall">Test all</button>
+            </div>
+            <div id="readiness-tiles" class="readiness-tiles" aria-live="polite"></div>
+          </div>
+        </details>
+
+        <h2 class="cockpit-title cockpit-title--sub">Session tools</h2>
         <div class="mgmt-cards">
           <div class="mgmt-card" data-mgmt="meds">
             <div class="mc-label">Medications</div>

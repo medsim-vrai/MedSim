@@ -53,6 +53,7 @@
       tabs[i].setAttribute("aria-selected",
         tabs[i].getAttribute("data-tab") === mode ? "true" : "false");
     }
+    if (mode === "operate" && typeof loadOperate === "function") loadOperate();
   }
 
   function wireTabs() {
@@ -97,6 +98,7 @@
     renderResumeBanner(snap);
     renderResumedNote(snap);
     renderMgmt(snap);
+    renderReadinessMini(snap);           // collapsed-readiness summary line
     wizSetReadiness(overall);            // keep the wizard's launch gate live
   }
 
@@ -196,6 +198,110 @@
       el.setAttribute("data-on", active ? "yes" : "no");
       el.textContent = active ? "Active" : "No session";
     });
+  }
+
+  // ── Operations — live entity cards (room-aware), each open-in-place or pop-out
+  //    to another monitor for real-time multi-screen ops. /api/control/operate. ──
+  var OP_ICON = { patient: "🛏", character: "💬",
+                  med_cart: "💊", nursing: "🩺", ehr: "📋" };
+
+  function safeName(s) { return String(s || "x").replace(/[^a-z0-9_]/gi, ""); }
+
+  function opCard(ent) {
+    var card = document.createElement("div");
+    card.className = "op-card";
+    card.setAttribute("data-kind", ent.kind || "");
+
+    var head = document.createElement("div");
+    head.className = "op-head";
+    var icon = document.createElement("span");
+    icon.className = "op-icon"; icon.setAttribute("aria-hidden", "true");
+    icon.textContent = OP_ICON[ent.kind] || "▪";
+    var title = document.createElement("span");
+    title.className = "op-title"; title.textContent = ent.title || ent.id || "";
+    head.appendChild(icon); head.appendChild(title);
+    card.appendChild(head);
+
+    if (ent.sub) {
+      var sub = document.createElement("div");
+      sub.className = "op-sub"; sub.textContent = ent.sub;
+      card.appendChild(sub);
+    }
+    if (ent.join) {
+      var jn = document.createElement("div");
+      jn.className = "op-join"; jn.textContent = "Join " + ent.join;
+      card.appendChild(jn);
+    }
+    if (ent.stats && ent.stats.length) {
+      var st = document.createElement("div");
+      st.className = "op-stats";
+      ent.stats.forEach(function (s) {
+        var b = document.createElement("span"); b.className = "op-stat";
+        b.textContent = s; st.appendChild(b);
+      });
+      card.appendChild(st);
+    }
+
+    var actions = document.createElement("div");
+    actions.className = "op-actions";
+    if (ent.open_url) {
+      var open = document.createElement("a");
+      open.className = "op-btn"; open.href = ent.open_url; open.textContent = "Open ↗";
+      actions.appendChild(open);
+
+      var pop = document.createElement("button");
+      pop.type = "button"; pop.className = "op-btn op-btn--ghost";
+      pop.textContent = "Pop out ⧉";
+      pop.title = "Open in a new window for another monitor";
+      pop.addEventListener("click", (function (url, name) {
+        return function () {
+          window.open(url, "op_" + name,
+            "width=560,height=760,menubar=no,toolbar=no,location=no");
+        };
+      })(ent.open_url, safeName(ent.kind + "_" + ent.id)));
+      actions.appendChild(pop);
+    }
+    if (ent.qr_url) {
+      var qr = document.createElement("a");
+      qr.className = "op-btn op-btn--ghost"; qr.href = ent.qr_url;
+      qr.target = "_blank"; qr.rel = "noopener"; qr.textContent = "QR";
+      actions.appendChild(qr);
+    }
+    card.appendChild(actions);
+    return card;
+  }
+
+  function renderOpCards(data) {
+    var grid = $("#operate-cards");
+    if (!grid) return;
+    var ents = (data && data.entities) || [];
+    var empty = $("#op-empty");
+    var label = $("#op-label");
+    grid.textContent = "";
+    if (!ents.length) {
+      if (empty) empty.hidden = false;
+      if (label) label.textContent = "";
+      return;
+    }
+    if (empty) empty.hidden = true;
+    if (label) label.textContent = data.label ? " · " + data.label : "";
+    ents.forEach(function (e) { grid.appendChild(opCard(e)); });
+  }
+
+  function loadOperate() {
+    return fetch("/api/control/operate", { credentials: "same-origin" })
+      .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
+      .then(function (data) { if (data) renderOpCards(data); })
+      .catch(function () { /* transient — keep the last rendered cards */ });
+  }
+
+  // Collapsed-readiness summary line (the tiles live inside the <details>).
+  function renderReadinessMini(snap) {
+    var mini = $("#readiness-mini");
+    if (!mini) return;
+    var overall = (snap && snap.overall) || "loading";
+    mini.setAttribute("data-status", overall);
+    mini.textContent = (GLYPH[overall] || "") + " " + (OVERALL_TEXT[overall] || overall);
   }
 
   function resumeSession(btn) {
@@ -998,6 +1104,7 @@
   }
 
   function poll() {
+    loadOperate();                       // refresh live operations cards alongside readiness
     return fetch("/api/control/readiness", { credentials: "same-origin" })
       .then(function (r) {
         if (handle401(r)) return null;
@@ -1050,6 +1157,10 @@
     var resumeBtn = $("#resume-btn");
     if (resumeBtn) {
       resumeBtn.addEventListener("click", function () { resumeSession(resumeBtn); });
+    }
+    var opRefresh = $("#op-refresh");
+    if (opRefresh) {
+      opRefresh.addEventListener("click", function () { loadOperate(); });
     }
     initWizard();
     applyMode(currentMode());

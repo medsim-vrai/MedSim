@@ -584,3 +584,60 @@ def test_wizard_launch_creates_session_like_classic(monkeypatch):
         if control_session.get_active() is not None:
             control_session.end_active()
         ehr_db._mem_session_state = None
+
+
+def test_operate_endpoint_requires_auth():
+    from portal import server
+    c = TestClient(server.app)
+    assert c.get("/api/control/operate").status_code == 401
+
+
+def test_operate_endpoint_shape(client):
+    """FR-011 — the Operate cockpit's live-operations feed: auth'd, always a
+    well-formed {ok, mode, entities[]} the client renders as entity cards."""
+    r = client.get("/api/control/operate")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["ok"] is True
+    assert data["mode"] in ("none", "single", "room")
+    assert isinstance(data["entities"], list)
+
+
+def test_operate_endpoint_live_session(client):
+    """A live session surfaces exactly one patient card with a join code and the
+    focused open_url the instructor opens in place or pops out. (A single start
+    is a one-encounter room under the v7 model, so mode may be 'room'.)"""
+    from portal import auth, control_room, control_session, ehr_db
+    ehr_db._mem_session_state = None
+    for v in auth._active_vaults.values():        # in-memory only
+        v._data["ANTHROPIC_API_KEY"] = "dummy-key"
+    control_room.end_active_room()                # the endpoint is room-first — isolate
+    if control_session.get_active() is not None:
+        control_session.end_active()
+    try:
+        r = client.post("/portal/control/start", data={
+            "scenario_name": "Operate cards test",
+            "personas": ["P-014", "P-001"],
+            "ehr_id": "cyrus",
+        })
+        assert r.status_code == 200
+        data = client.get("/api/control/operate").json()
+        assert data["mode"] in ("single", "room")
+        patients = [e for e in data["entities"] if e["kind"] == "patient"]
+        assert len(patients) == 1
+        assert patients[0]["open_url"] and patients[0]["join"]
+    finally:
+        if control_session.get_active() is not None:
+            control_session.end_active()
+        control_room.end_active_room()
+        ehr_db._mem_session_state = None
+
+
+def test_console_operate_panel_has_operations_buildout(client):
+    """The Operate panel ships the live-operations container, the pop-out-ready
+    cards mount, and the collapsible readiness block (FR-011 Operate build-out)."""
+    html = client.get("/portal/console").text
+    assert 'id="operate-cards"' in html        # live entity cards mount
+    assert 'id="op-empty"' in html             # empty-state copy
+    assert 'class="readiness-block"' in html   # collapsible readiness
+    assert 'id="readiness-mini"' in html       # collapsed summary status line

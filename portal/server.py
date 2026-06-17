@@ -5452,6 +5452,111 @@ async def api_control_session_resume(
     return JSONResponse({"ok": bool(summary), "summary": summary})
 
 
+@app.get("/api/control/operate")
+async def api_control_operate(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-011 — LIVE operations layout for the Operate cockpit. Returns one card
+    per entity (each bed/patient, every shared character, med carts, nursing
+    station) with its join code, live counts, and the focused URL the instructor
+    can open in place OR pop out onto another monitor to watch in real time.
+
+    Room-aware: a multi-bed room makes `get_active()` None, which is exactly why
+    the old cockpit looked empty after a room launch — here we read the active
+    ROOM directly, falling back to a single session, then to nothing."""
+    from portal import control_room, control_session, ehr_db, library
+
+    def _dev_count(enc_id: str) -> int:
+        try:
+            return len(ehr_db.device_stations(enc_id) or [])
+        except Exception:  # noqa: BLE001
+            return 0
+
+    entities: list = []
+    room = control_room.get_active_room()
+    if room is not None and room.encounters:
+        encs = list(room.encounters.values())
+        shared = list(getattr(room, "shared_personas", []) or [])
+        for i, enc in enumerate(encs, 1):
+            chars = [p for p in (enc.selected_personas or []) if p not in shared]
+            _title = enc.encounter_label or enc.scenario_name or f"Bed {i}"
+            _sub = enc.scenario_name or ""
+            if _sub and _sub in _title:        # label already carries the scenario — no echo
+                _sub = ""
+            entities.append({
+                "kind": "patient",
+                "id": enc.id,
+                "title": _title,
+                "sub": _sub,
+                "join": enc.join_code,
+                "stats": [f"{_dev_count(enc.id)} device(s)",
+                          f"{len(chars)} character(s)"],
+                "open_url": f"/portal/room/encounter/{enc.id}",
+            })
+        for pid in shared:
+            p = library.get_persona(pid) or {}
+            has_voice = any(pid in (e.voice_assignments or {}) for e in encs)
+            entities.append({
+                "kind": "character",
+                "id": pid,
+                "title": p.get("name") or pid,
+                "sub": "Shared · voice set" if has_voice else "Shared · no voice yet",
+                "open_url": f"/portal/room/shared/{pid}",
+                "qr_url": f"/qr/face/{pid}.svg?mode=audio",
+            })
+        for cart_id, beds in (getattr(room, "cart_links", {}) or {}).items():
+            entities.append({
+                "kind": "med_cart",
+                "id": cart_id,
+                "title": (getattr(room, "cart_labels", {}) or {}).get(cart_id, "Med cart"),
+                "sub": f"{len(beds or [])} bed(s) linked",
+                "open_url": "/portal/control",
+            })
+        if len(encs) > 1:
+            entities.append({
+                "kind": "nursing",
+                "id": "nursing",
+                "title": "Nursing station",
+                "sub": "Shared monitor for the room",
+                "open_url": "/portal/control/launch_nurse_station",
+            })
+        return JSONResponse({"ok": True, "mode": "room",
+                             "label": room.label or "Care room", "entities": entities})
+
+    try:
+        sess = control_session.get_active()
+    except Exception:  # noqa: BLE001
+        sess = None
+    if sess is not None:
+        entities.append({
+            "kind": "patient",
+            "id": sess.id,
+            "title": getattr(sess, "encounter_label", "") or sess.scenario_name or "Patient",
+            "sub": sess.scenario_name or "",
+            "join": sess.join_code,
+            "stats": [f"{_dev_count(sess.id)} device(s)",
+                      f"{len(sess.selected_personas or [])} character(s)"],
+            "open_url": "/portal/control",
+        })
+        for pid in (sess.selected_personas or []):
+            p = library.get_persona(pid) or {}
+            if (p.get("roleGroup") or "") == "Patient":
+                continue
+            has_voice = pid in (getattr(sess, "voice_assignments", {}) or {})
+            entities.append({
+                "kind": "character",
+                "id": pid,
+                "title": p.get("name") or pid,
+                "sub": "voice set" if has_voice else "no voice yet",
+                "open_url": "/portal/control",
+                "qr_url": f"/qr/face/{pid}.svg?mode=audio&scenario={sess.id}",
+            })
+        return JSONResponse({"ok": True, "mode": "single",
+                             "label": sess.scenario_name or "Session", "entities": entities})
+
+    return JSONResponse({"ok": True, "mode": "none", "label": "", "entities": []})
+
+
 # =====================================================================
 # V7 M30 — Per-encounter parity (transcript / voice / lead student)
 # =====================================================================
