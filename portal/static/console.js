@@ -103,7 +103,7 @@
   }
 
   function renderDetail(checks) {
-    var box = $("#readiness-detail");
+    var box = $("#readiness-detail-body");
     if (!box) return;
     box.textContent = "";
     checks.forEach(function (c) {
@@ -1194,18 +1194,26 @@
 
   function wireDetailToggle() {
     var bar = $("#readiness-bar");
-    var box = $("#readiness-detail");
-    if (!bar || !box) return;
-    function setOpen(open) {
-      box.hidden = !open;
-      bar.setAttribute("aria-expanded", open ? "true" : "false");
+    var dlg = $("#readiness-detail");
+    if (!bar || !dlg) return;
+    function open() {
+      if (typeof dlg.showModal === "function") { if (!dlg.open) dlg.showModal(); }
+      else { dlg.setAttribute("open", ""); }      // fallback for very old browsers
+      bar.setAttribute("aria-expanded", "true");
     }
-    // In-flow panel: the bar toggles it; Esc closes it. (No outside-click close —
-    // that would collapse the panel and shift content when you click into the form.)
-    bar.addEventListener("click", function () { setOpen(box.hidden); });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !box.hidden) setOpen(false);
-    });
+    function close() {
+      if (typeof dlg.close === "function") { if (dlg.open) dlg.close(); }
+      else { dlg.removeAttribute("open"); }
+      bar.setAttribute("aria-expanded", "false");
+    }
+    // The bar IS the button: click → status pops up as a modal; ✕ / Esc / backdrop
+    // close it → back to just the bar. A modal floats above the page (dimmed
+    // backdrop), so it can never overlap or pin to the content.
+    bar.addEventListener("click", function () { (dlg.open ? close : open)(); });
+    var x = $("#readiness-close");
+    if (x) x.addEventListener("click", close);
+    dlg.addEventListener("click", function (e) { if (e.target === dlg) close(); }); // backdrop
+    dlg.addEventListener("close", function () { bar.setAttribute("aria-expanded", "false"); });
   }
 
   document.addEventListener("DOMContentLoaded", function () {

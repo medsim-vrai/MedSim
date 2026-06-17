@@ -15,9 +15,9 @@
       <div class="ct-brand">Mission&nbsp;Control <span class="v-pill">v8</span></div>
 
       <button type="button" id="readiness-bar" class="readiness-bar"
-              aria-live="polite" aria-expanded="false"
-              aria-label="System readiness — activate for detail"
-              title="System readiness — click for detail">
+              aria-live="polite" aria-expanded="false" aria-haspopup="dialog"
+              aria-label="System status — click to open details"
+              title="System status — click to open the details popup">
         <span class="rb-overall" data-status="loading">
           <span class="rb-glyph" aria-hidden="true">…</span>
           <span class="rb-overall-text">Checking readiness…</span>
@@ -33,10 +33,18 @@
       </div>
     </header>
 
-    <!-- expandable readiness detail — IN-FLOW: closed by default; opening it pushes
-         the tabs/panel down (never overlaps) and it scrolls away under the sticky
-         bar. The readiness bar toggles it; Esc closes it. -->
-    <div id="readiness-detail" class="readiness-detail" hidden aria-label="Readiness detail"></div>
+    <!-- System status detail — a MODAL popped from the readiness bar (the "button").
+         Floats above everything with a dimmed backdrop, so it can never overlap or
+         pin to the page. Dismiss via ✕ / Esc / backdrop click → back to just the bar. -->
+    <dialog id="readiness-detail" class="readiness-modal" aria-label="System status">
+      <div class="rm-panel">
+        <div class="rm-head">
+          <strong>System status</strong>
+          <button type="button" id="readiness-close" class="rm-close" aria-label="Close">✕ Close</button>
+        </div>
+        <div id="readiness-detail-body" class="rm-body"></div>
+      </div>
+    </dialog>
 
     <!-- mode tabs -->
     <nav class="console-tabs" role="tablist" aria-label="Mission control modes">
