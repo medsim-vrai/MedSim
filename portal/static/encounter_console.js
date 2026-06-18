@@ -10,6 +10,17 @@
 
   const cfg = window.ENCOUNTER_CONSOLE || {};
   const $ = (id) => document.getElementById(id);
+  // A 401 means the operator's session expired (e.g. after a server restart) — the
+  // page is stale. Bounce to /login so they re-auth, instead of every card silently
+  // failing ("Start handoff" showed a cryptic "failed" on a dead session).
+  let _redirecting401 = false;
+  function enc401(r) {
+    if (r && r.status === 401 && !_redirecting401) {
+      _redirecting401 = true;
+      window.location = '/login';
+    }
+    return !!(r && r.status === 401);
+  }
   const TELEMETRY_POLL_MS = 1000;
   const STATE_POLL_MS     = 2000;
 
@@ -264,6 +275,7 @@
   async function pollState() {
     try {
       const r = await fetch('/api/room/state', {credentials: 'same-origin'});
+      if (enc401(r)) return;          // stale session (e.g. server restarted) -> /login
       if (r.status === 404) {
         $('enc-state').textContent = 'NO ROOM';
         return;
@@ -1303,6 +1315,7 @@
     fetch('/api/room/encounter/' + encodeURIComponent(cfg.encounterId) + '/operator/turn',
           { method: 'POST', credentials: 'same-origin', body: fd })
       .then(function (r) {
+        if (enc401(r)) return { ok: false, error: 'session expired — reloading' };
         return r.ok ? r.json()
           : r.json().then(function (j) { throw new Error((j && j.error) || r.status); });
       })
@@ -1450,7 +1463,10 @@
   function hoApi(path, opts) {
     var url = '/api/control/handoff' + (path || '');
     url += (url.indexOf('?') >= 0 ? '&' : '?') + 'bed=' + encodeURIComponent(cfg.encounterId);
-    return fetch(url, opts).then(function (r) { return r.json(); });
+    return fetch(url, opts).then(function (r) {
+      if (enc401(r)) return { ok: false, error: 'session expired — reloading' };
+      return r.json();
+    });
   }
   function hoRenderActive(st) {
     var cfgEl = $('ho-config'), a = $('ho-active'), evb = $('ho-eval');
