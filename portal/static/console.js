@@ -1311,6 +1311,17 @@
       opRefresh.addEventListener("click", function () { loadOperate(); });
     }
     wireRoomControls();           // room lifecycle bar (start/pause/resume/inject/QR/end)
+    // Session tools open in their OWN window (target=_blank was navigating the tab
+    // to classic on some loads — force a real popup window via window.open).
+    var mcLinks = document.querySelectorAll(".mc-link");
+    for (var mi = 0; mi < mcLinks.length; mi++) {
+      mcLinks[mi].addEventListener("click", function (e) {
+        e.preventDefault();
+        var href = this.getAttribute("href") || "";
+        if (href) window.open(href, "tool_" + href.replace(/[^a-z0-9]/gi, ""),
+          "width=1100,height=820,menubar=no,toolbar=no");
+      });
+    }
     initWizard();
     applyMode(currentMode());
     poll();

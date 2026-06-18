@@ -34,6 +34,7 @@
   <form id="chat">
     <input id="message" name="message" type="text" autocomplete="off"
            placeholder="Speak to {{ persona_name }}…" aria-label="Message">
+    <button type="button" id="talk" title="Hold to talk">🎤 Hold</button>
     <button type="submit" id="send">Send</button>
   </form>
   <script>
@@ -43,6 +44,7 @@
     var form = document.getElementById("chat");
     var input = document.getElementById("message");
     var send = document.getElementById("send");
+    var talk = document.getElementById("talk");
     function bubble(cls, who, text) {
       var d = document.createElement("div"); d.className = "msg " + cls;
       if (who) { var w = document.createElement("span"); w.className = "who"; w.textContent = who; d.appendChild(w); }
@@ -50,9 +52,25 @@
       log.appendChild(d); log.scrollTop = log.scrollHeight;
     }
     function err(text) { var d = document.createElement("div"); d.className = "err"; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; }
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var text = (input.value || "").trim();
+    // Speak the reply in the character's assigned voice (ElevenLabs via /api/tts),
+    // falling back to the browser voice when none is set.
+    function speak(text, voiceId) {
+      if (!text) return;
+      if (voiceId) {
+        fetch("/api/tts", { method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: text, voice_id: voiceId }) })
+          .then(function (r) { return r.ok ? r.blob() : null; })
+          .then(function (b) { if (b) { var u = URL.createObjectURL(b); var a = new Audio(u);
+            a.addEventListener("ended", function () { URL.revokeObjectURL(u); }); a.play(); } })
+          .catch(function () {});
+      } else if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+      }
+    }
+    function sendMessage(text) {
+      text = (text || "").trim();
       if (!text) return;
       bubble("you", "You", text);
       input.value = ""; send.disabled = true;
@@ -61,12 +79,50 @@
             { method: "POST", credentials: "same-origin", body: body })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (data) {
-          if (data && data.ok) bubble("them", data.character_name || NAME, data.reply);
+          if (data && data.ok) { bubble("them", data.character_name || NAME, data.reply);
+                                 speak(data.reply, data.voice_id); }
           else err((data && data.error) || "Reply failed.");
         })
         .catch(function () { err("Network error."); })
         .then(function () { send.disabled = false; input.focus(); });
-    });
+    }
+    form.addEventListener("submit", function (e) { e.preventDefault(); sendMessage(input.value); });
+
+    // Hold-to-talk (browser speech-to-text). Falls back to typing where unsupported.
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+      var recog = null, listening = false, finalText = "";
+      var startTalk = function () {
+        if (listening) return;
+        recog = new SR(); recog.lang = "en-US"; recog.interimResults = true; recog.continuous = true;
+        finalText = "";
+        recog.onresult = function (ev) {
+          var intr = "";
+          for (var i = ev.resultIndex; i < ev.results.length; i++) {
+            var t = ev.results[i][0].transcript;
+            if (ev.results[i].isFinal) finalText += t; else intr += t;
+          }
+          input.value = (finalText + intr).trim();
+        };
+        recog.onerror = function () { stopTalk(true); };
+        try { recog.start(); listening = true; talk.textContent = "● Listening";
+              talk.style.background = "#cc2f2f"; } catch (e) {}
+      };
+      var stopTalk = function (abort) {
+        if (!listening) return;
+        listening = false; talk.textContent = "🎤 Hold"; talk.style.background = "";
+        try { recog && recog.stop(); } catch (e) {}
+        var said = (finalText || input.value || "").trim();
+        if (!abort && said) sendMessage(said);
+      };
+      talk.addEventListener("mousedown", startTalk);
+      talk.addEventListener("touchstart", function (e) { e.preventDefault(); startTalk(); }, { passive: false });
+      talk.addEventListener("mouseup", function () { stopTalk(false); });
+      talk.addEventListener("mouseleave", function () { if (listening) stopTalk(false); });
+      talk.addEventListener("touchend", function (e) { e.preventDefault(); stopTalk(false); });
+    } else {
+      talk.disabled = true; talk.title = "Voice needs Chrome/Edge — type instead";
+    }
     input.focus();
   </script>
 </body>

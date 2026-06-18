@@ -2332,6 +2332,14 @@ async def api_room_shared_turn(persona_id: str, message: Annotated[str, Form()])
             "character_name": result.get("character_name", persona.get("name", "")),
             "ts": _time.time(),
         })
+        # Voice for the shared station's push-to-talk TTS — the shared character's
+        # ElevenLabs voice, assigned once on any bed. Empty -> the station falls back
+        # to the browser voice.
+        for e in encs:
+            v = (getattr(e, "voice_assignments", {}) or {}).get(persona_id)
+            if v:
+                result["voice_id"] = v
+                break
     return JSONResponse(result)
 
 
