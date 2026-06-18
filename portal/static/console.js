@@ -1295,7 +1295,22 @@
     dlg.addEventListener("close", function () { bar.setAttribute("aria-expanded", "false"); });
   }
 
+  // Request the mic up front so push-to-talk (SpeechRecognition, on the same-origin
+  // encounter consoles) has permission — Chrome's implicit PTT prompt is unreliable.
+  // We release the stream immediately: we want the granted permission, not an open mic.
+  function prewarmMic() {
+    try {
+      var md = navigator.mediaDevices;
+      if (md && md.getUserMedia) {
+        md.getUserMedia({ audio: true })
+          .then(function (s) { s.getTracks().forEach(function (t) { t.stop(); }); })
+          .catch(function () { /* denied/dismissed — PTT surfaces a guide on use */ });
+      }
+    } catch (e) { /* no-op */ }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    prewarmMic();                 // grant mic once at startup -> PTT works origin-wide
     wireTabs();
     wireDetailToggle();
     var testAllBtn = $("#test-all-btn");

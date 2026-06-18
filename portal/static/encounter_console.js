@@ -1337,6 +1337,16 @@
   function bootPtt() {
     var chips = $('op-chips'), talk = $('op-talk-btn'), typeBox = $('op-type');
     if (!chips || !talk) return;
+    // Request the mic up front so push-to-talk has permission (Chrome's implicit
+    // SpeechRecognition prompt is unreliable). Release the stream immediately.
+    try {
+      var _md = navigator.mediaDevices;
+      if (_md && _md.getUserMedia) {
+        _md.getUserMedia({ audio: true })
+          .then(function (s) { s.getTracks().forEach(function (t) { t.stop(); }); })
+          .catch(function () {});
+      }
+    } catch (e) { /* no-op */ }
     var ps = pttPersonas();
     if (!ps.length) { chips.innerHTML = '<p class="muted small">No characters on this bed.</p>'; return; }
     chips.textContent = '';
