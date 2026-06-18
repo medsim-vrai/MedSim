@@ -5688,12 +5688,19 @@ async def api_control_operate(
                 "qr_url": f"/qr/face/{pid}.svg?mode=audio",
             })
         for cart_id, beds in (getattr(room, "cart_links", {}) or {}).items():
+            # Direct cart UI (same as the classic "🛒 Open cart"): /device/<primary
+            # bed join>/<cart id>. Pops out to its own window, not the classic room.
+            station = ehr_db.get_device_station(cart_id) or {}
+            primary_eid = station.get("session_id") or ((beds or [None])[0])
+            primary_enc = room.encounters.get(primary_eid) if primary_eid else None
+            cart_url = (f"/device/{primary_enc.join_code}/{cart_id}"
+                        if primary_enc else "/portal/room")
             entities.append({
                 "kind": "med_cart",
                 "id": cart_id,
                 "title": (getattr(room, "cart_labels", {}) or {}).get(cart_id, "Med cart"),
                 "sub": f"{len(beds or [])} bed(s) linked",
-                "open_url": "/portal/control",
+                "open_url": cart_url,
             })
         if len(encs) > 1:
             entities.append({
@@ -5703,6 +5710,14 @@ async def api_control_operate(
                 "sub": "Shared monitor for the room",
                 "open_url": "/portal/control/launch_nurse_station",
             })
+        # Medical records (session-wide patient charts) — pops out to its own window.
+        entities.append({
+            "kind": "ehr",
+            "id": "records",
+            "title": "Medical records",
+            "sub": "Patient charts · MAR · notes · vitals",
+            "open_url": "/portal/medical_records",
+        })
         return JSONResponse({"ok": True, "mode": "room",
                              "label": room.label or "Care room",
                              # room lifecycle state for the Operate room-controls bar
