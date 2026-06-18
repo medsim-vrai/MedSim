@@ -284,23 +284,15 @@
         </details>
 
         <h2 class="cockpit-title cockpit-title--sub">Session tools</h2>
-        <div class="mgmt-cards">
-          <div class="mgmt-card" data-mgmt="meds">
-            <div class="mc-label">Medications</div>
-            <div class="mc-state" id="mc-meds">—</div>
-            <a class="mc-link" href="/portal/control/setup" target="_blank" rel="noopener">Manage&nbsp;↗</a>
-          </div>
-          <div class="mgmt-card" data-mgmt="errors">
-            <div class="mc-label">Staged errors</div>
-            <div class="mc-state" id="mc-errors">—</div>
-            <a class="mc-link" href="/portal/control/errors" target="_blank" rel="noopener">Manage&nbsp;↗</a>
-          </div>
-          <div class="mgmt-card" data-mgmt="handoff">
-            <div class="mc-label">Handoff</div>
-            <div class="mc-state" id="mc-handoff">—</div>
-            <a class="mc-link" href="/portal/control" target="_blank" rel="noopener">Open&nbsp;↗</a>
-          </div>
-        </div>
+        <p class="op-tools-note">
+          <strong>Medications</strong>, <strong>Staged errors</strong>, and the
+          <strong>Shift handoff</strong> are managed <strong>per patient</strong> — open a
+          patient card above (<strong>Open ↗</strong>, or <strong>Pop out ⧉</strong> to its own
+          window) and use that bed's Medications, Staged-errors, and Handoff cards. Room-wide
+          dispensing runs through the <strong>Med cart</strong> card.
+          <span class="muted">(The old session-wide pages were single-patient only — they don't
+          apply to a multi-bed room.)</span>
+        </p>
       </section>
 
       <section class="console-panel" data-panel="debrief" role="tabpanel" aria-label="Debrief">

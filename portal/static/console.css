@@ -300,6 +300,11 @@
 .op-btn--ghost:hover { background: #e1ebf3; }
 .op-empty { color: #6b7a88; font-size: 13px; }
 .op-empty a { color: #2b6cb0; }
+.op-tools-note {
+  max-width: 780px; font-size: 13px; line-height: 1.5; color: #3a4a58;
+  background: #f6f8fa; border: 1px solid #e1e7ed; border-radius: 8px; padding: 12px 14px;
+}
+.op-tools-note .muted { display: block; margin-top: 4px; color: #6b7a88; font-size: 12px; }
 
 /* ── System status — a small card; collapsed by default, expands the tiles ── */
 .readiness-block { margin: 20px 0 0; }

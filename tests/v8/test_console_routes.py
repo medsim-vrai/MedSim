@@ -97,8 +97,9 @@ def test_operate_cockpit_mounts_present(client):
     assert 'id="readiness-tiles"' in html       # the tile grid
     assert 'id="resume-banner"' in html         # the Resume banner
     assert 'id="test-all-btn"' in html          # Test all
-    for mount in ("mc-meds", "mc-errors", "mc-handoff"):
-        assert mount in html                    # live mgmt cards
+    # Session-wide meds/errors/handoff mounts were single-patient only; in the card
+    # model those are per-bed (encounter console) — Operate now points there.
+    assert 'op-tools-note' in html
 
 
 def test_resume_endpoint_requires_auth():
