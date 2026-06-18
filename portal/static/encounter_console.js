@@ -1467,6 +1467,13 @@
     if (st.n_patients > 1 && st.current_patient)
       h += '<div class="small">Current patient: ' + escapeHTML(st.current_patient)
          + ' (' + (st.cursor + 1) + '/' + st.n_patients + ')</div>';
+    h += '<div class="ho-hint">▶ Armed. Now <strong>run the report:</strong> engage the '
+       + 'counterpart in the <strong>🎤 push-to-talk card above</strong> (pick them, then talk/type) '
+       + '— or have the student do it on the tablet. '
+       + (st.mode === 'oncoming'
+            ? 'They’ll <em>give</em> the report; the student receives it.'
+            : 'The student <em>gives</em> report; they receive + probe gaps.')
+       + ' Then <strong>Score</strong>.</div>';
     h += '<div class="ho-actions">';
     if (st.phase === 'handoff' && st.n_patients > 1) h += '<button type="button" data-act="advance">Next patient →</button>';
     if (st.phase === 'handoff' || st.phase === 'prioritization') h += '<button type="button" data-act="evaluate">🧮 Score the handoff</button>';

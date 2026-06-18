@@ -1965,6 +1965,16 @@ async def api_control_operator_turn(
         "name": sess.scenario_name,
         "patient": {"history": sess.scenario_text} if sess.scenario_text else {},
     }
+    # FR-009 — inject the shift-handoff prompt block (+ med board / staged errors) so
+    # the chosen counterpart RUNS the handoff when engaged via operator PTT. No-op for
+    # any non-counterpart character (matched by card id).
+    from portal import handoff as _ho, med_errors as _me, med_orders as _mo
+    _ctx = "\n\n".join(x for x in (
+        _mo.prompt_block_for(sess.id, char),
+        _me.prompt_block_for(sess.id, char),
+        _ho.prompt_block_for(sess.id, char),
+    ) if x)
+    turn_card = {**char, "_extra_context": _ctx} if _ctx else char
     import time as _time
     # V6 — prefer the *current* vault key, falling back to the session-
     # cached key only if the vault doesn't have one. This lets the operator
@@ -1975,7 +1985,7 @@ async def api_control_operator_turn(
     sess.api_key = live_key   # keep the session in sync so other routes benefit
     sim_sess = runtime.create_session_from_data(
         scenario=scenario,
-        characters={persona_id: char},
+        characters={persona_id: turn_card},
         api_key=live_key,
     )
     turn_start = _time.time()
@@ -2027,10 +2037,21 @@ async def api_room_encounter_operator_turn(
         "name": enc.scenario_name,
         "patient": {"history": enc.scenario_text} if enc.scenario_text else {},
     }
+    # FR-009 — inject the shift-handoff prompt block (+ med board / staged errors) so
+    # the chosen counterpart actually RUNS the handoff when the operator engages it
+    # here. Keyed by enc.id (the handoff/med/error state's session id under
+    # ?bed=<encounter_id>); prompt_block_for is a no-op for any non-counterpart.
+    from portal import handoff as _ho, med_errors as _me, med_orders as _mo
+    _ctx = "\n\n".join(x for x in (
+        _mo.prompt_block_for(enc.id, char),
+        _me.prompt_block_for(enc.id, char),
+        _ho.prompt_block_for(enc.id, char),
+    ) if x)
+    turn_card = {**char, "_extra_context": _ctx} if _ctx else char
     import time as _time
     live_key = _resolve_anthropic_key(enc) or (vault.get("ANTHROPIC_API_KEY") or "")
     sim_sess = runtime.create_session_from_data(
-        scenario=scenario, characters={persona_id: char}, api_key=live_key)
+        scenario=scenario, characters={persona_id: turn_card}, api_key=live_key)
     turn_start = _time.time()
     result = runtime.take_turn(sim_sess.id, persona_id, message)
     latency_ms = int((_time.time() - turn_start) * 1000)
