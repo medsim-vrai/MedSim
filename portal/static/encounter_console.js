@@ -1382,7 +1382,15 @@
         }
         if (interim) interim.textContent = intr || finalText;
       };
-      pttRecog.onerror = function () { stopListen(true); };
+      pttRecog.onerror = function (ev) {
+        var e = (ev && ev.error) || 'error';
+        pttStatus(e === 'not-allowed' || e === 'service-not-allowed'
+          ? 'Microphone blocked — allow the mic for this site (or type your line below).'
+          : e === 'no-speech'
+          ? 'No speech heard — hold the button while speaking, or type below.'
+          : 'Voice unavailable (' + e + ') — type your line and press Enter.');
+        stopListen(true);
+      };
       try {
         pttRecog.start(); pttListening = true; talk.classList.add('listening');
         var s = $('op-talk-status'); if (s) s.textContent = 'Listening…';

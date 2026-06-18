@@ -277,7 +277,7 @@ def _open_browser() -> None:
     # puts the card URL in the address bar from the first paint.)
     if (os.environ.get("MEDSIM_DEFAULT_VIEW") or "").strip().lower() in (
             "console", "cards", "card", "mission", "v8", "7.1"):
-        url += "/portal/console?mode=operate"
+        url += "/portal/console?mode=setup"
     if _open_in_chrome(url):
         print("  → Opened in Chrome.")
     else:

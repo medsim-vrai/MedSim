@@ -247,7 +247,10 @@ def _default_landing() -> str:
     import os as _os
     v = (_os.environ.get("MEDSIM_DEFAULT_VIEW") or "").strip().lower()
     if v in ("console", "cards", "card", "mission", "v8", "7.1"):
-        return "/portal/console?mode=operate"
+        # Land on SET UP, not Operate — a fresh launch has no live session, and
+        # opening straight into Operations (empty/stale) is confusing. Start where
+        # you build the session.
+        return "/portal/console?mode=setup"
     return "/portal/home"
 
 
