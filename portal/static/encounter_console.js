@@ -858,9 +858,15 @@
              headers: {'Content-Type': 'application/json'},
              body: JSON.stringify({[pid]: voiceId})},
           );
-          if (r.ok) $('voice-status').textContent =
-            `Saved ${new Date().toLocaleTimeString()}`;
-          else      $('voice-status').textContent = `Save failed (${r.status}).`;
+          if (r.ok) {
+            // Keep the page-load snapshot in sync so every reader (PTT,
+            // pop-out windows) honors the new selection immediately.
+            encVoiceBody.voice_assignments = encVoiceBody.voice_assignments || {};
+            if (voiceId) encVoiceBody.voice_assignments[pid] = voiceId;
+            else delete encVoiceBody.voice_assignments[pid];
+            $('voice-status').textContent =
+              `Saved ${new Date().toLocaleTimeString()}`;
+          } else $('voice-status').textContent = `Save failed (${r.status}).`;
         });
       });
       grid.querySelectorAll('button.char-test').forEach(btn => {
@@ -1277,6 +1283,15 @@
       .map(function (pid) { return { id: pid, name: pid, role: '' }; });
   }
   function pttVoiceFor(pid) {
+    // Read the LIVE voice dropdown so a voice the instructor picks AFTER page
+    // load is honored. encVoiceBody.voice_assignments is only the page-load
+    // snapshot; reading it alone made a freshly-picked voice fall back to
+    // browser TTS (the "selected voice not used" bug). Fall back to the
+    // snapshot in solo/pop-out mode where the voice grid card isn't rendered.
+    var sels = document.querySelectorAll('select[data-persona]');
+    for (var i = 0; i < sels.length; i++) {
+      if (sels[i].dataset.persona === pid) return sels[i].value || '';
+    }
     var a = (encVoiceBody && encVoiceBody.voice_assignments) || {};
     return a[pid] || '';
   }
@@ -1337,16 +1352,31 @@
   function bootPtt() {
     var chips = $('op-chips'), talk = $('op-talk-btn'), typeBox = $('op-type');
     if (!chips || !talk) return;
-    // Request the mic up front so push-to-talk has permission (Chrome's implicit
-    // SpeechRecognition prompt is unreliable). Release the stream immediately.
-    try {
-      var _md = navigator.mediaDevices;
-      if (_md && _md.getUserMedia) {
-        _md.getUserMedia({ audio: true })
-          .then(function (s) { s.getTracks().forEach(function (t) { t.stop(); }); })
-          .catch(function () {});
-      }
-    } catch (e) { /* no-op */ }
+    // Mic permission. A getUserMedia call on page load (no user gesture) is an
+    // unreliable way to surface Chrome's permission prompt and silently fails
+    // if the mic was previously dismissed/blocked. Instead request it on the
+    // FIRST user gesture in this card (chip click / type focus / hold) — a
+    // gesture-tied prompt is reliable — and give actionable guidance if blocked.
+    var micReady = false, micTried = false, micPending = false;
+    function ensureMicOnce() {
+      if (micReady || micTried) return;
+      var md = navigator.mediaDevices;
+      if (!md || !md.getUserMedia) { micTried = true; return; }
+      micTried = true; micPending = true;
+      md.getUserMedia({ audio: true })
+        .then(function (s) {
+          s.getTracks().forEach(function (t) { t.stop(); });
+          micReady = true; micPending = false;
+          pttStatus('Microphone ready — hold “Hold to talk” and speak.');
+        })
+        .catch(function (err) {
+          micPending = false;
+          var n = (err && err.name) || '';
+          pttStatus((n === 'NotAllowedError' || n === 'SecurityError')
+            ? 'Microphone blocked — click the site icon at the left of the address bar, set Microphone to Allow, reload, or just type your line below.'
+            : 'No microphone available (' + (n || 'error') + ') — type your line and press Enter.');
+        });
+    }
     var ps = pttPersonas();
     if (!ps.length) { chips.innerHTML = '<p class="muted small">No characters on this bed.</p>'; return; }
     chips.textContent = '';
@@ -1355,6 +1385,7 @@
       b.type = 'button'; b.className = 'op-chip' + (i === 0 ? ' active' : '');
       b.textContent = p.name || p.id;
       b.addEventListener('click', function () {
+        ensureMicOnce();
         var all = chips.querySelectorAll('.op-chip');
         for (var k = 0; k < all.length; k++) all[k].classList.remove('active');
         b.classList.add('active');
@@ -1365,6 +1396,7 @@
     pttActive = { id: ps[0].id, name: ps[0].name || ps[0].id };
 
     if (typeBox) {
+      typeBox.addEventListener('focus', ensureMicOnce);
       typeBox.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && typeBox.value.trim()) {
           sendPttTurn(typeBox.value.trim()); typeBox.value = '';
@@ -1378,24 +1410,34 @@
       talk.disabled = true; talk.style.opacity = '0.55';
       return;
     }
-    var interim = $('op-interim'), finalText = '';
+    var interim = $('op-interim'), finalText = '', heard = '';
     function startListen() {
       if (pttListening || pttBusy) return;
+      ensureMicOnce();
+      if (micPending) {  // permission prompt is open — grant it, then hold again
+        pttStatus('Allow the microphone in the prompt, then hold “Hold to talk” again.');
+        return;
+      }
       pttRecog = new SR();
       pttRecog.lang = 'en-US'; pttRecog.interimResults = true; pttRecog.continuous = true;
-      finalText = '';
+      finalText = ''; heard = '';
       pttRecog.onresult = function (ev) {
         var intr = '';
         for (var i = ev.resultIndex; i < ev.results.length; i++) {
           var tr = ev.results[i][0].transcript;
           if (ev.results[i].isFinal) finalText += tr; else intr += tr;
         }
-        if (interim) interim.textContent = intr || finalText;
+        // Keep a best-effort full transcript (finalized + live interim) so a
+        // quick button release still sends. Chrome often hasn't marked the
+        // last utterance isFinal by the time the user lets go, which left
+        // finalText empty and dropped the turn (STT ran but no reply/TTS).
+        heard = (finalText + ' ' + intr).trim();
+        if (interim) interim.textContent = heard;
       };
       pttRecog.onerror = function (ev) {
         var e = (ev && ev.error) || 'error';
-        pttStatus(e === 'not-allowed' || e === 'service-not-allowed'
-          ? 'Microphone blocked — allow the mic for this site (or type your line below).'
+        pttStatus((e === 'not-allowed' || e === 'service-not-allowed')
+          ? 'Microphone blocked — click the site icon at the left of the address bar, set Microphone to Allow, then reload (or just type your line below).'
           : e === 'no-speech'
           ? 'No speech heard — hold the button while speaking, or type below.'
           : 'Voice unavailable (' + e + ') — type your line and press Enter.');
@@ -1411,9 +1453,12 @@
       pttListening = false; talk.classList.remove('listening');
       try { pttRecog && pttRecog.stop(); } catch (e) {}
       var s = $('op-talk-status'); if (s) s.textContent = 'Idle';
-      var said = finalText.trim();
+      var said = (heard || finalText).trim();
       if (interim) interim.textContent = '';
-      if (!abort && said) sendPttTurn(said);
+      if (!abort) {
+        if (said) sendPttTurn(said);
+        else pttStatus('Didn’t catch that — hold the button, speak, then release (or type below).');
+      }
     }
     talk.addEventListener('mousedown', startListen);
     talk.addEventListener('touchstart', function (e) { e.preventDefault(); startListen(); }, { passive: false });
