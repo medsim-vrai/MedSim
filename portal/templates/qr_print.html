@@ -295,6 +295,23 @@
       </div>
 
       <div class="qr-grid">
+        {# Patient avatar — the automated VRAI Faces rig for the bed's OWN patient
+           character. /qr/face/<patient>.svg with NO mode=audio = the animated 3D
+           rig (mode=audio would be the flat audio-only portrait). Regression fix
+           (2026-06): the patient was excluded from every avatar-QR section here
+           (only scenario/shared cast got face QRs), so the patient's rig-launch QR
+           had gone missing from the sheet entirely. #}
+        {% if enc.patient_persona_id %}
+        <div class="qr-block">
+          <p class="qr-block-label">🪞 Patient avatar (animated rig)</p>
+          <p class="qr-block-sublabel">Launch {% if enc.patient_name %}{{ enc.patient_name }}{% else %}the patient{% endif %}'s automated face rig on the bedside tablet.</p>
+          <img class="qr-block-img"
+               src="/qr/face/{{ enc.patient_persona_id }}.svg?scenario={{ enc.id }}"
+               alt="Patient avatar rig QR for {{ enc.patient_name or enc.patient_persona_id }}">
+          <code class="qr-block-url">{{ enc.patient_persona_id }}</code>
+        </div>
+        {% endif %}
+
         <div class="qr-block">
           <p class="qr-block-label">💬 Chat station</p>
           <p class="qr-block-sublabel">Bedside student joins to chat with the patient.</p>

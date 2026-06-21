@@ -220,7 +220,7 @@
          encodes the avatar app deep-link the tablet opens. #}
       {% for p in avatar_personas_detail %}
       <div class="qr-cell qr-cell-avatar">
-        <div class="qr-label">🪞 Avatar · {{ p.name }}</div>
+        <div class="qr-label">🪞 Avatar · {{ p.name }}{% if p.is_patient %} · patient (animated rig){% endif %}</div>
         <img class="qr-img"
              src="/qr/face/{{ p.id }}.svg?scenario={{ encounter.id }}"
              alt="VRAI Faces avatar QR for {{ p.name }}">

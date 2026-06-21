@@ -316,6 +316,47 @@ def test_room_start_stores_shared_personas_and_qr_sheet_groups(monkeypatch):
         assert "Scenario characters" in html and "Charge Nurse Kim" in html  # per-bed cast
         assert "Mr. Hayes" in html                                        # patient heading
         assert "/qr/face/P-001.svg" in html                               # avatar/voice QR
+        # Regression (2026-06): the PATIENT character must also get an avatar-rig
+        # launch QR — it was previously excluded from every avatar-QR section
+        # (only scenario/shared cast got /qr/face QRs on the sheet).
+        assert "/qr/face/P-014.svg" in html                               # Mr. Hayes (patient) rig QR
+        assert "Patient avatar (animated rig)" in html
+    finally:
+        if control_room.get_active_room() is not None:
+            control_room.end_active_room()
+        ehr_db._mem_session_state = None
+
+
+def test_encounter_console_always_shows_patient_avatar_qr(monkeypatch):
+    """Regression (2026-06): the patient is the primary bedside avatar, so its
+    animated-rig launch QR must appear in the encounter console (the card-GUI
+    controls) even when the instructor never opted the patient into
+    enc.avatar_personas — the card-launch/resume path could leave it out, which
+    made the patient's rig QR vanish from the controls."""
+    from portal import server, ehr_db, control_room, auth
+    monkeypatch.setattr(ehr_db, "_conn", lambda: None)
+    ehr_db._mem_session_state = None
+    _ensure_vault()
+    c = TestClient(server.app)
+    c.post("/login", data={"password": TEST_PASSWORD})
+    for v in auth._active_vaults.values():
+        v._data["ANTHROPIC_API_KEY"] = "dummy-key"
+    if control_room.get_active_room() is not None:
+        control_room.end_active_room()
+    try:
+        r = c.post("/api/room/start", json={
+            "label": "Ward",
+            "encounters": [
+                {"scenario_name": "Bed 1", "persona_id": "P-014",
+                 "personas": ["P-014", "P-004"], "ehr_id": "cyrus"},
+            ]})
+        assert r.status_code == 200 and r.json()["ok"] is True
+        room = control_room.get_active_room()
+        enc = next(iter(room.encounters.values()))
+        enc.avatar_personas = []          # simulate the regression: patient not opted in
+        html = c.get(f"/portal/room/encounter/{enc.id}?return=console").text
+        assert "/qr/face/P-014.svg" in html               # patient rig QR cell present
+        assert "patient (animated rig)" in html           # labeled as the patient's rig
     finally:
         if control_room.get_active_room() is not None:
             control_room.end_active_room()

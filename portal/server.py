@@ -5143,11 +5143,20 @@ async def portal_room_encounter_console(
     enc = room.encounters.get(encounter_id)
     if enc is None:
         raise HTTPException(404, f"Unknown encounter {encounter_id!r}.")
-    # V8 — personas the instructor enabled a VRAI Faces avatar for on this bed;
-    # the QR card shows one tablet-pairing code each (resolved to display names).
+    # V8 — personas with a VRAI Faces avatar QR (one tablet-pairing code each,
+    # resolved to display names). The PATIENT is the primary bedside avatar, so
+    # it ALWAYS gets an avatar-rig QR here even if it was never opted in via the
+    # wizard — the card-launch/resume path could leave enc.avatar_personas without
+    # the patient, which made the patient's rig-launch QR vanish from the controls
+    # (field report 2026-06). Patient first, then the opted-in secondary avatars.
+    _avatar_pids = list(enc.avatar_personas or [])
+    if enc.patient_persona_id and enc.patient_persona_id not in _avatar_pids:
+        _avatar_pids.insert(0, enc.patient_persona_id)
     avatar_personas_detail = [
-        {"id": pid, "name": (library.get_persona(pid) or {}).get("name") or pid}
-        for pid in (enc.avatar_personas or [])
+        {"id": pid,
+         "name": (library.get_persona(pid) or {}).get("name") or pid,
+         "is_patient": (pid == enc.patient_persona_id)}
+        for pid in _avatar_pids
     ]
     # Shows per-character device QRs — ensure the avatar app is up + LAN-reachable.
     _ensure_vrai_app_for_qr(request)
