@@ -74,6 +74,8 @@ BULLET = ParagraphStyle("bullet", parent=BODY, leftIndent=14, spaceAfter=2)
 CELL = ParagraphStyle("cell", fontName="Helvetica", fontSize=8.5, leading=11)
 CELL_H = ParagraphStyle("cellh", fontName="Helvetica-Bold", fontSize=8.5,
                         leading=11, textColor=colors.white)
+CODE = ParagraphStyle("code", fontName="Courier", fontSize=8, leading=10.5,
+                      textColor=colors.HexColor("#1a2330"))
 
 
 def col_widths(header, avail):
@@ -117,6 +119,21 @@ def make_table(rows):
     return t
 
 
+def code_block(lines):
+    body = "<br/>".join(html.escape(sanitize(ln), quote=False) or "&nbsp;"
+                        for ln in lines)
+    t = Table([[Paragraph(body, CODE)]], colWidths=[6.6 * inch])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eef2f7")),
+        ("BOX", (0, 0), (-1, -1), 0.5, LINE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    return t
+
+
 def parse(md):
     flow, para, lines, i = [], [], md.splitlines(), 0
 
@@ -138,6 +155,16 @@ def parse(md):
             flow.append(make_table(block))
             continue
         s = ln.strip()
+        if s.startswith("```"):
+            flush()
+            block = []
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith("```"):
+                block.append(lines[i])
+                i += 1
+            i += 1  # consume the closing fence
+            flow.append(code_block(block))
+            continue
         if not s:
             flush(); i += 1; continue
         if s.startswith("### "):

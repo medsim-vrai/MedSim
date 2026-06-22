@@ -25,9 +25,29 @@ Never burn time on network drift.
 
 ## 0. Setup
 
+**Launch the portal.** Run this in a terminal — `run_cards.sh` changes into the
+project folder itself and sets card-first mode, so it works from any directory
+(`MEDSIM_HOST=0.0.0.0` makes it reachable from tablets):
+
+```
+MEDSIM_HOST=0.0.0.0 bash "/Users/petermarotta/Documents/Claude/Projects/Scenario structure to support character engagement/medsim_v8/scripts/run_cards.sh"
+```
+
+Or change into the project folder first, then launch:
+
+```
+cd "/Users/petermarotta/Documents/Claude/Projects/Scenario structure to support character engagement/medsim_v8"
+MEDSIM_HOST=0.0.0.0 bash scripts/run_cards.sh
+```
+
+Stop it with **Ctrl+C** in that terminal (or `pkill -TERM -f run_portal.py`).
+*(Common slip: running the bare `.venv/bin/python run_portal.py` from a fresh
+terminal fails with "no such file" — that command only works from inside the
+project folder; the commands above don't.)*
+
 | # | Step | Pass |
 |---|---|---|
-| 0.1 | Restart card-first: `pkill -TERM -f run_portal.py` then `MEDSIM_NO_BROWSER=1 MEDSIM_DEFAULT_VIEW=console MEDSIM_HOST=0.0.0.0 .venv/bin/python run_portal.py` (or `bash scripts/run_cards.sh`). |  |
+| 0.1 | Run a launch command above → the portal boots (`Uvicorn running on https://0.0.0.0:8765`) and Chrome opens to the card UI. |  |
 | 0.2 | If the LAN IP drifted, re-mint the **leaf** cert (NEVER the CA): `python scripts/dev_cert.py <lan-ip>`, restart. The cockpit's TLS tile goes green. |  |
 | 0.3 | Open `https://localhost:8765/`, log in → you land on **`/portal/console?mode=setup`** (card-first, not the classic home). The top **readiness bar** paints. |  |
 | 0.4 | The **active mode tab is a filled coloured box with white text** (not an underline). |  |
