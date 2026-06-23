@@ -442,16 +442,10 @@
     }
     // 5. Cabinet shorthand.
     if (key === 'patient') {
-      if (state.patient && (state.patient.name || state.patient.id)) {
-        return state.patient.name || state.patient.id;
-      }
-      // #2 — fall back to the MAR-selected patient so the screen shows the real
-      // patient, not the skin's "MARTIN, ELENA" placeholder (display only — no
-      // engine event, so the cabinet screen state is untouched).
-      const sc = SELECTED_CHAR_ID && CHARACTERS
-        ? CHARACTERS.find((c) => c.character_id === SELECTED_CHAR_ID) : null;
-      if (sc && sc.name) return sc.name;
-      return undefined;
+      // HIPAA: the cabinet SCREEN never shows a patient name — the skin's
+      // "MARTIN, ELENA" placeholder is blanked. The real name appears only in the
+      // MAR overlay, and only when the scenario is running + a patient is picked.
+      return '';
     }
     if (key === 'user'    && state.session_user) return state.session_user;
     return undefined;
@@ -1713,6 +1707,17 @@
   function renderCabinetChecklist() {
     if (KIND !== 'cabinet') return;
     const openBtn = document.getElementById('cabinet-checklist-open');
+    // HIPAA gate: no patient picker / MAR / name until the scenario is RUNNING
+    // (started) AND a patient is picked. Before start (configured/paused/ended)
+    // the cart stays locked — no PHI on screen. Re-runs when applySessionState
+    // flips to 'running' (which calls renderFold → here).
+    if (SESSION_STATE !== 'running') {
+      const existing = document.getElementById('cabinet-checklist');
+      if (existing) existing.remove();
+      document.body.classList.remove('cab-mar-open');
+      if (openBtn) openBtn.style.display = 'none';
+      return;
+    }
     // M60 — default SELECTED_CHAR_ID to ASSIGNED_CHAR_ID once on
     // first render so instructor-driven assigns drill straight into
     // the MAR like pre-M60. Subsequent picker opens override this.
