@@ -1,78 +1,114 @@
-{% extends "base.html" %}
-{% block title %}Medical Records{% endblock %}
-{% block content %}
-<link rel="stylesheet" href="{{ static_v('medical_records.css') }}">
-
-<header class="page-header">
-  <h1>📋 Medical Records</h1>
-  <p class="muted">
-    Pick a patient character to open their medical record. Each row shows
-    pending actions for the current shift — meds due, continuous infusions,
-    PRN meds, and pending labs. Works in both single-patient (one row) and
-    multi-patient (one row per bed) modes.
-  </p>
-</header>
-
-{% if not patients %}
-  <section class="mr-empty">
-    <h2>No active session</h2>
-    <p class="muted">
-      Start a single-patient session from the
-      <a href="/portal/control">Control room</a> wizard, or open a
-      multi-patient room from <a href="/portal/room">Multi-Patient Control</a>.
-    </p>
-  </section>
-{% else %}
-  <section class="mr-picker">
-    <p class="muted small">
-      {{ patients | length }} patient{% if patients | length != 1 %}s{% endif %}
-      · current shift:
-      <strong>{{ patients[0].status.current_shift }}</strong>
-    </p>
-    <div class="mr-patient-grid">
-      {% for p in patients %}
-        <a class="mr-patient-card"
-           href="/portal/medical_records/{{ p.character_id }}">
-          <header class="mr-patient-card-header">
-            <strong class="mr-patient-name">{{ p.name }}</strong>
-            <span class="muted small">{{ p.character_id }}</span>
-          </header>
-          <p class="muted small mr-patient-loc">
-            {{ p.location_label }}
-            {% if p.encounter_label %} · {{ p.encounter_label }}{% endif %}
-            {% if p.mrn %} · MRN {{ p.mrn }}{% endif %}
-          </p>
-          <div class="mr-status-grid">
-            <div class="mr-status-cell"
-                 title="Total medications on this patient's MAR">
-              <span class="mr-status-num">{{ p.status.med_count }}</span>
-              <span class="mr-status-label">total meds</span>
-            </div>
-            <div class="mr-status-cell mr-status-due"
-                 title="Scheduled med administrations during the current shift">
-              <span class="mr-status-num">{{ p.status.due_in_current_shift }}</span>
-              <span class="mr-status-label">due this shift</span>
-            </div>
-            <div class="mr-status-cell"
-                 title="IV drips + tube feeds running continuously">
-              <span class="mr-status-num">{{ p.status.continuous_count }}</span>
-              <span class="mr-status-label">infusions</span>
-            </div>
-            <div class="mr-status-cell"
-                 title="PRN / as-needed meds (no scheduled time)">
-              <span class="mr-status-num">{{ p.status.prn_count }}</span>
-              <span class="mr-status-label">PRN</span>
-            </div>
-            <div class="mr-status-cell"
-                 title="Lab orders that haven't resulted yet">
-              <span class="mr-status-num">{{ p.status.labs_pending }}</span>
-              <span class="mr-status-label">labs pending</span>
-            </div>
-          </div>
-        </a>
-      {% endfor %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Helix Health EHR — Patient List</title>
+  <style>
+    /* Branded "Helix Health" EHR — a recognizable clinical record system (the way
+       the med cart is a recognizable "BD Pyxis"). Standalone, full-screen — no
+       portal sidebar. Indigo chrome + teal accent + clean clinical patient list. */
+    :root{ --hh-ink:#16213e; --hh-indigo:#1f2d6b; --hh-indigo2:#2a3a86; --hh-teal:#0f9aa7;
+           --hh-line:#e2e6f0; --hh-bg:#eef1f7; --hh-due:#b4540a; --hh-due-bg:#fdf0e3; }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; height:100%; background:var(--hh-bg); color:var(--hh-ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+    /* top brand bar */
+    .hh-top{ background:linear-gradient(90deg,var(--hh-indigo),var(--hh-indigo2));
+      color:#eef2ff; display:flex; align-items:center; gap:12px; padding:11px 20px;
+      box-shadow:0 2px 10px rgba(0,0,0,.18); position:sticky; top:0; z-index:5; }
+    .hh-mark{ width:30px; height:30px; border-radius:7px; background:var(--hh-teal); color:#04323a;
+      display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; }
+    .hh-brand{ font-size:18px; font-weight:800; letter-spacing:.01em; }
+    .hh-brand small{ display:block; font-size:10.5px; font-weight:600; color:#aebdf0;
+      letter-spacing:.16em; text-transform:uppercase; margin-top:1px; }
+    .hh-top-right{ margin-left:auto; display:flex; align-items:center; gap:14px; font-size:13px; color:#cdd7f5; }
+    .hh-shift b{ color:#fff; }
+    .hh-exit{ background:rgba(255,255,255,.14); color:#fff; text-decoration:none; padding:6px 13px;
+      border-radius:7px; font-weight:600; }
+    .hh-exit:hover{ background:rgba(255,255,255,.24); }
+    /* main */
+    .hh-main{ max-width:1100px; margin:0 auto; padding:22px 20px 60px; }
+    .hh-list-head{ display:flex; align-items:baseline; gap:12px; margin:4px 2px 16px; flex-wrap:wrap; }
+    .hh-list-head h1{ font-size:22px; margin:0; color:var(--hh-indigo); }
+    .hh-list-head .cnt{ color:#6b7596; font-size:13px; }
+    .hh-search{ margin-left:auto; background:#fff; border:1px solid var(--hh-line); border-radius:8px;
+      padding:8px 13px; color:#9aa4bf; font-size:13px; min-width:230px; }
+    /* patient rows */
+    .hh-patients{ display:flex; flex-direction:column; gap:10px; }
+    .hh-pt{ display:flex; align-items:center; gap:14px; background:#fff; border:1px solid var(--hh-line);
+      border-radius:11px; padding:13px 16px; text-decoration:none; color:inherit;
+      box-shadow:0 1px 3px rgba(20,30,60,.05); transition:box-shadow .12s, border-color .12s; }
+    .hh-pt:hover{ border-color:#b9c4e6; box-shadow:0 4px 14px rgba(31,45,107,.12); }
+    .hh-av{ width:46px; height:46px; flex:0 0 auto; border-radius:50%; background:var(--hh-indigo);
+      color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; }
+    .hh-pt-main{ flex:1 1 auto; min-width:0; }
+    .hh-pt-name{ font-size:16px; font-weight:700; color:var(--hh-ink); }
+    .hh-pt-name .mrn{ font-size:11.5px; font-weight:600; color:#7a85a6; margin-left:8px; }
+    .hh-pt-loc{ font-size:12.5px; color:#6b7596; margin-top:2px; }
+    .hh-metrics{ display:flex; gap:8px; flex:0 0 auto; }
+    .hh-m{ text-align:center; min-width:62px; background:#f4f6fc; border:1px solid var(--hh-line);
+      border-radius:8px; padding:6px 8px; }
+    .hh-m.due{ background:var(--hh-due-bg); border-color:#f3d6b5; }
+    .hh-m .n{ display:block; font-size:18px; font-weight:800; color:var(--hh-indigo); line-height:1.1; }
+    .hh-m.due .n{ color:var(--hh-due); }
+    .hh-m .l{ display:block; font-size:9.5px; font-weight:600; color:#7a85a6; text-transform:uppercase;
+      letter-spacing:.04em; margin-top:3px; }
+    .hh-chev{ flex:0 0 auto; color:#9aa4bf; font-size:26px; line-height:1; }
+    .hh-empty{ background:#fff; border:1px solid var(--hh-line); border-radius:12px; padding:34px;
+      text-align:center; color:#6b7596; }
+    .hh-empty h2{ color:var(--hh-indigo); margin:0 0 8px; }
+    .hh-empty a{ color:var(--hh-teal); font-weight:600; }
+    .hh-foot{ text-align:center; color:#9aa4bf; font-size:10.5px; letter-spacing:.08em;
+      margin-top:26px; text-transform:uppercase; }
+    @media (max-width:720px){ .hh-metrics{ display:none; } .hh-search{ display:none; } }
+  </style>
+</head>
+<body>
+  <header class="hh-top">
+    <span class="hh-mark">⬡</span>
+    <span class="hh-brand">Helix Health<small>Electronic Health Record</small></span>
+    <div class="hh-top-right">
+      {% if patients %}<span class="hh-shift">Shift&nbsp;<b>{{ patients[0].status.current_shift }}</b></span>{% endif %}
+      <a class="hh-exit" href="/portal/console?mode=operate">Close ✕</a>
     </div>
-  </section>
-{% endif %}
+  </header>
 
-{% endblock %}
+  <main class="hh-main">
+    {% if not patients %}
+      <section class="hh-empty">
+        <h2>No active patients</h2>
+        <p>Start a single-patient session from the
+          <a href="/portal/control">Control room</a>, or open a room from
+          <a href="/portal/room">Multi-Patient Control</a>. Patients appear here once a session is running.</p>
+      </section>
+    {% else %}
+      <div class="hh-list-head">
+        <h1>Patient List</h1>
+        <span class="cnt">{{ patients | length }} patient{% if patients | length != 1 %}s{% endif %} · {{ patients[0].status.current_shift }} shift</span>
+        <span class="hh-search">🔎 Search patients…</span>
+      </div>
+      <div class="hh-patients">
+        {% for p in patients %}
+          <a class="hh-pt" href="/portal/medical_records/{{ p.character_id }}">
+            <span class="hh-av">{{ p.name[:1] | upper }}</span>
+            <span class="hh-pt-main">
+              <span class="hh-pt-name">{{ p.name }}<span class="mrn">MRN {{ p.mrn or '—' }}</span></span>
+              <span class="hh-pt-loc">{{ p.location_label }}{% if p.encounter_label %} · {{ p.encounter_label }}{% endif %}</span>
+            </span>
+            <span class="hh-metrics">
+              <span class="hh-m"><span class="n">{{ p.status.med_count }}</span><span class="l">Meds</span></span>
+              <span class="hh-m due"><span class="n">{{ p.status.due_in_current_shift }}</span><span class="l">Due</span></span>
+              <span class="hh-m"><span class="n">{{ p.status.continuous_count }}</span><span class="l">Drips</span></span>
+              <span class="hh-m"><span class="n">{{ p.status.prn_count }}</span><span class="l">PRN</span></span>
+              <span class="hh-m"><span class="n">{{ p.status.labs_pending }}</span><span class="l">Labs</span></span>
+            </span>
+            <span class="hh-chev">›</span>
+          </a>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="hh-foot">Training Simulation — not a medical record system · Helix Health EHR</div>
+  </main>
+</body>
+</html>
