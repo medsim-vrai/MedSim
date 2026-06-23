@@ -34,6 +34,11 @@ def client(tmp_path: Path, monkeypatch):
     fake_home = tmp_path / "home"
     fake_home.mkdir()
     monkeypatch.setenv("HOME", str(fake_home))
+    # Test isolation: resume-on-boot persists session state into the shared
+    # EHR SQLite on TestClient teardown, which the next test's boot would
+    # restore — leaking a prior test's session. These tests want a clean
+    # slate (and don't exercise resume), so disable resume-on-boot.
+    monkeypatch.setenv("MEDSIM_RESUME", "0")
     monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
     from portal import (
         auth, control_room, credentials, voices as _voices,
@@ -112,7 +117,7 @@ def test_workstation_entry_lists_every_patient(client):
     r = client.get(f"/students/medical_records?code={room_code}")
     assert r.status_code == 200
     html = r.text
-    assert "Medical Records Workstation" in html
+    assert "Helix Health" in html          # branded records terminal
     # Patient cards for every encounter.
     assert html.count("mr-ws-patient-card") >= 2
     # Identity form fields.
@@ -172,7 +177,7 @@ def test_workstation_chart_supervisor_sees_add_form(client):
     assert "mr-add-form" in html
     assert "Add to chart" in html
     # Supervisor badge surfaces.
-    assert "Supervisor session" in html
+    assert "Supervisor" in html
 
 
 def test_workstation_chart_404_for_unknown_persona(client):

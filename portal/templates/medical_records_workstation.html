@@ -3,128 +3,157 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Medical Records Workstation · Training Bridge VRAI- MedSim</title>
-  <link rel="stylesheet" href="/static/portal.css">
-  <link rel="stylesheet" href="{{ static_v('medical_records.css') }}">
+  <title>Helix Health EHR — Records Terminal</title>
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#143b8a">
+  <meta name="theme-color" content="#1f2d6b">
+  <style>
+    /* Branded "Helix Health" EHR — the STUDENT / device-facing records terminal.
+       Same standalone Helix chrome as the instructor picker, plus the "Who's
+       charting?" identity capture this shared terminal needs. Multiple students
+       use one device; each chart-open is tagged with the entered name + initials. */
+    :root{ --hh-ink:#16213e; --hh-indigo:#1f2d6b; --hh-indigo2:#2a3a86; --hh-teal:#0f9aa7;
+           --hh-line:#e2e6f0; --hh-bg:#eef1f7; --hh-due:#b4540a; --hh-due-bg:#fdf0e3; }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; min-height:100%; background:var(--hh-bg); color:var(--hh-ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+    /* top brand bar */
+    .hh-top{ background:linear-gradient(90deg,var(--hh-indigo),var(--hh-indigo2));
+      color:#eef2ff; display:flex; align-items:center; gap:12px; padding:11px 20px;
+      box-shadow:0 2px 10px rgba(0,0,0,.18); position:sticky; top:0; z-index:5; }
+    .hh-mark{ width:30px; height:30px; border-radius:7px; background:var(--hh-teal); color:#04323a;
+      display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; }
+    .hh-brand{ font-size:18px; font-weight:800; letter-spacing:.01em; }
+    .hh-brand small{ display:block; font-size:10.5px; font-weight:600; color:#aebdf0;
+      letter-spacing:.16em; text-transform:uppercase; margin-top:1px; }
+    .hh-top-right{ margin-left:auto; display:flex; align-items:center; gap:12px; font-size:13px; }
+    .hh-role{ font-size:11px; font-weight:700; padding:4px 11px; border-radius:11px; white-space:nowrap; }
+    .hh-role.sup{ background:#0a6b46; color:#eafff5; } .hh-role.ins{ background:#34409a; color:#eef1ff; }
+    .hh-role.std{ background:rgba(255,255,255,.16); color:#fff; }
+    /* main */
+    .hh-main{ max-width:1100px; margin:0 auto; padding:22px 20px 60px; }
+    /* identify ("who's charting?") card */
+    .hh-identify{ background:#fff; border:1px solid var(--hh-line); border-radius:12px;
+      padding:16px 18px; margin-bottom:18px; box-shadow:0 1px 3px rgba(20,30,60,.05); }
+    .hh-identify h2{ margin:0 0 4px; font-size:16px; color:var(--hh-indigo); }
+    .hh-identify p.lead{ margin:0 0 12px; font-size:12.5px; color:#6b7596; }
+    .hh-identify-form{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
+    .hh-identify-form label{ display:flex; flex-direction:column; gap:4px; font-size:11px;
+      font-weight:600; color:#566c8a; text-transform:uppercase; letter-spacing:.04em; }
+    .hh-identify-form input{ font-size:15px; padding:9px 12px; border:1px solid #c6cee2;
+      border-radius:8px; min-width:200px; color:var(--hh-ink); background:#fcfdff; }
+    .hh-identify-form input:focus{ outline:none; border-color:var(--hh-teal); box-shadow:0 0 0 3px rgba(15,154,167,.18); }
+    .hh-identify-form input#mr-ws-initials{ min-width:90px; text-transform:uppercase; }
+    .hh-identify .role-line{ font-size:12px; color:#6b7596; margin:12px 0 0; }
+    .hh-identify .role-line b{ color:var(--hh-indigo); }
+    /* list head */
+    .hh-list-head{ display:flex; align-items:baseline; gap:12px; margin:4px 2px 14px; flex-wrap:wrap; }
+    .hh-list-head h1{ font-size:21px; margin:0; color:var(--hh-indigo); }
+    .hh-list-head .cnt{ color:#6b7596; font-size:13px; }
+    /* patient rows */
+    .hh-patients{ display:flex; flex-direction:column; gap:10px; }
+    .hh-pt{ display:flex; align-items:center; gap:14px; background:#fff; border:1px solid var(--hh-line);
+      border-radius:11px; padding:13px 16px; text-decoration:none; color:inherit; cursor:pointer;
+      box-shadow:0 1px 3px rgba(20,30,60,.05); transition:box-shadow .12s, border-color .12s; }
+    .hh-pt:hover{ border-color:#b9c4e6; box-shadow:0 4px 14px rgba(31,45,107,.12); }
+    .hh-pt:active{ transform:translateY(1px); }
+    .hh-av{ width:46px; height:46px; flex:0 0 auto; border-radius:50%; background:var(--hh-indigo);
+      color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; }
+    .hh-pt-main{ flex:1 1 auto; min-width:0; }
+    .hh-pt-name{ font-size:16px; font-weight:700; color:var(--hh-ink); }
+    .hh-pt-name .mrn{ font-size:11.5px; font-weight:600; color:#7a85a6; margin-left:8px; }
+    .hh-pt-loc{ font-size:12.5px; color:#6b7596; margin-top:2px; }
+    .hh-metrics{ display:flex; gap:8px; flex:0 0 auto; }
+    .hh-m{ text-align:center; min-width:60px; background:#f4f6fc; border:1px solid var(--hh-line);
+      border-radius:8px; padding:6px 8px; }
+    .hh-m.due{ background:var(--hh-due-bg); border-color:#f3d6b5; }
+    .hh-m .n{ display:block; font-size:18px; font-weight:800; color:var(--hh-indigo); line-height:1.1; }
+    .hh-m.due .n{ color:var(--hh-due); }
+    .hh-m .l{ display:block; font-size:9.5px; font-weight:600; color:#7a85a6; text-transform:uppercase;
+      letter-spacing:.04em; margin-top:3px; }
+    .hh-chev{ flex:0 0 auto; color:#9aa4bf; font-size:26px; line-height:1; }
+    .hh-empty{ background:#fff; border:1px solid var(--hh-line); border-radius:12px; padding:34px;
+      text-align:center; color:#6b7596; }
+    .hh-empty h2{ color:var(--hh-indigo); margin:0 0 8px; }
+    .hh-foot{ text-align:center; color:#9aa4bf; font-size:10.5px; letter-spacing:.08em;
+      margin-top:26px; text-transform:uppercase; }
+    @media (max-width:720px){ .hh-metrics{ display:none; } .hh-identify-form input{ min-width:0; flex:1 1 140px; } }
+  </style>
 </head>
-<body class="station-body">
-  <main class="mr-ws-page">
-    <header class="mr-ws-header">
-      <h1>📋 Medical Records Workstation</h1>
-      <p class="muted">
-        Pick a patient to open their chart. Multiple students can use
-        this device — each visit is independent. The instructor (and
-        any nursing supervisor who entered via the Nursing Station's
-        Supervisor button) can also add labs, doctor's notes, and
-        other chart updates.
-      </p>
+<body>
+  <header class="hh-top">
+    <span class="hh-mark">⬡</span>
+    <span class="hh-brand">Helix Health<small>Records Terminal</small></span>
+    <div class="hh-top-right">
       {% if role == "supervisor" or role == "admin" %}
-        <p class="mr-ws-role-badge mr-ws-role-supervisor">
-          🩺 Supervisor session · {{ initials }}
-        </p>
+        <span class="hh-role sup">🩺 Supervisor{% if initials %} · {{ initials }}{% endif %}</span>
       {% elif role == "instructor" %}
-        <p class="mr-ws-role-badge mr-ws-role-instructor">
-          👨‍⚕️ Instructor session
-        </p>
+        <span class="hh-role ins">👨‍⚕️ Instructor</span>
+      {% else %}
+        <span class="hh-role std">Bedside charting</span>
       {% endif %}
-    </header>
+    </div>
+  </header>
 
+  <main class="hh-main">
     {% if not patients %}
-      <section class="mr-empty">
+      <section class="hh-empty">
         <h2>No active session</h2>
-        <p class="muted">
-          The Multi-Patient Control room hasn't started a session yet,
-          or this room code is wrong. Ask your instructor to start a
-          room or check the QR code.
-        </p>
+        <p>The Multi-Patient Control room hasn't started a session yet, or this
+          room code is wrong. Ask your instructor to start a room or re-scan the
+          QR code.</p>
       </section>
     {% else %}
-      <section class="mr-ws-identify">
+      <section class="hh-identify">
         <h2>Who's charting?</h2>
-        <p class="muted small">
-          Identify yourself so chart entries are tagged with your name.
-          For routine bedside charting, just your display name and 2
-          initials. The fields are remembered for the next chart you
-          open from this workstation.
+        <p class="lead">
+          Identify yourself so chart entries are tagged with your name. For
+          routine bedside charting, just your display name and 2 initials —
+          remembered for the next chart you open from this terminal.
         </p>
-        <form id="mr-ws-identify-form" class="mr-ws-identify-form" onsubmit="return false">
-          <label>
-            <span>Display name</span>
+        <form id="mr-ws-identify-form" class="hh-identify-form" onsubmit="return false">
+          <label>Display name
             <input type="text" id="mr-ws-name" name="user"
                    placeholder="e.g. Alice P." spellcheck="false"
                    autocomplete="off" required>
           </label>
-          <label>
-            <span>Initials (2)</span>
+          <label>Initials
             <input type="text" id="mr-ws-initials" name="initials"
                    placeholder="AP" maxlength="3" spellcheck="false"
-                   autocomplete="off"
-                   pattern="[A-Za-z]{2,3}"
+                   autocomplete="off" pattern="[A-Za-z]{2,3}"
                    value="{{ initials }}" required>
           </label>
-          <p class="muted small">
-            Your role:
-            <strong>
-              {% if role == "supervisor" %}Nursing supervisor (admin)
-              {% elif role == "instructor" %}Instructor (admin)
-              {% else %}Bedside student
-              {% endif %}
-            </strong>
-          </p>
         </form>
+        <p class="role-line">Your role:
+          <b>{% if role == "supervisor" %}Nursing supervisor (admin){% elif role == "instructor" %}Instructor (admin){% else %}Bedside student{% endif %}</b>
+        </p>
       </section>
 
-      <section class="mr-picker">
-        <h2>Pick a patient</h2>
-        <p class="muted small">
-          {{ patients | length }} patient{% if patients | length != 1 %}s{% endif %}
-          · current shift:
-          <strong>{{ patients[0].status.current_shift }}</strong>
-        </p>
-        <div class="mr-patient-grid">
-          {% for p in patients %}
-            <a class="mr-patient-card mr-ws-patient-card"
-               data-character-id="{{ p.character_id }}"
-               href="#"
-               role="button">
-              <header class="mr-patient-card-header">
-                <strong class="mr-patient-name">{{ p.name }}</strong>
-                <span class="muted small">{{ p.character_id }}</span>
-              </header>
-              <p class="muted small mr-patient-loc">
-                {{ p.location_label }}
-                {% if p.encounter_label %} · {{ p.encounter_label }}{% endif %}
-                {% if p.mrn %} · MRN {{ p.mrn }}{% endif %}
-              </p>
-              <div class="mr-status-grid">
-                <div class="mr-status-cell">
-                  <span class="mr-status-num">{{ p.status.med_count }}</span>
-                  <span class="mr-status-label">meds</span>
-                </div>
-                <div class="mr-status-cell mr-status-due">
-                  <span class="mr-status-num">{{ p.status.due_in_current_shift }}</span>
-                  <span class="mr-status-label">this shift</span>
-                </div>
-                <div class="mr-status-cell">
-                  <span class="mr-status-num">{{ p.status.continuous_count }}</span>
-                  <span class="mr-status-label">drips</span>
-                </div>
-                <div class="mr-status-cell">
-                  <span class="mr-status-num">{{ p.status.prn_count }}</span>
-                  <span class="mr-status-label">PRN</span>
-                </div>
-                <div class="mr-status-cell">
-                  <span class="mr-status-num">{{ p.status.labs_pending }}</span>
-                  <span class="mr-status-label">labs</span>
-                </div>
-              </div>
-            </a>
-          {% endfor %}
-        </div>
-      </section>
+      <div class="hh-list-head">
+        <h1>Pick a patient</h1>
+        <span class="cnt">{{ patients | length }} patient{% if patients | length != 1 %}s{% endif %} · {{ patients[0].status.current_shift }} shift</span>
+      </div>
+      <div class="hh-patients">
+        {% for p in patients %}
+          <a class="hh-pt mr-ws-patient-card" href="#" role="button"
+             data-character-id="{{ p.character_id }}">
+            <span class="hh-av">{{ p.name[:1] | upper }}</span>
+            <span class="hh-pt-main">
+              <span class="hh-pt-name">{{ p.name }}<span class="mrn">MRN {{ p.mrn or '—' }}</span></span>
+              <span class="hh-pt-loc">{{ p.location_label }}{% if p.encounter_label %} · {{ p.encounter_label }}{% endif %}</span>
+            </span>
+            <span class="hh-metrics">
+              <span class="hh-m"><span class="n">{{ p.status.med_count }}</span><span class="l">Meds</span></span>
+              <span class="hh-m due"><span class="n">{{ p.status.due_in_current_shift }}</span><span class="l">Due</span></span>
+              <span class="hh-m"><span class="n">{{ p.status.continuous_count }}</span><span class="l">Drips</span></span>
+              <span class="hh-m"><span class="n">{{ p.status.prn_count }}</span><span class="l">PRN</span></span>
+              <span class="hh-m"><span class="n">{{ p.status.labs_pending }}</span><span class="l">Labs</span></span>
+            </span>
+            <span class="hh-chev">›</span>
+          </a>
+        {% endfor %}
+      </div>
     {% endif %}
+    <div class="hh-foot">Training Simulation — not a medical record system · Helix Health EHR</div>
   </main>
 
   <script>
@@ -132,9 +161,8 @@
       const params = new URLSearchParams(window.location.search);
       const code = params.get("code") || "";
       const role = params.get("role") || "student";
-      // Restore name + initials from sessionStorage so a student
-      // walking up to the workstation doesn't have to retype across
-      // multiple patient charts.
+      // Restore name + initials from sessionStorage so a student walking up to
+      // the terminal doesn't have to retype across multiple patient charts.
       const STORAGE_NAME = "medsim_ws_name";
       const STORAGE_INIT = "medsim_ws_initials";
       const nameEl = document.getElementById("mr-ws-name");
@@ -163,14 +191,12 @@
             alert("Initials must be at least 2 characters.");
             return;
           }
-          // Persist for the next chart-open from this workstation.
+          // Persist for the next chart-open from this terminal.
           try {
             sessionStorage.setItem(STORAGE_NAME, u);
             sessionStorage.setItem(STORAGE_INIT, i);
           } catch (e) { /* ignore */ }
-          const qs = new URLSearchParams({
-            code, user: u, initials: i, role,
-          });
+          const qs = new URLSearchParams({ code, user: u, initials: i, role });
           window.location = `/students/medical_records/${encodeURIComponent(cid)}?${qs.toString()}`;
         });
       });

@@ -27,6 +27,11 @@ def client(tmp_path: Path, monkeypatch):
     fake_home = tmp_path / "home"
     fake_home.mkdir()
     monkeypatch.setenv("HOME", str(fake_home))
+    # Test isolation: resume-on-boot persists session state into the shared
+    # EHR SQLite on TestClient teardown, which the next test's boot would
+    # restore — leaking a prior test's session. These tests want a clean
+    # slate (and don't exercise resume), so disable resume-on-boot.
+    monkeypatch.setenv("MEDSIM_RESUME", "0")
     monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
     from portal import (
         auth, control_room, credentials, voices as _voices,
@@ -234,15 +239,15 @@ def test_picker_page_lists_every_patient_multi(client):
     r = client.get("/portal/medical_records")
     assert r.status_code == 200
     html = r.text
-    assert "Medical Records" in html
+    assert "Helix Health" in html          # branded EHR chrome
     # Page renders three patient cards (one href per card).
     assert html.count('href="/portal/medical_records/') == 3
-    # Each card has a status grid with the 5 counter cells.
-    assert "mr-status-cell" in html
-    assert "due this shift" in html
-    assert "infusions" in html
+    # Each card has the Helix metric cells with the 5 counters.
+    assert "hh-metrics" in html
+    assert "Due" in html
+    assert "Drips" in html
     assert "PRN" in html
-    assert "labs pending" in html
+    assert "Labs" in html
 
 
 def test_picker_page_renders_when_no_session(client):
@@ -250,7 +255,7 @@ def test_picker_page_renders_when_no_session(client):
     r = client.get("/portal/medical_records")
     assert r.status_code == 200
     html = r.text
-    assert "No active session" in html
+    assert "No active patients" in html
 
 
 # ── 5. Patient detail route ────────────────────────────────────────
@@ -261,7 +266,7 @@ def test_chart_route_renders_for_patient(client):
     assert r.status_code == 200
     html = r.text
     # Header carries the persona name + the back link.
-    assert "Patients" in html
+    assert "Patient list" in html
     # MAR table with the three shift columns.
     assert "Medication Administration Record" in html
     assert "Day" in html and "Evening" in html and "Night" in html
@@ -297,7 +302,7 @@ def test_chart_route_shows_prn_section_when_present(client):
     # Stronger assertion: helper sets is_prn for "as prescribed"-tagged
     # stub rows; the seed builder uses that fallback for unresolved
     # module meds.
-    assert "Medical Records" in html or "Patients" in html
+    assert "Helix Health" in html
 
 
 # ── 6. Single-patient (v6) mode also works ─────────────────────────
