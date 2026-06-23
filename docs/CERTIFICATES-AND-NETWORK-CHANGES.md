@@ -101,6 +101,55 @@ responded, and STT/TTS worked.
 > Disable with `MEDSIM_NO_CERT_AUTOFIX=1`. The durable fix is still §6 (stable hostname).
 > So in practice the §2b manual steps are now only needed mid-session (no restart).
 
+## 2c · Avatar rig loads but won't skin / "binding fetch failed" (the cross-origin trap)
+
+The single most time-consuming false trail of the 2026-06-23 field test. Captured
+in full so it's a 30-second diagnosis next time, not an afternoon.
+
+**Signature.** The avatar **renders** on the tablet (you see the 3D face at 60 fps,
+STT even warms up) but it's the **generic demo face, never the patient's portrait**;
+the on-screen diagnostics scroll **`shell.portalBinding: binding fetch failed`** /
+**`binding not ready`**; the boot line says **`VRAI Faces booted (demo)`**; and
+push-to-talk reports **"portal unreachable."**
+
+**Red herrings — do NOT keep chasing these:**
+- It *looks* like a cert problem, so we re-minted the leaf (§2b) and fully trusted
+  the CA on the iPad (§3). **Both were necessary for other reasons, but neither
+  fixes this** — the failure persisted with the CA trust toggle confirmed ON.
+- Not "held too briefly" (the PTT no-audio note is a separate, real STT thing),
+  and not a missing portrait — the patient HAS one (proven in step 1 below).
+
+**Actual root cause — an ORIGIN mismatch, not TLS.** The portal was **not serving
+the avatar app** (`VRAI_FACES_SERVE` unset), so the QR deep-linked the tablet to the
+**separate vite dev server on `:5173`**, while the avatar's bind document lives on
+the **API at `:8765`**. The binding `fetch()` is then **cross-origin** (`:5173` →
+`:8765`): the rig never receives its portrait (→ demo face) and can't reach the turn
+API (→ PTT unreachable). `server.py`'s own comment names it — the "separate-vite
+(:5173) + cross-origin class of 'binding fetch'" failures (ADR-0028).
+
+**30-second diagnosis (all from the Mac):**
+```
+# 1. Does the binding itself work? (proves it is NOT the server/cert/portrait)
+curl -ksS "https://127.0.0.1:8765/api/face/<persona-id>/binding?scenario=<enc>" | head -c 200
+#    → HTTP 200 + a long "sourcePhoto" data URI  ⇒ server side is perfect.
+# 2. Is the portal serving the app SAME-ORIGIN? (the question that matters)
+.venv/bin/python -c "from portal import server; print(server._portal_serves_app())"   # must be True
+curl -ksS -o /dev/null -w "%{http_code}\n" "https://127.0.0.1:8765/face/<persona-id>"  # must be 200, not 404
+lsof -nP -iTCP:5173 -sTCP:LISTEN     # vite running = the app is (wrongly) being served there
+```
+If #1 is 200 but #2 is `False`/`404`, it's THIS — the app is on vite, not the portal.
+
+**Fix.** Launch with **`VRAI_FACES_SERVE=portal`** so the portal serves the built app
+from `dist/` and app + API + speech WS share ONE origin (`:8765`). It is now the
+**default in `scripts/run_cards.sh`** (commit `91ce3d1`); `run_portal` rebuilds
+`dist/` if missing. **After relaunch, re-print/re-scan the QR** — it then points at
+`:8765/face/…`, not `:5173`. The boot banner confirms it:
+`Avatar: portal serves the avatar app (one origin, one cert)`.
+
+> **Confirmed on iPad 2026-06-23** — rig skins with the real portrait, PTT connects.
+> **INVARIANT: tablet avatar testing MUST be portal-served. The vite `:5173` path is
+> desktop-dev only and always fails the binding cross-origin — no cert change fixes it.**
+
 ## 3 · New-device onboarding (one time per tablet — Apple AND Android)
 
 **The easy path (2026-06-10): the portal runs an onboarding helper on plain HTTP at
