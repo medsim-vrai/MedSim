@@ -12,6 +12,7 @@ import platform
 import shutil
 import socket
 import subprocess
+import sys
 import threading
 import time
 import webbrowser
@@ -33,6 +34,50 @@ def _tls_files() -> tuple[str, str] | None:
     cert = os.environ.get("MEDSIM_TLS_CERT") or str(_CERT_DIR / "dev-cert.pem")
     key = os.environ.get("MEDSIM_TLS_KEY") or str(_CERT_DIR / "dev-key.pem")
     return (cert, key) if os.path.isfile(cert) and os.path.isfile(key) else None
+
+
+def _ensure_cert_covers_lan_ip() -> str | None:
+    """Self-heal the dev TLS leaf when the LAN IP drifts — the recurring
+    "operator works on localhost but EVERY tablet fails (cert warning, avatar
+    rig not skinned, 'portal unreachable' on push-to-talk)" issue. If the
+    current LAN IP is not an IP-Address SAN in the dev leaf, re-mint it BEFORE
+    binding via the bare scripts/dev_cert.py (auto-detects the IP as a proper
+    IP SAN, reuses the CA so tablets need no reinstall). The cert the portal
+    serves then always matches the IP it bakes into the tablet QRs (_lan_ip),
+    so a network change just self-heals on the next launch.
+
+    Best-effort — never blocks startup. Skipped with a custom MEDSIM_TLS_CERT
+    or MEDSIM_NO_CERT_AUTOFIX=1. Runbook: docs/CERTIFICATES-AND-NETWORK-CHANGES.md §2b.
+    """
+    if os.environ.get("MEDSIM_TLS_CERT") or os.environ.get("MEDSIM_NO_CERT_AUTOFIX"):
+        return None
+    cert_path = _CERT_DIR / "dev-cert.pem"
+    if not cert_path.is_file():
+        return None
+    ip = _lan_ip()
+    if not ip or ip.startswith(("127.", "169.254.")):
+        return None
+    try:
+        from cryptography import x509
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        san = cert.extensions.get_extension_for_class(
+            x509.SubjectAlternativeName).value
+        if ip in {str(v) for v in san.get_values_for_type(x509.IPAddress)}:
+            return None   # already covered — no churn
+    except Exception:     # noqa: BLE001 — unreadable / no SAN → fall through and re-mint
+        pass
+    try:
+        script = Path(__file__).resolve().parent / "scripts" / "dev_cert.py"
+        subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(Path(__file__).resolve().parent),
+            check=True, capture_output=True, timeout=45,
+        )
+        return ip
+    except Exception as exc:  # noqa: BLE001
+        print(f"  [cert] auto-remint skipped ({exc}); run scripts/dev_cert.py "
+              "if a tablet hits a cert warning", file=sys.stderr)
+        return None
 
 
 # Durable device mode (ADR-0028): with VRAI_FACES_SERVE=portal the portal serves
@@ -298,10 +343,16 @@ def main() -> None:
     vrai_serve_status = _ensure_vrai_app_built()
 
     tls = _tls_files()
+    # Self-heal the dev cert if the LAN IP drifted since it was last minted, so
+    # the leaf the portal serves matches the IP it bakes into the tablet QRs
+    # (kills the recurring tablet cert-warning / no-skin / "portal unreachable").
+    healed_ip = _ensure_cert_covers_lan_ip() if tls else None
     scheme = "https" if tls else "http"
     lines = ["", "  medsim v7 · operator portal · multi-patient + devices + control + debrief", ""]
     if tls:
         lines.append("  TLS:       on (dev cert) — trust portal/data/certs/rootCA.pem on each tablet")
+    if healed_ip:
+        lines.append(f"  Cert:      auto re-minted for {healed_ip} (LAN IP drifted; CA unchanged → tablets need no reinstall)")
     if vrai_serve_status:
         lines.append(f"  Avatar:    {vrai_serve_status}")
     lines.append(f"  Local:     {scheme}://127.0.0.1:{PORT}")
