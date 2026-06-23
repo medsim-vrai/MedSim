@@ -48,7 +48,7 @@ project folder; the commands above don't.)*
 | # | Step | Pass |
 |---|---|---|
 | 0.1 | Run a launch command above → the portal boots (`Uvicorn running on https://0.0.0.0:8765`) and Chrome opens to the card UI. |  |
-| 0.2 | If the LAN IP drifted, re-mint the **leaf** cert (NEVER the CA): `python scripts/dev_cert.py <lan-ip>`, restart. The cockpit's TLS tile goes green. |  |
+| 0.2 | If a LAN device can't connect (operator fine but tablets fail / "Send failed" / no image): the LAN IP likely drifted out of the cert. Re-mint the **leaf** (NEVER the CA) with the BARE command `python scripts/dev_cert.py` (auto-detects the IP as an `IP Address:` SAN — do NOT pass the IP as a host arg), then **restart** the portal so it loads the new cert, and re-scan the tablet QR. Full runbook + verify command: `docs/CERTIFICATES-AND-NETWORK-CHANGES.md` §2b. |  |
 | 0.3 | Open `https://localhost:8765/`, log in → you land on **`/portal/console?mode=setup`** (card-first, not the classic home). The top **readiness bar** paints. |  |
 | 0.4 | The **active mode tab is a filled coloured box with white text** (not an underline). |  |
 

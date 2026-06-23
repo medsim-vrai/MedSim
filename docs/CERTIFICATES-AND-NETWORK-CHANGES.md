@@ -38,6 +38,65 @@ The preflight regenerates the QR for the current network (Desktop + Preview). **
 nothing** — no new profile, no toggles, no warnings — because the new leaf chains to the CA they
 already trust.
 
+## 2b · "Operator works but EVERY tablet fails" — IP-SAN drift (2026-06-22)
+
+A second venue/IP change cost a round-trip on 2026-06-22 in a way the §4 table didn't
+yet name. Captured in full so it never repeats.
+
+**Signature.** The operator on the Mac (localhost) is **fine** — control-room
+push-to-talk works — but **every LAN device fails the same way**: the avatar page taps
+through the cert warning and *appears to load*, then the **character image never
+appears**, **STT/TTS don't connect**, sends fail (**"Send failed"**), and device QRs
+bounce to **"scan a fresh QR."** It reads as "connections, not logic" — because it is.
+
+**Why it's deceptive.** A browser lets you tap through a bad cert for the **top-level
+page only**. The avatar's binding fetch (`/api/face/<id>/binding`) and the speech
+**WebSocket** are *subresources* — there is **no tap-through** for those — so they're
+silently blocked while the page itself looks loaded. Localhost is always in the SAN, so
+the operator never sees the failure. Same root cause behind the Android device "fresh
+QR."
+
+**Root cause — two ways in:**
+1. **IP drift.** DHCP moved the Mac (e.g. `192.168.1.134` → `.135`); the leaf's SAN no
+   longer lists the current IP.
+2. **The IP was minted as a DNS name, not an IP.** Passing the IP as a host arg
+   (`dev_cert.py --host 192.168.1.134`) records it as `DNS:192.168.1.134`. Browsers
+   validate an **IP-literal URL** against **`IP Address:` SAN entries only** — a `DNS:`
+   entry that merely *looks* like an IP does **not** count. So IP-literal TLS fails even
+   on the "correct" IP. (This is why it kept recurring — the fix command itself was
+   wrong.)
+
+**Diagnose (read-only):**
+```
+ipconfig getifaddr en0                                    # current LAN IP
+openssl x509 -in portal/data/certs/dev-cert.pem -noout -text | grep -A1 "Alternative Name"
+```
+The SAN **must** contain `IP Address:<that LAN IP>` — not `DNS:<ip>`, and not a stale IP.
+
+**Fix — re-mint the leaf with the BARE command (no host arg):**
+```
+python scripts/dev_cert.py        # auto-detects the LAN IP, writes it as an IP SAN, REUSES the CA
+```
+- ✅ Bare invocation auto-detects the egress IP and adds it as a proper `IP Address:` SAN.
+- ❌ Do **not** pass the IP as `--host <ip>` — that's the `DNS:`-SAN trap above.
+- ❌ Do **not** use `--remint` — it regenerates the CA and forces re-trusting every device.
+
+**Then RESTART the portal — this is the step that bit us.** The server loads the cert
+**once at boot**, so a *running* server keeps serving the OLD cert after a re-mint until
+you bounce it (Ctrl+C → relaunch). Always verify the **running** server is serving the
+new cert before touching a tablet:
+```
+echo | openssl s_client -connect 127.0.0.1:8765 2>/dev/null | openssl x509 -noout -text | grep -A1 "Alternative Name"
+```
+Tablets need **nothing** (CA unchanged) — just **re-scan the QR** (drops the stale
+cached page and reconnects over the new cert). **Confirmed end-to-end on an iPad
+2026-06-22:** after re-mint + restart, the patient avatar loaded, the character
+responded, and STT/TTS worked.
+
+> **Prevention idea (not yet built):** have `run_portal.py` compare the detected LAN IP
+> against the leaf SAN at boot and auto-re-mint if it's missing — making IP drift
+> self-healing without a manual step. The durable fix is still §6 (stable hostname).
+
 ## 3 · New-device onboarding (one time per tablet — Apple AND Android)
 
 **The easy path (2026-06-10): the portal runs an onboarding helper on plain HTTP at
@@ -89,6 +148,7 @@ and functioned on the tablet — no security warning, no Chrome hand-off.
 
 | Symptom on the iPad | Actual cause | Fix |
 |---|---|---|
+| Operator (localhost) works, but **every tablet** fails: page loads then no image, no STT/TTS, "Send failed", device asks for a "fresh QR" | Leaf has no `IP Address:` SAN for the current IP (IP drift, or the IP was minted as a `DNS:` name) — subresource fetch + speech WS are blocked with no tap-through | **§2b** — bare `python scripts/dev_cert.py` → **restart** portal → verify served SAN → re-scan QR |
 | "This Connection Is Not Private" interstitial | Leaf SAN doesn't cover the current IP, OR the CA trust toggle is off / profile not installed | Re-mint leaf + restart portal (§2), or finish §3 steps 1–2 |
 | Loads only after tapping "visit this website" — and **breaks again after every re-mint** | Running on a per-cert exception instead of CA trust | §3 steps 1–2 (the tap-through dies with each new leaf; CA trust doesn't) |
 | White screen, URL in the bar, spinner forever | TLS failing with **stale tab state** masking the interstitial | Clear Safari Website Data for the portal origins, retry — then fix the cert per above |
