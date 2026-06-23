@@ -147,6 +147,7 @@ class CabinetEngine(DeviceEngine):
             admins = list(state.get("administrations") or [])
             admins.append({
                 "ts":              event["ts"],
+                "action":          (payload.get("action") or "administer"),  # administer|return|waste
                 "character_id":    payload.get("character_id"),
                 "character_name":  payload.get("character_name"),
                 "med_name":        payload.get("med_name"),

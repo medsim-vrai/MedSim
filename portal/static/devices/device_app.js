@@ -1883,9 +1883,13 @@
         const status = med.current_status
           ? `<span style="background:#e9edf6;color:#3a4a6b;padding:0 6px;border-radius:3px;font-size:10px;font-weight:600;margin-left:6px">${escape(med.current_status)}</span>`
           : '';
-        const givenBadge = last
-          ? `<span style="background:#dff5e3;color:#1d6334;border:1px solid #b1d8bd;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">✓ GIVEN ${escape(new Date(last.ts * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}))}</span>`
-          : '';
+        const actBadge = last ? (function () {
+          const t = escape(new Date(last.ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}));
+          const a = last.action || 'administer';
+          if (a === 'return') return `<span style="background:#fff7e6;color:#8a5a00;border:1px solid #f0d9a8;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">↩ RETURNED ${t}</span>`;
+          if (a === 'waste')  return `<span style="background:#fdecea;color:#962d22;border:1px solid #f5c0c1;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">🗑 WASTED ${t}</span>`;
+          return `<span style="background:#dff5e3;color:#1d6334;border:1px solid #b1d8bd;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">✓ GIVEN ${t}</span>`;
+        })() : '';
         html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid #f0f3f8">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600">${escape(med.name)}${hi}${status}</div>
@@ -1895,13 +1899,17 @@
               ${med.rationale ? ` · ${escape(med.rationale)}` : ''}
             </div>
           </div>
-          <div style="display:flex;gap:6px;align-items:center;margin-left:8px">
-            ${givenBadge}
-            <button type="button" class="cabinet-take-btn"
-              data-char-id="${escape(ch.character_id)}" data-char-name="${escape(ch.name)}"
-              data-med-name="${escape(med.name)}" data-dose="${escape(med.dose || med.strength || '')}"
-              data-route="${escape(med.route || '')}" data-location="${escape(loc)}"
-              style="background:#143b8a;color:#fff;border:0;border-radius:6px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ TAKE</button>
+          <div class="cabinet-act-row" style="display:flex;gap:5px;align-items:center;margin-left:8px;flex-shrink:0"
+            data-char-id="${escape(ch.character_id)}" data-char-name="${escape(ch.name)}"
+            data-med-name="${escape(med.name)}" data-dose="${escape(med.dose || med.strength || '')}"
+            data-route="${escape(med.route || '')}" data-location="${escape(loc)}">
+            ${actBadge}
+            <button type="button" class="cabinet-act-btn" data-action="administer"
+              style="background:#143b8a;color:#fff;border:0;border-radius:6px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Take</button>
+            <button type="button" class="cabinet-act-btn" data-action="return"
+              style="background:#fff;color:#4a5670;border:1px solid #c2cad8;border-radius:6px;padding:7px 9px;font-size:12px;font-weight:600;cursor:pointer">↩ Return</button>
+            <button type="button" class="cabinet-act-btn" data-action="waste"
+              style="background:#fff;color:#962d22;border:1px solid #f0c4c4;border-radius:6px;padding:7px 9px;font-size:12px;font-weight:600;cursor:pointer">🗑 Waste</button>
           </div>
         </div>`;
       }
@@ -1919,14 +1927,19 @@
       SELECTED_CHAR_ID = null;
       if (STATE) renderFold(STATE); else renderCabinetChecklist();   // #2 — revert scr-patient
     });
-    panel.querySelectorAll('.cabinet-take-btn').forEach((btn) => {
+    panel.querySelectorAll('.cabinet-act-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const d = btn.dataset;
+        const row = btn.closest('.cabinet-act-row');
+        if (!row) return;
+        const d = row.dataset;
+        const action = btn.dataset.action || 'administer';
         if (!AUDIO_UNLOCKED) unlockAudio();
-        btn.disabled = true;
+        const sibs = row.querySelectorAll('.cabinet-act-btn');
+        sibs.forEach((b) => { b.disabled = true; });
         const original = btn.textContent;
         btn.textContent = '…';
         sendEvent('cabinet.administer', {
+          action:         action,
           character_id:   d.charId,
           character_name: d.charName,
           med_name:       d.medName,
@@ -1936,7 +1949,7 @@
           scan_used:      false,
           administered_by: (STATE && STATE.session_user) || 'student',
         }).finally(() => {
-          setTimeout(() => { btn.disabled = false; btn.textContent = original; }, 800);
+          setTimeout(() => { sibs.forEach((b) => { b.disabled = false; }); btn.textContent = original; }, 800);
         });
       });
     });

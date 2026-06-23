@@ -406,7 +406,8 @@ async def api_device_event(station_id: str, request: Request):
     # FR-008 S4: administering the staged med fires its configured patient
     # impact (per-error opt-in, severe pre-confirmed at arm). Best-effort —
     # must never break a device event.
-    if ev_type in ("cabinet.administer", "med.administer"):
+    if ev_type in ("cabinet.administer", "med.administer") \
+            and (payload.get("action") or "administer") == "administer":
         try:
             from portal import med_errors as _me
             _me.note_med_administered(
@@ -430,6 +431,17 @@ async def api_device_event(station_id: str, request: Request):
         except Exception as exc:  # noqa: BLE001
             import sys as _sys
             print(f"[MEDSIM] cart dispense transcript log failed: {exc}",
+                  file=_sys.stderr)
+    # #1/#4 — note a MAR take/administer/return/waste on the patient's transcript
+    # so the action is recorded for the operator + debrief (non-fatal).
+    if ev_type == "cabinet.administer" and station["device_kind"] == "cabinet":
+        try:
+            _log_cart_administer_to_transcript(
+                station_id=station_id, payload=payload,
+            )
+        except Exception as exc:  # noqa: BLE001
+            import sys as _sys
+            print(f"[MEDSIM] cart administer transcript log failed: {exc}",
                   file=_sys.stderr)
     # M51 — Patient Integrated Alarm button press handling. The PIA
     # tablet posts `type="pia.button"` with payload `{action: ...}`.
@@ -578,6 +590,63 @@ def _log_cart_dispense_to_transcript(
         persona_name=persona_name,
         student_text=line,
         character_text="",   # one-direction event line; no character reply
+        latency_ms=None,
+    )
+
+
+def _log_cart_administer_to_transcript(
+    *, station_id: str, payload: dict[str, Any],
+) -> None:
+    """#1/#4 — note a MAR take/administer/return/waste (cabinet.administer) on the
+    patient's encounter transcript, so the action is recorded for the operator +
+    debrief. Routes to the encounter that owns payload['character_id'] the same way
+    as cart dispenses; skipped if none matches."""
+    from portal import control_room as _cr, library as _library
+    room = _cr.get_active_room()
+    if room is None:
+        return
+    character_id = (payload.get("character_id") or "").strip()
+    if not character_id:
+        return
+    target_enc = None
+    for eid in (room.cart_links.get(station_id) or []):
+        enc = room.encounters.get(eid)
+        if enc is None:
+            continue
+        if character_id == enc.patient_persona_id \
+                or character_id in enc.selected_personas:
+            target_enc = enc
+            break
+    if target_enc is None:
+        station = ehr_db.get_device_station(station_id) or {}
+        sid = station.get("session_id")
+        if sid and sid in room.encounters:
+            target_enc = room.encounters[sid]
+    if target_enc is None:
+        return
+    cart_label = room.cart_labels.get(station_id) or "Med cart"
+    action = (payload.get("action") or "administer").strip().lower()
+    med   = (payload.get("med_name") or "").strip()
+    dose  = (payload.get("dose") or "").strip()
+    route = (payload.get("route") or "").strip()
+    by    = (payload.get("administered_by") or "").strip()
+    verb  = {"return": "returned", "waste": "wasted"}.get(action, "gave")
+    parts: list[str] = [f"💊 {cart_label}", f"{verb} {med}".strip() if med else verb]
+    dr = " ".join(x for x in (dose, route) if x)
+    if dr and action != "return":          # return = back to drawer; dose/route N/A
+        parts.append(dr)
+    if by:
+        parts.append(f"by {by}")
+    line = " · ".join(parts)
+    p = _library.get_persona(character_id) if character_id else None
+    persona_name = (p.get("name") if p else character_id)
+    target_enc.log_turn(
+        source=f"device:{station_id}",
+        source_label=cart_label,
+        persona_id=character_id,
+        persona_name=persona_name,
+        student_text=line,
+        character_text="",
         latency_ms=None,
     )
 
