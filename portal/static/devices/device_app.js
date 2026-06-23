@@ -76,6 +76,13 @@
       STATION = b.station || {};
       CHARACTERS = b.characters || [];     // V6.1.6 — med-cart roster
       ASSIGNED_CHAR_ID = b.character_id || null;   // V6.1.7 — instructor-assigned patient
+      // #2 — default the MAR/screen patient up front so scr-patient shows the
+      // real patient on first paint: prefer the instructor-assigned patient,
+      // else the only linked patient (single-bed cart).
+      if (SELECTED_CHAR_ID == null) {
+        if (ASSIGNED_CHAR_ID) SELECTED_CHAR_ID = ASSIGNED_CHAR_ID;
+        else if (CHARACTERS.length === 1) SELECTED_CHAR_ID = CHARACTERS[0].character_id;
+      }
       AUDIO_URLS = b.audio_urls || {};
       STATE = b.state || {};
       PHYS = b.physiology || null;         // FR-012 — advanced-device physiology
@@ -434,7 +441,18 @@
       }
     }
     // 5. Cabinet shorthand.
-    if (key === 'patient' && state.patient) return state.patient.name || state.patient.id;
+    if (key === 'patient') {
+      if (state.patient && (state.patient.name || state.patient.id)) {
+        return state.patient.name || state.patient.id;
+      }
+      // #2 — fall back to the MAR-selected patient so the screen shows the real
+      // patient, not the skin's "MARTIN, ELENA" placeholder (display only — no
+      // engine event, so the cabinet screen state is untouched).
+      const sc = SELECTED_CHAR_ID && CHARACTERS
+        ? CHARACTERS.find((c) => c.character_id === SELECTED_CHAR_ID) : null;
+      if (sc && sc.name) return sc.name;
+      return undefined;
+    }
     if (key === 'user'    && state.session_user) return state.session_user;
     return undefined;
   }
@@ -1785,7 +1803,7 @@
     panel.querySelectorAll('.cabinet-pick-patient').forEach((btn) => {
       btn.addEventListener('click', () => {
         SELECTED_CHAR_ID = btn.dataset.charId;
-        renderCabinetChecklist();
+        if (STATE) renderFold(STATE); else renderCabinetChecklist();   // #2 — refresh scr-patient too
       });
     });
   }
@@ -1900,7 +1918,7 @@
     const backBtnEl = document.getElementById('cabinet-checklist-back');
     if (backBtnEl) backBtnEl.addEventListener('click', () => {
       SELECTED_CHAR_ID = null;
-      renderCabinetChecklist();
+      if (STATE) renderFold(STATE); else renderCabinetChecklist();   // #2 — revert scr-patient
     });
     panel.querySelectorAll('.cabinet-take-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
