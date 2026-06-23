@@ -90,11 +90,22 @@ ADR → `In-progress` → `Shipped` → `Validated` (confirmed in a test session
 | **FR-001** | Best-practice med ordering (doctor) — random primary, min-dose, escalate to secondary | clinical-logic | instructor | P2 | **Shipped** (2026-06-10; field feedback: doctor must ORDER decisively w/ dose — fix planned) | runtime(core) · portal · data |
 | **FR-002** | Pharmacist availability + alternatives; instructor "not available" flag | clinical-logic · instructor-tools | instructor | P2 | **Shipped** (2026-06-10) | control-room · portal · runtime(core) · data |
 | **FR-003** | Instructor character prompting — speak in-context (emotion / mental status / role) | instructor-tools · character-interaction | instructor | P2 | **✅ Validated** (2026-06-10) | control-room · portal · avatar |
-| **FR-004** | Zero-config wireless device pairing for production venues | UX · scenario | testing | P1 | Proposed | portal · avatar · kit/ops (+ADR) |
-| **FR-005** | Two-stage control room — Setup page → Live-Operations window | instructor-tools · UX | instructor | P2 | **Shipped** (2026-06-10; live validation pending) | control-room · portal |
-| **FR-006** | Per-character Avatar vs Audio-only stations — clear choice + flat-portrait lite app for low-cost tablets | instructor-tools · UX · avatar | instructor | P2 | **Shipped — OPEN ISSUE:** voice take fails on Android Chrome (see entry) | control-room · portal · avatar |
-| **FR-007** | Unit-level shared staff characters — one tablet serves multiple patients; student must IDENTIFY the patient | character-interaction · clinical-logic · scenario | instructor | P2 | Proposed (investigate) | portal · runtime(core) · control-room · avatar |
-| **FR-010** | Post-restart device readiness ping — health-check paired tablets (status / what they run / working?) + warm character tablets cold→warm | UX · instructor-tools · ops · avatar | instructor | P1 | Proposed (investigate) | portal · avatar · control-room |
+| **FR-004** | Zero-config wireless device pairing for production venues | UX · scenario | testing | P1 | **✅ Validated** (2026-06-12, Beryl kit router; static-lease + hostname-QR hardening queued) | portal · avatar · kit/ops (+ADR) |
+| **FR-005** | Two-stage control room — Setup page → Live-Operations window | instructor-tools · UX | instructor | P2 | **Shipped** (2026-06-10; extended/superseded by FR-011) | control-room · portal |
+| **FR-006** | Per-character Avatar vs Audio-only stations + room-local STT (FR-006b) | instructor-tools · UX · avatar | instructor · testing | P2 | **✅ Validated** (2026-06-12, Android over kit LAN; ADR-0038) | control-room · portal · avatar |
+| **FR-007** | Unit-level shared staff characters — one tablet serves multiple patients; student must IDENTIFY the patient | character-interaction · clinical-logic · scenario | instructor | P2 | **Shipped** (v2; field-validation pending) | portal · runtime(core) · control-room · avatar |
+| **FR-008** | Instructor-staged medication errors (error-recognition training) | clinical-logic · instructor-tools · scenario | instructor | P1 | **Shipped** (S1–S7) · field-validated partial (2026-06-13); catalog clinical review pending | runtime(core) · portal · control-room · data |
+| **FR-009** | Shift turnover / handoff training (SBAR + I-PASS) | clinical-logic · instructor-tools · scenario | instructor | P1 | **Shipped** (H1–H6, 2026-06-13; AI scorer + SA1–SA3 standalone pending) · field-validation pending | runtime(core) · portal · control-room |
+| **FR-010** | Post-restart device readiness ping — health-check paired tablets + warm character tablets cold→warm | UX · instructor-tools · ops · avatar | instructor | P1 | Proposed — **largely subsumed by FR-011** resumability; warm-ping portion still open | portal · avatar · control-room |
+| **FR-011** | Educator GUI "Mission Control" — 3-mode resumable shell (classic room stays fallback) | instructor-tools · UX | instructor | P1 | **Shipped** (G1–G8 + card/pop-out/PTT + field-test cleanup, through 2026-06-23) · field-test pending | control-room · portal |
+| **FR-012** | Advanced clinical devices — telemetry monitor · ventilator · fault injection | instructor-tools · clinical-logic · scenario | instructor | P2 | **Shipped** (D1–D7) · field script ready · PhysioBridge Shape-B hookup pending | portal · control-room · data |
+| **FR-013** | Local-context layer + scenario generation in the card GUI | clinical-logic · instructor-tools · UX | instructor | P2 | **Proposed** (2026-06-17; thin-MVP sequencing defined → `docs/FR-013-local-context-and-scenario-gen.md`) | portal · runtime(core) · control-room · data |
+
+> **Reconciled to `main` on 2026-06-23** (HEAD `e0da279`). Since the 2026-06-17 baseline the
+> FR-011 field-test cleanup shipped: device model/version picker, cert IP-drift auto-remint at boot,
+> the functional HIPAA-gated med cart (BD-Pyxis-styled overlay), and the branded "Helix Health"
+> Medical Records EHR across the instructor and student records terminals. Gate green (287).
+> Local `main` is ahead of `origin` (unpushed). Full iPad field-test sign-off (FR-011) still pending.
 
 ---
 
@@ -551,8 +562,9 @@ notes_recent, seed_report — all already exist).
 ## FR-007 — Unit-level shared staff characters (one tablet, many patients)
 
 **Area:** character-interaction · clinical-logic · scenario · **Source:** instructor (2026-06-10) ·
-**Priority:** P2 · **Status:** Proposed — *investigate before speccing* · **Effort:** L ·
-**Lands in:** portal + runtime(core) + control-room + avatar
+**Priority:** P2 · **Status:** ✅ **Shipped** (v2 — shared "one tablet, many patients" station live;
+room-aware listen resolves the patient + kills the post-resume echo; field-validation pending) ·
+**Effort:** L · **Lands in:** portal + runtime(core) + control-room + avatar
 
 **Goal.** Mirror real staffing: ONE charge nurse / doctor / respiratory therapist / pharmacist
 covers a whole unit of patients from a single tablet. The student must IDENTIFY which patient
@@ -606,9 +618,13 @@ coding plan (`docs/PLAN-2026-06-13-gui-mission-control.md`: stages G1–G8, foun
 G1 portal resumability + G2 readiness API before any new pixels; classic control room = default
 fallback throughout).
 
-**Status:** Designed; coding plan written (G1–G8), pending ratification. Highest-leverage first
-build = G1 resumability (kills the restart-wipes-the-session friction; benefits the classic
-control room too). Effort L (phased). Subsumes FR-010's post-restart intent.
+**Status:** ✅ **Shipped** — G1–G8 all delivered on `main` (`ce74743` → `8248371`), plus the
+card-strategy / pop-out / PTT polish and the Set-up ecosystem board (issues #51–#57). The classic
+control room remains the default fallback. Effort L (phased). Subsumed FR-010's post-restart intent
+via portal resumability (G1). **Field-test cleanup (through 2026-06-23):** device model/version
+picker, cert IP-drift auto-remint at boot, functional HIPAA-gated med cart (BD-Pyxis overlay), and
+the branded "Helix Health" Medical Records EHR (instructor + student terminals). **Full iPad
+field-test sign-off still pending** (`docs/GUI-field-script.md`).
 
 ## FR-010 — Post-restart device readiness ping (health-check + warm cold→warm)
 
@@ -665,6 +681,41 @@ status; at most one tap per character tablet to fully arm the mic (browser const
 (`/api/device/{id}/heartbeat`, `/api/ehr/state` roster poll) · room-STT warm path (ADR-0038) ·
 the avatar app's reconnect/warm hooks (`installFirstGestureWarmup`) · device-token posture
 (ADR-0027). **Note:** directly addresses the standing restart-wipes-the-session friction.
+
+---
+
+## FR-012 — Advanced clinical devices (telemetry monitor · ventilator · fault injection)
+
+**Area:** instructor-tools · clinical-logic · scenario · **Source:** instructor · **Priority:** P2 ·
+**Status:** ✅ **Shipped** (D1–D7, on `main` `182890e` → `ac1ffed`) · **Effort:** L ·
+**Lands in:** portal + control-room + data
+
+**Shipped.** An **Advanced-devices** pull-down adds high-fidelity devices beyond the basic kit: a
+**telemetry monitor** (live vitals + scrolling waveforms; nursing-station alarm engine that
+auto-fires) and an **interactive ventilator** (control surface + breath model; full-screen device
+pages). Both drive the shared **physiology spine** (`portal/physiology.py`) so an injected alarm
+moves HR/ECG/rhythm — not just a tone — and a chosen clinical state/waveform aligns the vitals.
+**Fault injection** (D6/D6b) ships a vent-fault catalog with arm/clear + a control-room picker. D7
+wired resumability + the field script. Refs: `docs/PLAN-2026-06-14-advanced-devices.md`,
+`docs/DESIGN-2026-06-14-physiology-source-authority.md`, `docs/FR-012-field-script.md`.
+
+**Open / next.** **PhysioBridge Shape-B** hookup when the external physiologic engine is ready
+(device physiology currently runs on the in-portal spine); live field validation of the ventilator
++ fault drills.
+
+## FR-013 — Local-context layer + scenario generation in the card GUI
+
+**Area:** clinical-logic · instructor-tools · UX · **Source:** instructor · **Priority:** P2 ·
+**Status:** **Proposed** (filed 2026-06-17) · **Effort:** L (~3–4 wks full; thin MVP ~4–5 d) ·
+**Lands in:** portal + runtime(core) + control-room + data
+
+**Filed.** A toggleable **local-context overlay** so the sim "speaks local": best-practice baseline
++ the program's **standing orders / formulary / treatment priorities**, ingested from PDF/Word/Excel
+with per-item instructor review (FR-008 staged-confirm posture) and injected into **every**
+character-turn path (the FR-009 "inject everywhere" invariant). Plus a **"Scenario generation &
+context"** entry point next to Debrief — the authoring surface the card GUI lacks. Recommended
+sequencing = thin vertical MVP first (P1 → P5 → P4, hand-entered items) before the risky parser.
+Full spec, phasing, effort: **`docs/FR-013-local-context-and-scenario-gen.md`**.
 
 ---
 
