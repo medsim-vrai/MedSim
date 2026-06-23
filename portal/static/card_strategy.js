@@ -74,8 +74,7 @@
     pop.title = "Pop out to its own window (another monitor)";
     pop.addEventListener("click", function (e) {
       e.stopPropagation();
-      window.open(popUrl(c.id), "card_" + c.id.replace(/[^a-z0-9_]/gi, ""),
-        "width=620,height=820,menubar=no,toolbar=no,location=no");
+      window.open(popUrl(c.id), "card_" + c.id.replace(/[^a-z0-9_]/gi, ""));   // new tab/window, reused by name
     });
     tools.appendChild(pop);
 

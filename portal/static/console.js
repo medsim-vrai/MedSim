@@ -255,8 +255,7 @@
       pop.title = "Open in a new window for another monitor";
       pop.addEventListener("click", (function (url, name) {
         return function () {
-          window.open(url, "op_" + name,
-            "width=560,height=760,menubar=no,toolbar=no,location=no");
+          window.open(url, "op_" + name);   // new tab/window (manageable, drag-out-able), reused by name
         };
       })(ent.open_url, safeName(ent.kind + "_" + ent.id)));
       actions.appendChild(pop);
@@ -1426,8 +1425,7 @@
       mcLinks[mi].addEventListener("click", function (e) {
         e.preventDefault();
         var href = this.getAttribute("href") || "";
-        if (href) window.open(href, "tool_" + href.replace(/[^a-z0-9]/gi, ""),
-          "width=1100,height=820,menubar=no,toolbar=no");
+        if (href) window.open(href, "tool_" + href.replace(/[^a-z0-9]/gi, ""));
       });
     }
     initWizard();

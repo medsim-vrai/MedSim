@@ -671,8 +671,7 @@
   // ── M30 — Pop-out button ────────────────────────────────────────
   $('btn-popout')?.addEventListener('click', () => {
     const w = window.open(window.location.pathname + '?popout=1',
-                           `encounter_${cfg.encounterId}`,
-                           'width=620,height=900,resizable=yes,scrollbars=yes');
+                           `encounter_${cfg.encounterId}`);
     if (w) w.focus();
   });
 
@@ -1500,8 +1499,7 @@
       pop.title = 'Pop out to its own window (another monitor)';
       pop.addEventListener('click', function (e) {
         e.stopPropagation();
-        window.open(location.pathname + '?card=' + encodeURIComponent(c.id),
-          'enc_' + c.id, 'width=560,height=760,menubar=no,toolbar=no,location=no');
+        window.open(location.pathname + '?card=' + encodeURIComponent(c.id), 'enc_' + c.id);
       });
       tools.appendChild(pop);
       // card-medications manages its own collapse (wireMedsToggle) — give it
