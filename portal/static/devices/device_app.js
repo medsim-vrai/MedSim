@@ -1674,6 +1674,7 @@
   // back-compat (instructor-pushed assign drills straight into the
   // MAR like before); operator can override locally at any time.
   let SELECTED_CHAR_ID = null;
+  let HIGHLIGHTED_MED = null;   // the MAR med row highlighted (the single button bar acts on it)
   function injectCabinetChecklist() {
     if (KIND !== 'cabinet') return;
     if (!document.getElementById('cabinet-checklist-open')) {
@@ -1753,71 +1754,58 @@
     _renderCabinetMar(selectedChar);
   }
 
-  // #3 — the cabinet MAR + patient-picker share one SIDE panel beside the screen
-  // (CSS .cab-side + body.cab-mar-open shifts the cabinet left), not a bottom-sheet
-  // overlay covering it. One creator so both views stay in sync.
+  // The cabinet MAR + patient-picker render as a Pyxis-styled OVERLAY over the
+  // cart graphic's own footprint (CSS .cab-over, mounted inside #device-root), so
+  // they sit on the same area as the screen rather than beside it. One creator.
   function _cabinetPanelEl() {
     let panel = document.getElementById('cabinet-checklist');
     if (!panel) {
       panel = document.createElement('div');
       panel.id = 'cabinet-checklist';
-      document.body.appendChild(panel);
     }
-    panel.className = 'cab-side';
-    panel.style.cssText = 'overflow-y:auto;background:#f6f8fb;z-index:48;'
-      + 'padding:10px 14px 16px;font-family:-apple-system,Helvetica,Arial;color:#1b2733;';
-    document.body.classList.add('cab-mar-open');
+    panel.className = 'cab-over';
+    panel.style.cssText = '';
+    const host = document.getElementById('device-root') || document.body;
+    if (panel.parentNode !== host) host.appendChild(panel);
     return panel;
   }
 
-  // M60 — Patient picker: cards for every patient in CHARACTERS.
+  // Patient picker — Pyxis-styled list inside the overlay.
   function _renderCabinetPicker() {
     const escape = (s) => String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     const panel = _cabinetPanelEl();
-    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div>
-        <strong style="font-size:14px;color:#2b3956">👤 Pick a patient</strong>
-        <div style="font-size:11px;color:#6b7896;margin-top:2px">${CHARACTERS.length} patient${CHARACTERS.length === 1 ? '' : 's'} on linked encounters</div>
-      </div>
-      <button type="button" id="cabinet-checklist-close"
-        style="background:transparent;color:#6b7896;border:1px solid #c2cad8;border-radius:6px;padding:4px 10px;font-size:18px;cursor:pointer;line-height:1;font-weight:700">✕</button>
-    </div>`;
-    html += '<div style="display:flex;flex-direction:column;gap:6px">';
+    let rows = '';
     for (const ch of CHARACTERS) {
       const meds = ch.medications || [];
       const encLabel = ch.encounter_label ? ` · ${escape(ch.encounter_label)}` : '';
-      html += `<button type="button" class="cabinet-pick-patient"
-        data-char-id="${escape(ch.character_id)}"
-        style="text-align:left;background:#fff;border:1px solid #dde2ee;border-radius:8px;
-               padding:10px 14px;cursor:pointer;font-family:inherit;color:#1b2733;
-               display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700">${escape(ch.name)}</div>
-          <div style="font-size:11px;color:#6b7896;margin-top:2px">
-            ${escape(ch.location_label || '')}${encLabel} · MRN ${escape(ch.mrn || '—')}
-          </div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="background:#e9edf6;color:#3a4a6b;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">
-            ${meds.length} med${meds.length === 1 ? '' : 's'}
-          </div>
-          <div style="font-size:18px;color:#6b7896;margin-top:2px">→</div>
-        </div>
+      rows += `<button type="button" class="cab-pick-row" data-char-id="${escape(ch.character_id)}">
+        <span style="flex:1;min-width:0">
+          <span class="nm">${escape(ch.name)}</span>
+          <span class="meta">${escape(ch.location_label || '')}${encLabel} · MRN ${escape(ch.mrn || '—')}</span>
+        </span>
+        <span class="cnt">${meds.length} med${meds.length === 1 ? '' : 's'} →</span>
       </button>`;
     }
-    html += '</div>';
-    panel.innerHTML = html;
+    panel.innerHTML = `<div class="cab-over-panel">
+      <div class="cab-over-head">
+        <span class="ttl">👤 Select a patient</span>
+        <span class="sub">${CHARACTERS.length} patient${CHARACTERS.length === 1 ? '' : 's'}</span>
+        <button type="button" class="x" id="cabinet-checklist-close">✕</button>
+      </div>
+      <div class="cab-over-list">${rows}</div>
+    </div>`;
     const closeBtn = document.getElementById('cabinet-checklist-close');
     if (closeBtn) closeBtn.addEventListener('click', () => {
       CHECKLIST_DISMISSED = true;
       renderCabinetChecklist();
     });
-    panel.querySelectorAll('.cabinet-pick-patient').forEach((btn) => {
+    panel.querySelectorAll('.cab-pick-row').forEach((btn) => {
       btn.addEventListener('click', () => {
         SELECTED_CHAR_ID = btn.dataset.charId;
-        if (STATE) renderFold(STATE); else renderCabinetChecklist();   // #2 — refresh scr-patient too
+        HIGHLIGHTED_MED = null;
+        if (STATE) renderFold(STATE); else renderCabinetChecklist();
       });
     });
   }
@@ -1855,106 +1843,91 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     const ch = assignedChar;
     const meds = ch.medications || [];
-    // M60 — only show the "← Patients" back-button when there's more
-    // than one patient to return to. Single-patient carts collapse
-    // the picker step entirely.
     const showBackBtn = (CHARACTERS && CHARACTERS.length > 1);
-    const backBtn = showBackBtn
-      ? `<button type="button" id="cabinet-checklist-back"
-           style="background:transparent;color:#143b8a;border:1px solid #c2cad8;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-right:6px">
-           ← Patients
-         </button>`
-      : '';
     const encLabel = ch.encounter_label ? ` · ${escape(ch.encounter_label)}` : '';
-    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        ${backBtn}
-        <div>
-          <strong style="font-size:14px;color:#2b3956">💊 MAR · ${escape(ch.name)}</strong>
-          <div style="font-size:11px;color:#6b7896;margin-top:2px">${escape(ch.location_label || '')}${encLabel} · MRN ${escape(ch.mrn || '—')} · ${meds.length} med${meds.length === 1 ? '' : 's'}</div>
-        </div>
-      </div>
-      <button type="button" id="cabinet-checklist-close"
-        style="background:transparent;color:#6b7896;border:1px solid #c2cad8;border-radius:6px;padding:4px 10px;font-size:18px;cursor:pointer;line-height:1;font-weight:700">✕</button>
-    </div>`;
+    // The single button bar acts on the highlighted med (if still in this list).
+    const hiMed = meds.find((m) => m.name === HIGHLIGHTED_MED) || null;
+    let rows = '';
     if (!meds.length) {
-      html += `<div style="padding:18px;background:#fff;border:1px dashed #d3d9e4;border-radius:8px;color:#6b7896;font-size:13px;text-align:center">No active MAR meds for this patient.</div>`;
+      rows = `<div class="cab-empty">No active MAR meds for this patient.</div>`;
     } else {
-      html += `<div style="background:#fff;border:1px solid #dde2ee;border-radius:8px;padding:6px 12px">`;
       for (const med of meds) {
         const loc  = locationFor(med.name);
         const last = lastAdministered(ch.character_id, med.name);
-        const hi   = med.high_alert ? `<span style="background:#fdecea;color:#962d22;border:1px solid #f5c0c1;padding:0 6px;border-radius:3px;font-size:10px;font-weight:700;margin-left:6px">HIGH-ALERT</span>` : '';
-        const status = med.current_status
-          ? `<span style="background:#e9edf6;color:#3a4a6b;padding:0 6px;border-radius:3px;font-size:10px;font-weight:600;margin-left:6px">${escape(med.current_status)}</span>`
-          : '';
-        const actBadge = last ? (function () {
+        const hi   = med.high_alert ? `<span class="tag hi">HIGH-ALERT</span>` : '';
+        const status = med.current_status ? `<span class="tag st">${escape(med.current_status)}</span>` : '';
+        const badge = last ? (function () {
           const t = escape(new Date(last.ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}));
           const a = last.action || 'administer';
-          if (a === 'return') return `<span style="background:#fff7e6;color:#8a5a00;border:1px solid #f0d9a8;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">↩ RETURNED ${t}</span>`;
-          if (a === 'waste')  return `<span style="background:#fdecea;color:#962d22;border:1px solid #f5c0c1;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">🗑 WASTED ${t}</span>`;
-          return `<span style="background:#dff5e3;color:#1d6334;border:1px solid #b1d8bd;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">✓ GIVEN ${t}</span>`;
+          if (a === 'return') return `<span class="badge ret">↩ RETURNED ${t}</span>`;
+          if (a === 'waste')  return `<span class="badge wst">🗑 WASTED ${t}</span>`;
+          return `<span class="badge giv">✓ GIVEN ${t}</span>`;
         })() : '';
-        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid #f0f3f8">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600">${escape(med.name)}${hi}${status}</div>
-            <div style="font-size:11px;color:#6b7896;margin-top:2px">
-              ${escape(med.dose || med.strength || '')} ${escape(med.route || '')} ·
-              ${loc ? `📍 <code style="background:#eef0f4;padding:1px 4px;border-radius:3px">${escape(loc)}</code>` : `<span style="color:#9aa3b8">not stocked in this cart</span>`}
-              ${med.rationale ? ` · ${escape(med.rationale)}` : ''}
-            </div>
-          </div>
-          <div class="cabinet-act-row" style="display:flex;gap:5px;align-items:center;margin-left:8px;flex-shrink:0"
-            data-char-id="${escape(ch.character_id)}" data-char-name="${escape(ch.name)}"
-            data-med-name="${escape(med.name)}" data-dose="${escape(med.dose || med.strength || '')}"
-            data-route="${escape(med.route || '')}" data-location="${escape(loc)}">
-            ${actBadge}
-            <button type="button" class="cabinet-act-btn" data-action="administer"
-              style="background:#143b8a;color:#fff;border:0;border-radius:6px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:.04em">✓ Take</button>
-            <button type="button" class="cabinet-act-btn" data-action="return"
-              style="background:#fff;color:#4a5670;border:1px solid #c2cad8;border-radius:6px;padding:7px 9px;font-size:12px;font-weight:600;cursor:pointer">↩ Return</button>
-            <button type="button" class="cabinet-act-btn" data-action="waste"
-              style="background:#fff;color:#962d22;border:1px solid #f0c4c4;border-radius:6px;padding:7px 9px;font-size:12px;font-weight:600;cursor:pointer">🗑 Waste</button>
-          </div>
+        const sel = (med.name === HIGHLIGHTED_MED) ? ' selected' : '';
+        rows += `<div class="cab-med-row${sel}" data-med-name="${escape(med.name)}" role="button" tabindex="0">
+          <span style="flex:1;min-width:0">
+            <span class="nm">${escape(med.name)}${hi}${status}</span>
+            <span class="meta">${escape(med.dose || med.strength || '')} ${escape(med.route || '')}${loc ? ` · 📍 ${escape(loc)}` : ' · not stocked in this cart'}${med.rationale ? ` · ${escape(med.rationale)}` : ''}</span>
+          </span>
+          ${badge}
         </div>`;
       }
-      html += `</div>`;
     }
-    panel.innerHTML = html;
+    const dis = hiMed ? '' : 'disabled';
+    panel.innerHTML = `<div class="cab-over-panel">
+      <div class="cab-over-head">
+        ${showBackBtn ? '<button type="button" class="x" id="cabinet-checklist-back">← Patients</button>' : ''}
+        <span class="ttl">💊 MAR · ${escape(ch.name)}</span>
+        <span class="sub">${escape(ch.location_label || '')}${encLabel} · MRN ${escape(ch.mrn || '—')} · ${meds.length} med${meds.length === 1 ? '' : 's'}</span>
+        <button type="button" class="x" id="cabinet-checklist-close">✕</button>
+      </div>
+      <div class="cab-over-list">${rows}</div>
+      <div class="cab-over-bar">
+        <button type="button" class="cab-verb give" data-action="administer" ${dis}>✓ Remove &amp; give</button>
+        <button type="button" class="cab-verb ret" data-action="return" ${dis}>↩ Return</button>
+        <button type="button" class="cab-verb waste" data-action="waste" ${dis}>🗑 Waste</button>
+        <span class="cab-verb-hint">${hiMed ? escape(hiMed.name) : 'Tap a medication above'}</span>
+      </div>
+    </div>`;
     const closeBtn = document.getElementById('cabinet-checklist-close');
     if (closeBtn) closeBtn.addEventListener('click', () => {
       CHECKLIST_DISMISSED = true;
       renderCabinetChecklist();
     });
-    // M60 — ← Patients button drops back to the picker.
     const backBtnEl = document.getElementById('cabinet-checklist-back');
     if (backBtnEl) backBtnEl.addEventListener('click', () => {
-      SELECTED_CHAR_ID = null;
-      if (STATE) renderFold(STATE); else renderCabinetChecklist();   // #2 — revert scr-patient
+      SELECTED_CHAR_ID = null; HIGHLIGHTED_MED = null;
+      if (STATE) renderFold(STATE); else renderCabinetChecklist();
     });
-    panel.querySelectorAll('.cabinet-act-btn').forEach((btn) => {
+    // Highlight one med (single selection); the button bar then acts on it.
+    panel.querySelectorAll('.cab-med-row').forEach((row) => {
+      const pick = () => { HIGHLIGHTED_MED = row.dataset.medName; renderCabinetChecklist(); };
+      row.addEventListener('click', pick);
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
+      });
+    });
+    // The single Remove/Return/Waste bar acts on the highlighted med.
+    panel.querySelectorAll('.cab-verb').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const row = btn.closest('.cabinet-act-row');
-        if (!row) return;
-        const d = row.dataset;
+        if (btn.disabled || !hiMed) return;
         const action = btn.dataset.action || 'administer';
         if (!AUDIO_UNLOCKED) unlockAudio();
-        const sibs = row.querySelectorAll('.cabinet-act-btn');
-        sibs.forEach((b) => { b.disabled = true; });
+        panel.querySelectorAll('.cab-verb').forEach((b) => { b.disabled = true; });
         const original = btn.textContent;
         btn.textContent = '…';
         sendEvent('cabinet.administer', {
-          action:         action,
-          character_id:   d.charId,
-          character_name: d.charName,
-          med_name:       d.medName,
-          dose:           d.dose,
-          route:          d.route,
-          med_location:   d.location,
-          scan_used:      false,
+          action:          action,
+          character_id:    ch.character_id,
+          character_name:  ch.name,
+          med_name:        hiMed.name,
+          dose:            hiMed.dose || hiMed.strength || '',
+          route:           hiMed.route || '',
+          med_location:    locationFor(hiMed.name),
+          scan_used:       false,
           administered_by: (STATE && STATE.session_user) || 'student',
         }).finally(() => {
-          setTimeout(() => { sibs.forEach((b) => { b.disabled = false; }); btn.textContent = original; }, 800);
+          setTimeout(() => { btn.textContent = original; renderCabinetChecklist(); }, 700);
         });
       });
     });
