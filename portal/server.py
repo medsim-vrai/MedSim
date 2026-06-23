@@ -440,6 +440,7 @@ async def mission_control_console(
             "group": "Advanced" if k in _dev_advanced else "Basic",
             "common": k in _dev_common,
             "model": models[0] if models else "",
+            "models": models,   # full list so the wizard popup can offer model/brand choice
         })
 
     bootstrap = {"samples": samples, "ehrs": ehrs, "default_ehr": default_ehr,

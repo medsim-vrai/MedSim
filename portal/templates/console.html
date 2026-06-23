@@ -256,6 +256,30 @@
           </div>
         </dialog>
 
+        <!-- Device-config popup — wizard parity with the control-room "Add device"
+             modal: checking a device opens this to pick the model/brand + a human
+             label so launch mints a correct, named QR for the assigned patient. -->
+        <dialog id="dev-cfg-modal" class="readiness-modal scene-modal" aria-label="Configure device">
+          <div class="rm-panel">
+            <div class="rm-head">
+              <strong id="dev-cfg-title">Configure device</strong>
+              <button type="button" id="dev-cfg-cancel" class="rm-close" aria-label="Cancel">✕ Cancel</button>
+            </div>
+            <div class="rm-body scene-modal-body">
+              <label class="sc-field">Model / brand
+                <select id="dev-cfg-model"></select>
+              </label>
+              <label class="sc-field">Label <span class="muted small">(name on the QR + cockpit)</span>
+                <input type="text" id="dev-cfg-label" maxlength="40" placeholder="e.g. Bed 1 IV">
+              </label>
+              <p class="muted small" id="dev-cfg-note"></p>
+              <div class="sc-actions">
+                <button type="button" id="dev-cfg-save" class="rc-btn rc-go">Save device</button>
+              </div>
+            </div>
+          </div>
+        </dialog>
+
         <!-- Operations — live entity cards (room-aware). Each opens in place or
              pops out onto another monitor for real-time, multi-screen ops. -->
         <div class="cockpit-head">

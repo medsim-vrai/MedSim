@@ -393,7 +393,7 @@
   }
 
   // ── G5 Launch Wizard ──────────────────────────────────────────────────────
-  var WIZ = { step: 1, max: 5, boot: null, overall: "loading" };
+  var WIZ = { step: 1, max: 5, boot: null, overall: "loading", devPlan: {} };
 
   function readBootstrap() {
     var el = document.getElementById("console-bootstrap");
@@ -687,8 +687,7 @@
   function rebuildDevices() {
     var box = $("#wiz-devices");
     if (!box) return;
-    var prev = bedDevices();                  // preserve per-bed selections by index
-    box.textContent = "";
+    box.textContent = "";                     // selections persist via WIZ.devPlan
     var cat = ((WIZ.boot && WIZ.boot.devices) || [])
       .filter(function (d) { return !d.common; });   // med cart is common, not per-bed
     var n = bedCount();
@@ -706,8 +705,8 @@
         lab.className = "dev-opt";
         var cb = document.createElement("input");
         cb.type = "checkbox"; cb.className = "dev-cb"; cb.value = d.kind;
-        if (prev[i] && prev[i].indexOf(d.kind) >= 0) cb.checked = true;
-        cb.addEventListener("change", refreshReview);
+        if ((WIZ.devPlan[i] || {})[d.kind]) cb.checked = true;   // restore from saved plan
+        cb.addEventListener("change", onDevToggle);
         var t = document.createElement("span");
         t.textContent = d.name;
         if (d.group === "Advanced") {
@@ -722,6 +721,7 @@
       box.appendChild(block);
     }
     syncCommonUI();
+    wireDevCfg();
     refreshReview();
   }
 
@@ -746,24 +746,118 @@
       });
   }
 
-  // Mint a bed's planned devices (QR stations) once it has a join code at launch.
-  function registerDevices(join, kinds) {
-    var cat = (WIZ.boot && WIZ.boot.devices) || [];
-    var byKind = {};
-    cat.forEach(function (d) { byKind[d.kind] = d; });
+  // ── per-device config (model + label) — wizard parity with the control-room
+  //    "Add device" modal. Checking a device opens a popup to pick the brand/model
+  //    + a human label; those choices drive correct, named QR minting at launch. ──
+  function catByKind() {
+    var m = {};
+    ((WIZ.boot && WIZ.boot.devices) || []).forEach(function (d) { m[d.kind] = d; });
+    return m;
+  }
+  function prettyModel(m) {
+    return (m || "").replace(/_/g, " ").replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+  function devModels(d) {
+    // Prefer the full model list from the server catalog; fall back to the single
+    // default model so this works even before the server passes `models`.
+    return (d && d.models && d.models.length) ? d.models : (d && d.model ? [d.model] : []);
+  }
+  // The instructor's per-(bed,kind) choices: WIZ.devPlan[bed][kind] = {model, label}.
+  function bedDevicePlan(i) {
+    var plan = (WIZ.devPlan && WIZ.devPlan[i]) || {};
+    return Object.keys(plan).map(function (kind) {
+      return { kind: kind, model: plan[kind].model, label: plan[kind].label };
+    });
+  }
+  function cabinetEntry() {
+    var d = catByKind().cabinet || { kind: "cabinet", model: "pyxis", name: "Med cart" };
+    return { kind: "cabinet", model: d.model || "pyxis", label: d.name || "Med cart" };
+  }
+
+  // Mint planned devices (QR stations) once a bed has a join code at launch.
+  // Accepts {kind, model, label} entries (NOT bare kind strings).
+  function registerDevices(join, entries) {
     var chain = Promise.resolve();
-    (kinds || []).forEach(function (k) {
-      var d = byKind[k];
-      if (!d) return;
+    (entries || []).forEach(function (e) {
+      if (!e || !e.kind) return;
       chain = chain.then(function () {
         return fetch("/api/device/register?join=" + encodeURIComponent(join), {
           method: "POST", credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ device_kind: d.kind, device_model: d.model, label: d.name })
+          body: JSON.stringify({ device_kind: e.kind, device_model: e.model, label: e.label })
         }).catch(function () { /* best-effort — still addable in the cockpit */ });
       });
     });
     return chain;
+  }
+
+  // Device-config popup. Checking a device opens it; Save stores the plan + keeps
+  // it checked; Cancel / ✕ / Esc / backdrop aborts a fresh selection (unchecks).
+  var _devCfg = null;   // {bed, kind, cb}
+  function onDevToggle(ev) {
+    var cb = ev.target;
+    var blk = cb.closest && cb.closest(".wiz-dev-bed");
+    var bed = blk ? parseInt(blk.getAttribute("data-bed"), 10) : 0;
+    var kind = cb.value;
+    WIZ.devPlan = WIZ.devPlan || {};
+    if (cb.checked) { openDevCfg(bed, kind, cb); }
+    else { if (WIZ.devPlan[bed]) delete WIZ.devPlan[bed][kind]; refreshReview(); }
+  }
+  function openDevCfg(bed, kind, cb) {
+    var dlg = $("#dev-cfg-modal"); if (!dlg) return;
+    var d = catByKind()[kind] || { kind: kind, name: kind };
+    var models = devModels(d);
+    var sel = $("#dev-cfg-model"); if (sel) sel.innerHTML = "";
+    models.forEach(function (m) {
+      var o = document.createElement("option");
+      o.value = m; o.textContent = prettyModel(m);
+      if (sel) sel.appendChild(o);
+    });
+    var existing = (WIZ.devPlan[bed] || {})[kind];
+    if (existing && sel && existing.model) sel.value = existing.model;
+    var lab = $("#dev-cfg-label");
+    if (lab) lab.value = (existing && existing.label) || ((d.name || kind) + " · Bed " + (bed + 1));
+    var title = $("#dev-cfg-title");
+    if (title) title.textContent = "Configure " + (d.name || kind) + " — Bed " + (bed + 1);
+    var note = $("#dev-cfg-note");
+    if (note) note.textContent = models.length > 1
+      ? "Pick the model / brand for this device."
+      : "One model available in this build — the QR launches it; the label names it.";
+    _devCfg = { bed: bed, kind: kind, cb: cb };
+    if (dlg.showModal && !dlg.open) dlg.showModal();
+  }
+  function saveDevCfg() {
+    if (!_devCfg) return;
+    var sel = $("#dev-cfg-model"), lab = $("#dev-cfg-label");
+    var d = catByKind()[_devCfg.kind] || {};
+    WIZ.devPlan[_devCfg.bed] = WIZ.devPlan[_devCfg.bed] || {};
+    WIZ.devPlan[_devCfg.bed][_devCfg.kind] = {
+      model: (sel && sel.value) || d.model || "",
+      label: ((lab && lab.value) || "").trim() || d.name || _devCfg.kind
+    };
+    if (_devCfg.cb) _devCfg.cb.checked = true;
+    _devCfg = null;
+    var dlg = $("#dev-cfg-modal"); if (dlg && dlg.open) dlg.close();
+    refreshReview();
+  }
+  function cancelDevCfg() {
+    if (_devCfg) {
+      var saved = (WIZ.devPlan[_devCfg.bed] || {})[_devCfg.kind];
+      if (!saved && _devCfg.cb) _devCfg.cb.checked = false;   // aborted a fresh selection
+      _devCfg = null;
+    }
+    var dlg = $("#dev-cfg-modal"); if (dlg && dlg.open) dlg.close();
+    refreshReview();
+  }
+  function wireDevCfg() {
+    if (wireDevCfg._done) return; wireDevCfg._done = true;
+    var save = $("#dev-cfg-save"), cancel = $("#dev-cfg-cancel"), dlg = $("#dev-cfg-modal");
+    if (save) save.addEventListener("click", saveDevCfg);
+    if (cancel) cancel.addEventListener("click", cancelDevCfg);
+    if (dlg) {
+      dlg.addEventListener("click", function (e) { if (e.target === dlg) cancelDevCfg(); });
+      dlg.addEventListener("cancel", function (e) { e.preventDefault(); cancelDevCfg(); });  // Esc
+    }
   }
 
   // ── common devices (shared across the session): med cart, records terminal,
@@ -788,7 +882,7 @@
           }).catch(function () {});
         }
         var j = encs[0] && encs[0].join_code;          // plain cart on bed 1
-        return j ? registerDevices(j, ["cabinet"]) : null;
+        return j ? registerDevices(j, [cabinetEntry()]) : null;
       });
     }
     if (p.ehrTerminal) {
@@ -812,7 +906,7 @@
     var p = commonPlan();
     var chain = Promise.resolve();
     if (p.medCart && joinCode) {
-      chain = chain.then(function () { return registerDevices(joinCode, ["cabinet"]); });
+      chain = chain.then(function () { return registerDevices(joinCode, [cabinetEntry()]); });
     }
     if (p.ehrTerminal) {
       chain = chain.then(function () {                  // registers the patient + an EHR station
@@ -1132,11 +1226,11 @@
       .then(function (r) { if (handle401(r)) return null; return r.ok ? r.json() : null; })
       .then(function (data) {
         if (data && data.ok && data.redirect_url) {
-          var kinds = bedDevices()[0] || [];          // mint bed 1's planned devices
+          var plan = bedDevicePlan(0);                 // bed 1's planned devices (kind+model+label)
           var go = function () { window.location = "/portal/console?mode=operate"; };
           var chain = Promise.resolve();
-          if (data.join_code && kinds.length) {
-            chain = chain.then(function () { return registerDevices(data.join_code, kinds); });
+          if (data.join_code && plan.length) {
+            chain = chain.then(function () { return registerDevices(data.join_code, plan); });
           }
           chain.then(function () { return launchSingleCommon(data.join_code); }).then(go);
           return;
@@ -1193,12 +1287,11 @@
       .then(function (data) {
         if (data && data.ok) {
           var encs = data.encounters || [];
-          var devs = bedDevices();
           var chain = Promise.resolve();
-          encs.forEach(function (e, i) {              // mint each bed's planned devices
-            var kinds = devs[i] || [];
-            if (e.join_code && kinds.length) {
-              chain = chain.then(function () { return registerDevices(e.join_code, kinds); });
+          encs.forEach(function (e, i) {              // mint each bed's planned devices (kind+model+label)
+            var plan = bedDevicePlan(i);
+            if (e.join_code && plan.length) {
+              chain = chain.then(function () { return registerDevices(e.join_code, plan); });
             }
           });
           chain = chain.then(function () { return launchRoomCommon(encs); });  // common devices
