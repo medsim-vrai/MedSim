@@ -93,9 +93,13 @@ cached page and reconnects over the new cert). **Confirmed end-to-end on an iPad
 2026-06-22:** after re-mint + restart, the patient avatar loaded, the character
 responded, and STT/TTS worked.
 
-> **Prevention idea (not yet built):** have `run_portal.py` compare the detected LAN IP
-> against the leaf SAN at boot and auto-re-mint if it's missing — making IP drift
-> self-healing without a manual step. The durable fix is still §6 (stable hostname).
+> **Prevention SHIPPED (#70, commit `0ad8447`):** `run_portal.main()` now calls
+> `_ensure_cert_covers_lan_ip()` at boot — if the current `_lan_ip()` isn't an
+> IP-Address SAN in the leaf, it auto-re-mints (bare `dev_cert.py`, reuse CA) before
+> binding, so IP drift self-heals on every launch and the served cert always matches
+> the IP baked into the tablet QRs. The banner prints `Cert: auto re-minted for <ip>`.
+> Disable with `MEDSIM_NO_CERT_AUTOFIX=1`. The durable fix is still §6 (stable hostname).
+> So in practice the §2b manual steps are now only needed mid-session (no restart).
 
 ## 3 · New-device onboarding (one time per tablet — Apple AND Android)
 
