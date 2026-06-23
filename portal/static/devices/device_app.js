@@ -1724,6 +1724,7 @@
     if (!haveAnyChars) {
       const existing = document.getElementById('cabinet-checklist');
       if (existing) existing.remove();
+      document.body.classList.remove('cab-mar-open');
       if (openBtn) openBtn.style.display = 'none';
       return;
     }
@@ -1733,6 +1734,7 @@
     if (CHECKLIST_DISMISSED) {
       const existing = document.getElementById('cabinet-checklist');
       if (existing) existing.remove();
+      document.body.classList.remove('cab-mar-open');
       return;
     }
     const selectedChar = SELECTED_CHAR_ID && CHARACTERS.find(
@@ -1746,22 +1748,29 @@
     _renderCabinetMar(selectedChar);
   }
 
+  // #3 — the cabinet MAR + patient-picker share one SIDE panel beside the screen
+  // (CSS .cab-side + body.cab-mar-open shifts the cabinet left), not a bottom-sheet
+  // overlay covering it. One creator so both views stay in sync.
+  function _cabinetPanelEl() {
+    let panel = document.getElementById('cabinet-checklist');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'cabinet-checklist';
+      document.body.appendChild(panel);
+    }
+    panel.className = 'cab-side';
+    panel.style.cssText = 'overflow-y:auto;background:#f6f8fb;z-index:48;'
+      + 'padding:10px 14px 16px;font-family:-apple-system,Helvetica,Arial;color:#1b2733;';
+    document.body.classList.add('cab-mar-open');
+    return panel;
+  }
+
   // M60 — Patient picker: cards for every patient in CHARACTERS.
   function _renderCabinetPicker() {
     const escape = (s) => String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    let panel = document.getElementById('cabinet-checklist');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'cabinet-checklist';
-      panel.style.cssText = 'position:fixed;left:0;right:0;bottom:0;'
-        + 'max-height:62vh;overflow-y:auto;background:#f6f8fb;'
-        + 'border-top:2px solid #2b3956;z-index:48;padding:10px 14px 16px;'
-        + 'font-family:-apple-system,Helvetica,Arial;color:#1b2733;'
-        + 'box-shadow:0 -4px 18px rgba(0,0,0,.18);';
-      document.body.appendChild(panel);
-    }
+    const panel = _cabinetPanelEl();
     let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div>
         <strong style="font-size:14px;color:#2b3956">👤 Pick a patient</strong>
@@ -1812,17 +1821,7 @@
   // pre-M60 inline render so the patient-picker shares the panel
   // chrome cleanly.
   function _renderCabinetMar(assignedChar) {
-    let panel = document.getElementById('cabinet-checklist');
-    if (!panel) {
-      panel = document.createElement('div');
-      panel.id = 'cabinet-checklist';
-      panel.style.cssText = 'position:fixed;left:0;right:0;bottom:0;'
-        + 'max-height:62vh;overflow-y:auto;background:#f6f8fb;'
-        + 'border-top:2px solid #2b3956;z-index:48;padding:10px 14px 16px;'
-        + 'font-family:-apple-system,Helvetica,Arial;color:#1b2733;'
-        + 'box-shadow:0 -4px 18px rgba(0,0,0,.18);';
-      document.body.appendChild(panel);
-    }
+    const panel = _cabinetPanelEl();
     const adminLog = (STATE && STATE.administrations) || [];
     const cabinetMeds = (STATE && STATE.medications) || {};
     function locationFor(medName) {

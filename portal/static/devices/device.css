@@ -31,3 +31,15 @@ body { display:flex; align-items:center; justify-content:center; touch-action:ma
   0%, 100% { box-shadow: 0 4px 16px rgba(0,0,0,.25); }
   50%      { box-shadow: 0 4px 22px rgba(62,124,177,.7); }
 }
+/* #3 — cabinet MAR / patient-picker lives in a SIDE panel BESIDE the screen, not a
+   bottom-sheet overlay covering it. body.cab-mar-open right-pads the flex-centered
+   <body> so #device-root (the cabinet) recenters in the space left of the panel. */
+#cabinet-checklist.cab-side { position:fixed; top:0; right:0; bottom:0; left:auto;
+  width:min(440px,42vw); max-height:100vh; border-left:2px solid #2b3956;
+  box-shadow:-4px 0 18px rgba(0,0,0,.18); }
+body.cab-mar-open { padding-right:min(440px,42vw); transition:padding-right .15s ease; }
+@media (max-width:760px) {  /* narrow tablet / phone — fall back to the bottom sheet */
+  #cabinet-checklist.cab-side { top:auto; left:0; right:0; width:auto; max-height:62vh;
+    border-left:0; border-top:2px solid #2b3956; box-shadow:0 -4px 18px rgba(0,0,0,.18); }
+  body.cab-mar-open { padding-right:0; }
+}
