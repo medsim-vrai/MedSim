@@ -1380,6 +1380,11 @@
     var tbl = $("#wiz-assign-table");
     if (!tbl) return;
     var beds = _bedsForAssign();
+    var pl = $("#wiz-assign-patients");
+    if (pl) pl.innerHTML = beds.length
+      ? "<strong>Patients in this room (" + beds.length + "):</strong> "
+        + beds.map(function (b) { return _aesc(b.label); }).join(" &nbsp;·&nbsp; ")
+      : "<em>No beds defined yet — go back to “Patients &amp; rooms” / “Scenario” to add them.</em>";
     if (!WIZ.access.staff.length) {
       tbl.innerHTML = '<p class="muted small">No one added yet — patients stay open to all students until you add assignments.</p>';
       return;
