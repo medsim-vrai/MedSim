@@ -405,8 +405,15 @@ def snapshot() -> dict[str, Any] | None:
             for s in room.encounters.values()]
     if not encs:
         return None
+    # Med cart v2 — PHI-free staff roster (cabinet users + nurse→patient
+    # assignments). Assignments are encounter_ids, which restore() preserves,
+    # so the roster + scoping survive a restart.
+    staff = [{"display_name": sm.display_name, "initials": sm.initials,
+              "role": sm.role, "assignments": list(sm.assignments)}
+             for sm in getattr(room, "staff", {}).values()]
     return {"room_label": getattr(room, "label", ""),
             "shared_personas": list(getattr(room, "shared_personas", []) or []),
+            "staff": staff,
             "encounters": encs}
 
 
@@ -450,4 +457,20 @@ def restore(blob: dict[str, Any] | None) -> bool:
         )
         room.add_encounter(sess)
         made += 1
+    # Med cart v2 — restore the staff roster into the re-created room so the
+    # cabinet sign-in roster + nurse assignments survive a restart. add_staff
+    # validates each assignment against the now-restored encounters, dropping
+    # any stale ids.
+    for sp in (blob.get("staff") or []):
+        if not isinstance(sp, dict) or not sp.get("display_name"):
+            continue
+        try:
+            room.add_staff(
+                str(sp["display_name"]),
+                initials=str(sp.get("initials") or ""),
+                role=str(sp.get("role") or "nurse"),
+                assignments=list(sp.get("assignments") or []),
+            )
+        except Exception:  # noqa: BLE001 — roster restore is best-effort
+            pass
     return made > 0

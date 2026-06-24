@@ -183,7 +183,10 @@ def test_existing_v6_db_gets_session_state_via_migration_7(tmp_path):
     tabs = {r[0] for r in conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     assert "session_state" in tabs
-    assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 7
+    # Med cart v2 — migration 8 adds the staff roster table; the runner must
+    # advance the old v6 DB through 7 (session_state) AND 8 (staff_member).
+    assert "staff_member" in tabs
+    assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 8
     conn.close()
 
 

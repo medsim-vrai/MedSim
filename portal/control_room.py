@@ -93,6 +93,41 @@ class Student:
 
 
 @dataclass
+class StaffMember:
+    """A cabinet user on the room's staff roster (med cart v2) — distinct
+    from the learner ``Student`` table so cart-only people (instructors)
+    never surface in the student-join / debrief flows. Persisted in the
+    ``staff_member`` table (schema v8).
+
+    ``role`` is 'nurse' | 'charge_nurse' | 'supervisor' | 'instructor'.
+    ``assignments`` is the list of encounter_ids a NURSE is scoped to for
+    med pulls — empty means "all of the cart's patients" (the
+    no-assignments-show-all rule). charge_nurse / supervisor / instructor
+    always see every patient regardless of ``assignments``.
+    """
+    staff_id: str
+    room_id: str
+    display_name: str
+    initials: str = ""
+    role: str = "nurse"
+    assignments: list[str] = field(default_factory=list)
+    created_at: float = field(default_factory=time.time)
+    last_seen: float | None = None
+
+    @property
+    def sees_all_patients(self) -> bool:
+        """Charge nurse / supervisor / instructor have unit-wide access; a
+        nurse with no explicit assignments also sees all (graceful
+        default). Only a nurse WITH assignments is scoped down."""
+        if self.role in ("charge_nurse", "supervisor", "instructor"):
+            return True
+        return not self.assignments
+
+    def touch(self) -> None:
+        self.last_seen = time.time()
+
+
+@dataclass
 class ControlRoom:
     """A roomful of Encounters under one instructor.
 
@@ -109,6 +144,11 @@ class ControlRoom:
     voice_char_cap: int | None = None     # M17 — ElevenLabs char budget
     encounters: dict[str, Encounter] = field(default_factory=dict)   # keyed by Encounter.id
     students: dict[str, Student] = field(default_factory=dict)       # keyed by student_id
+    # Med cart v2 — the room's STAFF roster (cabinet users: nurse /
+    # charge_nurse / supervisor / instructor), keyed by staff_id. Persisted
+    # in the `staff_member` table and rehydrated on boot like students; NOT
+    # in the session_state snapshot (operator roster, not sim config).
+    staff: dict[str, "StaffMember"] = field(default_factory=dict)
     # M17 — lazy-attached budget tracker. Built on first access to
     # avoid an import cycle; values mirror haiku_rate_cap +
     # voice_char_cap and are updated whenever the operator changes
@@ -400,6 +440,93 @@ class ControlRoom:
             eid = student.assigned_encounter_id
             if eid and eid in self.encounters:
                 self.encounters[eid].assigned_student_ids.append(student.student_id)
+        return len(rows)
+
+    # ── Staff roster (med cart v2) ─────────────────────────────────────
+
+    def add_staff(self, display_name: str, *, initials: str = "",
+                  role: str = "nurse",
+                  assignments: list[str] | None = None) -> "StaffMember":
+        """Register a cabinet user to this room's staff roster. Writes a row
+        to the ``staff_member`` table so it survives restarts."""
+        from . import ehr_db
+        valid = [eid for eid in (assignments or []) if eid in self.encounters]
+        row = ehr_db.register_staff(
+            self.room_id, display_name=display_name, initials=initials,
+            role=role, assignments=valid,
+        )
+        sm = StaffMember(
+            staff_id=row["staff_id"], room_id=row["room_id"],
+            display_name=row["display_name"], initials=row["initials"],
+            role=row["role"], assignments=list(row["assignments"]),
+            created_at=row["created_at"], last_seen=row["last_seen"],
+        )
+        self.staff[sm.staff_id] = sm
+        return sm
+
+    def update_staff(self, staff_id: str, *, display_name: str | None = None,
+                     initials: str | None = None,
+                     role: str | None = None) -> None:
+        """Patch a staff member's name / initials / role (write-through)."""
+        from . import ehr_db
+        sm = self.staff.get(staff_id)
+        if sm is None:
+            raise KeyError(f"unknown staff {staff_id!r}")
+        if display_name is not None:
+            sm.display_name = display_name
+        if initials is not None:
+            sm.initials = initials.upper()
+        if role is not None and role in ehr_db._STAFF_ROLES:
+            sm.role = role
+        ehr_db.update_staff(staff_id, display_name=display_name,
+                            initials=initials, role=role)
+
+    def set_staff_assignments(self, staff_id: str,
+                              encounter_ids: list[str]) -> None:
+        """Replace a staff member's patient (encounter) assignments. Only
+        encounter_ids that exist in this room are kept (write-through)."""
+        from . import ehr_db
+        sm = self.staff.get(staff_id)
+        if sm is None:
+            raise KeyError(f"unknown staff {staff_id!r}")
+        valid = [eid for eid in (encounter_ids or [])
+                 if eid in self.encounters]
+        sm.assignments = valid
+        ehr_db.set_staff_assignments(staff_id, valid)
+
+    def remove_staff(self, staff_id: str) -> None:
+        """Drop a staff member from the roster (write-through)."""
+        from . import ehr_db
+        self.staff.pop(staff_id, None)
+        ehr_db.remove_staff(staff_id)
+
+    def accessible_encounter_ids(self, staff_id: str) -> list[str]:
+        """The encounter_ids a signed-in staff member may pull meds for,
+        applying the role scoping rule. Unknown staff => [] (locked out)."""
+        sm = self.staff.get(staff_id)
+        if sm is None:
+            return []
+        if sm.sees_all_patients:
+            return list(self.encounters.keys())
+        # Nurse with explicit assignments — intersect with live encounters.
+        return [eid for eid in sm.assignments if eid in self.encounters]
+
+    def rehydrate_staff_from_db(self) -> int:
+        """Load every staff row for this room into ``self.staff``. Mirrors
+        ``rehydrate_students_from_db`` for the cabinet roster."""
+        from . import ehr_db
+        rows = ehr_db.staff_for_room(self.room_id)
+        self.staff = {}
+        for row in rows:
+            sm = StaffMember(
+                staff_id=row["staff_id"], room_id=row["room_id"],
+                display_name=row["display_name"],
+                initials=row.get("initials", ""),
+                role=row.get("role", "nurse"),
+                assignments=list(row.get("assignments") or []),
+                created_at=row["created_at"], last_seen=row["last_seen"],
+            )
+            self.staff[sm.staff_id] = sm
         return len(rows)
 
 

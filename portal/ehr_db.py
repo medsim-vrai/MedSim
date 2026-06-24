@@ -263,6 +263,27 @@ SCHEMA_MIGRATIONS: list[tuple[int, str]] = [
       blob_json  TEXT NOT NULL
     );
     """),
+    (8, """
+    -- Med cart v2 — the room's STAFF roster (people who use the dispensing
+    -- cabinet), kept SEPARATE from the learner `student` table so cart-only
+    -- people (instructors) never leak into the student-join / debrief flows.
+    --   role: 'nurse' | 'charge_nurse' | 'supervisor' | 'instructor'
+    --   assignments_json: JSON list of encounter_ids a NURSE is scoped to.
+    --     Empty list => the nurse sees ALL of the cart's patients (the
+    --     "no assignments → show all" rule). charge_nurse / supervisor /
+    --     instructor always see all, regardless of this column.
+    CREATE TABLE IF NOT EXISTS staff_member (
+      staff_id         TEXT PRIMARY KEY,
+      room_id          TEXT NOT NULL,
+      display_name     TEXT NOT NULL,
+      initials         TEXT NOT NULL DEFAULT '',
+      role             TEXT NOT NULL DEFAULT 'nurse',
+      assignments_json TEXT NOT NULL DEFAULT '[]',
+      created_at       REAL NOT NULL,
+      last_seen        REAL
+    );
+    CREATE INDEX IF NOT EXISTS ix_staff_member_room ON staff_member(room_id);
+    """),
 ]
 
 SCHEMA_VERSION = SCHEMA_MIGRATIONS[-1][0]
@@ -1200,6 +1221,184 @@ def remove_student(student_id: str) -> None:
         return
     with _lock:
         db.execute("DELETE FROM student WHERE student_id=?", (student_id,))
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Med cart v2 — staff roster (cabinet users: nurse / charge_nurse /
+# supervisor / instructor). Separate from `student` so cart-only people
+# (instructors) never appear in the learner join / debrief flows. A nurse's
+# `assignments` is the list of encounter_ids they may pull meds for (empty
+# => all cart patients); charge/supervisor/instructor always see all.
+# ──────────────────────────────────────────────────────────────────────
+
+_mem_staff: dict[str, dict[str, Any]] = {}
+
+_STAFF_ROLES = ("nurse", "charge_nurse", "supervisor", "instructor")
+_STAFF_COLS = ("staff_id, room_id, display_name, initials, role, "
+               "assignments_json, created_at, last_seen")
+
+
+def _row_to_staff(r: Any) -> dict[str, Any]:
+    return {
+        "staff_id":     r[0],
+        "room_id":      r[1],
+        "display_name": r[2],
+        "initials":     r[3] or "",
+        "role":         r[4] or "nurse",
+        "assignments":  json.loads(r[5] or "[]"),
+        "created_at":   r[6],
+        "last_seen":    r[7],
+    }
+
+
+def register_staff(room_id: str, *, display_name: str, initials: str = "",
+                    role: str = "nurse", staff_id: str | None = None,
+                    assignments: list[str] | None = None) -> dict[str, Any]:
+    """Insert a staff-roster row (a cabinet user). Returns the row dict.
+    `role` is clamped to the known set; `assignments` is the list of
+    encounter_ids a nurse may pull meds for (empty => all cart patients)."""
+    if role not in _STAFF_ROLES:
+        role = "nurse"
+    sid = staff_id or ("stf_" + uuid.uuid4().hex[:10])
+    now = time.time()
+    assigns = list(assignments or [])
+    inits = (initials or "").upper()
+    row = {
+        "staff_id":     sid,
+        "room_id":      room_id,
+        "display_name": display_name,
+        "initials":     inits,
+        "role":         role,
+        "assignments":  assigns,
+        "created_at":   now,
+        "last_seen":    now,
+    }
+    db = _conn()
+    if db is None:
+        _mem_staff[sid] = {**row, "assignments": list(assigns)}
+        return dict(row)
+    with _lock:
+        db.execute(
+            "INSERT OR REPLACE INTO staff_member "
+            "(staff_id, room_id, display_name, initials, role, "
+            " assignments_json, created_at, last_seen) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (sid, room_id, display_name, inits, role,
+             json.dumps(assigns), now, now),
+        )
+    return dict(row)
+
+
+def update_staff(staff_id: str, *, display_name: str | None = None,
+                  initials: str | None = None,
+                  role: str | None = None) -> None:
+    """Patch a staff member's name / initials / role (any subset given)."""
+    if role is not None and role not in _STAFF_ROLES:
+        role = "nurse"
+    db = _conn()
+    if db is None:
+        s = _mem_staff.get(staff_id)
+        if s:
+            if display_name is not None:
+                s["display_name"] = display_name
+            if initials is not None:
+                s["initials"] = initials.upper()
+            if role is not None:
+                s["role"] = role
+        return
+    sets: list[str] = []
+    args: list[Any] = []
+    if display_name is not None:
+        sets.append("display_name=?")
+        args.append(display_name)
+    if initials is not None:
+        sets.append("initials=?")
+        args.append(initials.upper())
+    if role is not None:
+        sets.append("role=?")
+        args.append(role)
+    if not sets:
+        return
+    args.append(staff_id)
+    with _lock:
+        db.execute(
+            f"UPDATE staff_member SET {', '.join(sets)} WHERE staff_id=?",
+            args,
+        )
+
+
+def set_staff_assignments(staff_id: str, encounter_ids: list[str]) -> None:
+    """Replace a staff member's patient (encounter) assignments."""
+    assigns = list(encounter_ids or [])
+    db = _conn()
+    if db is None:
+        s = _mem_staff.get(staff_id)
+        if s:
+            s["assignments"] = assigns
+        return
+    with _lock:
+        db.execute(
+            "UPDATE staff_member SET assignments_json=? WHERE staff_id=?",
+            (json.dumps(assigns), staff_id),
+        )
+
+
+def touch_staff(staff_id: str) -> None:
+    """Bump last_seen — used when a staff member signs in at a cabinet."""
+    now = time.time()
+    db = _conn()
+    if db is None:
+        s = _mem_staff.get(staff_id)
+        if s:
+            s["last_seen"] = now
+        return
+    with _lock:
+        db.execute(
+            "UPDATE staff_member SET last_seen=? WHERE staff_id=?",
+            (now, staff_id),
+        )
+
+
+def staff_for_room(room_id: str) -> list[dict[str, Any]]:
+    """All staff registered to a room, oldest first."""
+    db = _conn()
+    if db is None:
+        rows = [s for s in _mem_staff.values() if s["room_id"] == room_id]
+        rows.sort(key=lambda s: s["created_at"])
+        return [{**s, "assignments": list(s.get("assignments") or [])}
+                for s in rows]
+    with _lock:
+        rows = db.execute(
+            f"SELECT {_STAFF_COLS} FROM staff_member WHERE room_id=? "
+            "ORDER BY created_at ASC",
+            (room_id,),
+        ).fetchall()
+    return [_row_to_staff(r) for r in rows]
+
+
+def get_staff(staff_id: str) -> dict[str, Any] | None:
+    """Lookup one staff member by id. None when unknown."""
+    db = _conn()
+    if db is None:
+        s = _mem_staff.get(staff_id)
+        return ({**s, "assignments": list(s.get("assignments") or [])}
+                if s else None)
+    with _lock:
+        r = db.execute(
+            f"SELECT {_STAFF_COLS} FROM staff_member WHERE staff_id=?",
+            (staff_id,),
+        ).fetchone()
+    return _row_to_staff(r) if r else None
+
+
+def remove_staff(staff_id: str) -> None:
+    """Drop a staff row (roster-management UI)."""
+    db = _conn()
+    if db is None:
+        _mem_staff.pop(staff_id, None)
+        return
+    with _lock:
+        db.execute("DELETE FROM staff_member WHERE staff_id=?", (staff_id,))
 
 
 # ──────────────────────────────────────────────────────────────────────
