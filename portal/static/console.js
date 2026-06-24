@@ -392,7 +392,7 @@
   }
 
   // ── G5 Launch Wizard ──────────────────────────────────────────────────────
-  var WIZ = { step: 1, max: 5, boot: null, overall: "loading", devPlan: {} };
+  var WIZ = { step: 1, max: 6, boot: null, overall: "loading", devPlan: {}, access: { open: true, staff: [] } };
 
   function readBootstrap() {
     var el = document.getElementById("console-bootstrap");
@@ -414,6 +414,40 @@
     var back = $("#wiz-back"), next = $("#wiz-next"), launch = $("#wiz-launch");
     if (back) back.addEventListener("click", function () { wizGoto(WIZ.step - 1); });
     if (next) next.addEventListener("click", function () { wizGoto(WIZ.step + 1); });
+    // #80 — Assignments step controls
+    document.querySelectorAll('input[name="wiz-access-mode"]').forEach(function (r) {
+      r.addEventListener("change", function () {
+        var c = document.querySelector('input[name="wiz-access-mode"]:checked');
+        WIZ.access.open = !c || c.value !== "restrict";
+        renderAssign();
+      });
+    });
+    var aAdd = $("#wiz-assign-add");
+    if (aAdd) aAdd.addEventListener("click", function () {
+      var nm = ($("#wiz-assign-name").value || "").trim();
+      if (!nm) { $("#wiz-assign-name").focus(); return; }
+      WIZ.access.staff.push({ name: nm, initials: ($("#wiz-assign-init").value || "").trim().toUpperCase(),
+        role: $("#wiz-assign-role").value, beds: [] });
+      $("#wiz-assign-name").value = ""; $("#wiz-assign-init").value = "";
+      renderAssign();
+    });
+    var aTbl = $("#wiz-assign-table");
+    if (aTbl) {
+      aTbl.addEventListener("click", function (e) {
+        var rm = e.target.getAttribute && e.target.getAttribute("data-rm");
+        if (rm) { WIZ.access.staff.splice(parseInt(rm, 10), 1); renderAssign(); }
+      });
+      aTbl.addEventListener("change", function (e) {
+        if (!(e.target.matches && e.target.matches('input[type="checkbox"][data-si]'))) return;
+        var s = WIZ.access.staff[parseInt(e.target.getAttribute("data-si"), 10)];
+        if (!s) return;
+        s.beds = s.beds || [];
+        var bed = parseInt(e.target.getAttribute("data-bed"), 10);
+        var pos = s.beds.indexOf(bed);
+        if (e.target.checked && pos < 0) s.beds.push(bed);
+        else if (!e.target.checked && pos >= 0) s.beds.splice(pos, 1);
+      });
+    }
     if (launch) launch.addEventListener("click", launchScenario);
     var bedCountEl = $("#wiz-bed-count");
     if (bedCountEl) {
@@ -1294,6 +1328,7 @@
             }
           });
           chain = chain.then(function () { return launchRoomCommon(encs); });  // common devices
+          chain = chain.then(function () { return applyAssignments(encs); });  // #80 — access mode + roster
           chain.then(function () { window.location = "/portal/console?mode=operate"; });
           return;
         }
@@ -1322,7 +1357,64 @@
     var back = $("#wiz-back"), next = $("#wiz-next");
     if (back) back.hidden = n === 1;
     if (next) next.hidden = n === WIZ.max;
+    if (n === 4) renderAssign();           // #80 — Assignments step (beds are current here)
     if (n === WIZ.max) refreshReview();
+  }
+
+  // ── #80 Assignments step — open vs assign students/groups to beds ──────────
+  function _aesc(s) { var d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; }
+  function _roleLbl(r) { return ({ nurse: "Nurse", charge_nurse: "Charge", supervisor: "Supervisor", instructor: "Instructor" })[r] || "Nurse"; }
+  function _bedsForAssign() {
+    return bedScenarios().map(function (b, i) {
+      var s = (b && b.sample && sampleById(b.sample)) || {};
+      return { idx: i, label: "Bed " + (i + 1) + (s.name ? " · " + s.name : "") };
+    });
+  }
+  function renderAssign() {
+    var openR = document.querySelector('input[name="wiz-access-mode"][value="open"]');
+    var restR = document.querySelector('input[name="wiz-access-mode"][value="restrict"]');
+    if (openR) openR.checked = !!WIZ.access.open;
+    if (restR) restR.checked = !WIZ.access.open;
+    var roster = $("#wiz-assign-roster");
+    if (roster) roster.hidden = !!WIZ.access.open;
+    var tbl = $("#wiz-assign-table");
+    if (!tbl) return;
+    var beds = _bedsForAssign();
+    if (!WIZ.access.staff.length) {
+      tbl.innerHTML = '<p class="muted small">No one added yet — patients stay open to all students until you add assignments.</p>';
+      return;
+    }
+    var head = "<tr><th>Name</th><th>Init.</th><th>Role</th>"
+      + beds.map(function (b) { return "<th>" + _aesc(b.label) + "</th>"; }).join("") + "<th></th></tr>";
+    var rows = WIZ.access.staff.map(function (s, si) {
+      var seesAll = s.role !== "nurse";
+      var cells = beds.map(function (b) {
+        if (seesAll) return '<td style="text-align:center"><span class="muted small">all</span></td>';
+        var on = (s.beds || []).indexOf(b.idx) >= 0 ? "checked" : "";
+        return '<td style="text-align:center"><input type="checkbox" data-si="' + si + '" data-bed="' + b.idx + '" ' + on + "></td>";
+      }).join("");
+      return "<tr><td>" + _aesc(s.name) + "</td><td>" + _aesc(s.initials || "—") + "</td><td>" + _roleLbl(s.role) + "</td>"
+        + cells + '<td><button type="button" class="link" data-rm="' + si + '">remove</button></td></tr>';
+    }).join("");
+    tbl.innerHTML = '<table class="wiz-assign-tbl" style="width:100%;border-collapse:collapse;font-size:13px">' + head + rows + "</table>";
+  }
+  // After launch, persist the access mode + roster via the #77 room routes,
+  // mapping each staff member's bed indices to the created encounter ids.
+  function applyAssignments(encs) {
+    function post(url, body) {
+      return fetch(url, { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(function () {});
+    }
+    var jobs = [post("/api/room/med_access", { open: !!WIZ.access.open })];
+    if (!WIZ.access.open) {
+      WIZ.access.staff.forEach(function (s) {
+        var eids = (s.beds || []).map(function (bi) { return encs[bi] && encs[bi].encounter_id; })
+          .filter(Boolean);
+        jobs.push(post("/api/room/staff", { display_name: s.name, initials: s.initials,
+          role: s.role, assignments: eids }));
+      });
+    }
+    return Promise.all(jobs);
   }
 
   function handle401(r) {

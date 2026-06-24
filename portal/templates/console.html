@@ -93,8 +93,9 @@
             <li class="wiz-pill active" data-pill="1">1&nbsp;·&nbsp;Patients &amp; rooms</li>
             <li class="wiz-pill" data-pill="2">2&nbsp;·&nbsp;Scenario</li>
             <li class="wiz-pill" data-pill="3">3&nbsp;·&nbsp;Characters</li>
-            <li class="wiz-pill" data-pill="4">4&nbsp;·&nbsp;Devices</li>
-            <li class="wiz-pill" data-pill="5">5&nbsp;·&nbsp;Review</li>
+            <li class="wiz-pill" data-pill="4">4&nbsp;·&nbsp;Assignments</li>
+            <li class="wiz-pill" data-pill="5">5&nbsp;·&nbsp;Devices</li>
+            <li class="wiz-pill" data-pill="6">6&nbsp;·&nbsp;Review</li>
           </ol>
 
           <div class="wiz-step" data-step="1">
@@ -151,6 +152,32 @@
           </div>
 
           <div class="wiz-step" data-step="4" hidden>
+            <h2>Assignments</h2>
+            <p class="muted">Who can pull meds at the cart and read charts at the records terminal.
+               <strong>Open</strong> (default) — any student signs in at the shared terminal with their
+               name + initials and reaches every patient. <strong>Restrict</strong> — assign students or
+               groups to specific patients; charge nurse / supervisor / instructor always see everyone.</p>
+            <div class="wiz-field" style="display:flex;gap:18px;flex-wrap:wrap;align-items:center">
+              <label><input type="radio" name="wiz-access-mode" value="open" checked> Open — any student, all patients</label>
+              <label><input type="radio" name="wiz-access-mode" value="restrict"> Restrict by assignment</label>
+            </div>
+            <div id="wiz-assign-roster" hidden>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:8px 0">
+                <input type="text" id="wiz-assign-name" placeholder="Student or group name">
+                <input type="text" id="wiz-assign-init" placeholder="Initials" maxlength="4" style="width:96px">
+                <select id="wiz-assign-role">
+                  <option value="nurse">Nurse / student</option>
+                  <option value="charge_nurse">Charge nurse</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="instructor">Instructor</option>
+                </select>
+                <button type="button" id="wiz-assign-add" class="wiz-btn">+ Add</button>
+              </div>
+              <div id="wiz-assign-table" class="wiz-assign-table"></div>
+            </div>
+          </div>
+
+          <div class="wiz-step" data-step="5" hidden>
             <h2>Devices</h2>
             <p class="muted">Assign devices to each bed — basic and advanced. They're minted (QR
                codes) at launch and appear in the cockpit ready to scan on the bedside tablets.</p>
@@ -172,7 +199,7 @@
             </div>
           </div>
 
-          <div class="wiz-step" data-step="5" hidden>
+          <div class="wiz-step" data-step="6" hidden>
             <h2>Review</h2>
             <div id="wiz-review" class="wiz-review"></div>
             <div class="wiz-readiness">
