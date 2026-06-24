@@ -1753,8 +1753,7 @@
     // HIPAA gate: the cart stays fully locked (no face, no PHI) until the
     // scenario is RUNNING. Re-runs when applySessionState flips to 'running'.
     if (SESSION_STATE !== 'running') {
-      const ex = document.getElementById('cabinet-checklist');
-      if (ex) ex.remove();
+      _renderCabinetLocked();   // informative "waiting to start" face, not a blank box
       return;
     }
     // Restore a persisted sign-in (per station) so a re-render / reconnect
@@ -1779,9 +1778,30 @@
     _renderCabinetMar(selectedChar, chars);
   }
 
+  // Locked face — shown before the scenario is running so the cart reads as
+  // "waiting to start" rather than a blank/broken box. No PHI.
+  function _renderCabinetLocked() {
+    const panel = _cabinetPanelEl();
+    panel.innerHTML = `<div class="cab-face">
+      <div class="cab-title">${_cabEsc(_cabBrand())}</div>
+      <div class="cab-screen">
+        ${_cabHeadHTML(false)}
+        <div class="cab-signin">
+          <h4>Cabinet locked</h4>
+          <div class="hint">Waiting for the scenario to start. Once the instructor
+            starts the session, sign in with your initials to pull meds.</div>
+        </div>
+        <div class="cab-log">Locked — scenario not started.</div>
+      </div>
+      ${_cabDrawersHTML()}
+      <div class="cab-foot">Training simulation — not a medical device</div>
+    </div>`;
+    _startCabClock();
+  }
+
   // Sign-in screen: pick from the room roster (enforced role + assignments),
-  // or — when no roster is set up — an ad-hoc typed name + initials (nurse,
-  // all-access). Either way every action is attributed to this identity.
+  // or — when no roster is set up — OPEN ACCESS: an ad-hoc typed name + initials
+  // grants access to every patient. Either way every action is attributed.
   function _renderCabinetSignin() {
     const panel = _cabinetPanelEl();
     let body;
@@ -1806,7 +1826,7 @@
           <input class="in-in" id="cab-si-init" placeholder="Initials" maxlength="4" autocomplete="off">
           <button type="button" class="cab-ctl prim" id="cab-si-go" style="padding:9px 16px">Sign in</button>
         </div>
-        <div class="hint">No staff roster set up for this room — sign in ad-hoc. Every action is logged to your initials.</div>`;
+        <div class="hint">Open access — no staff roster is set up, so anyone can sign in with their initials and pull meds for <strong>any</strong> patient. Every action is logged to your initials.</div>`;
     }
     panel.innerHTML = `<div class="cab-face">
       <div class="cab-title">${_cabEsc(_cabBrand())}</div>
