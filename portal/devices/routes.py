@@ -251,6 +251,7 @@ async def api_device_bootstrap(station_id: str):
         #   event handler can route the transcript entry to the
         #   right encounter (see /api/device/{sid}/event below).
         characters: list[dict[str, Any]] = []
+        roster: list[dict[str, Any]] = []
         if station["device_kind"] == "cabinet":
             try:
                 from portal import ehr_seed as _ehr_seed
@@ -300,8 +301,27 @@ async def api_device_bootstrap(station_id: str):
                         c["encounter_label"] = (
                             enc.encounter_label or enc.scenario_name)
                         characters.append(c)
+                # Med cart v2 — the cabinet sign-in roster: every staff member
+                # on the room, each with the cart patients they may pull meds
+                # for (role scoping ∩ this cart's linked encounters). The
+                # device shows this for sign-in and scopes the patient picker
+                # to `accessible`; the server re-checks on every action.
+                if room is not None:
+                    cart_enc_ids = {enc.id for enc in enc_list}
+                    for sm in room.staff.values():
+                        acc = [eid for eid in
+                               room.accessible_encounter_ids(sm.staff_id)
+                               if eid in cart_enc_ids]
+                        roster.append({
+                            "staff_id":     sm.staff_id,
+                            "display_name": sm.display_name,
+                            "initials":     sm.initials,
+                            "role":         sm.role,
+                            "accessible":   acc,
+                        })
             except Exception:
                 characters = []
+                roster = []
         # FR-012 — advanced devices carry a live physiology snapshot so the
         # monitor/vent client renders real vitals; opening a telemetry monitor
         # re-evaluates its auto alarms so it reflects current breaches at once.
@@ -318,6 +338,7 @@ async def api_device_bootstrap(station_id: str):
             "audio_urls":   audio,
             "state":        state,
             "characters":   characters,
+            "roster":       roster,
             "physiology":   physiology_view,
             "vent":         vent_view,
         })
@@ -399,6 +420,24 @@ async def api_device_event(station_id: str, request: Request):
     if not ev_type:
         raise HTTPException(400, "Missing 'type'.")
     payload = body.get("payload") or {}
+    # Med cart v2 — server-side scope enforcement. A signed-in staff member may
+    # only act on a patient they have access to: a nurse is limited to assigned
+    # patients; charge_nurse / supervisor / instructor see all; an unknown
+    # staff_id is locked out. No staff_id (ad-hoc / no roster) => unrestricted
+    # (back-compat). Checked BEFORE the engine applies the event.
+    if ev_type == "cabinet.administer" and station["device_kind"] == "cabinet":
+        staff_id = (payload.get("staff_id") or "").strip()
+        if staff_id:
+            _room = control_room.get_active_room()
+            if _room is not None and _room.staff:
+                _tgt = _cart_target_encounter(
+                    _room, station_id, payload.get("character_id") or "")
+                if (_tgt is not None and
+                        _tgt.id not in set(_room.accessible_encounter_ids(staff_id))):
+                    return JSONResponse(
+                        {"ok": False, "reason": "not_assigned",
+                         "detail": "This patient is not assigned to you."},
+                        status_code=403)
     engine = make_engine(session_id=sess.id, station_id=station_id,
                          device_kind=station["device_kind"],
                          device_model=station["device_model"])
@@ -594,13 +633,45 @@ def _log_cart_dispense_to_transcript(
     )
 
 
+def _cart_target_encounter(room, station_id: str, character_id: str):
+    """Resolve the encounter a cart action targets: the linked encounter that
+    owns ``character_id`` (its patient persona / cast), else the cart's primary
+    session. Returns the Encounter or None. Shared by the scope-enforcement
+    check and the transcript logger."""
+    cid = (character_id or "").strip()
+    if cid:
+        for eid in (room.cart_links.get(station_id) or []):
+            enc = room.encounters.get(eid)
+            if enc is None:
+                continue
+            if cid == enc.patient_persona_id or cid in enc.selected_personas:
+                return enc
+    station = ehr_db.get_device_station(station_id) or {}
+    sid = station.get("session_id")
+    if sid and sid in room.encounters:
+        return room.encounters[sid]
+    return None
+
+
+# Med cart v2 — human-readable verb per action for the transcript line.
+_CART_VERB = {
+    "administer":  "gave",                  # legacy "give" code (Remove button)
+    "remove":      "removed & gave",
+    "return":      "returned",
+    "waste":       "wasted",
+    "count":       "counted",
+    "discrepancy": "filed a discrepancy on",
+    "override":    "override-removed",
+}
+
+
 def _log_cart_administer_to_transcript(
     *, station_id: str, payload: dict[str, Any],
 ) -> None:
-    """#1/#4 — note a MAR take/administer/return/waste (cabinet.administer) on the
-    patient's encounter transcript, so the action is recorded for the operator +
-    debrief. Routes to the encounter that owns payload['character_id'] the same way
-    as cart dispenses; skipped if none matches."""
+    """Med cart v2 — note a cabinet action (cabinet.administer; action ∈
+    remove/return/waste/count/discrepancy/override, plus legacy 'administer')
+    on the patient's encounter transcript, attributed to the signed-in staff
+    member, for the operator + debrief. Skipped if no encounter matches."""
     from portal import control_room as _cr, library as _library
     room = _cr.get_active_room()
     if room is None:
@@ -608,20 +679,7 @@ def _log_cart_administer_to_transcript(
     character_id = (payload.get("character_id") or "").strip()
     if not character_id:
         return
-    target_enc = None
-    for eid in (room.cart_links.get(station_id) or []):
-        enc = room.encounters.get(eid)
-        if enc is None:
-            continue
-        if character_id == enc.patient_persona_id \
-                or character_id in enc.selected_personas:
-            target_enc = enc
-            break
-    if target_enc is None:
-        station = ehr_db.get_device_station(station_id) or {}
-        sid = station.get("session_id")
-        if sid and sid in room.encounters:
-            target_enc = room.encounters[sid]
+    target_enc = _cart_target_encounter(room, station_id, character_id)
     if target_enc is None:
         return
     cart_label = room.cart_labels.get(station_id) or "Med cart"
@@ -629,14 +687,20 @@ def _log_cart_administer_to_transcript(
     med   = (payload.get("med_name") or "").strip()
     dose  = (payload.get("dose") or "").strip()
     route = (payload.get("route") or "").strip()
-    by    = (payload.get("administered_by") or "").strip()
-    verb  = {"return": "returned", "waste": "wasted"}.get(action, "gave")
-    parts: list[str] = [f"💊 {cart_label}", f"{verb} {med}".strip() if med else verb]
+    name  = (payload.get("administered_by") or "").strip()
+    inits = (payload.get("administered_initials") or "").strip()
+    role  = (payload.get("administered_role") or "").strip()
+    verb  = _CART_VERB.get(action, "gave")
+    parts: list[str] = [f"💊 {cart_label}",
+                        f"{verb} {med}".strip() if med else verb]
     dr = " ".join(x for x in (dose, route) if x)
-    if dr and action != "return":          # return = back to drawer; dose/route N/A
+    if dr and action not in ("return", "count", "discrepancy"):
         parts.append(dr)
-    if by:
-        parts.append(f"by {by}")
+    if name or inits:
+        who = f"{name} ({inits})" if (name and inits) else (name or inits)
+        if role:
+            who = f"{who}, {role.replace('_', ' ')}"
+        parts.append(f"by {who}")
     line = " · ".join(parts)
     p = _library.get_persona(character_id) if character_id else None
     persona_name = (p.get("name") if p else character_id)

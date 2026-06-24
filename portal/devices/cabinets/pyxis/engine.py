@@ -147,7 +147,9 @@ class CabinetEngine(DeviceEngine):
             admins = list(state.get("administrations") or [])
             admins.append({
                 "ts":              event["ts"],
-                "action":          (payload.get("action") or "administer"),  # administer|return|waste
+                # med cart v2 actions: remove|return|waste|count|discrepancy|
+                # override (+ legacy 'administer' = the give action)
+                "action":          (payload.get("action") or "administer"),
                 "character_id":    payload.get("character_id"),
                 "character_name":  payload.get("character_name"),
                 "med_name":        payload.get("med_name"),
@@ -155,8 +157,12 @@ class CabinetEngine(DeviceEngine):
                 "scheduled_time":  payload.get("scheduled_time"),
                 "dose":            payload.get("dose"),
                 "route":           payload.get("route"),
+                # med cart v2 — attribution: who pulled it (signed-in staff)
                 "administered_by": payload.get("administered_by") or
                                     state.get("session_user") or "student",
+                "administered_initials": payload.get("administered_initials") or "",
+                "administered_role":     payload.get("administered_role") or "",
+                "staff_id":              payload.get("staff_id") or "",
                 "scan_used":       bool(payload.get("scan_used")),
             })
             return {**state, "administrations": admins[-200:]}
