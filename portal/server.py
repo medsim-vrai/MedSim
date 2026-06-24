@@ -4074,15 +4074,51 @@ async def portal_medical_records_chart(
 # add-lab/add-note forms for the Nursing Station supervisor.
 # ─────────────────────────────────────────────────────────────────────
 
+def _records_scope(room: Any, *, initials: str, role: str):
+    """Resolve a student's records access on a shared terminal (#82).
+
+    Parallels the med-cart access model: a shared records terminal requires a
+    point-of-entry sign-in, then open access shows every patient while restrict
+    access scopes to the signed-in person's roster assignments.
+
+    Returns ``(mode, member, accessible)``:
+      - ``"all"``     → see every patient (open access, or an elevated role).
+      - ``"scoped"``  → see only the encounter ids in ``accessible`` (set[str]).
+      - ``"signin"``  → no identity yet; the terminal must capture name+initials.
+      - ``"unknown"`` → restrict access + these initials are not on the roster.
+    ``member`` is the matched ``StaffMember`` for ``"scoped"`` else ``None``.
+    """
+    role_n = (role or "").lower().strip()
+    # The instructor's nursing-station "supervisor" button is a trusted entry.
+    if role_n in ("supervisor", "instructor", "admin"):
+        return ("all", None, None)
+    ini = (initials or "").upper().strip()[:3]
+    if not ini:
+        return ("signin", None, None)
+    open_access = bool(getattr(room, "open_med_access", True)) if room is not None else True
+    if open_access:
+        return ("all", None, None)
+    member = None
+    if room is not None:
+        member = next((s for s in room.staff.values()
+                       if (s.initials or "").upper().strip() == ini), None)
+    if member is None:
+        return ("unknown", None, None)
+    return ("scoped", member, set(room.accessible_encounter_ids(member.staff_id)))
+
+
 @app.get("/students/medical_records", response_class=HTMLResponse)
 async def students_medical_records_entry(
     request: Request,
     code: str = "",
     role: str = "",
     initials: str = "",
+    user: str = "",
 ):
-    """Public workstation entry — no vault auth. Lists every patient
-    so the student / supervisor can pick one before drilling in."""
+    """Public workstation entry — no vault auth. A shared terminal: the
+    student signs in (name + initials), then sees the patients they're
+    cleared for — every patient under open access, only their roster
+    assignments under restrict access (#82)."""
     from portal import medical_records as _mr
     room = control_room.get_active_room()
     # Validate room code if provided; if room exists, accept either
@@ -4090,19 +4126,34 @@ async def students_medical_records_entry(
     if code and room is not None and (code or "") != (room.room_code or ""):
         # Wrong code → empty state.
         room = None
-    patients = []
-    if room is not None or control_session.get_active() is not None:
-        patients = _mr.patients_for_picker(
+    ini = (initials or "").upper().strip()[:3]
+    active = room is not None or control_session.get_active() is not None
+    state = "no_session"
+    patients: list[Any] = []
+    signed_name = (user or "").strip()[:80]
+    if active:
+        all_patients = _mr.patients_for_picker(
             control_room_mod=control_room,
             control_session_mod=control_session,
         )
+        mode, member, accessible = _records_scope(room, initials=ini, role=role)
+        state = mode
+        if mode == "all":
+            patients = all_patients
+        elif mode == "scoped":
+            patients = [p for p in all_patients
+                        if p.get("encounter_id") in accessible]
+            signed_name = member.display_name or signed_name
+            ini = (member.initials or ini).upper()
     return templates.TemplateResponse(
         request, "medical_records_workstation.html",
         {
             "room_code":     code or (room.room_code if room else ""),
             "patients":      patients,
+            "state":         state,
+            "signed_name":   signed_name,
             "role":          (role or "").lower().strip() or "student",
-            "initials":      (initials or "").upper().strip()[:3],
+            "initials":      ini,
         },
     )
 
@@ -4145,6 +4196,19 @@ async def students_medical_records_chart(
             break
     if not target_persona:
         raise HTTPException(404, f"Unknown patient persona {persona_id!r}.")
+    # #82 — records access control. The chart is where full PHI renders, so
+    # enforce scope HERE (not just in the picker) to close direct-link access:
+    # on a restrict-access room a signed-in nurse may open only their assigned
+    # patients; charge_nurse / supervisor / instructor (and open access) see all.
+    if room is not None:
+        _mode, _member, _accessible = _records_scope(
+            room, initials=initials, role=role)
+        if _mode in ("signin", "unknown") or (
+                _mode == "scoped"
+                and getattr(target_enc, "id", "") not in _accessible):
+            raise HTTPException(
+                403, "This patient is not assigned to you. Return to the "
+                     "records terminal and sign in.")
     full_seed = None
     try:
         full_seed = _ehr_seed.seed_from_session(
