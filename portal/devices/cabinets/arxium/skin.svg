@@ -65,8 +65,8 @@
  <!-- patient context strip -->
  <rect x="195" y="158" width="510" height="38" rx="4" fill="#ffffff" stroke="#d4dade" stroke-width="1"/>
  <text x="207" y="175" class="sub">PATIENT</text>
- <text id="scr-patient" x="207" y="188" class="ui" font-weight="bold">HALVERSEN, RUTH</text>
- <text id="scr-loc" x="372" y="182" class="ui">MRN 3318045      Room 207</text>
+ <text id="scr-patient" x="207" y="188" class="ui" font-weight="bold"></text>
+ <text id="scr-loc" x="372" y="182" class="ui"></text>
  <!-- list header -->
  <text class="uih" x="195" y="222">Remove  -  select a medication</text>
  <!-- medication list -->
