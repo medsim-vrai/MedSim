@@ -425,20 +425,12 @@ async def api_device_event(station_id: str, request: Request):
     # patients; charge_nurse / supervisor / instructor see all; an unknown
     # staff_id is locked out. No staff_id (ad-hoc / no roster) => unrestricted
     # (back-compat). Checked BEFORE the engine applies the event.
-    if ev_type == "cabinet.administer" and station["device_kind"] == "cabinet":
-        staff_id = (payload.get("staff_id") or "").strip()
-        if staff_id:
-            _room = control_room.get_active_room()
-            if (_room is not None and _room.staff
-                    and not getattr(_room, "open_med_access", True)):
-                _tgt = _cart_target_encounter(
-                    _room, station_id, payload.get("character_id") or "")
-                if (_tgt is not None and
-                        _tgt.id not in set(_room.accessible_encounter_ids(staff_id))):
-                    return JSONResponse(
-                        {"ok": False, "reason": "not_assigned",
-                         "detail": "This patient is not assigned to you."},
-                        status_code=403)
+    if (ev_type == "cabinet.administer" and station["device_kind"] == "cabinet"
+            and _cabinet_scope_blocked(station_id, payload)):
+        return JSONResponse(
+            {"ok": False, "reason": "not_assigned",
+             "detail": "This patient is not assigned to you."},
+            status_code=403)
     engine = make_engine(session_id=sess.id, station_id=station_id,
                          device_kind=station["device_kind"],
                          device_model=station["device_model"])
@@ -446,7 +438,7 @@ async def api_device_event(station_id: str, request: Request):
     # FR-008 S4: administering the staged med fires its configured patient
     # impact (per-error opt-in, severe pre-confirmed at arm). Best-effort —
     # must never break a device event.
-    if ev_type in ("cabinet.administer", "med.administer") \
+    if ev_type == "med.administer" \
             and (payload.get("action") or "administer") == "administer":
         try:
             from portal import med_errors as _me
@@ -472,17 +464,10 @@ async def api_device_event(station_id: str, request: Request):
             import sys as _sys
             print(f"[MEDSIM] cart dispense transcript log failed: {exc}",
                   file=_sys.stderr)
-    # #1/#4 — note a MAR take/administer/return/waste on the patient's transcript
-    # so the action is recorded for the operator + debrief (non-fatal).
+    # Med cart v2 — cabinet.administer side effects (FR-008 impact + attributed
+    # transcript line), shared with the WS path via _cabinet_event_effects.
     if ev_type == "cabinet.administer" and station["device_kind"] == "cabinet":
-        try:
-            _log_cart_administer_to_transcript(
-                station_id=station_id, payload=payload,
-            )
-        except Exception as exc:  # noqa: BLE001
-            import sys as _sys
-            print(f"[MEDSIM] cart administer transcript log failed: {exc}",
-                  file=_sys.stderr)
+        _cabinet_event_effects(sess, station_id, payload)
     # M51 — Patient Integrated Alarm button press handling. The PIA
     # tablet posts `type="pia.button"` with payload `{action: ...}`.
     #   call_bell / bed_alarm → write an alarm.injected device_event
@@ -652,6 +637,44 @@ def _cart_target_encounter(room, station_id: str, character_id: str):
     if sid and sid in room.encounters:
         return room.encounters[sid]
     return None
+
+
+def _cabinet_scope_blocked(station_id: str, payload: dict) -> bool:
+    """True when a signed-in scoped nurse may NOT act on the targeted patient.
+    Allowed (False) for: no staff_id (ad-hoc / no roster), open-access mode, no
+    roster, an unresolved target, or an elevated role (charge_nurse / supervisor
+    / instructor have all patients in accessible). Shared by the HTTP event route
+    AND the WS handler so both transports enforce the same way."""
+    staff_id = (payload.get("staff_id") or "").strip()
+    if not staff_id:
+        return False
+    room = control_room.get_active_room()
+    if room is None or not room.staff or getattr(room, "open_med_access", True):
+        return False
+    tgt = _cart_target_encounter(room, station_id, payload.get("character_id") or "")
+    if tgt is None:
+        return False
+    return tgt.id not in set(room.accessible_encounter_ids(staff_id))
+
+
+def _cabinet_event_effects(sess, station_id: str, payload: dict) -> None:
+    """Side effects of a cabinet.administer event, shared by the HTTP + WS paths
+    so they fire regardless of transport: the FR-008 staged-med-error impact (the
+    give action only) + the attributed patient-transcript line. Best-effort."""
+    if (payload.get("action") or "administer") == "administer":
+        try:
+            from portal import med_errors as _me
+            _me.note_med_administered(
+                sess.id, str(payload.get("med_name") or payload.get("medication")
+                             or payload.get("name") or ""))
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        _log_cart_administer_to_transcript(station_id=station_id, payload=payload)
+    except Exception as exc:  # noqa: BLE001
+        import sys as _sys
+        print(f"[MEDSIM] cart administer transcript log failed: {exc}",
+              file=_sys.stderr)
 
 
 # Med cart v2 — human-readable verb per action for the transcript line.

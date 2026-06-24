@@ -160,10 +160,30 @@ async def handle_device_ws(ws: WebSocket, station_id: str) -> None:
                 payload = msg.get("payload") or {}
                 if not ev_type:
                     continue
+                # Med cart v2 — server-side scope enforcement (parity with the
+                # HTTP event route): a signed-in scoped nurse may only act on
+                # their assigned patients.
+                if (ev_type == "cabinet.administer"
+                        and station["device_kind"] == "cabinet"):
+                    from . import routes as _routes
+                    if _routes._cabinet_scope_blocked(station_id, payload):
+                        await ws.send_text(json.dumps(
+                            {"type": "rejected", "reason": "not_assigned",
+                             "detail": "This patient is not assigned to you."}))
+                        continue
                 engine = make_engine(session_id=sess.id, station_id=station_id,
                                      device_kind=station["device_kind"],
                                      device_model=station["device_model"])
                 engine.handle(type=ev_type, surface="device", payload=payload)
+                # Med cart v2 — cabinet.administer side effects (FR-008 impact +
+                # attributed transcript line) on the WS path too (parity).
+                if (ev_type == "cabinet.administer"
+                        and station["device_kind"] == "cabinet"):
+                    from . import routes as _routes
+                    try:
+                        _routes._cabinet_event_effects(sess, station_id, payload)
+                    except Exception:  # noqa: BLE001
+                        pass
                 ehr_db.touch_device_station(station_id)
                 if station_id in sess.device_stations:
                     sess.device_stations[station_id].touch()
