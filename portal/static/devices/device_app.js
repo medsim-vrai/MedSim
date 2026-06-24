@@ -1835,7 +1835,8 @@
           <input class="in-in" id="cab-si-init" placeholder="Initials" maxlength="4" autocomplete="off">
           <button type="button" class="cab-ctl prim" id="cab-si-go" style="padding:9px 16px">Sign in</button>
         </div>
-        <div class="hint">Open access — no staff roster is set up, so anyone can sign in with their initials and pull meds for <strong>any</strong> patient. Every action is logged to your initials.</div>`;
+        <div class="hint">Open access — no staff roster is set up, so anyone can sign in with their initials and pull meds for <strong>any</strong> patient. Every action is logged to your initials.</div>
+        <div class="hint" id="cab-si-diag" style="margin-top:6px"></div>`;
     }
     panel.innerHTML = `<div class="cab-face">
       <div class="cab-title">${_cabEsc(_cabBrand())}</div>
@@ -1858,7 +1859,12 @@
       const doGo = () => {
         const nm = (document.getElementById('cab-si-name').value || '').trim();
         const ini = (document.getElementById('cab-si-init').value || '').toUpperCase().trim();
-        if (!nm && ini.length < 2) { return; }
+        if (!nm && ini.length < 2) {
+          const lg = document.getElementById('cab-log');
+          if (lg) lg.textContent = 'Enter your initials (2+ letters), then Sign in.';
+          const ie2 = document.getElementById('cab-si-init'); if (ie2) ie2.focus();
+          return;
+        }
         _cartSignIn({ adhoc: true, staff_id: '', display_name: nm || ini,
           initials: ini || nm.slice(0, 3).toUpperCase(), role: 'nurse' });
       };
@@ -1866,6 +1872,13 @@
       if (go) go.addEventListener('click', doGo);
       const ie = document.getElementById('cab-si-init');
       if (ie) ie.addEventListener('keydown', (e) => { if (e.key === 'Enter') doGo(); });
+      const ne = document.getElementById('cab-si-name');
+      if (ne) ne.addEventListener('keydown', (e) => { if (e.key === 'Enter') doGo(); });
+      const diag = document.getElementById('cab-si-diag');
+      if (diag) diag.innerHTML = (CHARACTERS && CHARACTERS.length)
+        ? CHARACTERS.length + ' patient' + (CHARACTERS.length === 1 ? '' : 's') + ' on this cart · scenario running.'
+        : '<span style="color:#a8341f">⚠ No patients are linked to this cart — link beds on the Control room → Med carts.</span>';
+      if (ne) ne.focus();
     }
     _startCabClock();
   }
