@@ -17,6 +17,11 @@ dev = [
   "pytest-asyncio>=0.23",
   "ruff>=0.6",
   "mypy>=1.10",
+  # room-STT route-contract tests (tests/v8/test_room_stt.py) stub the whisper
+  # engine but still exercise the real numpy PCM decode (room_stt.py:_transcribe);
+  # in production numpy arrives with the STT engine, so it must be declared here
+  # for the model-free CI test job, which installs only ".[dev,serve]".
+  "numpy>=1.24",
 ]
 kb = [
   "chromadb>=0.5",
