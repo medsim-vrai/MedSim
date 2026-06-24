@@ -16,7 +16,9 @@
     :root{ --hh-ink:#16213e; --hh-indigo:#1f2d6b; --hh-indigo2:#2a3a86; --hh-teal:#0f9aa7;
            --hh-line:#e2e6f0; --hh-bg:#eef1f7; --hh-due:#b4540a; --hh-due-bg:#fdf0e3; }
     *{ box-sizing:border-box; }
-    html,body{ margin:0; min-height:100%; background:var(--hh-bg); color:var(--hh-ink);
+    html{ min-height:100%; }
+    body{ margin:0; min-height:100vh; display:flex; flex-direction:column;
+      background:var(--hh-bg); color:var(--hh-ink);
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
     /* top brand bar */
     .hh-top{ background:linear-gradient(90deg,var(--hh-indigo),var(--hh-indigo2));
@@ -32,7 +34,17 @@
     .hh-role.sup{ background:#0a6b46; color:#eafff5; } .hh-role.ins{ background:#34409a; color:#eef1ff; }
     .hh-role.std{ background:rgba(255,255,255,.16); color:#fff; }
     /* main */
-    .hh-main{ max-width:1100px; margin:0 auto; padding:22px 20px 60px; }
+    .hh-main{ max-width:1100px; width:100%; margin:0 auto; padding:22px 20px 60px; flex:1 1 auto; }
+    /* gate screens (sign-in / not-on-roster / no-session) fill the viewport and
+       center their card — a full-screen sign-in, not a small card at the top. */
+    .hh-main.hh-gate{ display:flex; flex-direction:column; align-items:center; justify-content:center;
+      max-width:none; padding:24px; }
+    .hh-main.hh-gate > .hh-identify,
+    .hh-main.hh-gate > .hh-empty{ width:100%; max-width:540px; margin:0; }
+    .hh-main.hh-gate > .hh-identify{ padding:28px 28px 30px; }
+    .hh-main.hh-gate .hh-identify h2{ font-size:21px; margin-bottom:6px; }
+    .hh-main.hh-gate .hh-identify p.lead{ font-size:13.5px; }
+    .hh-main.hh-gate .hh-foot{ margin-top:30px; }
     /* identify ("who's charting?") card */
     .hh-identify{ background:#fff; border:1px solid var(--hh-line); border-radius:12px;
       padding:16px 18px; margin-bottom:18px; box-shadow:0 1px 3px rgba(20,30,60,.05); }
@@ -115,7 +127,7 @@
     </div>
   </header>
 
-  <main class="hh-main">
+  <main class="hh-main{% if state in ('signin', 'unknown', 'no_session') %} hh-gate{% endif %}">
     {% if state == "no_session" %}
       <section class="hh-empty">
         <h2>No active session</h2>

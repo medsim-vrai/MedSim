@@ -268,3 +268,53 @@ def test_chart_open_mode_allows_signed_in(client):
     cids = _cids_by_eid(eids)
     r = _chart(client, cids[3], initials="ZZ", role="student", user="Walk Up")
     assert r.status_code == 200
+
+
+# ── Instructor records page (/portal/medical_records) — gated too ───────
+# The vault-authed sidebar "Medical Records" page now requires the same EHR
+# sign-in + scoping, EXCEPT unrecognized initials fall back to the full
+# supervisor view (the authed instructor can never lock themselves out).
+
+def _portal_records(client, *, role="", initials="", user=""):
+    return client.get("/portal/medical_records", params={
+        "role": role, "initials": initials, "user": user})
+
+
+def _nrows_portal(html: str) -> int:
+    return html.count('href="/portal/medical_records/')   # one per patient row
+
+
+def test_student_signin_is_fullscreen_gate(client):
+    """The student terminal sign-in screen carries the full-screen gate class."""
+    _room4(client)
+    html = _entry(client, code=_roomcode(client)).text     # no initials → signin
+    assert "hh-gate" in html
+
+
+def test_portal_records_requires_signin(client):
+    _room4(client)
+    html = _portal_records(client).text                    # authed, no identity
+    assert "Sign in to Helix Health" in html
+    assert _nrows_portal(html) == 0
+
+
+def test_portal_records_supervisor_sees_all(client):
+    _room4(client)
+    html = _portal_records(client, role="supervisor", user="Sup").text
+    assert _nrows_portal(html) == 4
+
+
+def test_portal_records_nurse_scoped(client):
+    eids = _room4(client)
+    _restrict_nurse(client, eids)                          # AP assigned eids[:2]
+    html = _portal_records(client, role="student", initials="AP",
+                           user="Alice P.").text
+    assert _nrows_portal(html) == 2
+
+
+def test_portal_records_unknown_initials_falls_back_to_all(client):
+    eids = _room4(client)
+    _restrict_nurse(client, eids)
+    html = _portal_records(client, role="student", initials="ZZ",
+                           user="Whoever").text
+    assert _nrows_portal(html) == 4        # authed instructor never locked out

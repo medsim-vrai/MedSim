@@ -3921,16 +3921,43 @@ async def portal_room(
 async def portal_medical_records(
     request: Request,
     _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    role: str = "",
+    initials: str = "",
+    user: str = "",
 ):
-    """Picker view — one row per patient across single + multi modes."""
+    """Picker view — one row per patient. Gated by an EHR sign-in, mirroring the
+    student Records Terminal (#82): identify yourself before charts appear, then
+    a nurse identity is scoped to their assigned patients while the supervisor
+    view shows all. This page is vault-authed (the instructor), so unrecognized
+    initials fall back to the full supervisor view rather than locking out."""
     from portal import medical_records as _mr
-    patients = _mr.patients_for_picker(
+    room = control_room.get_active_room()
+    ini = (initials or "").upper().strip()[:3]
+    all_patients = _mr.patients_for_picker(
         control_room_mod=control_room,
         control_session_mod=control_session,
     )
+    state = "no_session"
+    patients: list[Any] = []
+    signed_name = (user or "").strip()[:80]
+    if all_patients:
+        mode, member, accessible = _records_scope(room, initials=ini, role=role)
+        if mode == "signin":
+            state = "signin"
+        elif mode == "scoped":
+            state = "scoped"
+            patients = [p for p in all_patients
+                        if p.get("encounter_id") in accessible]
+            signed_name = member.display_name or signed_name
+            ini = (member.initials or ini).upper()
+        else:                  # "all" or "unknown" → the authed instructor sees all
+            state = "all"
+            patients = all_patients
     return templates.TemplateResponse(
         request, "medical_records.html",
-        {"active": "medical_records", "patients": patients},
+        {"active": "medical_records", "patients": patients, "state": state,
+         "signed_name": signed_name,
+         "role": (role or "").lower().strip() or "student", "initials": ini},
     )
 
 

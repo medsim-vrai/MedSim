@@ -7,11 +7,14 @@
   <style>
     /* Branded "Helix Health" EHR — a recognizable clinical record system (the way
        the med cart is a recognizable "BD Pyxis"). Standalone, full-screen — no
-       portal sidebar. Indigo chrome + teal accent + clean clinical patient list. */
+       portal sidebar. Indigo chrome + teal accent + clean clinical patient list.
+       Gated by an EHR sign-in (same model as the student Records Terminal). */
     :root{ --hh-ink:#16213e; --hh-indigo:#1f2d6b; --hh-indigo2:#2a3a86; --hh-teal:#0f9aa7;
            --hh-line:#e2e6f0; --hh-bg:#eef1f7; --hh-due:#b4540a; --hh-due-bg:#fdf0e3; }
     *{ box-sizing:border-box; }
-    html,body{ margin:0; height:100%; background:var(--hh-bg); color:var(--hh-ink);
+    html{ min-height:100%; }
+    body{ margin:0; min-height:100vh; display:flex; flex-direction:column;
+      background:var(--hh-bg); color:var(--hh-ink);
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
     /* top brand bar */
     .hh-top{ background:linear-gradient(90deg,var(--hh-indigo),var(--hh-indigo2));
@@ -28,7 +31,40 @@
       border-radius:7px; font-weight:600; }
     .hh-exit:hover{ background:rgba(255,255,255,.24); }
     /* main */
-    .hh-main{ max-width:1100px; margin:0 auto; padding:22px 20px 60px; }
+    .hh-main{ max-width:1100px; width:100%; margin:0 auto; padding:22px 20px 60px; flex:1 1 auto; }
+    /* gate screens (sign-in / no-session) fill the viewport and center the card */
+    .hh-main.hh-gate{ display:flex; flex-direction:column; align-items:center; justify-content:center;
+      max-width:none; padding:24px; }
+    .hh-main.hh-gate > .hh-identify,
+    .hh-main.hh-gate > .hh-empty{ width:100%; max-width:540px; margin:0; }
+    .hh-main.hh-gate .hh-foot{ margin-top:30px; }
+    /* identify ("sign in") card */
+    .hh-identify{ background:#fff; border:1px solid var(--hh-line); border-radius:12px;
+      padding:28px 28px 30px; box-shadow:0 1px 3px rgba(20,30,60,.05); }
+    .hh-identify h2{ margin:0 0 6px; font-size:21px; color:var(--hh-indigo); }
+    .hh-identify p.lead{ margin:0 0 16px; font-size:13.5px; color:#6b7596; }
+    .hh-identify-form{ display:flex; gap:14px; flex-wrap:wrap; align-items:flex-end; }
+    .hh-identify-form label{ display:flex; flex-direction:column; gap:4px; font-size:11px;
+      font-weight:600; color:#566c8a; text-transform:uppercase; letter-spacing:.04em; }
+    .hh-identify-form input{ font-size:15px; padding:10px 12px; border:1px solid #c6cee2;
+      border-radius:8px; min-width:190px; color:var(--hh-ink); background:#fcfdff; }
+    .hh-identify-form input:focus{ outline:none; border-color:var(--hh-teal); box-shadow:0 0 0 3px rgba(15,154,167,.18); }
+    .hh-identify-form input#hh-init{ min-width:96px; text-transform:uppercase; }
+    .hh-btn{ font-size:14px; font-weight:700; padding:11px 18px; border:none; border-radius:8px;
+      background:var(--hh-teal); color:#04323a; cursor:pointer; }
+    .hh-btn:hover{ background:#0bb0bf; } .hh-btn:active{ transform:translateY(1px); }
+    .hh-btn.ghost{ margin-top:14px; background:#eef1fb; color:var(--hh-indigo); border:1px solid var(--hh-line); }
+    .hh-btn.ghost:hover{ background:#e2e7f7; }
+    /* signed-in identity banner */
+    .hh-signedin{ display:flex; align-items:center; gap:14px; background:#fff; border:1px solid var(--hh-line);
+      border-radius:12px; padding:13px 18px; margin-bottom:18px; box-shadow:0 1px 3px rgba(20,30,60,.05); }
+    .hh-si-name{ font-size:15px; font-weight:700; color:var(--hh-ink); }
+    .hh-si-name .ini{ font-size:11.5px; font-weight:700; color:#fff; background:var(--hh-indigo);
+      border-radius:6px; padding:1px 7px; margin-left:7px; letter-spacing:.04em; }
+    .hh-si-scope{ font-size:12.5px; color:#6b7596; margin-top:2px; }
+    .hh-switch{ margin-left:auto; flex:0 0 auto; font-size:12px; font-weight:700; color:var(--hh-indigo);
+      background:#eef1fb; border:1px solid var(--hh-line); border-radius:8px; padding:8px 13px; cursor:pointer; }
+    .hh-switch:hover{ background:#e2e7f7; }
     .hh-list-head{ display:flex; align-items:baseline; gap:12px; margin:4px 2px 16px; flex-wrap:wrap; }
     .hh-list-head h1{ font-size:22px; margin:0; color:var(--hh-indigo); }
     .hh-list-head .cnt{ color:#6b7596; font-size:13px; }
@@ -61,7 +97,8 @@
     .hh-empty a{ color:var(--hh-teal); font-weight:600; }
     .hh-foot{ text-align:center; color:#9aa4bf; font-size:10.5px; letter-spacing:.08em;
       margin-top:26px; text-transform:uppercase; }
-    @media (max-width:720px){ .hh-metrics{ display:none; } .hh-search{ display:none; } }
+    @media (max-width:720px){ .hh-metrics{ display:none; } .hh-search{ display:none; }
+      .hh-identify-form input{ min-width:0; flex:1 1 140px; } }
   </style>
 </head>
 <body>
@@ -69,46 +106,117 @@
     <span class="hh-mark">⬡</span>
     <span class="hh-brand">Helix Health<small>Electronic Health Record</small></span>
     <div class="hh-top-right">
-      {% if patients %}<span class="hh-shift">Shift&nbsp;<b>{{ patients[0].status.current_shift }}</b></span>{% endif %}
+      {% if state in ('scoped', 'all') and patients %}<span class="hh-shift">Shift&nbsp;<b>{{ patients[0].status.current_shift }}</b></span>{% endif %}
       <a class="hh-exit" href="/portal/console?mode=operate">Close ✕</a>
     </div>
   </header>
 
-  <main class="hh-main">
-    {% if not patients %}
+  <main class="hh-main{% if state in ('signin', 'no_session') %} hh-gate{% endif %}">
+    {% if state == 'no_session' %}
       <section class="hh-empty">
         <h2>No active patients</h2>
         <p>Start a single-patient session from the
           <a href="/portal/control">Control room</a>, or open a room from
           <a href="/portal/room">Multi-Patient Control</a>. Patients appear here once a session is running.</p>
       </section>
+
+    {% elif state == 'signin' %}
+      <section class="hh-identify">
+        <h2>Sign in to Helix Health</h2>
+        <p class="lead">Identify yourself to open records — entries are tagged to you.
+          Enter a nurse's initials to view as that nurse (scoped to their assigned
+          patients), or open the full supervisor view.</p>
+        <form class="hh-identify-form" onsubmit="return hhSignIn();">
+          <label>Display name
+            <input type="text" id="hh-name" name="user" placeholder="e.g. Pat C."
+                   spellcheck="false" autocomplete="off" required>
+          </label>
+          <label>Initials
+            <input type="text" id="hh-init" name="initials" placeholder="PC" maxlength="3"
+                   spellcheck="false" autocomplete="off" pattern="[A-Za-z]{2,3}" required>
+          </label>
+          <button type="submit" class="hh-btn">Enter records →</button>
+        </form>
+        <button type="button" class="hh-btn ghost" onclick="hhSupervisor()">Supervisor view — all patients</button>
+      </section>
+
     {% else %}
-      <div class="hh-list-head">
-        <h1>Patient List</h1>
-        <span class="cnt">{{ patients | length }} patient{% if patients | length != 1 %}s{% endif %} · {{ patients[0].status.current_shift }} shift</span>
-        <span class="hh-search">🔎 Search patients…</span>
-      </div>
-      <div class="hh-patients">
-        {% for p in patients %}
-          <a class="hh-pt" href="/portal/medical_records/{{ p.character_id }}">
-            <span class="hh-av">{{ p.name[:1] | upper }}</span>
-            <span class="hh-pt-main">
-              <span class="hh-pt-name">{{ p.name }}<span class="mrn">MRN {{ p.mrn or '—' }}</span></span>
-              <span class="hh-pt-loc">{{ p.location_label }}{% if p.encounter_label %} · {{ p.encounter_label }}{% endif %}</span>
-            </span>
-            <span class="hh-metrics">
-              <span class="hh-m"><span class="n">{{ p.status.med_count }}</span><span class="l">Meds</span></span>
-              <span class="hh-m due"><span class="n">{{ p.status.due_in_current_shift }}</span><span class="l">Due</span></span>
-              <span class="hh-m"><span class="n">{{ p.status.continuous_count }}</span><span class="l">Drips</span></span>
-              <span class="hh-m"><span class="n">{{ p.status.prn_count }}</span><span class="l">PRN</span></span>
-              <span class="hh-m"><span class="n">{{ p.status.labs_pending }}</span><span class="l">Labs</span></span>
-            </span>
-            <span class="hh-chev">›</span>
-          </a>
-        {% endfor %}
-      </div>
+      {# scoped or all — signed in #}
+      <section class="hh-signedin">
+        <div>
+          <div class="hh-si-name">{{ signed_name or 'Supervisor' }}{% if initials %}<span class="ini">{{ initials }}</span>{% endif %}</div>
+          <div class="hh-si-scope">
+            {% if state == 'scoped' %}{{ patients | length }} patient{% if patients | length != 1 %}s{% endif %} in your scope
+            {% else %}Supervisor view — all patients{% endif %}
+          </div>
+        </div>
+        <button type="button" class="hh-switch" onclick="hhSwitch()">Switch user</button>
+      </section>
+
+      {% if not patients %}
+        <section class="hh-empty">
+          <h2>No patients in your scope</h2>
+          <p>Those initials aren't assigned any patients in this room. Switch user,
+            or use the supervisor view to see every chart.</p>
+        </section>
+      {% else %}
+        <div class="hh-list-head">
+          <h1>Patient List</h1>
+          <span class="cnt">{{ patients | length }} patient{% if patients | length != 1 %}s{% endif %} · {{ patients[0].status.current_shift }} shift</span>
+          <span class="hh-search">🔎 Search patients…</span>
+        </div>
+        <div class="hh-patients">
+          {% for p in patients %}
+            <a class="hh-pt" href="/portal/medical_records/{{ p.character_id }}?role={{ role }}&initials={{ initials }}&user={{ signed_name | urlencode }}">
+              <span class="hh-av">{{ p.name[:1] | upper }}</span>
+              <span class="hh-pt-main">
+                <span class="hh-pt-name">{{ p.name }}<span class="mrn">MRN {{ p.mrn or '—' }}</span></span>
+                <span class="hh-pt-loc">{{ p.location_label }}{% if p.encounter_label %} · {{ p.encounter_label }}{% endif %}</span>
+              </span>
+              <span class="hh-metrics">
+                <span class="hh-m"><span class="n">{{ p.status.med_count }}</span><span class="l">Meds</span></span>
+                <span class="hh-m due"><span class="n">{{ p.status.due_in_current_shift }}</span><span class="l">Due</span></span>
+                <span class="hh-m"><span class="n">{{ p.status.continuous_count }}</span><span class="l">Drips</span></span>
+                <span class="hh-m"><span class="n">{{ p.status.prn_count }}</span><span class="l">PRN</span></span>
+                <span class="hh-m"><span class="n">{{ p.status.labs_pending }}</span><span class="l">Labs</span></span>
+              </span>
+              <span class="hh-chev">›</span>
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
     {% endif %}
     <div class="hh-foot">Training Simulation — not a medical record system · Helix Health EHR</div>
   </main>
+
+  <script>
+    (function () {
+      const nameEl = document.getElementById("hh-name");
+      const initEl = document.getElementById("hh-init");
+      // Sign in as a named nurse → reload scoped to their assignments (server
+      // decides; unrecognized initials fall back to the full view).
+      window.hhSignIn = function () {
+        const u = (nameEl && nameEl.value || "").trim();
+        const i = (initEl && initEl.value || "").toUpperCase().trim();
+        if (!u || i.length < 2) {
+          (u ? initEl : nameEl)?.focus();
+          alert("Enter your display name AND at least 2 initials.");
+          return false;
+        }
+        window.location = "/portal/medical_records?" +
+          new URLSearchParams({ role: "student", initials: i, user: u }).toString();
+        return false;
+      };
+      // Open the full supervisor view (every chart).
+      window.hhSupervisor = function () {
+        const u = (nameEl && nameEl.value || "").trim() || "Supervisor";
+        window.location = "/portal/medical_records?" +
+          new URLSearchParams({ role: "supervisor", user: u }).toString();
+      };
+      // Drop identity → back to the sign-in.
+      window.hhSwitch = function () { window.location = "/portal/medical_records"; };
+      if (nameEl) nameEl.focus();
+    })();
+  </script>
 </body>
 </html>
