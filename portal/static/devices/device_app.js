@@ -1679,6 +1679,7 @@
   let SELECTED_CHAR_ID = null;      // patient currently open in the MAR
   let MED_SEL_INDEX = 0;            // center-anchored active med index in the MAR window
   let SIGNED_IN = null;             // signed-in staff {staff_id,display_name,initials,role,accessible:[enc_id]} | ad-hoc
+  let SIGNIN_CONFIRM = null;        // roster member tapped, awaiting initials confirmation (pre-sign-in)
   let _CAB_CLOCK_TIMER = null;
   // Shared terminal: many students, one cart. The sign-in is NOT persisted
   // (each fresh load returns to a clean point-of-entry sign-in), and the
@@ -1705,12 +1706,12 @@
     return CHARACTERS.filter((c) => acc.has(c.encounter_id));
   }
   function _cartSignIn(staff) {
-    SIGNED_IN = staff; SELECTED_CHAR_ID = null; MED_SEL_INDEX = 0;
+    SIGNED_IN = staff; SIGNIN_CONFIRM = null; SELECTED_CHAR_ID = null; MED_SEL_INDEX = 0;
     _cabBumpIdle();   // arm the shared-terminal inactivity auto-lock
     renderCabinetChecklist();
   }
   function _cartSignOut() {
-    SIGNED_IN = null; SELECTED_CHAR_ID = null; MED_SEL_INDEX = 0;
+    SIGNED_IN = null; SIGNIN_CONFIRM = null; SELECTED_CHAR_ID = null; MED_SEL_INDEX = 0;
     if (_CAB_IDLE_TIMER) { clearTimeout(_CAB_IDLE_TIMER); _CAB_IDLE_TIMER = null; }
     renderCabinetChecklist();
   }
@@ -1774,7 +1775,20 @@
     // (1) Not signed in → sign-in screen (roster pick, or ad-hoc typed). The
     // sign-in is intentionally NOT persisted — this is a shared terminal, so
     // each fresh load returns to a clean point-of-entry sign-in.
-    if (!SIGNED_IN) { _renderCabinetSignin(); return; }
+    if (!SIGNED_IN) {
+      // Mid sign-in: a roster name was tapped and we're awaiting initials. This
+      // is a real screen in the state machine — keep it up across re-renders
+      // (folds/heartbeats), and if its input is already mounted DON'T repaint
+      // (a repaint would wipe the initials being typed + steal focus).
+      if (SIGNIN_CONFIRM) {
+        if (!document.getElementById('cab-ci-init')) _renderCabinetSigninConfirm(SIGNIN_CONFIRM);
+        return;
+      }
+      // Likewise don't repaint over a half-typed ad-hoc (open-access) sign-in.
+      if (document.getElementById('cab-si-init')) return;
+      _renderCabinetSignin();
+      return;
+    }
     // (2) Signed in → patients scoped to this user.
     const chars = _cabAccessibleChars();
     let selectedChar = SELECTED_CHAR_ID
@@ -1817,16 +1831,19 @@
     if (ROSTER && ROSTER.length) {
       let rows = '';
       for (const s of ROSTER) {
+        // Initials are NOT shown here — the next step asks you to enter them, so
+        // picking a name is a real sign-in (you must know your own initials), not
+        // a one-tap login anyone could trigger.
         rows += `<button type="button" class="cab-staff" data-staff="${_cabEsc(s.staff_id)}">
           <span style="flex:1;min-width:0">
             <span class="snm">${_cabEsc(s.display_name)}</span>
-            <span class="smeta">${_cabEsc(s.initials || '—')}</span>
+            <span class="smeta">Tap, then enter your initials</span>
           </span>
           <span class="cab-role ${_cabEsc(s.role)}">${_cabEsc(_cabRoleLabel(s.role))}</span>
         </button>`;
       }
       body = `<h4>Sign in to unlock the cabinet</h4>
-        <div class="hint">Pick your name. Every med you remove, return or waste is logged to you.</div>
+        <div class="hint">Tap your name, then enter your initials to confirm it's you. Every med you remove, return or waste is logged to you.</div>
         <div class="cab-staff-list">${rows}</div>`;
     } else {
       body = `<h4>Sign in to unlock the cabinet</h4>
@@ -1852,7 +1869,7 @@
       panel.querySelectorAll('.cab-staff').forEach((b) => {
         b.addEventListener('click', () => {
           const s = ROSTER.find((x) => x.staff_id === b.dataset.staff);
-          if (s) _cartSignIn(Object.assign({}, s));
+          if (s) { SIGNIN_CONFIRM = Object.assign({}, s); _renderCabinetSigninConfirm(SIGNIN_CONFIRM); }
         });
       });
     } else {
@@ -1879,6 +1896,67 @@
         ? CHARACTERS.length + ' patient' + (CHARACTERS.length === 1 ? '' : 's') + ' on this cart · scenario running.'
         : '<span style="color:#a8341f">⚠ No patients are linked to this cart — link beds on the Control room → Med carts.</span>';
       if (ne) ne.focus();
+    }
+    _startCabClock();
+  }
+
+  // Roster sign-in, step 2: confirm identity by entering initials. Picking a
+  // name on the roster is NOT enough — the nurse must enter their own initials
+  // (which the list does not reveal) to actually sign in. Verified against the
+  // staff member's initials on file; if none are on file, capture what's typed.
+  function _renderCabinetSigninConfirm(staff) {
+    const panel = _cabinetPanelEl();
+    const expect = String(staff.initials || '').toUpperCase().trim();
+    panel.innerHTML = `<div class="cab-face">
+      <div class="cab-title">${_cabEsc(_cabBrand())}</div>
+      <div class="cab-screen">
+        ${_cabHeadHTML(false)}
+        <div class="cab-signin">
+          <h4>Sign in as ${_cabEsc(staff.display_name)}</h4>
+          <div class="hint">Enter your initials to confirm it's you. Every med you
+            remove, return or waste is logged to ${_cabEsc(staff.display_name)}
+            (${_cabEsc(_cabRoleLabel(staff.role))}).</div>
+          <div class="cab-signin-row" style="margin-top:12px">
+            <input class="in-in" id="cab-ci-init" placeholder="Initials" maxlength="4"
+                   autocomplete="off" autocapitalize="characters" spellcheck="false">
+            <button type="button" class="cab-ctl prim" id="cab-ci-go" style="padding:9px 18px">Sign in</button>
+            <button type="button" class="cab-ctl" id="cab-ci-back" style="padding:9px 16px">Back</button>
+          </div>
+          <div class="hint" id="cab-ci-err" style="margin-top:10px;min-height:15px"></div>
+        </div>
+        <div class="cab-log" id="cab-log">Confirm your initials to unlock.</div>
+      </div>
+      ${_cabDrawersHTML()}
+      <div class="cab-foot">Training simulation — not a medical device</div>
+    </div>`;
+    const inp = document.getElementById('cab-ci-init');
+    const err = document.getElementById('cab-ci-err');
+    const go = () => {
+      const got = String((inp && inp.value) || '').toUpperCase().trim();
+      if (got.length < 2) {
+        if (err) err.textContent = 'Enter at least 2 letters.';
+        if (inp) inp.focus();
+        return;
+      }
+      if (expect && got !== expect) {
+        if (err) err.innerHTML = '<span style="color:#a8341f">Those initials don\'t match '
+          + _cabEsc(staff.display_name) + '. Try again, or go Back to pick another name.</span>';
+        if (inp) inp.select();
+        return;
+      }
+      // Verified (or no initials on file → adopt what was typed). Now sign in.
+      _cartSignIn(expect ? Object.assign({}, staff)
+                         : Object.assign({}, staff, { initials: got }));
+    };
+    const goBtn = document.getElementById('cab-ci-go');
+    if (goBtn) goBtn.addEventListener('click', go);
+    const backBtn = document.getElementById('cab-ci-back');
+    if (backBtn) backBtn.addEventListener('click', () => {
+      SIGNIN_CONFIRM = null; _renderCabinetSignin();
+    });
+    if (inp) {
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+      inp.focus();
     }
     _startCabClock();
   }
