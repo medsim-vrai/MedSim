@@ -44,9 +44,14 @@ test('binds a real character from a mocked portal binding', async ({ page }) => 
 
   const api = encodeURIComponent('http://localhost:4173');
   await page.goto(`/face/rn-amy?scenario=e2e&opacity=0.66&api=${api}&diag=1`);
-  await page.waitForLoadState('networkidle');
 
-  expect(bindHits, 'shell fetched the bind document').toBeGreaterThanOrEqual(1);
+  // NOT networkidle: the portal bind is fire-and-forget at the END of boot
+  // (main.ts), and the app-shell service worker can satisfy the shell from
+  // cache — so "idle" can fire before boot reaches the bind. Wait for the
+  // bind request to actually land.
+  await expect
+    .poll(() => bindHits, { timeout: 15_000, message: 'shell fetched the bind document' })
+    .toBeGreaterThanOrEqual(1);
   await expect(page.locator('#stage')).toBeVisible();
   expect(errors, `page errors: ${errors.join(' | ')}`).toEqual([]);
 });

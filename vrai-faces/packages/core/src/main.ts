@@ -300,7 +300,15 @@ async function boot(): Promise<void> {
   }
 }
 
-boot().catch((e: unknown) => {
+boot().then(() => {
+  // e2e boot signal — the full async boot chain (resume → renderer → demo →
+  // background bind kicked off) finished. Tests should wait for THIS, not
+  // `networkidle`: the app-shell service worker can satisfy the shell from
+  // cache (and the demo-avatar build is a network-quiet CPU gap), so idle can
+  // fire well before boot reaches the fire-and-forget portal bind.
+  (window as Window & { __vraiBooted?: boolean }).__vraiBooted = true;
+  window.dispatchEvent(new Event('vrai:booted'));
+}).catch((e: unknown) => {
   diag.push({
     t: performance.now(), moduleId: 'main', kind: 'error',
     message: 'boot() failed',
