@@ -1680,7 +1680,12 @@
   let MED_SEL_INDEX = 0;            // center-anchored active med index in the MAR window
   let SIGNED_IN = null;             // signed-in staff {staff_id,display_name,initials,role,accessible:[enc_id]} | ad-hoc
   let _CAB_CLOCK_TIMER = null;
-  const _CART_SS_KEY = 'medsim_cart_signin_' + STN;   // persist sign-in per station
+  // Shared terminal: many students, one cart. The sign-in is NOT persisted
+  // (each fresh load returns to a clean point-of-entry sign-in), and the
+  // terminal auto-locks back to the sign-in screen after inactivity so the
+  // next student signs in as themselves.
+  let _CAB_IDLE_TIMER = null;
+  const _CAB_IDLE_MS = 180000;      // 3 min idle → auto sign-out (tunable)
 
   const _cabEsc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1701,13 +1706,23 @@
   }
   function _cartSignIn(staff) {
     SIGNED_IN = staff; SELECTED_CHAR_ID = null; MED_SEL_INDEX = 0;
-    try { sessionStorage.setItem(_CART_SS_KEY, JSON.stringify(staff)); } catch (e) { /* private mode */ }
+    _cabBumpIdle();   // arm the shared-terminal inactivity auto-lock
     renderCabinetChecklist();
   }
   function _cartSignOut() {
     SIGNED_IN = null; SELECTED_CHAR_ID = null; MED_SEL_INDEX = 0;
-    try { sessionStorage.removeItem(_CART_SS_KEY); } catch (e) { /* ignore */ }
+    if (_CAB_IDLE_TIMER) { clearTimeout(_CAB_IDLE_TIMER); _CAB_IDLE_TIMER = null; }
     renderCabinetChecklist();
+  }
+  // Shared-terminal inactivity auto-lock — bumped on any cart interaction; when
+  // it fires, sign the current student out so the cart returns to a clean
+  // point-of-entry sign-in for the next student.
+  function _cabBumpIdle() {
+    if (_CAB_IDLE_TIMER) clearTimeout(_CAB_IDLE_TIMER);
+    if (SIGNED_IN) _CAB_IDLE_TIMER = setTimeout(_cabAutoLock, _CAB_IDLE_MS);
+  }
+  function _cabAutoLock() {
+    if (SIGNED_IN) _cartSignOut();
   }
   function _wireCabHead() {
     const so = document.getElementById('cab-signout');
@@ -1756,15 +1771,9 @@
       _renderCabinetLocked();   // informative "waiting to start" face, not a blank box
       return;
     }
-    // Restore a persisted sign-in (per station) so a re-render / reconnect
-    // keeps the signed-in user without re-typing.
-    if (SIGNED_IN == null) {
-      try {
-        const raw = sessionStorage.getItem(_CART_SS_KEY);
-        if (raw) SIGNED_IN = JSON.parse(raw);
-      } catch (e) { /* ignore */ }
-    }
-    // (1) Not signed in → sign-in screen (roster pick, or ad-hoc typed).
+    // (1) Not signed in → sign-in screen (roster pick, or ad-hoc typed). The
+    // sign-in is intentionally NOT persisted — this is a shared terminal, so
+    // each fresh load returns to a clean point-of-entry sign-in.
     if (!SIGNED_IN) { _renderCabinetSignin(); return; }
     // (2) Signed in → patients scoped to this user.
     const chars = _cabAccessibleChars();
@@ -1869,6 +1878,9 @@
     if (!panel) {
       panel = document.createElement('div');
       panel.id = 'cabinet-checklist';
+      // Shared-terminal auto-lock: any interaction bumps the idle timer.
+      ['click', 'keydown', 'wheel', 'touchstart'].forEach((ev) =>
+        panel.addEventListener(ev, _cabBumpIdle, { passive: true }));
     }
     panel.className = 'cab-over';
     panel.style.cssText = '';
