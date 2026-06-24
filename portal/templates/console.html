@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mission Control · Training Bridge VRAI-MedSim</title>
-  <link rel="stylesheet" href="/static/portal.css">
-  <link rel="stylesheet" href="/static/console.css">
+  <link rel="stylesheet" href="{{ static_v('portal.css') }}">
+  <link rel="stylesheet" href="{{ static_v('console.css') }}">
 </head>
 <body class="console-body">
   <div class="console" data-mode="{{ mode }}">
@@ -361,6 +361,6 @@
 
   </div>
   <script id="console-bootstrap" type="application/json">{{ (bootstrap or {}) | tojson }}</script>
-  <script src="/static/console.js"></script>
+  <script src="{{ static_v('console.js') }}"></script>
 </body>
 </html>
