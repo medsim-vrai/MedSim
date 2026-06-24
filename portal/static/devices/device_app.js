@@ -1895,7 +1895,9 @@
     const panel = _cabinetPanelEl();
     let rows = '';
     if (!chars.length) {
-      rows = `<div class="cab-empty2">No patients assigned to you on this cart.</div>`;
+      rows = (CHARACTERS && CHARACTERS.length)
+        ? `<div class="cab-empty2">None of this cart's patients are assigned to you.<br>Sign out and use a login that has assignments, or ask your instructor.</div>`
+        : `<div class="cab-empty2">No patients are linked to this cart yet.<br>Link beds to it on the Control room → 🛒 Med carts.</div>`;
     } else {
       for (const ch of chars) {
         const meds = ch.medications || [];
@@ -1916,7 +1918,7 @@
         <div class="cab-ptbar" style="cursor:default">
           <span class="lbl">Patient</span>
           <span class="nm">Select a patient</span>
-          <span class="sub">${chars.length} assigned · no PHI until one is chosen</span>
+          <span class="sub">${chars.length} patient${chars.length === 1 ? '' : 's'} · no PHI until one is chosen</span>
         </div>
         <div class="cab-pick-list">${rows}</div>
         <div class="cab-log" id="cab-log">Signed in as ${_cabEsc(SIGNED_IN.display_name)} — select a patient.</div>
