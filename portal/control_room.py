@@ -149,6 +149,12 @@ class ControlRoom:
     # in the `staff_member` table and rehydrated on boot like students; NOT
     # in the session_state snapshot (operator roster, not sim config).
     staff: dict[str, "StaffMember"] = field(default_factory=dict)
+    # Med cart v2 — access mode for the shared terminals (cart + records). When
+    # True (the default) access is OPEN: any student signs in with name/initials
+    # and can reach every patient. When False it is RESTRICTED to each student's
+    # assigned patients (the staff roster above); charge_nurse / supervisor /
+    # instructor still see all. The instructor sets this in the room dashboard.
+    open_med_access: bool = True
     # M17 — lazy-attached budget tracker. Built on first access to
     # avoid an import cycle; values mirror haiku_rate_cap +
     # voice_char_cap and are updated whenever the operator changes

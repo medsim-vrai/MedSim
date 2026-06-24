@@ -306,7 +306,7 @@ async def api_device_bootstrap(station_id: str):
                 # for (role scoping ∩ this cart's linked encounters). The
                 # device shows this for sign-in and scopes the patient picker
                 # to `accessible`; the server re-checks on every action.
-                if room is not None:
+                if room is not None and not getattr(room, "open_med_access", True):
                     cart_enc_ids = {enc.id for enc in enc_list}
                     for sm in room.staff.values():
                         acc = [eid for eid in
@@ -429,7 +429,8 @@ async def api_device_event(station_id: str, request: Request):
         staff_id = (payload.get("staff_id") or "").strip()
         if staff_id:
             _room = control_room.get_active_room()
-            if _room is not None and _room.staff:
+            if (_room is not None and _room.staff
+                    and not getattr(_room, "open_med_access", True)):
                 _tgt = _cart_target_encounter(
                     _room, station_id, payload.get("character_id") or "")
                 if (_tgt is not None and

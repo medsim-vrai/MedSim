@@ -4567,6 +4567,128 @@ def _find_room_cart(room: control_room.ControlRoom, cart_sid: str) -> str | None
     return None
 
 
+# ── Med cart v2 (#77) — shared-terminal access: open vs assigned roster ──────
+#
+# Open (default): any student signs in at the cart / records terminal with their
+# name + initials and reaches every patient. Restricted: each roster member
+# (student or group) is scoped to their assigned patients; charge_nurse /
+# supervisor / instructor see all. The cart + records read room.open_med_access
+# + the staff roster (control_room.StaffMember).
+
+def _persist_room_quiet() -> None:
+    try:
+        from portal import session_state as _ss
+        _ss.persist()
+    except Exception:  # noqa: BLE001 — best-effort
+        pass
+
+
+@app.get("/api/room/staff")
+async def api_room_staff_list(
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """The room roster + access mode + encounters, for the dashboard panel."""
+    room = _require_active_room()
+    staff = [{
+        "staff_id": sm.staff_id, "display_name": sm.display_name,
+        "initials": sm.initials, "role": sm.role,
+        "assignments": list(sm.assignments),
+    } for sm in room.staff.values()]
+    encounters = [{
+        "encounter_id": e.id,
+        "label": (e.encounter_label or e.scenario_name or e.id),
+    } for e in room.encounters.values()]
+    return JSONResponse({
+        "ok": True,
+        "open_med_access": getattr(room, "open_med_access", True),
+        "staff": staff,
+        "encounters": encounters,
+    })
+
+
+@app.post("/api/room/med_access")
+async def api_room_med_access(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Set the shared-terminal access mode. Body: {"open": true|false}."""
+    room = _require_active_room()
+    body = await request.json()
+    room.open_med_access = bool(body.get("open", True))
+    _persist_room_quiet()
+    return JSONResponse({"ok": True, "open_med_access": room.open_med_access})
+
+
+@app.post("/api/room/staff")
+async def api_room_staff_add(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Add a person/group to the roster. Body: {display_name, initials, role,
+    assignments:[encounter_id]}."""
+    room = _require_active_room()
+    body = await request.json()
+    name = (body.get("display_name") or "").strip()
+    if not name:
+        raise HTTPException(400, "display_name required.")
+    sm = room.add_staff(
+        name,
+        initials=(body.get("initials") or "").strip(),
+        role=(body.get("role") or "nurse").strip(),
+        assignments=list(body.get("assignments") or []),
+    )
+    _persist_room_quiet()
+    return JSONResponse({"ok": True, "staff_id": sm.staff_id})
+
+
+@app.post("/api/room/staff/{staff_id}/assignments")
+async def api_room_staff_assignments(
+    staff_id: str, request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Replace a roster member's patient (encounter) assignments.
+    Body: {encounter_ids:[...]}"""
+    room = _require_active_room()
+    if staff_id not in room.staff:
+        raise HTTPException(404, "Unknown staff member.")
+    body = await request.json()
+    room.set_staff_assignments(staff_id, list(body.get("encounter_ids") or []))
+    _persist_room_quiet()
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/room/staff/{staff_id}/update")
+async def api_room_staff_update(
+    staff_id: str, request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Patch a roster member's display_name / initials / role (any subset)."""
+    room = _require_active_room()
+    if staff_id not in room.staff:
+        raise HTTPException(404, "Unknown staff member.")
+    body = await request.json()
+    room.update_staff(
+        staff_id,
+        display_name=body.get("display_name"),
+        initials=body.get("initials"),
+        role=body.get("role"),
+    )
+    _persist_room_quiet()
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/room/staff/{staff_id}")
+async def api_room_staff_remove(
+    staff_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Remove a roster member."""
+    room = _require_active_room()
+    room.remove_staff(staff_id)
+    _persist_room_quiet()
+    return JSONResponse({"ok": True})
+
+
 @app.post("/api/room/med_cart/register")
 async def api_room_med_cart_register(
     request: Request,

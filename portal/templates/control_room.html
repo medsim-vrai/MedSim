@@ -188,6 +188,133 @@
 </section>
 {% endif %}
 
+{# Med cart v2 (#77) — shared-terminal access. Open (default): any student
+   signs in at the cart / records terminal with name + initials and reaches
+   every patient. Restrict: assign students/groups to specific patients
+   (charge nurse / supervisor / instructor always see all). Drives the med
+   cart sign-in + the records terminal. #}
+{% if room %}
+<section class="lead-assign-panel" id="med-access-panel">
+  <style>
+    #med-access-panel .ma-mode{ display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin:6px 0 10px; }
+    #med-access-panel .ma-mode label{ display:flex; gap:6px; align-items:center; font-size:14px; }
+    #med-access-panel .ma-add{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+    #med-access-panel .ma-add input{ padding:7px 10px; }
+    #med-access-panel table{ width:100%; border-collapse:collapse; font-size:13px; }
+    #med-access-panel th, #med-access-panel td{ padding:6px 8px; border-bottom:1px solid var(--line,#e2e6f0); text-align:left; }
+    #med-access-panel th.ma-enc, #med-access-panel td.ma-enc{ text-align:center; }
+  </style>
+  <div class="lead-assign-header">
+    <h3>🔐 Med cart &amp; records access</h3>
+    <p class="muted small">
+      Controls who can pull meds at the cart and read charts at the records
+      terminal. <strong>Open</strong> = any student signs in with their name +
+      initials and reaches every patient. <strong>Restrict</strong> = assign
+      students (or a group name) to specific patients; charge nurse / supervisor
+      / instructor always see everyone.
+    </p>
+  </div>
+  <div class="ma-mode">
+    <label><input type="radio" name="med-access-mode" value="open" id="med-access-open"> Open — any student, all patients</label>
+    <label><input type="radio" name="med-access-mode" value="restrict" id="med-access-restrict"> Restrict by assignment</label>
+    <span id="med-access-status" class="muted small"></span>
+  </div>
+  <div id="med-access-roster" hidden>
+    <div class="ma-add">
+      <input type="text" id="staff-name" placeholder="Student or group name">
+      <input type="text" id="staff-initials" placeholder="Initials" maxlength="4" style="width:96px">
+      <select id="staff-role">
+        <option value="nurse">Nurse / student</option>
+        <option value="charge_nurse">Charge nurse</option>
+        <option value="supervisor">Supervisor</option>
+        <option value="instructor">Instructor</option>
+      </select>
+      <button type="button" id="staff-add" class="primary-action">+ Add</button>
+    </div>
+    <table>
+      <thead><tr><th>Name</th><th>Init.</th><th>Role</th><th></th></tr></thead>
+      <tbody id="staff-tbody"></tbody>
+    </table>
+  </div>
+  <script>
+    (function () {
+      const panel = document.getElementById('med-access-panel');
+      if (!panel) return;
+      let ENCS = [];
+      const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
+      const roleLabel = (r) => ({ nurse: 'Nurse', charge_nurse: 'Charge', supervisor: 'Supervisor', instructor: 'Instructor' })[r] || 'Nurse';
+      const status = (s) => { const el = document.getElementById('med-access-status'); if (el) el.textContent = s || ''; };
+      function api(method, url, body) {
+        return fetch(url, {
+          method, credentials: 'same-origin',
+          headers: body ? { 'Content-Type': 'application/json' } : {},
+          body: body ? JSON.stringify(body) : undefined,
+        }).then((r) => r.json().catch(() => ({})));
+      }
+      function render(data) {
+        if (!data || data.ok === false) return;
+        ENCS = data.encounters || [];
+        const open = !!data.open_med_access;
+        document.getElementById('med-access-open').checked = open;
+        document.getElementById('med-access-restrict').checked = !open;
+        document.getElementById('med-access-roster').hidden = open;
+        panel.querySelector('thead tr').innerHTML =
+          '<th>Name</th><th>Init.</th><th>Role</th>'
+          + ENCS.map((e) => `<th class="ma-enc">${esc(e.label)}</th>`).join('')
+          + '<th></th>';
+        const staff = data.staff || [];
+        const tb = document.getElementById('staff-tbody');
+        if (!staff.length) {
+          tb.innerHTML = `<tr><td colspan="${ENCS.length + 4}" class="muted small">No one added yet — patients stay open to all students until you add assignments.</td></tr>`;
+          return;
+        }
+        tb.innerHTML = staff.map((s) => {
+          const seesAll = s.role !== 'nurse';
+          const cells = ENCS.map((e) => {
+            if (seesAll) return '<td class="ma-enc"><span class="muted small">all</span></td>';
+            const on = (s.assignments || []).indexOf(e.encounter_id) >= 0 ? 'checked' : '';
+            return `<td class="ma-enc"><input type="checkbox" data-staff="${esc(s.staff_id)}" data-enc="${esc(e.encounter_id)}" ${on}></td>`;
+          }).join('');
+          return `<tr><td>${esc(s.display_name)}</td><td>${esc(s.initials || '—')}</td><td>${roleLabel(s.role)}</td>${cells}<td><button type="button" class="link" data-remove="${esc(s.staff_id)}">remove</button></td></tr>`;
+        }).join('');
+      }
+      function load() { api('GET', '/api/room/staff').then(render); }
+      panel.addEventListener('change', (e) => {
+        if (e.target.name === 'med-access-mode') {
+          status('saving…');
+          api('POST', '/api/room/med_access', { open: e.target.value === 'open' })
+            .then(() => { status('saved'); load(); });
+        } else if (e.target.matches('input[type="checkbox"][data-staff]')) {
+          const sid = e.target.dataset.staff;
+          const eids = Array.from(panel.querySelectorAll(`input[type="checkbox"][data-staff="${sid}"]`))
+            .filter((c) => c.checked).map((c) => c.dataset.enc);
+          status('saving…');
+          api('POST', `/api/room/staff/${encodeURIComponent(sid)}/assignments`, { encounter_ids: eids })
+            .then(() => status('saved'));
+        }
+      });
+      document.getElementById('staff-add').addEventListener('click', () => {
+        const name = (document.getElementById('staff-name').value || '').trim();
+        const ini = (document.getElementById('staff-initials').value || '').trim();
+        const role = document.getElementById('staff-role').value;
+        if (!name) { document.getElementById('staff-name').focus(); return; }
+        status('adding…');
+        api('POST', '/api/room/staff', { display_name: name, initials: ini, role }).then(() => {
+          document.getElementById('staff-name').value = '';
+          document.getElementById('staff-initials').value = '';
+          status('added'); load();
+        });
+      });
+      panel.addEventListener('click', (e) => {
+        const rm = e.target.dataset && e.target.dataset.remove;
+        if (rm) { status('removing…'); api('DELETE', `/api/room/staff/${encodeURIComponent(rm)}`).then(() => { status('removed'); load(); }); }
+      });
+      load();
+    })();
+  </script>
+</section>
+{% endif %}
+
 {# M62 — Medical Records workstation launch. QR for students to scan
    from a shared tablet/workstation. Button for the instructor to open
    it on their own machine in a new window. The entry route lists
