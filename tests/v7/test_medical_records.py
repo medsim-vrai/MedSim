@@ -236,7 +236,8 @@ def test_patient_status_labs_pending_count():
 
 def test_picker_page_lists_every_patient_multi(client):
     _start_multi(client, n=3)
-    r = client.get("/portal/medical_records")
+    # The instructor records page is gated now (#82); supervisor view = all.
+    r = client.get("/portal/medical_records?role=supervisor")
     assert r.status_code == 200
     html = r.text
     assert "Helix Health" in html          # branded EHR chrome
@@ -314,7 +315,7 @@ def test_picker_works_in_single_patient_mode(client):
     # Mimic v6 single-patient start by passing one encounter to the
     # room-start route (it will register a singleton too).
     _start_multi(client, n=1)
-    r = client.get("/portal/medical_records")
+    r = client.get("/portal/medical_records?role=supervisor")
     assert r.status_code == 200
     # Exactly one patient card on the picker. Counting the unique
     # per-card href is more reliable than the class-name substring

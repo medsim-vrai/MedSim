@@ -114,15 +114,16 @@ def test_workstation_entry_lists_every_patient(client):
     # Drop auth cookie so the route runs as public.
     from portal import auth
     client.cookies.delete(auth.COOKIE_NAME)
-    r = client.get(f"/students/medical_records?code={room_code}")
+    # Signed-in (supervisor) view lists every patient (#82 gates the terminal).
+    r = client.get(f"/students/medical_records?code={room_code}&role=supervisor")
     assert r.status_code == 200
     html = r.text
     assert "Helix Health" in html          # branded records terminal
-    # Patient cards for every encounter.
     assert html.count("mr-ws-patient-card") >= 2
-    # Identity form fields.
-    assert 'id="mr-ws-name"' in html
-    assert 'id="mr-ws-initials"' in html
+    # The un-authed entry shows the sign-in gate instead (name + initials).
+    gate = client.get(f"/students/medical_records?code={room_code}").text
+    assert 'id="mr-ws-name"' in gate
+    assert 'id="mr-ws-initials"' in gate
 
 
 def test_workstation_entry_no_active_session_shows_empty(client):
