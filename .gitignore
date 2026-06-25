@@ -30,6 +30,10 @@ portal/data/face_portraits/*.jpg
 portal/data/face_portraits/*.jpeg
 portal/data/face_portraits/*.webp
 
+# FR-013 — per-install local-context library (authored standing orders /
+# formulary / priorities). Program data, not repo content.
+portal/data/local_context/
+
 # Never commit dev TLS material (private keys + local CA). Regenerate per machine
 # with scripts/make-dev-cert.sh.
 portal/data/certs/

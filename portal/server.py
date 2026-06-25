@@ -4780,6 +4780,73 @@ async def api_room_staff_remove(
     return JSONResponse({"ok": True})
 
 
+# ── FR-013a — Local-context library (P1: program-wide CRUD) ─────────────
+# Standing orders / formulary / treatment priorities the clinical turn consults
+# AFTER best practice. Authored + reviewed, instructor-only, and NOT session-
+# scoped — a program-wide library that persists across sessions + the reset.sh
+# clean slate. Active items form the overlay a session toggles on (P5) and every
+# turn path injects (P4). Nothing applies until an item is marked active.
+
+@app.get("/api/local-context/items")
+async def api_local_context_list(
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from . import local_context as _lc
+    return JSONResponse({"items": _lc.list_items(), "types": list(_lc.ITEM_TYPES)})
+
+
+@app.post("/api/local-context/items")
+async def api_local_context_add(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from . import local_context as _lc
+    body = await request.json()
+    try:
+        item = _lc.add_item(
+            type=str(body.get("type") or ""),
+            title=str(body.get("title") or ""),
+            content=str(body.get("content") or ""),
+            source=str(body.get("source") or "manual"),
+            active=bool(body.get("active")),
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"ok": True, "item": item})
+
+
+@app.patch("/api/local-context/items/{item_id}")
+async def api_local_context_update(
+    item_id: str, request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from . import local_context as _lc
+    body = await request.json()
+    try:
+        item = _lc.update_item(
+            item_id,
+            type=body.get("type"), title=body.get("title"),
+            content=body.get("content"), source=body.get("source"),
+            active=body.get("active"),
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if item is None:
+        raise HTTPException(404, "Unknown local-context item.")
+    return JSONResponse({"ok": True, "item": item})
+
+
+@app.delete("/api/local-context/items/{item_id}")
+async def api_local_context_remove(
+    item_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from . import local_context as _lc
+    if not _lc.remove_item(item_id):
+        raise HTTPException(404, "Unknown local-context item.")
+    return JSONResponse({"ok": True})
+
+
 @app.post("/api/room/med_cart/register")
 async def api_room_med_cart_register(
     request: Request,
