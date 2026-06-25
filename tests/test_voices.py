@@ -139,9 +139,15 @@ def client(tmp_path, monkeypatch):
     monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
 
     from portal import auth, credentials, control_session, voices as _voices
-    # Ensure no stray keyfile / cached key leaks into the offline tests.
-    # The sticky runtime cache (_runtime_key) is process-global, so an
-    # earlier suite that resolved a real key would otherwise carry over.
+    # Ensure no stray keyfile / cached key / VAULT key leaks into the offline
+    # tests. get_api_key resolves vault → env → keyfile → runtime cache; the
+    # vault is process-shared unless isolated, so an earlier suite that wrote an
+    # ELEVENLABS key would carry over and break the offline assertions (passes
+    # alone, fails in the full suite). Isolate all four sources.
+    sandbox = fake_home / ".medsim"
+    sandbox.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(credentials, "VAULT_DIR", sandbox)
+    monkeypatch.setattr(credentials, "VAULT_PATH", sandbox / "vault.enc")
     monkeypatch.setattr(_voices, "KEYFILE", tmp_path / "no-such.key")
     monkeypatch.setattr(_voices, "_runtime_key", "")
     control_session._active = None

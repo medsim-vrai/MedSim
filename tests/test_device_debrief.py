@@ -8,6 +8,23 @@ from portal import control_session, debrief, ehr_db
 from portal.compare import rules_devices
 from portal.devices.engine.state_machine import make_engine
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolate_db(tmp_path, monkeypatch):
+    """Each test gets a FRESH on-disk DB so device events don't accumulate
+    across tests (or read the developer's real ~/.medsim/v7/medsim.db, which
+    was giving e.g. `assert 27 == 1`). ehr_db caches one shared connection, so
+    reset _db_ready/_shared to force a reopen against the tmp DB."""
+    monkeypatch.setattr(ehr_db, "V7_DIR", tmp_path, raising=False)
+    monkeypatch.setattr(ehr_db, "DB_PATH", tmp_path / "medsim.db", raising=False)
+    ehr_db._db_ready = False
+    ehr_db._shared = None
+    yield
+    ehr_db._db_ready = False
+    ehr_db._shared = None
+
 
 def _sess_with_devices(scenario: str = "dbg-test"):
     """Boot a fresh session with one pump and one cabinet, returning the

@@ -64,18 +64,12 @@ jobs:
       - name: Install (dev + serve extras)
         run: pip install -e ".[dev,serve]"
 
-      # Gating: the VRAI Faces ⇄ portal integration (tests/v8) PLUS the v7 suite.
-      # v7 was previously only in the non-blocking step below and silently rotted
-      # to 21 failures; it's now cleaned up + a resume-leak test-isolation bug was
-      # fixed (#85/#86), so it gates here and can't rot again. (numpy is declared
-      # in the dev extra for the room-STT decode.)
-      - name: Portal tests (gating)
-        run: pytest tests/v8 tests/v7 -q
-
-      # Informative: the top-level legacy suites. test_device_debrief has a
-      # fixture DB-isolation issue (accumulated events) and test_voices needs the
-      # pytest-asyncio config / offline handling pinned (#87). Surfaced but
-      # non-blocking until fixed. (v7/v8 excluded — already gated above.)
-      - name: Top-level legacy suite (non-blocking)
-        run: pytest tests --ignore=tests/v7 --ignore=tests/v8 -q
-        continue-on-error: true
+      # Gating: the FULL portal suite (v7 + v8 + top-level). It silently rotted
+      # for a long time because only tests/v8 gated and the rest ran with
+      # continue-on-error. Now everything gates after the v7 cleanup (#85/#86)
+      # and the #87 test-isolation fixes — test_device_debrief gets a per-test DB
+      # (events were accumulating in the shared ~/.medsim DB) and test_voices
+      # isolates the vault (a leaked ELEVENLABS key broke the offline tests under
+      # full-suite ordering); pytest-asyncio is in the dev extra. Nothing rots now.
+      - name: Portal tests (full suite)
+        run: pytest tests -q
