@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Training Bridge VRAI- MedSim · {% block title %}{% endblock %}</title>
   <link rel="stylesheet" href="/static/portal.css">
+  <style>
+    /* FR — bring the classic portal chrome up to the Mission Control card-UI look
+       (dark slate top bar · white sidebar · light content · blue accent). Contained
+       override of portal.css; structure + nav links unchanged. */
+    header.topbar{ background:#14202b; color:#eef4f8; border-bottom:0;
+      box-shadow:0 2px 10px rgba(8,16,30,.22); padding:11px 22px; }
+    header.topbar .brand{ color:#fff; font-weight:700; letter-spacing:.2px; }
+    header.topbar .v-pill{ background:#2b6cb0; color:#fff; border-color:transparent; }
+    header.topbar .logout-form .link, header.topbar .link{ color:#9fb4c4; }
+    header.topbar .logout-form .link:hover, header.topbar .link:hover{ color:#fff; }
+    .layout{ background:#eef2f7; }
+    nav.sidebar{ background:#fff; border-right:1px solid #e1e7ed; }
+    nav.sidebar .nav-label{ color:#8595b8; text-transform:uppercase;
+      letter-spacing:.08em; font-size:.7rem; }
+    nav.sidebar a{ color:#27435a; border-radius:9px; padding:7px 11px;
+      transition:background .12s, color .12s; }
+    nav.sidebar a:hover{ background:#eef3f7; color:#16324a; }
+    nav.sidebar a.active{ background:#2b6cb0; color:#fff; }
+    main.content{ background:#eef2f7; }
+  </style>
 </head>
 <body>
   <header class="topbar">

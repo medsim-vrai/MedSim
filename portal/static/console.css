@@ -327,7 +327,18 @@
 .cockpit-subhead { display: flex; justify-content: flex-end; margin: 0 0 10px; }
 
 /* ── G6 ecosystem board (alternate view of the same Set-up state) ──────── */
-.setup-views { display: flex; gap: 4px; margin: 0 0 16px; }
+.setup-views { display: flex; gap: 4px; margin: 0 0 16px; align-items: center; }
+/* "Generate a scenario" sits on the LIGHT setup row, so the dark-topbar
+   .ct-classic styling (pale blue text) is invisible here — make it a bold,
+   high-contrast gradient button instead. */
+.setup-views .ct-classic {
+  color: #fff; background: linear-gradient(135deg, #2b6cb0, #5b3fd6);
+  border: 0; font-weight: 700; padding: 8px 15px; border-radius: 9px;
+  box-shadow: 0 3px 10px rgba(43,108,176,.35);
+}
+.setup-views .ct-classic:hover {
+  background: linear-gradient(135deg, #255d99, #4f37bd); color: #fff;
+}
 .setup-view-btn {
   cursor: pointer; font-size: 13px; font-weight: 600; color: #5a6b79;
   background: #fff; border: 1px solid #c4cfd9; border-radius: 7px; padding: 6px 16px;
