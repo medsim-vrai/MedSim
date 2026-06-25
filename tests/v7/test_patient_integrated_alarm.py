@@ -221,7 +221,7 @@ def test_code_blue_press_fires_scene_and_cascades(client) -> None:
     assert blue["severity"] in ("danger", "critical")
 
 
-def test_intercom_request_writes_chart_event_and_transcript(client) -> None:
+def test_intercom_request_surfaces_on_bus_and_writes_chart(client) -> None:
     body = _start_room(client, n=1)
     enc = body["encounters"][0]
     eid = enc["encounter_id"]
@@ -232,6 +232,14 @@ def test_intercom_request_writes_chart_event_and_transcript(client) -> None:
               "payload": {"action": "intercom_request", "by": "patient"}},
     )
     assert r.status_code == 200, r.text
+    # #83 — the request now surfaces on the alarm bus the SAME way a call bell
+    # does, so the nurse station board + operator actually see/hear it (before,
+    # it was only a quiet chart entry nobody was alerted to).
+    alarms = client.get("/api/room/alarms").json()["alarms"]
+    inter = [a for a in alarms if a.get("kind") == "intercom_request"]
+    assert len(inter) == 1, f"intercom request did not surface on the bus: {alarms!r}"
+    assert inter[0]["source"] == "device"
+    assert inter[0]["encounter_id"] == eid
     # Chart event exists.
     from portal import ehr_db
     events = ehr_db.events(eid) or []

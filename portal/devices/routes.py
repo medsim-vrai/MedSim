@@ -516,14 +516,26 @@ def _handle_pia_button(sess: control_session.ControlSession,
         )
         return
     if action == "intercom_request":
+        by = (payload.get("by") or "patient")
+        # #83 — Surface the request the SAME way a call bell does: raise an
+        # alarm.injected on the bus so the nurse station board + operator
+        # actually SEE/HEAR it. Previously this only wrote a quiet chart event
+        # that nothing surfaced, so pressing Intercom appeared to do nothing.
+        ehr_db.append_device_event(
+            sess.id, station_id,
+            type="alarm.injected", surface="device",
+            payload={"tone": "intercom_request",
+                     "label": "Intercom request",
+                     "by": by},
+        )
         # The bedside is asking the nurse station to start the
-        # intercom. We write a comm.intercom_request chart event;
+        # intercom. We also write a comm.intercom_request chart event;
         # the nurse station can poll the chart for these or read
         # them off /api/encounter/{id}/transcript.
         ehr_db.append_event(
             sess.id, station_id,
             type="comm.intercom_request", surface="device",
-            payload={"by": "patient",
+            payload={"by": by,
                      "station_id": station_id,
                      "device_kind": "patient_integrated_alarm"},
         )
