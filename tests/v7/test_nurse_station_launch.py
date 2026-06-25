@@ -165,7 +165,10 @@ def test_dashboard_omits_nurse_station_panel_when_no_room(client) -> None:
     the QR."""
     r = client.get("/portal/room")
     assert r.status_code == 200
-    assert "nurse-station-launch" not in r.text
+    # Check the SECTION element, not the bare class — the always-rendered
+    # CARD_STRATEGY config lists ".nurse-station-launch" as a selector
+    # regardless of room state.
+    assert '<section class="nurse-station-launch"' not in r.text
 
 
 # ── Per-Patient Console adds a 4th QR cell ──────────────────────────

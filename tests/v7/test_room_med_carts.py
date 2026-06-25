@@ -330,5 +330,7 @@ def test_control_room_dashboard_includes_med_carts_panel(client) -> None:
 def test_control_room_dashboard_omits_panel_when_no_room(client) -> None:
     r = client.get("/portal/room")
     assert r.status_code == 200
-    # The panel sits under `{% if room %}` — no active room → no panel.
-    assert "med-carts-panel" not in r.text
+    # The panel SECTION sits under `{% if room %}` — no active room → no panel.
+    # (Check the element, not the bare class: the always-rendered CARD_STRATEGY
+    # config lists ".med-carts-panel" as a selector regardless of room state.)
+    assert '<section class="med-carts-panel"' not in r.text

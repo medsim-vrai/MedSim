@@ -80,19 +80,18 @@ def _start_2enc_room(client):
 
 # ── Ops route works in multi-patient mode via ?join=… ───────────────
 
-def test_ops_view_loads_via_join_code_in_multi_encounter_room(client) -> None:
-    """In v7 multi-patient mode, control_session.get_active() returns
-    None — so the OLD ops view redirected to the wizard. M42 wires
-    the route to look up by `?join=<code>` first."""
+def test_ops_view_routes_join_to_setup_in_multi_encounter_room(client) -> None:
+    """In v7 multi-patient mode, control_session.get_active() returns None — so
+    the OLD ops view redirected to the wizard. M42 wires the route to look up by
+    `?join=<code>` first; FR-005's two-stage flow then sends an un-started
+    encounter's LIVE ops view to Setup (where the scenario is started) rather
+    than dead-ending at the wizard. So the join is resolved and carried through."""
     body = _start_2enc_room(client)
     join = body["encounters"][0]["join_code"]
     r = client.get(f"/portal/control/ops?join={join}",
                    follow_redirects=False)
-    assert r.status_code == 200, r.text
-    html = r.text
-    # Bed 1's join code appears in the page (the ops view's invite QR
-    # card uses session.join_code).
-    assert join in html
+    assert r.status_code == 303
+    assert "/portal/control/setup" in r.headers.get("location", "")
 
 
 def test_ops_view_with_unknown_join_falls_back_to_wizard(client) -> None:

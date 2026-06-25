@@ -42,13 +42,12 @@ def test_activity_handler_checks_seed_persona_checkbox() -> None:
     # Locate the activity change handler.
     idx = src.find('ev.target.dataset?.field !== "activity"')
     assert idx >= 0, "activity change handler not found"
-    handler_block = src[idx:idx + 3000]
+    handler_block = src[idx:idx + 4500]
     # Must reference seed_persona_id and check a data-row-persona
-    # checkbox by value.
+    # checkbox by value (M40 roster auto-fill: cb.checked = true).
     assert "a.seed_persona_id" in handler_block
     assert "data-row-persona" in handler_block
-    assert "personaCb.checked = true" in handler_block or \
-           "personaCb.checked=true" in handler_block
+    assert "cb.checked = true" in handler_block
 
 
 def test_activity_handler_checks_each_seed_module_checkbox() -> None:
@@ -56,7 +55,7 @@ def test_activity_handler_checks_each_seed_module_checkbox() -> None:
     data-row-module checkbox in the row's Curriculum drawer."""
     src = _src()
     idx = src.find('ev.target.dataset?.field !== "activity"')
-    handler_block = src[idx:idx + 3000]
+    handler_block = src[idx:idx + 4500]
     # The handler must iterate data-row-module checkboxes.
     assert "data-row-module" in handler_block
     # And reference a.seed_modules.

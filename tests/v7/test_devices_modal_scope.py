@@ -195,7 +195,7 @@ def test_devices_js_filters_cabinet_kind_in_embed_mode() -> None:
     src = js_path.read_text(encoding="utf-8")
     fn_idx = src.find("function fillKindSelect")
     assert fn_idx >= 0
-    body = src[fn_idx:fn_idx + 1200]
+    body = src[fn_idx:fn_idx + 2800]
     # Reads embed_mode flag from bootstrap.
     assert "embed_mode" in body
     # Filters out the cabinet kind.
