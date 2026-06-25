@@ -1039,11 +1039,12 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             }
             # FR-001/002: same med-board injection as /listen (doctor/pharmacist only).
             # FR-008 S3: staged verbal-error context rides the same channel.
-            from . import handoff, med_errors, med_orders
+            from . import handoff, local_context, med_errors, med_orders
             _med_ctx = med_orders.prompt_block_for(sess.id, card)
             _err_ctx = med_errors.prompt_block_for(sess.id, card)
             _ho_ctx = handoff.prompt_block_for(sess.id, card)  # FR-009 H2 — counterpart only
-            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx, _ho_ctx) if x)
+            _lc_ctx = local_context.overlay_block()            # FR-013 P4 — local overlay
+            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx, _ho_ctx, _lc_ctx) if x)
             ic_card = {**card, "_extra_context": _ctx} if _ctx else card
             sim = runtime.create_session_from_data(
                 scenario=scenario_doc, characters={cid: ic_card}, api_key=sess.api_key)
@@ -1192,13 +1193,17 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                     # character on a tablet actually RUNS the handoff and is grounded in
                     # the med board — parity with the single-session branch below. Each
                     # block is a no-op for a non-counterpart / non-doctor-pharmacist.
-                    from . import handoff as _ho2, med_errors as _me2, med_orders as _mo2
+                    from . import (handoff as _ho2, local_context as _lc2,
+                                   med_errors as _me2, med_orders as _mo2)
                     _hsid = getattr(vsess, "id", None)
-                    _rctx = "\n\n".join(x for x in (
-                        _mo2.prompt_block_for(_hsid, card),
-                        _me2.prompt_block_for(_hsid, card),
-                        _ho2.prompt_block_for(_hsid, card),
-                    ) if x) if _hsid else ""
+                    # FR-013 P4 — local-practice overlay (program-wide, no session
+                    # key) applies even when this branch has no bound bed id.
+                    _rparts = [_lc2.overlay_block()]
+                    if _hsid:
+                        _rparts += [_mo2.prompt_block_for(_hsid, card),
+                                    _me2.prompt_block_for(_hsid, card),
+                                    _ho2.prompt_block_for(_hsid, card)]
+                    _rctx = "\n\n".join(x for x in _rparts if x)
                     _rcard = {**card, "_extra_context": _rctx} if _rctx else card
                     _sim = runtime.create_session_from_data(
                         scenario=_scn, characters={cid: _rcard}, api_key=_key)
@@ -1232,11 +1237,12 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
             # FR-001/002: doctor/pharmacist personas get the session's medication
             # board injected into their system prompt (authored data; code-selected
             # recommendation — the model never invents drugs/doses). No-op otherwise.
-            from . import handoff, med_errors, med_orders
+            from . import handoff, local_context, med_errors, med_orders
             _med_ctx = med_orders.prompt_block_for(sess.id, card)
             _err_ctx = med_errors.prompt_block_for(sess.id, card)
             _ho_ctx = handoff.prompt_block_for(sess.id, card)  # FR-009 H2 — counterpart only
-            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx, _ho_ctx) if x)
+            _lc_ctx = local_context.overlay_block()            # FR-013 P4 — local overlay
+            _ctx = "\n\n".join(x for x in (_med_ctx, _err_ctx, _ho_ctx, _lc_ctx) if x)
             turn_card = {**card, "_extra_context": _ctx} if _ctx else card
             sim = runtime.create_session_from_data(
                 scenario=scenario, characters={cid: turn_card}, api_key=sess.api_key,

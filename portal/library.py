@@ -30,7 +30,15 @@ def personas_doc() -> dict[str, Any]:
 
 
 def list_personas() -> list[dict[str, Any]]:
-    return personas_doc().get("personas", [])
+    base = personas_doc().get("personas", [])
+    # FR-013b — append instructor-authored personas (read fresh, not cached, so a
+    # just-saved scenario's cast resolves immediately). No-op when none exist.
+    try:
+        from . import authored_content
+        extra = authored_content.list_personas()
+    except Exception:  # noqa: BLE001 — authoring must never break the static catalog
+        extra = []
+    return [*base, *extra] if extra else base
 
 
 def get_persona(persona_id: str) -> dict[str, Any] | None:
@@ -183,7 +191,15 @@ def sample_scenarios_doc() -> dict[str, Any]:
 
 
 def list_sample_scenarios() -> list[dict[str, Any]]:
-    return sample_scenarios_doc().get("samples", [])
+    base = sample_scenarios_doc().get("samples", [])
+    # FR-013b — append instructor-authored scenarios (sample-record shape) so they
+    # are first-class in the launch wizard. Read fresh (not cached). No-op if none.
+    try:
+        from . import authored_content
+        extra = authored_content.list_scenarios()
+    except Exception:  # noqa: BLE001
+        extra = []
+    return [*base, *extra] if extra else base
 
 
 def get_sample_scenario(scenario_id: str) -> dict[str, Any] | None:

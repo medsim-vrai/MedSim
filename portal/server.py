@@ -668,6 +668,26 @@ async def scenario_new(
     )
 
 
+@app.get("/portal/scenario-studio", response_class=HTMLResponse)
+async def scenario_studio_page(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-013b — Scenario Studio: a guided page (reached from Set up) that prompts
+    the instructor for a premise + patient + LOCAL factors, drafts a full scenario
+    via Claude, and (after review/edit) saves it as a first-class launch-wizard
+    scenario. Active local-context items + the inline local factors ground the
+    draft in this site's practice."""
+    from . import local_context as _lc
+    patients = [{"id": p["id"], "name": p.get("name", ""), "role": p.get("role", "")}
+                for p in library.list_personas()
+                if (p.get("roleGroup") or "") == "Patient"]
+    return templates.TemplateResponse(request, "scenario_studio.html", {
+        "active": "console", "patients": patients,
+        "active_overlay_count": len(_lc.active_items()),
+    })
+
+
 @app.get("/portal/scenarios/{scenario_id}/edit", response_class=HTMLResponse)
 async def scenario_edit(
     scenario_id: str,
@@ -1972,11 +1992,15 @@ async def api_control_operator_turn(
     # FR-009 — inject the shift-handoff prompt block (+ med board / staged errors) so
     # the chosen counterpart RUNS the handoff when engaged via operator PTT. No-op for
     # any non-counterpart character (matched by card id).
-    from portal import handoff as _ho, med_errors as _me, med_orders as _mo
+    # FR-013 P4 — local-practice overlay (program-wide toggle) rides the same
+    # channel, so an operator-engaged character also "speaks local". No-op when
+    # the overlay is off or no items are active.
+    from portal import handoff as _ho, local_context as _lc, med_errors as _me, med_orders as _mo
     _ctx = "\n\n".join(x for x in (
         _mo.prompt_block_for(sess.id, char),
         _me.prompt_block_for(sess.id, char),
         _ho.prompt_block_for(sess.id, char),
+        _lc.overlay_block(),
     ) if x)
     turn_card = {**char, "_extra_context": _ctx} if _ctx else char
     import time as _time
@@ -2045,11 +2069,12 @@ async def api_room_encounter_operator_turn(
     # the chosen counterpart actually RUNS the handoff when the operator engages it
     # here. Keyed by enc.id (the handoff/med/error state's session id under
     # ?bed=<encounter_id>); prompt_block_for is a no-op for any non-counterpart.
-    from portal import handoff as _ho, med_errors as _me, med_orders as _mo
+    from portal import handoff as _ho, local_context as _lc, med_errors as _me, med_orders as _mo
     _ctx = "\n\n".join(x for x in (
         _mo.prompt_block_for(enc.id, char),
         _me.prompt_block_for(enc.id, char),
         _ho.prompt_block_for(enc.id, char),
+        _lc.overlay_block(),                  # FR-013 P4 — local-practice overlay
     ) if x)
     turn_card = {**char, "_extra_context": _ctx} if _ctx else char
     import time as _time
@@ -2194,9 +2219,11 @@ async def api_station_turn(
         )
     # Reuse runtime by creating a transient session per turn — simpler than
     # caching a SimSession alongside ControlSession.
+    from portal import local_context as _lc
+    _ov = _lc.overlay_block()        # FR-013 P4 — local-practice overlay (audio station)
     sim_sess = runtime.create_session_from_data(
         scenario=scenario,
-        characters={persona["id"]: char},
+        characters={persona["id"]: ({**char, "_extra_context": _ov} if _ov else char)},
         api_key=live_key,
     )
     # Replay station history into the sim session so context is preserved
@@ -2317,8 +2344,12 @@ async def api_room_shared_turn(persona_id: str, message: Annotated[str, Form()])
                             status_code=200)
     char = library.persona_as_character(persona)
     scenario = _room_shared_scenario(room)
+    from portal import local_context as _lc
+    _ov = _lc.overlay_block()        # FR-013 P4 — local-practice overlay (shared station)
     sim_sess = runtime.create_session_from_data(
-        scenario=scenario, characters={persona["id"]: char}, api_key=live_key)
+        scenario=scenario,
+        characters={persona["id"]: ({**char, "_extra_context": _ov} if _ov else char)},
+        api_key=live_key)
     import time as _time
     for h in station.history[-runtime.HISTORY_WINDOW:]:
         sim_sess.history.append(runtime.TurnRecord(
@@ -4792,7 +4823,27 @@ async def api_local_context_list(
     _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
 ):
     from . import local_context as _lc
-    return JSONResponse({"items": _lc.list_items(), "types": list(_lc.ITEM_TYPES)})
+    items = _lc.list_items()
+    return JSONResponse({
+        "items": items,
+        "types": list(_lc.ITEM_TYPES),
+        "enabled": _lc.is_enabled(),                                  # P5 toggle state
+        "active_count": sum(1 for it in items if it.get("active")),
+    })
+
+
+@app.post("/api/local-context/enabled")
+async def api_local_context_set_enabled(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """FR-013 P5 — flip the program-wide LOCAL-PRACTICE overlay on/off from the
+    Set-up page. Persisted; every character-turn path reads it at turn time."""
+    from . import local_context as _lc
+    body = await request.json()
+    enabled = _lc.set_enabled(bool(body.get("enabled")))
+    return JSONResponse({"ok": True, "enabled": enabled,
+                         "active_count": len(_lc.active_items())})
 
 
 @app.post("/api/local-context/items")
@@ -4845,6 +4896,58 @@ async def api_local_context_remove(
     if not _lc.remove_item(item_id):
         raise HTTPException(404, "Unknown local-context item.")
     return JSONResponse({"ok": True})
+
+
+# ── FR-013b Scenario Studio — guided AI scenario generation ─────────────────
+
+@app.post("/api/scenario-studio/generate")
+async def api_scenario_studio_generate(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Draft a scenario from the instructor's guided inputs (premise, patient,
+    local factors). Returns the draft for review/edit — saving is a separate,
+    confirmed step (FR-008 posture). The active local-context items + the inline
+    local factors ground the draft in this site's practice (FR-013)."""
+    from . import scenario_gen
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    key = (vault.get("ANTHROPIC_API_KEY") or "") or (_resolve_anthropic_key(None) or "")
+    if not key:
+        return JSONResponse(
+            {"ok": False, "error": "No Anthropic API key configured. Add it at "
+             "/portal/credentials, then try again."}, status_code=200)
+    try:
+        draft = scenario_gen.generate(body, api_key=key)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001 — API/parse failure → clean message, not a 500
+        return JSONResponse({"ok": False, "error": f"Generation failed: {e}"}, status_code=200)
+    return JSONResponse({"ok": True, "draft": draft})
+
+
+@app.post("/api/scenario-studio/save")
+async def api_scenario_studio_save(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Persist a REVIEWED draft as a first-class scenario (+ its synthesized
+    personas). It then appears in the launch wizard's Scenario step, pre-fills the
+    cast, and seeds the EHR from the patient persona + narrative. This is the
+    explicit confirm step (FR-008 'nothing live until confirmed')."""
+    from . import authored_content
+    try:
+        draft = await request.json()
+    except Exception:  # noqa: BLE001
+        draft = {}
+    try:
+        record = authored_content.create_from_draft(draft)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"ok": True, "scenario": {
+        "id": record["id"], "name": record["name"], "personas": record["personas"]}})
 
 
 @app.post("/api/room/med_cart/register")

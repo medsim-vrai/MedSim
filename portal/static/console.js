@@ -400,6 +400,42 @@
     try { return JSON.parse(el.textContent || "{}"); } catch (e) { return null; }
   }
 
+  // FR-013 P5 — local-practice overlay: a program-wide on/off the instructor
+  // sets on the Set-up page. Persisted server-side; every character-turn path
+  // reads it at turn time. The note reflects how many active items will apply.
+  function setLocalContextNote(enabled, activeCount) {
+    var note = document.getElementById("wiz-local-context-note");
+    if (!note) return;
+    if (!enabled) { note.textContent = "Off — best practice only."; return; }
+    note.textContent = activeCount > 0
+      ? "On — " + activeCount + " local item" + (activeCount === 1 ? "" : "s")
+        + " layered on top of best practice."
+      : "On — no active local items yet.";
+  }
+
+  function initLocalContextToggle() {
+    var lcx = document.getElementById("wiz-local-context");
+    if (!lcx) return;
+    fetch("/api/local-context/items").then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) return;
+        lcx.checked = !!d.enabled;
+        setLocalContextNote(!!d.enabled, d.active_count || 0);
+      }).catch(function () {});
+    lcx.addEventListener("change", function () {
+      var on = lcx.checked;
+      fetch("/api/local-context/enabled", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: on }),
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          var en = d ? !!d.enabled : on;
+          lcx.checked = en;
+          setLocalContextNote(en, d ? (d.active_count || 0) : 0);
+        }).catch(function () { lcx.checked = !on; });   // revert on failure
+    });
+  }
+
   function initWizard() {
     var boot = readBootstrap();
     if (!boot || !document.getElementById("launch-wizard")) return;
@@ -449,6 +485,7 @@
       });
     }
     if (launch) launch.addEventListener("click", launchScenario);
+    initLocalContextToggle();            // FR-013 P5 — local-practice overlay switch
     var bedCountEl = $("#wiz-bed-count");
     if (bedCountEl) {
       bedCountEl.addEventListener("change", rebuildBedScenarios);

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scenario Studio · Training Bridge VRAI- MedSim</title>
+  <link rel="stylesheet" href="/static/portal.css">
+<style>
+  /* Card-UI chrome (matches Mission Control: dark slate bar + light panel),
+     NOT the classic base.html sidebar. */
+  body.ss-page{ margin:0; background:#eef2f7; }
+  .ss-topbar{ display:flex; align-items:center; justify-content:space-between; gap:16px;
+    background:#14202b; color:#eef4f8; padding:12px 22px; }
+  .ss-topbar .brand{ font-weight:700; letter-spacing:.2px; }
+  .ss-topbar .vp{ font-size:.7rem; background:#2b6cb0; padding:2px 7px; border-radius:999px; }
+  .ss-topbar .acts{ display:flex; align-items:center; gap:14px; }
+  .ss-topbar a.back{ color:#fff; background:#2b6cb0; padding:8px 13px; border-radius:10px;
+    text-decoration:none; font-size:.9rem; font-weight:600; }
+  .ss-topbar a.back:hover{ background:#255d99; }
+  .ss-topbar .logout{ background:none; border:0; color:#9fb4c4; cursor:pointer; font-size:.9rem; }
+  .ss-topbar .logout:hover{ color:#fff; text-decoration:underline; }
+  .ss-wrap { max-width: 920px; margin:0 auto; padding:22px 20px 64px; }
+  .ss-help { color: var(--muted, #667); margin: 2px 0 14px; }
+  .ss-radio-row { display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin:4px 0 10px; }
+  .ss-sub { padding:10px 12px; background:var(--surface,#f4f6fc); border-radius:8px; margin:6px 0; }
+  .ss-actions { display:flex; gap:12px; align-items:center; margin:18px 0; flex-wrap:wrap; }
+  .ss-status { color: var(--muted,#667); }
+  .ss-status.err { color:#b00020; }
+  #ss-review[hidden] { display:none; }
+  .ss-review-head { display:flex; align-items:center; justify-content:space-between; gap:12px;
+                    border-top:2px solid var(--line,#dde); margin-top:24px; padding-top:16px; }
+  .ss-cast-row { display:grid; grid-template-columns: 1.1fr 1.2fr 2fr auto; gap:8px; margin:6px 0; align-items:center; }
+  .ss-cast-row input { width:100%; }
+  .ss-chip { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--surface,#eef);
+             font-size:.85em; color:var(--muted,#556); }
+  .ss-saved { padding:12px 14px; background:#e8f5e9; border:1px solid #b5dcb8; border-radius:8px; margin-top:14px; }
+  .ss-spin { display:none; }
+  .ss-spin.on { display:inline; }
+  textarea.mono { font-family: ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body class="ss-page">
+  <header class="ss-topbar">
+    <div class="brand">Mission&nbsp;Control <span class="vp">v8</span></div>
+    <div class="acts">
+      <a class="back" href="/portal/console?mode=setup">← Back to Set up</a>
+      <form action="/logout" method="post" style="margin:0">
+        <button type="submit" class="logout">Log out</button></form>
+    </div>
+  </header>
+
+  <div class="ss-wrap">
+    <header class="page-header">
+      <h1>✨ Scenario Studio</h1>
+    </header>
+  <p class="ss-help">Describe the case and your local factors; we draft a complete, runnable
+     scenario you can review, edit, and save. Saved scenarios appear in the launch wizard’s
+     <strong>Scenario</strong> step — cast pre-filled, chart auto-seeded.
+     {% if active_overlay_count %}<br><span class="ss-chip">{{ active_overlay_count }} active local-context item(s)</span>
+     will be folded into generation when the box below is checked.{% endif %}</p>
+
+  <!-- ─────────────── INPUTS ─────────────── -->
+  <section class="form-section">
+    <h2>1 · The case</h2>
+    <label>Premise <span class="muted">(one or two sentences — what's happening)</span>
+      <textarea id="ss-premise" rows="3" placeholder="e.g. 78M POD#2 from sigmoid resection on a med-surg floor, vitals trending toward sepsis."></textarea>
+    </label>
+    <label>Learning objectives <span class="muted">(one per line)</span>
+      <textarea id="ss-objectives" rows="3" placeholder="Recognize the deterioration trend&#10;Initiate the hour-1 sepsis bundle&#10;Closed-loop communication with the attending"></textarea>
+    </label>
+    <div class="grid-2">
+      <label>Acuity / arc
+        <select id="ss-acuity">
+          <option value="stable">Stable / assessment</option>
+          <option value="deteriorating" selected>Gradual deterioration</option>
+          <option value="rapid decompensation">Rapid decompensation</option>
+          <option value="arrest / code">Arrest / code</option>
+        </select>
+      </label>
+      <label>Setting
+        <input type="text" id="ss-setting" placeholder="e.g. Med-surg floor, ED, ICU">
+      </label>
+    </div>
+    <label>Approx. duration (minutes)
+      <input type="number" id="ss-duration" min="5" max="120" value="30" style="max-width:120px">
+    </label>
+  </section>
+
+  <section class="form-section">
+    <h2>2 · Patient</h2>
+    <div class="ss-radio-row">
+      <label><input type="radio" name="ss-pmode" value="new" checked> New patient (from scratch)</label>
+      <label><input type="radio" name="ss-pmode" value="library"> Pick from the library</label>
+    </div>
+    <div id="ss-patient-new" class="ss-sub">
+      <div class="grid-2">
+        <label>Name <span class="muted">(optional — we'll invent one if blank)</span>
+          <input type="text" id="ss-pname" placeholder="e.g. Joseph Diaz"></label>
+        <label>Age <input type="number" id="ss-page" min="0" max="120"></label>
+      </div>
+      <div class="grid-2">
+        <label>Sex <input type="text" id="ss-psex" placeholder="male / female / other"></label>
+        <label>Condition <span class="muted">(primary)</span>
+          <input type="text" id="ss-pcond" placeholder="e.g. septic shock"></label>
+      </div>
+    </div>
+    <div id="ss-patient-lib" class="ss-sub" hidden>
+      <label>Library patient
+        <select id="ss-ppersona">
+          {% for p in patients %}<option value="{{ p.id }}">{{ p.name }}{% if p.role %} — {{ p.role }}{% endif %}</option>{% endfor %}
+        </select>
+      </label>
+      {% if not patients %}<p class="muted">No patient personas in the library yet — use “New patient”.</p>{% endif %}
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h2>3 · Local factors <span class="muted">— what makes this YOUR site's patient</span></h2>
+    <p class="ss-help">These shape the patient presentation, the expected treatment path, and the supporting cast.</p>
+    <label>Local standing orders
+      <textarea id="ss-standing" rows="2" placeholder="e.g. Lactate q2h until normalized; sepsis bundle within 1 h of recognition."></textarea>
+    </label>
+    <label>Issues facing the local patient population
+      <textarea id="ss-population" rows="2" placeholder="e.g. High COPD + frailty; rural transfers; limited ICU beds."></textarea>
+    </label>
+    <label>Key features of the patient(s) being modeled
+      <textarea id="ss-features" rows="2" placeholder="e.g. Older, hard-of-hearing; polypharmacy; caregiver at bedside."></textarea>
+    </label>
+    <label class="checkbox-row"><input type="checkbox" id="ss-use-overlay" checked>
+      Also fold in my active local-context overlay items</label>
+  </section>
+
+  <section class="form-section">
+    <h2>4 · Supporting cast <span class="muted">(optional)</span></h2>
+    <label>Who else is in the scene
+      <input type="text" id="ss-cast-hint" placeholder="e.g. attending, charge nurse, respiratory therapist, anxious spouse"></label>
+  </section>
+
+  <div class="ss-actions">
+    <button type="button" id="ss-generate" class="primary-action">Generate draft</button>
+    <span id="ss-gen-status" class="ss-status"><span id="ss-spin" class="ss-spin">⏳ drafting…</span></span>
+  </div>
+
+  <!-- ─────────────── REVIEW / EDIT ─────────────── -->
+  <section id="ss-review" hidden>
+    <div class="ss-review-head">
+      <h2 style="margin:0">Review &amp; edit the draft</h2>
+      <span class="muted" id="ss-model-note"></span>
+    </div>
+    <p class="ss-help">Nothing is saved until you click <strong>Save</strong>. Edit any field below.</p>
+
+    <section class="form-section">
+      <label>Scenario name <input type="text" id="r-name"></label>
+      <label>Instructor pre-brief / notes <textarea id="r-notes" rows="2"></textarea></label>
+    </section>
+
+    <section class="form-section">
+      <h3>Patient</h3>
+      <div class="grid-2">
+        <label>Name <input type="text" id="r-pname"></label>
+        <label>Age <input type="number" id="r-page" min="0" max="120"></label>
+      </div>
+      <div class="grid-2">
+        <label>Sex <input type="text" id="r-psex"></label>
+        <label>Condition <input type="text" id="r-pcond"></label>
+      </div>
+      <label>Clinical narrative <span class="muted">(drives the chart — keep concrete numbers)</span>
+        <textarea id="r-history" rows="5"></textarea></label>
+      <label>Baseline vitals <span class="muted">(one per line — Key: value)</span>
+        <textarea id="r-vitals" rows="5" class="mono"></textarea></label>
+    </section>
+
+    <section class="form-section">
+      <h3>Supporting cast</h3>
+      <div id="r-cast"></div>
+      <button type="button" id="r-cast-add" class="button-link">+ add character</button>
+    </section>
+
+    <section class="form-section">
+      <h3>Curriculum &amp; expected path</h3>
+      <label>Touchpoints <span class="muted">(one per line)</span>
+        <textarea id="r-touchpoints" rows="4"></textarea></label>
+      <label>Expected treatment path <span class="muted">(one per line)</span>
+        <textarea id="r-treatment" rows="4"></textarea></label>
+    </section>
+
+    <section class="form-section">
+      <h3>Deterioration timeline <span class="muted">(generated; advanced)</span></h3>
+      <pre id="r-timeline" class="ss-sub mono" style="white-space:pre-wrap;overflow:auto;max-height:180px"></pre>
+    </section>
+
+    <div class="ss-actions">
+      <button type="button" id="ss-save" class="primary-action">Save to scenario library</button>
+      <button type="button" id="ss-regen" class="button-link">Regenerate</button>
+      <span id="ss-save-status" class="ss-status"></span>
+    </div>
+    <div id="ss-saved" class="ss-saved" hidden></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  function $(id) { return document.getElementById(id); }
+  function lines(v) { return String(v || "").split("\n").map(function (s) { return s.trim(); }).filter(Boolean); }
+  var draft = null;
+
+  // patient mode toggle
+  function syncPatientMode() {
+    var lib = (document.querySelector('input[name="ss-pmode"]:checked') || {}).value === "library";
+    $("ss-patient-lib").hidden = !lib;
+    $("ss-patient-new").hidden = lib;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="ss-pmode"]'),
+    function (r) { r.addEventListener("change", syncPatientMode); });
+
+  function gatherInputs() {
+    var mode = (document.querySelector('input[name="ss-pmode"]:checked') || {}).value || "new";
+    var ageRaw = $("ss-page").value;
+    return {
+      premise: $("ss-premise").value,
+      objectives: lines($("ss-objectives").value),
+      acuity: $("ss-acuity").value,
+      setting: $("ss-setting").value,
+      duration_min: parseInt($("ss-duration").value, 10) || 30,
+      patient_mode: mode,
+      patient: mode === "library"
+        ? { persona_id: $("ss-ppersona").value }
+        : { name: $("ss-pname").value, age: ageRaw ? parseInt(ageRaw, 10) : null,
+            sex: $("ss-psex").value, condition: $("ss-pcond").value },
+      local_factors: {
+        standing_orders: $("ss-standing").value,
+        population_issues: $("ss-population").value,
+        patient_features: $("ss-features").value,
+      },
+      use_local_overlay: $("ss-use-overlay").checked,
+      cast_hint: $("ss-cast-hint").value,
+    };
+  }
+
+  // ── render the draft into the editable review panel ──
+  function castRow(c) {
+    var row = document.createElement("div");
+    row.className = "ss-cast-row";
+    row.innerHTML =
+      '<input class="c-role" placeholder="role">' +
+      '<input class="c-name" placeholder="name">' +
+      '<input class="c-why"  placeholder="why they\'re in the scene">' +
+      '<button type="button" class="button-link c-rm">✕</button>';
+    row.querySelector(".c-role").value = c.role || "";
+    row.querySelector(".c-name").value = c.name || "";
+    row.querySelector(".c-why").value = c.why || "";
+    row.querySelector(".c-rm").addEventListener("click", function () { row.remove(); });
+    return row;
+  }
+  function vitalsToText(v) {
+    v = v || {}; return Object.keys(v).map(function (k) { return k + ": " + v[k]; }).join("\n");
+  }
+  function textToVitals(t) {
+    var out = {};
+    lines(t).forEach(function (ln) {
+      var i = ln.indexOf(":"); if (i > 0) out[ln.slice(0, i).trim()] = ln.slice(i + 1).trim();
+    });
+    return out;
+  }
+  function renderDraft(d) {
+    draft = d;
+    var p = d.patient || {};
+    $("r-name").value = d.name || "";
+    $("r-notes").value = d.notes || "";
+    $("r-pname").value = p.name || "";
+    $("r-page").value = (p.age != null ? p.age : "");
+    $("r-psex").value = p.sex || "";
+    $("r-pcond").value = p.condition || "";
+    $("r-history").value = p.history || "";
+    $("r-vitals").value = vitalsToText(p.baseline_vitals);
+    var cast = $("r-cast"); cast.innerHTML = "";
+    (d.suggested_cast || []).forEach(function (c) { cast.appendChild(castRow(c)); });
+    $("r-touchpoints").value = ((d.curriculum || {}).touchpoints || []).join("\n");
+    $("r-treatment").value = (d.treatment_path || []).join("\n");
+    $("r-timeline").textContent = JSON.stringify(d.vitals_timeline || [], null, 2);
+    $("ss-model-note").textContent = d._model ? ("drafted by " + d._model) : "";
+    $("ss-review").hidden = false;
+    $("ss-saved").hidden = true;
+    $("ss-save-status").textContent = "";
+    $("ss-review").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  // merge the review edits back into the held draft (preserves _inputs/_model)
+  function gatherEditedDraft() {
+    if (!draft) return null;
+    draft.name = $("r-name").value.trim();
+    draft.notes = $("r-notes").value.trim();
+    draft.patient = draft.patient || {};
+    var ageRaw = $("r-page").value;
+    draft.patient.name = $("r-pname").value.trim();
+    draft.patient.age = ageRaw ? parseInt(ageRaw, 10) : null;
+    draft.patient.sex = $("r-psex").value.trim();
+    draft.patient.condition = $("r-pcond").value.trim();
+    draft.patient.history = $("r-history").value.trim();
+    draft.patient.baseline_vitals = textToVitals($("r-vitals").value);
+    draft.suggested_cast = Array.prototype.map.call($("r-cast").children, function (row) {
+      return { role: row.querySelector(".c-role").value.trim(),
+               name: row.querySelector(".c-name").value.trim(),
+               why: row.querySelector(".c-why").value.trim() };
+    }).filter(function (c) { return c.role; });
+    draft.curriculum = { touchpoints: lines($("r-touchpoints").value) };
+    draft.treatment_path = lines($("r-treatment").value);
+    draft.scenario_text = draft.patient.history;   // narrative seeds the chart
+    return draft;
+  }
+
+  // ── generate ──
+  function generate() {
+    var inputs = gatherInputs();
+    if (!inputs.premise.trim()) { $("ss-premise").focus(); return; }
+    var btn = $("ss-generate"); btn.disabled = true;
+    $("ss-spin").className = "ss-spin on";
+    var st = $("ss-gen-status"); st.className = "ss-status";
+    fetch("/api/scenario-studio/generate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(inputs),
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok && res.j.ok && res.j.draft) { renderDraft(res.j.draft); }
+        else { st.className = "ss-status err"; st.textContent = res.j.error || res.j.detail || "Generation failed."; }
+      })
+      .catch(function () { st.className = "ss-status err"; st.textContent = "Network error."; })
+      .then(function () { btn.disabled = false; $("ss-spin").className = "ss-spin"; });
+  }
+
+  // ── save ──
+  function save() {
+    var d = gatherEditedDraft();
+    if (!d) return;
+    if (!d.name || !d.patient.history) {
+      $("ss-save-status").className = "ss-status err";
+      $("ss-save-status").textContent = "Name and clinical narrative are required.";
+      return;
+    }
+    var btn = $("ss-save"); btn.disabled = true;
+    $("ss-save-status").className = "ss-status"; $("ss-save-status").textContent = "saving…";
+    fetch("/api/scenario-studio/save", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(d),
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok && res.j.ok) {
+          $("ss-save-status").textContent = "";
+          var s = res.j.scenario || {};
+          $("ss-saved").hidden = false;
+          $("ss-saved").innerHTML = "✓ Saved <strong>" + (s.name || "scenario") +
+            "</strong> with " + ((s.personas || []).length) + " character(s). " +
+            'It’s now in the launch wizard. <a href="/portal/console?mode=setup">Go to Set up →</a>';
+        } else {
+          $("ss-save-status").className = "ss-status err";
+          $("ss-save-status").textContent = res.j.detail || res.j.error || "Save failed.";
+        }
+      })
+      .catch(function () { $("ss-save-status").className = "ss-status err"; $("ss-save-status").textContent = "Network error."; })
+      .then(function () { btn.disabled = false; });
+  }
+
+  $("ss-generate").addEventListener("click", generate);
+  $("ss-regen").addEventListener("click", generate);
+  $("ss-save").addEventListener("click", save);
+  $("r-cast-add").addEventListener("click", function () { $("r-cast").appendChild(castRow({})); });
+  syncPatientMode();
+})();
+</script>
+</body>
+</html>

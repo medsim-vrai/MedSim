@@ -161,3 +161,49 @@ def prompt_block(enabled: bool = True) -> str:
         for it in group:
             lines.append(f"  - {it.get('title')}: {it.get('content')}")
     return "\n".join(lines)
+
+
+# ── Program-wide overlay toggle (FR-013 P5) ───────────────────────────────
+# ONE persisted on/off flag for the whole install. The library is program-wide
+# and this single-instructor portal runs one scenario/room at a time, so a
+# single switch (not a per-session flag threaded through every turn path) is the
+# right grain for the MVP. Default OFF = pure best practice. The Set-up page
+# flips it; every character-turn path reads it at TURN TIME via overlay_block().
+# Stored beside the library (program data — reset.sh keeps it, not session
+# state). Path derived from LIBRARY_DIR at call time so a test's monkeypatch of
+# LIBRARY_DIR isolates the toggle too.
+
+def _settings_path() -> Path:
+    return LIBRARY_DIR / "settings.json"
+
+
+def is_enabled() -> bool:
+    """Whether the LOCAL-PRACTICE overlay is switched on program-wide."""
+    try:
+        p = _settings_path()
+        if p.exists():
+            data = json.loads(p.read_text("utf-8"))
+            if isinstance(data, dict):
+                return bool(data.get("enabled", False))
+    except (OSError, ValueError):
+        pass
+    return False
+
+
+def set_enabled(enabled: bool) -> bool:
+    """Persist the program-wide overlay toggle; returns the stored value."""
+    LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+    p = _settings_path()
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"enabled": bool(enabled)}, indent=2), "utf-8")
+    tmp.replace(p)   # atomic swap
+    return bool(enabled)
+
+
+def overlay_block() -> str:
+    """The local overlay a CHARACTER-TURN PATH injects (FR-013 P4): the active-
+    items block when the program toggle is ON, else ''. One call, no session key
+    — the toggle is program-wide. A clean no-op ('') in pure-best-practice mode
+    or with no active items, so every turn path can add it unconditionally next
+    to the med_orders / med_errors / handoff blocks."""
+    return prompt_block(is_enabled())

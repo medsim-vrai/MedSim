@@ -85,6 +85,7 @@
         <div class="setup-views" role="tablist" aria-label="Set up view">
           <button type="button" class="setup-view-btn active" data-view="wizard">Wizard</button>
           <button type="button" class="setup-view-btn" data-view="board">Board</button>
+          <a class="ct-classic" href="/portal/scenario-studio" style="margin-left:auto">✨ Generate a scenario</a>
         </div>
 
         <div id="setup-wizard-view">
@@ -204,6 +205,13 @@
           <div class="wiz-step" data-step="6" hidden>
             <h2>Review</h2>
             <div id="wiz-review" class="wiz-review"></div>
+            <div class="wiz-group wiz-local-context">
+              <label class="wiz-group-opt"><input type="checkbox" id="wiz-local-context">
+                Apply <strong>local-practice overlay</strong>
+                <span class="muted">— characters follow this site's standing orders / formulary /
+                  treatment priorities on top of best practice</span></label>
+              <p class="muted small" id="wiz-local-context-note">Off — best practice only.</p>
+            </div>
             <div class="wiz-readiness">
               <span class="muted">Readiness</span>
               <span id="wiz-readiness-pill" class="wiz-rpill" data-status="loading">checking…</span>

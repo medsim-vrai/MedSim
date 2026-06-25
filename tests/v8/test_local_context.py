@@ -88,6 +88,32 @@ def test_prompt_block_renders_active_grouped_by_type():
     assert "OldDrug" not in block                     # inactive excluded
 
 
+# ── Program-wide overlay toggle + overlay_block (P5) ─────────────────────
+
+def test_enabled_default_off_and_persists():
+    assert lc.is_enabled() is False                   # default OFF = best practice
+    assert lc.set_enabled(True) is True
+    assert lc.is_enabled() is True
+    assert lc.set_enabled(False) is False
+    assert lc.is_enabled() is False
+
+
+def test_overlay_block_follows_toggle_and_active_items():
+    lc.add_item(type="standing_order", title="Sepsis bundle",
+                content="Lactate q2h.", active=True)
+    assert lc.overlay_block() == ""                   # toggle still off → no-op
+    lc.set_enabled(True)
+    block = lc.overlay_block()
+    assert "LOCAL PRACTICE OVERLAY" in block
+    assert "Sepsis bundle: Lactate q2h." in block
+
+
+def test_overlay_block_empty_when_enabled_but_no_active_items():
+    lc.add_item(type="medication", title="X", content="y")   # inactive only
+    lc.set_enabled(True)
+    assert lc.overlay_block() == ""
+
+
 # ── CRUD API (instructor-authed) ────────────────────────────────────────
 
 @pytest.fixture
@@ -146,3 +172,29 @@ def test_api_requires_instructor_auth(client):
     from portal import auth
     client.cookies.delete(auth.COOKIE_NAME)
     assert client.get("/api/local-context/items").status_code in (401, 403)
+
+
+def test_api_list_includes_toggle_state(client):
+    body = client.get("/api/local-context/items").json()
+    assert body["enabled"] is False
+    assert body["active_count"] == 0
+
+
+def test_api_set_enabled_roundtrip(client):
+    client.post("/api/local-context/items", json={
+        "type": "standing_order", "title": "Sepsis", "content": "Lactate q2h.",
+        "active": True})
+    r = client.post("/api/local-context/enabled", json={"enabled": True})
+    assert r.status_code == 200, r.text
+    assert r.json()["enabled"] is True
+    assert r.json()["active_count"] == 1
+    assert client.get("/api/local-context/items").json()["enabled"] is True
+    assert client.post("/api/local-context/enabled",
+                       json={"enabled": False}).json()["enabled"] is False
+
+
+def test_api_set_enabled_requires_auth(client):
+    from portal import auth
+    client.cookies.delete(auth.COOKIE_NAME)
+    assert client.post("/api/local-context/enabled",
+                       json={"enabled": True}).status_code in (401, 403)
