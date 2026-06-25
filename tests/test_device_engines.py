@@ -115,6 +115,26 @@ def test_alaris_apply_resilient_to_missing_channels_key():
     assert new_state["channels"]["A"]["rate_ml_hr"] == 125
 
 
+def test_alaris_program_channel_b_from_single_channel_state():
+    """Regression (#83): a state carrying only {'A'} — e.g. a single-channel
+    pump switched to a dual-channel model via the in-control picker — must NOT
+    silently drop a pump.program for 'B'. The self-heal adds every spec channel
+    so channel B programs instead of vanishing."""
+    from portal.devices.pumps.alaris.engine import PumpIvEngine
+    eng = _setup("t_alaris_chan_b", "stn_chan_b",
+                  device_kind="pump_iv", device_model="alaris")
+    single = {"power": True, "screen": "running", "active_alarms": [],
+              "channels": {"A": PumpIvEngine._empty_channel()}}
+    new_state = eng.apply(single, {
+        "type": "pump.program", "ts": 1234567890.0,
+        "payload": {"channel": "B", "drug_label": "Norepinephrine",
+                     "rate_ml_hr": 12, "vtbi_ml": 100},
+    })
+    assert "B" in new_state["channels"]                    # channel healed in
+    assert new_state["channels"]["B"]["rate_ml_hr"] == 12  # B actually programmed
+    assert new_state["channels"]["A"]["rate_ml_hr"] == 0   # A untouched
+
+
 def test_alaris_alarm_inject_silence_clear():
     eng = _setup("t_alaris_alarm", "stn1",
                   device_kind="pump_iv", device_model="alaris")

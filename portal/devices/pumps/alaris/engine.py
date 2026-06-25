@@ -161,9 +161,18 @@ class PumpIvEngine(DeviceEngine):
         # subclass change) could land here without it. Self-heal so a
         # KeyError never crashes the bootstrap. The repaired state is
         # built from the spec's declared channel list.
-        if "channels" not in state or not isinstance(state.get("channels"), dict):
-            state = {**state, "channels": {ch: PumpIvEngine._empty_channel()
-                                            for ch in self_.spec.get("channels", ["A"])}}
+        # V8 — heal MISSING channels too, not just an absent dict: a state
+        # carrying only {'A'} (e.g. a single-channel pump switched to a
+        # dual-channel model via the in-control picker) would otherwise make
+        # pump.program for 'B' a silent no-op (ch not in channels_in below).
+        spec_channels = self_.spec.get("channels") or ["A"]
+        chans = state.get("channels")
+        if not isinstance(chans, dict):
+            chans = {}
+        missing = {ch: PumpIvEngine._empty_channel()
+                   for ch in spec_channels if ch not in chans}
+        if missing or not isinstance(state.get("channels"), dict):
+            state = {**state, "channels": {**chans, **missing}}
         et = event["type"]
         payload = event.get("payload", {}) or {}
         channels_in = state.get("channels", {})
