@@ -1112,15 +1112,6 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                                 status_code=400)
         scenario_id = str(body.get("scenario") or "default")
 
-        # FR-009 H2 — feed the trainee's utterance to the handoff gap-tracker so the
-        # oncoming-nurse counterpart can probe what was NOT covered (off-going mode).
-        try:
-            from . import handoff as _handoff
-            if _handoff.get(sess.id):
-                _handoff.note_student_utterance(sess.id, text)
-        except Exception:  # noqa: BLE001
-            pass
-
         # Device-token capability check (ADR-0027) — only when enforcement is on.
         # The token is minted into the QR/launch URL for (scenario, character), so a
         # LAN client that never scanned the QR can't drive the avatar / spend AI.
@@ -1196,8 +1187,21 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
                     _scn = {"id": _encs[0].id, "name": _room.label or "Care room",
                             "room_patients": _rps}
                 if _scn is not None and _key:
+                    # FR-009 / FR-001-002 — inject the handoff + med-board + staged-error
+                    # prompt blocks for THIS bed (keyed by vsess.id) so a shared/per-bed
+                    # character on a tablet actually RUNS the handoff and is grounded in
+                    # the med board — parity with the single-session branch below. Each
+                    # block is a no-op for a non-counterpart / non-doctor-pharmacist.
+                    from . import handoff as _ho2, med_errors as _me2, med_orders as _mo2
+                    _hsid = getattr(vsess, "id", None)
+                    _rctx = "\n\n".join(x for x in (
+                        _mo2.prompt_block_for(_hsid, card),
+                        _me2.prompt_block_for(_hsid, card),
+                        _ho2.prompt_block_for(_hsid, card),
+                    ) if x) if _hsid else ""
+                    _rcard = {**card, "_extra_context": _rctx} if _rctx else card
                     _sim = runtime.create_session_from_data(
-                        scenario=_scn, characters={cid: card}, api_key=_key)
+                        scenario=_scn, characters={cid: _rcard}, api_key=_key)
                     import asyncio as _aio0
                     try:
                         _res = await _aio0.wait_for(
@@ -1269,6 +1273,18 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
         # From here, the voice synth + operator log use vsess (the bed we borrowed
         # in room mode; identical to sess in single-patient mode).
         sess = vsess
+
+        # FR-009 H2 — feed the trainee's utterance to the off-going handoff
+        # gap-tracker, keyed by the resolved encounter (the bed in room mode), so
+        # the on-coming counterpart can probe what was NOT covered. (This ran
+        # before `sess` was resolved previously, so it silently never fired.)
+        if sess is not None:
+            try:
+                from . import handoff as _hg
+                if _hg.get(sess.id):
+                    _hg.note_student_utterance(sess.id, text)
+            except Exception:  # noqa: BLE001
+                pass
 
         # Surface the exchange in the OPERATOR's control transcript. The turn above
         # runs in a throwaway runtime session, so without this the operator never
