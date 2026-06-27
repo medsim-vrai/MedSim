@@ -148,7 +148,11 @@ def test_pia_route_renders_device_pia_template(client) -> None:
     assert 'data-action="call_bell"' in html
     assert 'data-action="bed_alarm"' in html
     assert 'data-action="code_blue"' in html
-    assert 'data-action="intercom_request"' in html
+    # FR-016 — Intercom is now a hold-to-talk PTT (live audio over the room WS),
+    # not a tap→alert data-action. The server-side intercom_request handler is
+    # still exercised by test_intercom_request_surfaces_on_bus_and_writes_chart.
+    assert 'id="pia-intercom-btn"' in html
+    assert "/static/intercom.js" in html
     # Loads the PIA JS bundle.
     assert "/static/pia_app.js" in html
     # Generic device skin chrome should NOT be present.

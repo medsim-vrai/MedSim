@@ -6,6 +6,7 @@
   <title>Station — {{ persona.name }}</title>
   <link rel="stylesheet" href="/static/portal.css">
   <link rel="stylesheet" href="/static/station.css">
+  <link rel="stylesheet" href="/static/intercom.css">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#1f3a63">
 </head>
@@ -17,6 +18,19 @@
     </div>
     <span class="badge {% if persona.safetyClass == 'high-risk' %}danger{% elif persona.safetyClass == 'sensitive' %}warn{% else %}ok{% endif %}">{{ persona.safetyClass }}</span>
   </header>
+
+  {# FR-016 — call the nursing station (live audio). Hidden when this station
+     isn't part of a room (no intercom bus). #}
+  {% if room_code %}
+  <div class="station-intercom">
+    <button type="button" id="call-nurse" class="ptt-btn ptt-mini"
+            title="Hold to talk to the nursing station.">📞 Call nurses station</button>
+    <span class="muted small">hold to talk · release to send</span>
+  </div>
+  <div class="intercom-banner" id="intercom-banner">
+    <span class="ib-dot"></span><span id="intercom-banner-text">Nursing station…</span>
+  </div>
+  {% endif %}
 
   <div class="station-chat" id="chat-log">
     {% for h in history %}
@@ -59,10 +73,48 @@
       station_id: {{ station.station_id | tojson }},
       persona_name: {{ persona.name | tojson }},
       voice_profile: {{ voice_profile | tojson }},
-      voice_id: {{ voice_id | tojson }}
+      voice_id: {{ voice_id | tojson }},
+      room_code: {{ room_code | tojson }},
+      encounter_id: {{ encounter_id | tojson }},
+      bed_label: {{ bed_label | tojson }}
     };
   </script>
   <script src="{{ static_v('tts_client.js') }}"></script>
   <script src="{{ static_v('station_chat.js') }}"></script>
+  {# FR-016 — bedside intercom: call the nursing station + hear pages. #}
+  <script src="{{ static_v('intercom.js') }}"></script>
+  <script>
+    (function () {
+      const S = window.MEDSIM2_STATION || {};
+      const IC = window.MedSimIntercom;
+      if (!IC || !S.room_code) return;           // not in a room → no intercom
+      if (!IC.init({ roomCode: S.room_code, role: 'bed',
+                     encounterId: S.encounter_id,
+                     selfLabel: S.bed_label || 'Bedside' })) return;
+      const btn = document.getElementById('call-nurse');
+      if (btn) IC.bindPTT(btn, {});
+      const banner = document.getElementById('intercom-banner');
+      const txt = document.getElementById('intercom-banner-text');
+      function show(label, ms) {
+        if (!banner) return;
+        if (txt) txt.textContent = label;
+        banner.classList.add('show');
+        clearTimeout(banner._t);
+        banner._t = setTimeout(() => banner.classList.remove('show'), ms || 2500);
+      }
+      IC.onState((m) => { if (m.from === 'nurse' && m.on)
+        show('🎙 ' + (m.label || 'Nursing station') + (m.scope === 'all' ? ' — all rooms' : '') + ' calling…', 4000); });
+      // Incoming page transcript — shown here (the module also speaks it).
+      IC.onText((m) => { if (m.from === 'nurse')
+        show('💬 ' + (m.label || 'Nursing station') + (m.scope === 'all' ? ' (all rooms)' : '') + ': ' + (m.text || ''), 6000); });
+      // Local feedback when THIS bedside calls the station.
+      IC.onInterim((t) => { if (t) show('🎙 ' + t, 1500); });
+      IC.onLocal((info) => {
+        if (info.sent) show('✓ Sent to nursing station: ' + info.text, 3000);
+        else if (info.error === 'no-mic') show('Microphone unavailable — allow mic access.', 4000);
+      });
+      IC.onStatus((up) => show(up ? '🛰 Intercom connected' : '⚠ Intercom offline — reconnecting…', 2500));
+    })();
+  </script>
 </body>
 </html>

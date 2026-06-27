@@ -126,6 +126,44 @@
     }, 4000);
   }
 
+  // ── FR-016 — live two-way intercom on the Intercom tile. ──────────
+  //
+  // HOLD the Intercom button → speech-to-text → page the nurses station
+  // (heard there as spoken text). Pages back are spoken here + shown in the
+  // footer + flash the frame. Reuses portal/static/intercom.js over the
+  // room WS. The tile has no data-action, so the alarm-button click loop
+  // skips it. Disabled if this device isn't bound to a room.
+  function initIntercom() {
+    const IC = window.MedSimIntercom;
+    const btn = $('pia-intercom-btn');
+    const last = $('pia-last-event');
+    if (!IC || !cfg.roomCode) {
+      if (btn) {
+        btn.disabled = true;
+        const sub = btn.querySelector('.pia-btn-sub');
+        if (sub) sub.textContent = 'Intercom unavailable (no room)';
+      }
+      return;
+    }
+    if (!IC.init({ roomCode: cfg.roomCode, role: 'bed',
+                   encounterId: cfg.encounterId, selfLabel: cfg.label || 'Bedside' })) return;
+    if (btn) IC.bindPTT(btn, {});
+    IC.onState((m) => { if (m.from === 'nurse' && m.on) {
+      flashFrame('intercom'); if (last) last.textContent = '📟 Nursing station calling…'; } });
+    IC.onText((m) => { if (m.from === 'nurse') {        // module also speaks it
+      flashFrame('intercom'); if (last) last.textContent = '📟 Nurse: ' + (m.text || ''); } });
+    IC.onInterim((t) => { if (t && last) last.textContent = '🎙 ' + t; });
+    IC.onLocal((info) => {
+      if (info.sent) { if (last) last.textContent = '🎙 Sent to nurses station: ' + info.text; return; }
+      if (info.error === 'no-mic' && last) {
+        // Don't raise a clinical alarm for a mic problem — just tell the user.
+        // (The nurses station still got the transient "calling…" indicator.)
+        last.textContent = '🎤 Mic unavailable — allow mic access, or use Call Bell / type a page.';
+      }
+    });
+    IC.onStatus((up) => { if (last && !up) last.textContent = '⚠ Intercom offline — reconnecting…'; });
+  }
+
   // ── Wire buttons. ──────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('[data-action]').forEach(btn => {
@@ -141,6 +179,28 @@
         }
       });
     });
+    // Bedside "Clear alarms" — staff in the room cancel this bed's call-bell /
+    // bed-alarm alerts, like a real wall console. (Server clears device-source
+    // alarms for this encounter; code-blue + physiologic alarms stay.)
+    const clearBtn = $('pia-clear');
+    if (clearBtn) clearBtn.addEventListener('click', async () => {
+      const eid = cfg.encounterId, last = $('pia-last-event');
+      if (!eid) { if (last) last.textContent = 'Clear needs a running room.'; return; }
+      clearBtn.disabled = true;
+      try {
+        const r = await fetch(
+          `/api/room/encounter/${encodeURIComponent(eid)}/clear_alarms`, { method: 'POST' });
+        const j = await r.json().catch(() => ({}));
+        if (last) last.textContent = r.ok
+          ? `✓ Cleared ${j.cleared || 0} alarm(s) · ${new Date().toLocaleTimeString()}`
+          : `Clear failed (${r.status})`;
+      } catch (err) {
+        if (last) last.textContent = 'Clear network error: ' + err;
+      } finally {
+        setTimeout(() => { clearBtn.disabled = false; }, 800);
+      }
+    });
+    initIntercom();
     startCascadePoll();
   });
 

@@ -62,7 +62,15 @@
         <button type="button" class="ns-code-blue-btn"
                 data-code-blue="${escapeHTML(enc.encounter_id)}"
                 title="Fire a code.blue scene at this bed.">🚨 Code Blue</button>
+        <button type="button" class="ptt-btn ptt-mini" data-ptt-bed
+                title="Hold to talk to this room (live audio).">🎙 Hold to talk
+          <span class="ptt-pip" data-ptt-pip></span></button>
       </div>
+      <form class="ns-page-text" data-page-form>
+        <input type="text" data-page-input maxlength="200"
+               placeholder="…or type a page to this room">
+        <button type="submit" class="ns-page-send">Send</button>
+      </form>
     `;
     // M50 — Code Blue button per bed card. POSTs to the new
     // /api/room/encounter/{eid}/nurse_code_blue route with the
@@ -101,7 +109,47 @@
         }
       });
     }
+    // FR-016 — per-bed press-to-talk (live audio) + typed-page fallback.
+    const pttBtn = card.querySelector('[data-ptt-bed]');
+    if (pttBtn && window.MedSimIntercom) {
+      window.MedSimIntercom.bindPTT(pttBtn, { scope: 'bed', encounterId: enc.encounter_id });
+    }
+    const pForm = card.querySelector('[data-page-form]');
+    if (pForm) {
+      pForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const inp = pForm.querySelector('[data-page-input]');
+        const text = (inp.value || '').trim();
+        if (!text || !window.MedSimIntercom) return;
+        // Typed backup → same text frame a spoken page produces.
+        window.MedSimIntercom.sendText(text, { scope: 'bed', encounterId: enc.encounter_id });
+        inp.value = '';
+      });
+    }
     return card;
+  }
+
+  // FR-016 — flash a bed card's pip when that room is transmitting / we play it.
+  function flashBedPip(encounterId, cls, ms) {
+    const grid = document.getElementById('ns-grid');
+    if (!grid) return;
+    const card = grid.querySelector(`[data-encounter-id="${encounterId}"]`);
+    const pip = card && card.querySelector('[data-ptt-pip]');
+    if (!pip) return;
+    pip.classList.add(cls);
+    clearTimeout(pip._t);
+    pip._t = setTimeout(() => pip.classList.remove(cls), ms || 1200);
+  }
+
+  // FR-016 — incoming bedside-talkback banner.
+  function showBanner(text, ms) {
+    const b = document.getElementById('intercom-banner');
+    const t = document.getElementById('intercom-banner-text');
+    if (!b) return;
+    if (t) t.textContent = text;
+    b.classList.add('show');
+    clearTimeout(b._t);
+    b._t = setTimeout(() => b.classList.remove('show'), ms || 2500);
   }
 
   async function pollTelemetryForBed(card, encounter_id) {
@@ -476,6 +524,8 @@
     if (form) form.addEventListener('submit', saveThresholds);
     // M54 — collapse/expand on header click.
     wireThresholdToggle();
+    // FR-016 — live intercom: connect, wire Page-all, receive bedside talkback.
+    initIntercom();
     // M54 — Fast audio ticker. The 3 s state poll caches the latest
     // alarms list in _lastAlarmsForAudio; this 700 ms ticker re-runs
     // the dispatcher against that cache so the 2.5 s danger-tier
@@ -522,5 +572,42 @@
         setState(!expanded);
       }
     });
+  }
+
+  // ── FR-016 — live intercom (nurse role) ────────────────────────────
+  function initIntercom() {
+    const IC = window.MedSimIntercom;
+    if (!IC) return;
+    const roomCode = (window.NURSE_STATION || {}).roomCode || '';
+    if (!IC.init({ roomCode, role: 'nurse', selfLabel: 'Nursing station' })) return;
+    // Page-all — hold to talk to every room at once.
+    const pa = document.getElementById('ns-page-all');
+    if (pa) IC.bindPTT(pa, { scope: 'all' });
+    // Bedside talkback → flash the calling bed + a banner (module plays audio).
+    const labelFor = (eid) => {
+      const grid = document.getElementById('ns-grid');
+      const card = grid && grid.querySelector(`[data-encounter-id="${eid}"]`);
+      const h = card && card.querySelector('h3 span');
+      return (h && h.textContent) || 'A room';
+    };
+    IC.onState((m) => {
+      if (m.from !== 'bed' || !m.encounter_id || !m.on) return;
+      flashBedPip(m.encounter_id, 'rx', 4000);
+      showBanner('🎙 ' + labelFor(m.encounter_id) + ' calling…', 4000);
+    });
+    // Bedside talkback transcript — show it (the module also speaks it).
+    IC.onText((m) => {
+      if (m.from !== 'bed') return;
+      const who = m.encounter_id ? labelFor(m.encounter_id) : (m.label || 'A room');
+      if (m.encounter_id) flashBedPip(m.encounter_id, 'rx', 1500);
+      showBanner('💬 ' + who + ': ' + (m.text || ''), 6000);
+    });
+    // Local feedback so the operator KNOWS the page went out (or why it didn't).
+    IC.onInterim((t) => { if (t) showBanner('🎙 ' + t, 1500); });
+    IC.onLocal((info) => {
+      if (info.sent) showBanner('✓ Paged: ' + info.text, 3000);
+      else if (info.error === 'no-mic') showBanner('Microphone unavailable — allow mic access, or type the page.', 4000);
+    });
+    IC.onStatus((up) => showBanner(up ? '🛰 Intercom connected' : '⚠ Intercom offline — reconnecting…', 2500));
   }
 })();

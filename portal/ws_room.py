@@ -32,11 +32,25 @@ Client behavior on each type:
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from typing import Any
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect, WebSocketState
+
+# FR-016 — intercom (two-way PTT) lets a client RELAY a whitelisted frame to the
+# rest of the room over this otherwise push-only channel. Everything else stays
+# discarded (keepalive). The room_code is the access token, same trust model as
+# the rest of the channel; a size guard bounds a single relayed frame.
+# intercom_state/text = calling indicator + STT caption / typed page (text path).
+# rtc_* = WebRTC signaling for the live-voice path (FR-016b): the WS is the
+# signaling channel; SDP/ICE carry from/to and clients filter by `to`. The voice
+# media itself goes peer-to-peer over WebRTC, NOT through this relay.
+# intercom_audio is the legacy MediaRecorder fallback (kept for compatibility).
+_RELAY_TYPES = {"intercom_state", "intercom_text", "intercom_audio",
+                "rtc_hello", "rtc_offer", "rtc_answer", "rtc_ice", "rtc_bye"}
+_MAX_RELAY_BYTES = 1_200_000   # bounds any single relayed frame (SDP/ICE are tiny)
 
 
 class _RoomManager:
@@ -167,15 +181,27 @@ async def handle_room_ws(ws: WebSocket, room_code: str) -> None:
     presence pings."""
     await manager.connect(room_code, ws)
     try:
-        # Keepalive loop — read and discard anything the client sends.
-        # Without this, disconnects only fire when we try to send and
-        # the socket is closed. The receive cancels on disconnect.
+        # Keepalive loop — read client frames. Whitelisted intercom frames
+        # (FR-016) are RELAYED to the rest of the room; everything else is
+        # discarded. Without this loop, disconnects only fire when we try to
+        # send and the socket is closed. The receive cancels on disconnect.
         while True:
             try:
-                await ws.receive_text()
+                raw = await ws.receive_text()
             except WebSocketDisconnect:
                 break
             except Exception:  # noqa: BLE001
                 break
+            if not raw or len(raw) > _MAX_RELAY_BYTES:
+                continue
+            try:
+                msg = json.loads(raw)
+            except (ValueError, TypeError):
+                continue
+            if isinstance(msg, dict) and msg.get("type") in _RELAY_TYPES:
+                # Re-broadcast to the room; client-side routing (by `from` /
+                # `scope` / `encounter_id`) decides who actually plays it, so
+                # the sender naturally ignores its own echo.
+                await manager.broadcast(room_code, msg)
     finally:
         await manager.disconnect(room_code, ws)

@@ -155,6 +155,48 @@ def test_alarms_sorted_critical_first_then_newest(client) -> None:
         assert last_crit < first_warn
 
 
+def test_clear_device_alarm_from_nurse_station(client) -> None:
+    """Regression: DEVICE alarms (call bell / bed alarm / intercom) must clear
+    from the nurse station via /api/alarm/{id}/clear. They previously honored
+    only tone/all clears, so the alarm_id-based Clear button silently failed."""
+    from portal import ehr_db
+    body = _start_room(client, n=1)
+    eid = body["encounters"][0]["encounter_id"]
+    ehr_db.append_device_event(eid, "pia-A", type="alarm.injected",
+                               surface="device", payload={"tone": "call_bell", "by": "patient"})
+    alarms = client.get("/api/room/alarms").json()["alarms"]
+    dev = next(a for a in alarms if a["source"] == "device" and a["kind"] == "call_bell")
+    r = client.post(f"/api/alarm/{dev['alarm_id']}/clear")
+    assert r.status_code == 200, r.text
+    remaining = client.get("/api/room/alarms").json()["alarms"]
+    assert not any(a["alarm_id"] == dev["alarm_id"] for a in remaining)
+
+
+def test_bedside_clear_alarms_clears_device_not_scene(client) -> None:
+    """Bedside 'Clear alarms' (Integrated Com & Alarm) silences the bed's device
+    alerts (call bell / bed alarm) but leaves a code-blue scene alarm running."""
+    from portal import ehr_db
+    body = _start_room(client, n=1)
+    eid = body["encounters"][0]["encounter_id"]
+    ehr_db.append_device_event(eid, "pia-A", type="alarm.injected",
+                               surface="device", payload={"tone": "bed_alarm", "by": "patient"})
+    client.post(f"/api/encounter/{eid}/scene", json={"scene": {"kind": "code.blue"}})
+    before = client.get("/api/room/alarms").json()["alarms"]
+    assert any(a["source"] == "device" for a in before)
+    assert any(a["source"] == "scene" for a in before)
+    r = client.post(f"/api/room/encounter/{eid}/clear_alarms")
+    assert r.status_code == 200, r.text
+    assert r.json()["cleared"] >= 1
+    after = client.get("/api/room/alarms").json()["alarms"]
+    assert not any(a["source"] == "device" for a in after)   # device alerts cleared
+    assert any(a["source"] == "scene" for a in after)        # code blue persists
+
+
+def test_bedside_clear_alarms_unknown_encounter_404(client) -> None:
+    _start_room(client, n=1)
+    assert client.post("/api/room/encounter/NOPE/clear_alarms").status_code == 404
+
+
 def test_clear_unknown_alarm_404s(client) -> None:
     _start_room(client, n=1)
     r = client.post("/api/alarm/never:exists:0/clear")

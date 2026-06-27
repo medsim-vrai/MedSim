@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nursing Station · {{ room.label or room.room_code }} · Training Bridge VRAI- MedSim</title>
   <link rel="stylesheet" href="{{ static_v('nurse_station.css') }}">
+  <link rel="stylesheet" href="{{ static_v('intercom.css') }}">
 </head>
 <body>
   <main class="ns-page">
@@ -27,9 +28,19 @@
                 title="Open the Medical Records administrative portal in a new window (enter your 2 initials).">
           🩺 Open Supervisor Records
         </button>
+        {# FR-016 — hold to page every bedside at once (live audio). #}
+        <button type="button" id="ns-page-all" class="ptt-btn ptt-all"
+                title="Hold to talk — pages every room at once.">
+          📢 Page all rooms <span class="ptt-pip" id="ns-page-all-pip"></span>
+        </button>
         <span id="ns-status" class="muted small">connecting…</span>
       </div>
     </header>
+
+    {# FR-016 — incoming bedside-talkback banner. #}
+    <div class="intercom-banner" id="intercom-banner">
+      <span class="ib-dot"></span><span id="intercom-banner-text">Incoming…</span>
+    </div>
 
     <script>
       (function () {
@@ -141,6 +152,7 @@
     };
   </script>
   <script src="{{ static_v('ecg_strip.js') }}"></script>
+  <script src="{{ static_v('intercom.js') }}"></script>
   <script src="{{ static_v('nurse_station.js') }}"></script>
 </body>
 </html>

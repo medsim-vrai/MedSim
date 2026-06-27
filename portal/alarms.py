@@ -122,10 +122,17 @@ def _device_alarms_for(encounter_id: str) -> list[dict[str, Any]]:
     # Build a tone → last-cleared-ts index so we know which injected
     # rows are still active.
     cleared_at: dict[str, float] = {}
+    cleared_ids: set[str] = set()
     for ev in rows:
         if ev.get("type") == "alarm.cleared":
             payload = ev.get("payload") or {}
             tone = payload.get("tone")
+            # Per-alarm clear by deterministic id (the nurse-station Clear button
+            # and the bedside "Clear alarms" both write alarm_id). Without this,
+            # device alarms (call bell / bed alarm / intercom) could NOT be
+            # cleared from the nurse station — only by tone/all from the device.
+            if payload.get("alarm_id"):
+                cleared_ids.add(str(payload["alarm_id"]))
             if payload.get("all"):
                 # Clear-all sets cleared_at for every tone at this ts.
                 # We approximate by stamping a wildcard key.
@@ -142,13 +149,16 @@ def _device_alarms_for(encounter_id: str) -> list[dict[str, Any]]:
         payload = ev.get("payload") or {}
         tone = payload.get("tone")
         ev_ts = ev.get("ts", 0)
+        aid = _alarm_id("device", ev.get("id"), encounter_id)
+        if aid in cleared_ids:
+            continue
         if ev_ts <= all_cleared_after:
             continue
         if tone and ev_ts <= cleared_at.get(tone, 0):
             continue
         kind = tone or "device"
         out.append({
-            "alarm_id":        _alarm_id("device", ev.get("id"), encounter_id),
+            "alarm_id":        aid,
             "source":          "device",
             "kind":            kind,
             "encounter_id":    encounter_id,

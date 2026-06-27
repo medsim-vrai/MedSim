@@ -2163,6 +2163,11 @@ async def station_page(
     if persona is None:
         return RedirectResponse(f"/join?code={join_code}", status_code=303)
     voice_profile = library.voice_profile_for(persona)
+    # FR-016 — intercom needs the room bus + this bed's identity. The session
+    # IS the encounter (room.encounters is keyed by session id); room_code is
+    # the active room's code when this session belongs to it.
+    _room = control_room.get_active_room()
+    _room_code = (_room.room_code if (_room and sess.id in _room.encounters) else "")
     return templates.TemplateResponse(
         request, "station.html",
         {
@@ -2174,6 +2179,11 @@ async def station_page(
             # persona ("" → station uses the browser voice).
             "voice_id": sess.voice_assignments.get(persona["id"], ""),
             "history": station.history,
+            # FR-016 — intercom bus + bed identity (empty room_code → single
+            # session not in a room; the intercom UI stays hidden).
+            "room_code": _room_code,
+            "encounter_id": sess.id,
+            "bed_label": getattr(sess, "scenario_name", "") or persona.get("name", "Bedside"),
         },
     )
 
@@ -5803,6 +5813,29 @@ async def api_alarm_clear(
     if result is None:
         raise HTTPException(404, f"Unknown alarm id {alarm_id!r}.")
     return JSONResponse(result)
+
+
+@app.post("/api/room/encounter/{encounter_id}/clear_alarms")
+async def api_encounter_clear_alarms(encounter_id: str):
+    """Bedside 'Clear alarms' (Integrated Com & Alarm device) — silences THIS
+    bed's call-bell / bed-alarm / intercom alerts from the room itself, like a
+    real wall console when staff enter. Public (room-code trust, same model as
+    the PIA buttons). Clears DEVICE-source alarms only; code-blue + physiologic
+    threshold alarms intentionally persist (cleared by the team / nurse station)."""
+    room = control_room.get_active_room()
+    if room is None or encounter_id not in room.encounters:
+        raise HTTPException(404, "Unknown encounter.")
+    cleared = 0
+    for a in alarms_mod.active_alarms(room):
+        if a.get("encounter_id") == encounter_id and a.get("source") == "device":
+            if alarms_mod.clear_alarm(room, str(a.get("alarm_id") or "")):
+                cleared += 1
+    try:
+        await ws_room.manager.broadcast(room.room_code, {
+            "type": "alarms_cleared", "encounter_id": encounter_id, "count": cleared})
+    except Exception:  # noqa: BLE001
+        pass
+    return JSONResponse({"ok": True, "cleared": cleared})
 
 
 # ─────────────────────────────────────────────────────────────────────

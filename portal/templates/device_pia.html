@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Patient Integrated Alarm · {{ station.label or station.id }} · Training Bridge VRAI- MedSim</title>
-  <link rel="stylesheet" href="/static/pia_app.css">
+  <link rel="stylesheet" href="{{ static_v('pia_app.css') }}">
+  <link rel="stylesheet" href="{{ static_v('intercom.css') }}">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#11192f">
 </head>
@@ -50,13 +51,24 @@
         <span class="pia-btn-label">Code Blue</span>
         <span class="pia-btn-sub">Cardiac / respiratory arrest</span>
       </button>
-      <button type="button" class="pia-btn pia-btn-intercom"
-              data-action="intercom_request">
+      {# FR-016 — live two-way intercom. HOLD to talk to the nurses station
+         (speech→text→spoken there); pages back are spoken + shown here. The
+         old tap→alert path is gone in favor of real audio. #}
+      <button type="button" class="pia-btn pia-btn-intercom" id="pia-intercom-btn">
         <span class="pia-btn-icon">🎙</span>
         <span class="pia-btn-label">Intercom</span>
-        <span class="pia-btn-sub">Page nurses station</span>
+        <span class="pia-btn-sub">Hold to talk · nurses station</span>
       </button>
     </main>
+
+    {# Bedside clear — staff enter the room and cancel the call bell / bed alarm,
+       like a real wall console. Code Blue + physiologic alarms stay for the team. #}
+    <button type="button" id="pia-clear"
+            style="display:block;width:100%;margin:14px 0 0;padding:22px;border:0;
+                   border-radius:14px;font:inherit;font-weight:800;font-size:26px;
+                   color:#000;background:#ffd400;cursor:pointer">
+      ✓ Clear alarms — I’m in the room
+    </button>
 
     <footer class="pia-footer">
       <p class="muted small" id="pia-last-event">No events yet.</p>
@@ -68,8 +80,11 @@
       stationId: {{ station.id | tojson }},
       joinCode:  {{ join_code | tojson }},
       label:     {{ (station.label or "Patient Integrated Alarm") | tojson }},
+      roomCode:  {{ (room_code or "") | tojson }},
+      encounterId: {{ (encounter_id or "") | tojson }},
     };
   </script>
-  <script src="/static/pia_app.js"></script>
+  <script src="{{ static_v('intercom.js') }}"></script>
+  <script src="{{ static_v('pia_app.js') }}"></script>
 </body>
 </html>

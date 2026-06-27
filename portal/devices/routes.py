@@ -151,13 +151,22 @@ async def device_app(request: Request, join_code: str, station_id: str):
     # pumps/cabinets.  Branch by kind here so the device-side bundle
     # stays simple per kind.
     template_name = "device_app.html"
+    extra: dict[str, Any] = {}
     if station.get("device_kind") == "patient_integrated_alarm":
         template_name = "device_pia.html"
+        # FR-016 — the PIA's Intercom button joins the live audio bus. It needs
+        # the room code + this bed's encounter id (the session IS the encounter).
+        from portal import control_room as _cr
+        _room = _cr.get_active_room()
+        extra = {
+            "room_code": (_room.room_code if (_room and sess.id in _room.encounters) else ""),
+            "encounter_id": sess.id,
+        }
     return templates.TemplateResponse(
         request, template_name,
         {"join_code": join_code, "station": station,
          "device_kind": station["device_kind"],
-         "device_model": station["device_model"]},
+         "device_model": station["device_model"], **extra},
     )
 
 
