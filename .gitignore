@@ -41,6 +41,10 @@ portal/data/authored/
 # FR-014 — student-scanned chart documents (per-run training artifacts; cleared on reset).
 portal/data/scanned_documents/
 
+# FR-018 S4 — instructor-authored scenario support documents (persistent, NOT
+# reset-cleared; shared via FR-017 export rather than committed binaries).
+portal/data/scenario_docs/
+
 # Never commit dev TLS material (private keys + local CA). Regenerate per machine
 # with scripts/make-dev-cert.sh.
 portal/data/certs/

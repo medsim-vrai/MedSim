@@ -1,6 +1,8 @@
 # FR-018 — Scenario support documents (instructor injection + AI roles)
 
-**Status:** BUILDING (S1). **Logged:** 2026-06-26. Extends FR-014 (scanned docs)
+**Status:** S1–S4 DONE (storage · AI wiring + auto-reveal · auto-summary + operator
+reveal · scenario authoring + load-into-bed). Remaining: Studio inline entry-link +
+field verify. **Logged:** 2026-06-26. Extends FR-014 (scanned docs)
 and ties to FR-017 (scenario export carries authored docs).
 
 ## Problem / goal
@@ -72,12 +74,19 @@ notice + ask); `revealed` only gates **AI engagement**, not student visibility.
   path) — `context` docs are always in the AI; an `on_ask` doc auto-reveals when a
   student brings it up (keyword match on type/name/purpose), then joins. Folds in
   the old S5 (auto-detect). Tests: `test_support_docs_ai.py`.
-- **S3 — Live injection (DONE) + operator reveal (remains):** the patient-control
-  console 📎 Documents card injects live; a manual operator "reveal" button for an
-  on_ask doc is still TODO.
-- **S4 — Authoring injection:** scenario-saved support docs (+ export via FR-017).
-- **S6 — Field verify** on a live scenario (talk to the patient; confirm a
-  context doc is used and an on_ask doc joins only after it's raised).
+- **S3 — Live injection + operator reveal** ✅: the console 📎 Documents card
+  injects live; instructor docs **auto-summarize on inject** (the AI reads the
+  content, not just the purpose); a **"🔓 Reveal to AI now"** button manually
+  reveals a dormant on_ask doc.
+- **S4 — Authoring injection** ✅: persistent per-scenario store
+  (`portal/scenario_docs.py` → `data/scenario_docs/`, survives reset); a manager
+  page `/portal/scenarios/{id}/documents` (linked from the scenario edit page + the
+  scenarios list); and a console **"Load from scenario"** picker that copies a
+  scenario's docs into a running bed (fresh per-run reveal state). Remaining: a
+  Studio *inline* entry-link (the manager is reachable by URL + the scenarios list
+  already covers saved scenarios); FR-017 export will bundle these.
+- **S6 — Field verify** on a live scenario (talk to the patient; confirm a context
+  doc is used and an on_ask doc joins only after it's raised).
 
 ## Open questions
 - on_ask visibility — default is "visible in chart, AI-dormant"; alternative is

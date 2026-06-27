@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Support documents · {{ scenario_name }}{% endblock %}
+{% block content %}
+  <p><a href="/portal/scenarios">← Scenarios</a></p>
+  <h1>📎 Support documents — {{ scenario_name }}</h1>
+  <p class="muted small">Documents authored onto this scenario. They persist and are
+    reusable: load them into a running bed from the patient-control console
+    (<em>Load from scenario</em>). Each carries an AI role and is auto-summarized so
+    the content travels with the scenario.</p>
+
+  {% if documents %}
+  <ul style="list-style:none;padding:0">
+    {% for d in documents %}
+    <li style="border:1px solid #e2e6f0;border-radius:10px;padding:10px;margin:8px 0">
+      <strong>{{ d.filename }}</strong>
+      <span class="muted small">· {{ d.doc_type or "Document" }}{% if d.section %} · {{ d.section }}{% endif %}
+        · {{ "🧠 AI" if d.ai_mode == "context" else ("🕓 not AI until asked" if d.ai_mode == "on_ask" else "—") }}</span>
+      {% if d.purpose %}<div class="muted small">{{ d.purpose }}</div>{% endif %}
+      {% if d.summary %}<div class="muted small">📝 {{ d.summary }}</div>{% endif %}
+      <div style="margin-top:6px">
+        <a href="/portal/scenarios/{{ scenario_id }}/documents/{{ d.id }}/file" target="_blank" rel="noopener">view</a>
+        &nbsp;·&nbsp;
+        <form action="/portal/scenarios/{{ scenario_id }}/documents/{{ d.id }}/delete" method="post" style="display:inline">
+          <button type="submit" class="link" style="border:0;background:none;color:#b3261e;cursor:pointer;padding:0;font:inherit"
+                  onclick="return confirm('Delete this document?')">delete</button>
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted small">No support documents yet.</p>
+  {% endif %}
+
+  <h2>Add a document</h2>
+  <form action="/portal/scenarios/{{ scenario_id }}/documents" method="post" enctype="multipart/form-data"
+        style="display:grid;gap:8px;max-width:560px">
+    <label>File (image or PDF)<br>
+      <input type="file" name="file" accept="image/*,application/pdf" required></label>
+    <label>Type<br>
+      <select name="doc_type">
+        <option>Lab report</option><option>Imaging / Radiology</option>
+        <option>ECG / Diagnostics</option><option>Pathology</option>
+        <option>Consult / Referral</option><option>Other</option>
+      </select></label>
+    <label>File under (chart area)<br>
+      <select name="section">
+        <option>Labs</option><option>Imaging</option><option>Diagnostics</option>
+        <option>Notes</option><option>Medications</option><option>Documents</option>
+      </select></label>
+    <label>Purpose (instructor-only)<br>
+      <input type="text" name="purpose" placeholder="e.g. prior EKG for comparison"></label>
+    <label>Scenario AI role<br>
+      <select name="ai_mode">
+        <option value="context">Part of the AI — characters know about it and can use it</option>
+        <option value="on_ask">Not part of the AI — only joins if a student brings it up</option>
+      </select></label>
+    <div><button type="submit" class="primary-action">📎 Add document</button></div>
+  </form>
+{% endblock %}

@@ -4596,6 +4596,102 @@ async def api_medical_records_reveal_document(persona_id: str, doc_id: str):
     return JSONResponse({"ok": True, "document": out})
 
 
+# ── FR-018 S4 — scenario support documents (authored on a scenario; persistent) ──
+
+@app.get("/portal/scenarios/{scenario_id}/documents", response_class=HTMLResponse)
+async def scenario_documents_page(
+    request: Request,
+    scenario_id: str,
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Manage the support documents authored onto a scenario. They persist with the
+    scenario and are copied into a running bed via the console 'Load from scenario'."""
+    from portal import scenario_docs as _scd, scenarios as _scn
+    sc = _scn.get_scenario(scenario_id) or {}
+    return templates.TemplateResponse(request, "scenario_documents.html", {
+        "scenario_id": scenario_id,
+        "scenario_name": sc.get("name") or scenario_id,
+        "documents": _scd.list_docs(scenario_id),
+    })
+
+
+@app.post("/portal/scenarios/{scenario_id}/documents")
+async def scenario_documents_upload(
+    scenario_id: str,
+    file: Annotated[UploadFile, File()],
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+    doc_type: Annotated[str, Form()] = "",
+    section: Annotated[str, Form()] = "",
+    purpose: Annotated[str, Form()] = "",
+    ai_mode: Annotated[str, Form()] = "",
+):
+    from portal import scenario_docs as _scd, doc_summary as _sum
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Empty file.")
+    if len(data) > 12 * 1024 * 1024:
+        raise HTTPException(400, "File too large (max 12 MB).")
+    try:
+        rec = _scd.save_doc(scenario_id, file.filename or "doc", data,
+                            doc_type=doc_type, section=section, purpose=purpose,
+                            ai_mode=ai_mode, content_type=file.content_type or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    # Auto-summarize (vision/PDF) so the AI content travels with the scenario.
+    if _sum.supported(rec.get("ext", "")):
+        key = (vault.get("ANTHROPIC_API_KEY") or "") or (_resolve_anthropic_key(None) or "")
+        if key:
+            try:
+                _scd.set_summary(scenario_id, rec["id"],
+                                 _sum.summarize(data, rec["ext"], api_key=key))
+            except Exception:  # noqa: BLE001 — best-effort
+                pass
+    return RedirectResponse(f"/portal/scenarios/{scenario_id}/documents", status_code=303)
+
+
+@app.post("/portal/scenarios/{scenario_id}/documents/{doc_id}/delete")
+async def scenario_documents_delete(
+    scenario_id: str, doc_id: str,
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from portal import scenario_docs as _scd
+    _scd.delete_doc(scenario_id, doc_id)
+    return RedirectResponse(f"/portal/scenarios/{scenario_id}/documents", status_code=303)
+
+
+@app.get("/portal/scenarios/{scenario_id}/documents/{doc_id}/file")
+async def scenario_documents_file(
+    scenario_id: str, doc_id: str,
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from portal import scenario_docs as _scd
+    p = _scd.doc_path(scenario_id, doc_id)
+    if p is None:
+        raise HTTPException(404, "Document not found.")
+    rec = _scd.get_doc(scenario_id, doc_id) or {}
+    return FileResponse(str(p), media_type=rec.get("content_type") or "application/octet-stream")
+
+
+@app.post("/api/room/encounter/{encounter_id}/load_scenario_docs")
+async def api_encounter_load_scenario_docs(encounter_id: str, request: Request):
+    """FR-018 S4 — copy a scenario's authored support docs into this running bed
+    (manual one-click from the console). Workstation trust model."""
+    from portal import scenario_docs as _scd
+    room = control_room.get_active_room()
+    enc = room.encounters.get(encounter_id) if room else None
+    if enc is None:
+        raise HTTPException(404, "Unknown encounter.")
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    scenario_id = str(body.get("scenario_id") or "").strip()
+    if not scenario_id:
+        raise HTTPException(400, "scenario_id required.")
+    n = _scd.copy_to_encounter(scenario_id, enc.id, enc.patient_persona_id or "")
+    return JSONResponse({"ok": True, "copied": n})
+
+
 # ── FR-015 — clinical report generator (R1: labs) ───────────────────────────
 
 def _report_seed(persona_id: str, mode: str = "live") -> dict[str, Any] | None:
@@ -6122,6 +6218,8 @@ async def portal_room_encounter_console(
             "base_url": _base_url_for_qr(request),
             "back_url": back_url,
             "back_label": back_label,
+            # FR-018 S4 — scenarios the instructor can "Load from" into this bed.
+            "scenarios": scenarios.list_scenarios(),
         },
     )
 

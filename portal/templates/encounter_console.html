@@ -442,6 +442,18 @@
       file it under a chart area, and choose the scenario AI role. Students see the
       document in their chart; the role only decides whether the AI characters use it.
     </p>
+    {# FR-018 S4 — load a scenario's authored support docs into this bed. #}
+    <div style="margin:8px 0;padding:8px;border:1px dashed #c7ccd9;border-radius:8px">
+      <label class="muted small">Load a scenario's authored support documents into this bed:</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px">
+        <select id="load-scn">
+          <option value="">— pick a scenario —</option>
+          {% for s in scenarios %}<option value="{{ s.id }}">{{ s.name or s.id }}</option>{% endfor %}
+        </select>
+        <button type="button" class="btn" id="load-scn-btn">📥 Load into this bed</button>
+        <span id="load-scn-status" class="muted small"></span>
+      </div>
+    </div>
     <div id="docs-list"><p class="muted small">Loading…</p></div>
     <div style="margin-top:10px;display:grid;gap:8px;max-width:560px">
       <label class="muted small">File (image or PDF)<br>
@@ -562,6 +574,21 @@
             })
             .catch(function(){ stEl.textContent = "Network error."; })
             .then(function(){ upEl.disabled = false; });
+        });
+        // FR-018 S4 — load a scenario's authored docs into this bed.
+        var lb = document.getElementById("load-scn-btn");
+        if (lb) lb.addEventListener("click", function(){
+          var sid = document.getElementById("load-scn").value;
+          var ls = document.getElementById("load-scn-status");
+          if (!sid){ if (ls) ls.textContent = "Pick a scenario first."; return; }
+          lb.disabled = true; if (ls) ls.textContent = "Loading…";
+          fetch("/api/room/encounter/" + encodeURIComponent({{ encounter.id | tojson }}) + "/load_scenario_docs",
+                { method:"POST", credentials:"same-origin", headers:{"Content-Type":"application/json"},
+                  body: JSON.stringify({ scenario_id: sid }) })
+            .then(function(r){ return r.json(); })
+            .then(function(j){ if (ls) ls.textContent = (j && j.ok) ? ("Loaded " + j.copied + " document(s).") : "Load failed."; load(); })
+            .catch(function(){ if (ls) ls.textContent = "Network error."; })
+            .then(function(){ lb.disabled = false; });
         });
         load();
       })();
