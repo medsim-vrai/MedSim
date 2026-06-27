@@ -447,10 +447,8 @@
         <input type="text" id="mr-doc-purpose" placeholder="e.g. prior EKG for comparison"></label>
       <label><span>Scenario AI role</span>
         <select id="mr-doc-aimode">
-          <option value="">None — chart only</option>
-          <option value="context">Context — the AI may use it</option>
-          <option value="distraction">Distraction — the AI ignores it (red herring)</option>
-          <option value="on_ask">Reveal on ask — dormant until the student asks</option>
+          <option value="context">Part of the AI — characters know about it and can use it</option>
+          <option value="on_ask">Not part of the AI — only joins if a student brings it up</option>
         </select></label>
       <div class="mr-add-actions">
         <button type="button" class="primary-action" id="mr-doc-upload">📎 Import document</button>
@@ -469,7 +467,11 @@
           return s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;").split('"').join("&quot;"); }
         function fmtTs(ts){ try { return new Date(ts*1000).toLocaleString(); } catch(e){ return ""; } }
         function base(){ return "/api/medical_records/" + encodeURIComponent(pid) + "/documents"; }
-        var AI_LABEL = { context:"🧠 AI context", distraction:"🎭 distraction", on_ask:"🙋 reveal on ask" };
+        function aiTag(d){
+          if (d.ai_mode === "context") return "🧠 AI";
+          if (d.ai_mode === "on_ask") return d.revealed ? "🧠 AI (joined when discussed)" : "🕓 not AI — joins if discussed";
+          return d.ai_mode ? esc(d.ai_mode) : "";
+        }
         function render(docs){
           if (!docs.length){ listEl.innerHTML = '<p class="muted small">No documents yet.</p>'; return; }
           var groups = {};
@@ -487,7 +489,7 @@
                 : '<a href="'+fileUrl+'" target="_blank" rel="noopener">📄 '+esc(d.filename)+'</a>';
               var tags = [];
               if (d.doc_type) tags.push(esc(d.doc_type));
-              if (d.source === "instructor" && d.ai_mode) tags.push(AI_LABEL[d.ai_mode] || esc(d.ai_mode));
+              if (d.source === "instructor") { var _t = aiTag(d); if (_t) tags.push(_t); }
               row.innerHTML =
                 '<header><strong>'+esc(d.filename)+'</strong> <span class="muted small">'+
                   (tags.length ? ("· " + tags.join(" · ") + " ") : "") + '· '+fmtTs(d.ts)+'</span></header>'+

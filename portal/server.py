@@ -4475,6 +4475,11 @@ async def api_medical_records_attach_document(
         raise HTTPException(400, "Empty file.")
     if len(data) > 12 * 1024 * 1024:
         raise HTTPException(400, "File too large (max 12 MB).")
+    # FR-018 — student-added chart documents are ALWAYS part of the AI context (no
+    # role choice on the student side); only an instructor injection picks a role
+    # (context = in the AI now; on_ask = outside it until a student brings it up).
+    if source != "instructor":
+        ai_mode = "context"
     try:
         rec = _docs.save_doc(enc.id, persona_id, file.filename or "scan", data,
                              author_name=author_name, author_initials=author_initials,

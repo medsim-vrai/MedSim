@@ -4,14 +4,21 @@
 and ties to FR-017 (scenario export carries authored docs).
 
 ## Problem / goal
-FR-014 lets a *student* scan a document into a patient's chart. Instructors also
-want to **inject documents as scenario support material** — with a stated
-**purpose** and a chosen **AI role**:
-- **Context** — the AI characters are aware of it and may use/discuss it.
-- **Distraction** — a red herring: it sits in the chart for the student to
-  evaluate, but the AI treats it as clinically irrelevant and won't steer toward it.
-- **Reveal-on-ask** — dormant to the AI until the student asks about it; then it
-  enters the conversation (becomes Context).
+FR-014 lets a *student* scan a document into a patient's chart — those are
+**always part of the AI context** (the AI sees what the student charts; no role
+choice or role notation is shown for them).
+
+Instructors also want to **inject documents as scenario support material** — with
+a stated **purpose**, a **type** + **chart area** (filing), and a binary **AI
+role** (refined 2026-06-27 from an earlier 3-way context/distraction/on_ask model):
+- **Part of the AI** (`ai_mode=context`) — characters know about it and may
+  use/discuss it from the start.
+- **Not part of the AI** (`ai_mode=on_ask`) — it sits in the chart but stays
+  OUTSIDE the AI role **until a student brings it up** during the scenario; then it
+  joins the role. If the student never raises it, it stays outside — which
+  naturally provides the "distraction" / red-herring behavior, so there is **no
+  separate Distraction mode** in the UI (the `distraction` value remains accepted
+  by storage but unused).
 
 Two **injection points** (instructor chose *both*): authored into the scenario
 (saved, reusable, travels with export) **and** injected live during a run.

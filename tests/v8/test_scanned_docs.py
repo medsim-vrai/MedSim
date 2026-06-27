@@ -188,3 +188,12 @@ def test_api_instructor_import_with_role_and_section(client):
     assert doc["source"] == "instructor"
     assert doc["doc_type"] == "ECG / Diagnostics" and doc["section"] == "Diagnostics"
     assert doc["ai_mode"] == "on_ask" and doc["purpose"] == "prior EKG for comparison"
+
+
+def test_api_student_upload_is_always_ai_context(client):
+    # FR-018 — a student-added doc is ALWAYS AI context (no role choice on the
+    # student side); the route forces it even if the form omits ai_mode.
+    _start_room(client)
+    doc = client.post("/api/medical_records/P-014/documents",
+                      files={"file": ("scan.png", b"\x89PNG", "image/png")}).json()["document"]
+    assert doc["source"] == "scan" and doc["ai_mode"] == "context"
