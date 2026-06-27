@@ -1,4 +1,8 @@
 {% extends "base.html" %}
+{# Patient control conforms to the Mission Control card standard: no left nav,
+   full-width card grid (the ← Back link at the top covers navigation). #}
+{% block body_class %}no-sidebar{% endblock %}
+{% block sidebar %}{% endblock %}
 {% block title %}{{ encounter.encounter_label or encounter.scenario_name }} · Per-Patient Console{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="{{ static_v('encounter_console.css') }}">
@@ -425,6 +429,129 @@
     <ul class="chart-recent" id="chart-recent">
       <li class="muted small">awaiting first poll…</li>
     </ul>
+  </article>
+
+  {# FR-018 — instructor document injection (kept on the CONTROL console, off the
+     student chart flow). Docs attach to the patient record; the AI role decides
+     whether characters use them. #}
+  <article class="console-card" id="card-documents">
+    <h2>📎 Documents</h2>
+    {% if encounter.patient_persona_id %}
+    <p class="muted small">
+      Import a document (image or PDF) into this patient's record — tag its type,
+      file it under a chart area, and choose the scenario AI role. Students see the
+      document in their chart; the role only decides whether the AI characters use it.
+    </p>
+    <div id="docs-list"><p class="muted small">Loading…</p></div>
+    <div style="margin-top:10px;display:grid;gap:8px;max-width:560px">
+      <label class="muted small">File (image or PDF)<br>
+        <input type="file" id="doc-file" accept="image/*,application/pdf"></label>
+      <label class="muted small">Type<br>
+        <select id="doc-type">
+          <option value="Lab report">Lab report</option>
+          <option value="Imaging / Radiology">Imaging / Radiology</option>
+          <option value="ECG / Diagnostics">ECG / Diagnostics</option>
+          <option value="Pathology">Pathology</option>
+          <option value="Consult / Referral">Consult / Referral</option>
+          <option value="Other">Other</option>
+        </select></label>
+      <label class="muted small">File under (chart area)<br>
+        <select id="doc-section">
+          <option value="Labs">Labs</option>
+          <option value="Imaging">Imaging</option>
+          <option value="Diagnostics">Diagnostics</option>
+          <option value="Notes">Notes &amp; Updates</option>
+          <option value="Medications">Medications (MAR)</option>
+          <option value="Documents">Documents (general)</option>
+        </select></label>
+      <label class="muted small">Purpose (instructor-only)<br>
+        <input type="text" id="doc-purpose" placeholder="e.g. prior EKG for comparison" style="width:100%"></label>
+      <label class="muted small">Scenario AI role<br>
+        <select id="doc-aimode">
+          <option value="context">Part of the AI — characters know about it and can use it</option>
+          <option value="on_ask">Not part of the AI — only joins if a student brings it up</option>
+        </select></label>
+      <div><button type="button" class="btn" id="doc-import">📎 Import document</button>
+        <span id="doc-status" class="muted small"></span></div>
+    </div>
+    <script>
+      (function () {
+        var pid = {{ encounter.patient_persona_id | tojson }};
+        var listEl = document.getElementById("docs-list");
+        var fileEl = document.getElementById("doc-file");
+        var upEl   = document.getElementById("doc-import");
+        var stEl   = document.getElementById("doc-status");
+        if (!listEl || !pid) return;
+        function esc(s){ s=String(s==null?"":s);
+          return s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;").split('"').join("&quot;"); }
+        function fmtTs(ts){ try { return new Date(ts*1000).toLocaleString(); } catch(e){ return ""; } }
+        function base(){ return "/api/medical_records/" + encodeURIComponent(pid) + "/documents"; }
+        function aiTag(d){
+          if (d.ai_mode === "context") return "🧠 AI";
+          if (d.ai_mode === "on_ask") return d.revealed ? "🧠 AI (joined when discussed)" : "🕓 not AI — joins if discussed";
+          return d.ai_mode ? esc(d.ai_mode) : "";
+        }
+        function render(docs){
+          if (!docs.length){ listEl.innerHTML = '<p class="muted small">No documents yet.</p>'; return; }
+          var groups = {};
+          docs.forEach(function(d){ var s = d.section || "Documents"; (groups[s] = groups[s] || []).push(d); });
+          listEl.innerHTML = "";
+          Object.keys(groups).forEach(function(sec){
+            var h = document.createElement("h3"); h.textContent = sec;
+            h.style.cssText = "margin:10px 0 4px;font-size:14px"; listEl.appendChild(h);
+            groups[sec].forEach(function(d){
+              var row = document.createElement("div");
+              row.style.cssText = "margin:6px 0;padding:8px;border:1px solid #e2e6f0;border-radius:8px";
+              var fileUrl = base() + "/" + encodeURIComponent(d.id) + "/file";
+              var isImg = d.content_type && d.content_type.indexOf("image/") === 0;
+              var thumb = isImg
+                ? '<a href="'+fileUrl+'" target="_blank" rel="noopener"><img src="'+fileUrl+'" alt="" style="max-height:80px;border-radius:8px;border:1px solid #e2e6f0"></a>'
+                : '<a href="'+fileUrl+'" target="_blank" rel="noopener">📄 '+esc(d.filename)+'</a>';
+              var tags = [];
+              if (d.doc_type) tags.push(esc(d.doc_type));
+              var _t = aiTag(d); if (_t) tags.push(_t);
+              row.innerHTML =
+                '<div><strong>'+esc(d.filename)+'</strong> <span class="muted small">'+
+                  (tags.length ? ("· " + tags.join(" · ") + " ") : "") + '· '+fmtTs(d.ts)+'</span></div>'+
+                '<div style="margin-top:6px">'+thumb+'</div>'+
+                (d.purpose ? ('<div class="muted small" style="margin-top:4px">'+esc(d.purpose)+'</div>') : '');
+              listEl.appendChild(row);
+            });
+          });
+        }
+        function load(){
+          fetch(base()).then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(j){ if(j) render(j.documents || []); })
+            .catch(function(){ listEl.innerHTML = '<p class="muted small">Could not load documents.</p>'; });
+        }
+        upEl.addEventListener("click", function(){
+          var f = fileEl.files[0];
+          if (!f){ stEl.textContent = "Choose a file first."; return; }
+          stEl.textContent = "Importing…"; upEl.disabled = true;
+          var fd = new FormData();
+          fd.append("file", f);
+          fd.append("source", "instructor");
+          fd.append("author_name", "Instructor"); fd.append("author_initials", "IN");
+          fd.append("doc_type", document.getElementById("doc-type").value);
+          fd.append("section", document.getElementById("doc-section").value);
+          fd.append("purpose", document.getElementById("doc-purpose").value);
+          fd.append("ai_mode", document.getElementById("doc-aimode").value);
+          fetch(base(), { method:"POST", credentials:"same-origin", body: fd })
+            .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+            .then(function(res){
+              if (res.ok && res.j.ok){ stEl.textContent = "Imported.";
+                fileEl.value = ""; document.getElementById("doc-purpose").value = ""; load(); }
+              else { stEl.textContent = res.j.detail || res.j.error || "Import failed."; }
+            })
+            .catch(function(){ stEl.textContent = "Network error."; })
+            .then(function(){ upEl.disabled = false; });
+        });
+        load();
+      })();
+    </script>
+    {% else %}
+    <p class="muted small">No patient persona on this bed — assign one to import documents.</p>
+    {% endif %}
   </article>
 
 </section>

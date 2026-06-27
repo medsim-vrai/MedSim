@@ -24,9 +24,13 @@
     nav.sidebar a:hover{ background:#eef3f7; color:#16324a; }
     nav.sidebar a.active{ background:#2b6cb0; color:#fff; }
     main.content{ background:#eef2f7; }
+    /* Pages that opt out of the left nav (e.g. the patient-control console) go
+       full-width card layout, matching the Mission Control card standard. */
+    body.no-sidebar .layout{ grid-template-columns:1fr; }
+    body.no-sidebar main.content, body.no-sidebar .content{ max-width:none; }
   </style>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <header class="topbar">
     <div class="brand">Training Bridge VRAI- MedSim <span class="v-pill">v7</span></div>
     <form action="/logout" method="post" class="logout-form">
@@ -34,6 +38,7 @@
     </form>
   </header>
   <div class="layout">
+    {% block sidebar %}
     <nav class="sidebar">
       <div class="nav-group">
         <span class="nav-label">Setup</span>
@@ -60,6 +65,7 @@
         <a href="/portal/characters"  class="{% if active == 'characters'  %}active{% endif %}">Characters</a>
       </div>
     </nav>
+    {% endblock %}
     <main class="content">
       {% block content %}{% endblock %}
     </main>
