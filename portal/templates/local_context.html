@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local context · Training Bridge VRAI- MedSim</title>
+  <link rel="stylesheet" href="/static/portal.css">
+<style>
+  body.lc-page{ margin:0; background:#eef2f7; }
+  .lc-topbar{ display:flex; align-items:center; justify-content:space-between; gap:16px;
+    background:#14202b; color:#eef4f8; padding:12px 22px; }
+  .lc-topbar .brand{ font-weight:700; letter-spacing:.2px; }
+  .lc-topbar .vp{ font-size:.7rem; background:#2b6cb0; padding:2px 7px; border-radius:999px; }
+  .lc-topbar .acts{ display:flex; align-items:center; gap:14px; }
+  .lc-topbar a.back{ color:#fff; background:#2b6cb0; padding:8px 13px; border-radius:10px;
+    text-decoration:none; font-size:.9rem; font-weight:600; }
+  .lc-topbar a.back:hover{ background:#255d99; }
+  .lc-topbar .logout{ background:none; border:0; color:#9fb4c4; cursor:pointer; font-size:.9rem; }
+  .lc-topbar .logout:hover{ color:#fff; text-decoration:underline; }
+  .lc-wrap{ max-width:860px; margin:0 auto; padding:22px 20px 64px; }
+  .lc-help{ color:#5b6a8a; margin:2px 0 16px; }
+  .card{ background:#fff; border:1px solid #e1e7ed; border-radius:14px; padding:18px 18px; margin:0 0 18px;
+    box-shadow:0 1px 3px rgba(16,28,54,.05); }
+  .card h2{ margin:0 0 4px; font-size:1.08rem; }
+  .lc-toggle{ display:flex; align-items:center; gap:12px; }
+  .lc-toggle .state{ font-weight:700; }
+  .lc-toggle .on{ color:#1f9d55; } .lc-toggle .off{ color:#8595b8; }
+  .lc-field{ display:block; margin:10px 0 6px; font-weight:600; font-size:.9rem; }
+  .lc-field input, .lc-field select, .lc-field textarea{ width:100%; margin-top:5px; padding:10px 11px;
+    border:1.5px solid #dfe5f2; border-radius:10px; font-size:.97rem; background:#fbfcff; }
+  .lc-field input:focus, .lc-field select:focus, .lc-field textarea:focus{ outline:none; border-color:#2b6cb0;
+    box-shadow:0 0 0 3px rgba(43,108,176,.14); background:#fff; }
+  .lc-row2{ display:grid; grid-template-columns:1fr 2fr; gap:12px; }
+  .btn{ border:0; border-radius:10px; padding:10px 16px; font-weight:700; cursor:pointer; font-size:.95rem; }
+  .btn-primary{ background:linear-gradient(135deg,#2b6cb0,#1f54d6); color:#fff; }
+  .btn-primary:hover{ filter:brightness(1.07); }
+  .btn-ghost{ background:#eef3f7; color:#27435a; }
+  .btn-ghost:hover{ background:#e1ebf3; }
+  .btn-danger{ background:#fff; color:#b00020; border:1.5px solid #f0c2c8; font-weight:600; }
+  .btn-danger:hover{ background:#fdeaec; }
+  .item{ border:1px solid #e6ebf2; border-radius:11px; padding:12px 14px; margin:10px 0; background:#fff; }
+  .item.inactive{ opacity:.62; }
+  .item-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .badge{ font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    padding:3px 9px; border-radius:999px; }
+  .badge.standing_order{ background:#e6f0ff; color:#1d4ed8; }
+  .badge.medication{ background:#e7f8ef; color:#138a52; }
+  .badge.treatment_priority{ background:#fdf0e6; color:#b5651d; }
+  .item-title{ font-weight:700; flex:1 1 auto; }
+  .item-content{ color:#3a4761; margin:7px 0 0; white-space:pre-wrap; }
+  .item-acts{ display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .item-acts .grow{ margin-left:auto; }
+  .switch{ display:inline-flex; align-items:center; gap:6px; font-size:.88rem; color:#27435a; cursor:pointer; }
+  .muted-sm{ color:#8595b8; font-size:.85rem; }
+  .lc-empty{ color:#8595b8; padding:14px 0; }
+</style>
+</head>
+<body class="lc-page">
+  <header class="lc-topbar">
+    <div class="brand">Mission&nbsp;Control <span class="vp">v8</span></div>
+    <div class="acts">
+      <a class="back" href="/portal/console?mode=setup">← Back to Set up</a>
+      <form action="/logout" method="post" style="margin:0">
+        <button type="submit" class="logout">Log out</button></form>
+    </div>
+  </header>
+
+  <div class="lc-wrap">
+    <h1>⚙ Local context</h1>
+    <p class="lc-help">This site's <strong>standing orders, formulary, and treatment priorities</strong>.
+      Active items refine every character's answers on top of best practice (runtime overlay) and ground
+      <a href="/portal/scenario-studio">Scenario Studio</a> generation. Nothing applies until you mark it
+      <strong>Active</strong> and the overlay is on.</p>
+
+    <div class="card">
+      <div class="lc-toggle">
+        <label class="switch"><input type="checkbox" id="lc-enabled"> Overlay</label>
+        <span class="state" id="lc-enabled-state">…</span>
+        <span class="muted-sm" id="lc-enabled-note"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Add an item</h2>
+      <div class="lc-row2">
+        <label class="lc-field">Type
+          <select id="lc-type">
+            <option value="standing_order">Standing order</option>
+            <option value="medication">Medication / formulary</option>
+            <option value="treatment_priority">Treatment priority</option>
+          </select>
+        </label>
+        <label class="lc-field">Title <span class="muted-sm">(short label)</span>
+          <input type="text" id="lc-title" placeholder="e.g. Sepsis bundle — lactate q2h">
+        </label>
+      </div>
+      <label class="lc-field">Content <span class="muted-sm">(the local rule / order / formulary text)</span>
+        <textarea id="lc-content" rows="3" placeholder="e.g. Draw lactate q2h until normalized; broad-spectrum antibiotics within 1 h of recognition."></textarea>
+      </label>
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="lc-active" checked> Mark Active on add</label>
+      <div style="margin-top:10px"><button type="button" id="lc-add" class="btn btn-primary">Add item</button>
+        <span id="lc-add-msg" class="muted-sm"></span></div>
+    </div>
+
+    <div class="card">
+      <h2>Import a document <span class="muted-sm">(PDF · Word · Excel · text)</span></h2>
+      <p class="muted-sm" style="margin:2px 0 10px">We extract candidate items and add them
+        <strong>inactive</strong> for your review below — nothing goes live until you mark it Active.
+        (Best with an Anthropic key configured; otherwise a rough line-by-line split you can clean up.)</p>
+      <input type="file" id="lc-file" accept=".pdf,.docx,.xlsx,.xlsm,.txt,.md,.csv,.tsv">
+      <button type="button" id="lc-import" class="btn btn-primary" style="margin-left:8px">Import</button>
+      <span id="lc-import-msg" class="muted-sm"></span>
+    </div>
+
+    <div class="card">
+      <h2>Library <span class="muted-sm" id="lc-count"></span></h2>
+      <div id="lc-list"><p class="lc-empty">Loading…</p></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+  function $(id){ return document.getElementById(id); }
+  var LABEL = { standing_order:"Standing order", medication:"Medication / formulary",
+                treatment_priority:"Treatment priority" };
+  function esc(s){ s = String(s==null?"":s);
+    return s.split("&").join("&amp;").split("<").join("&lt;")
+            .split(">").join("&gt;").split('"').join("&quot;"); }
+
+  function setEnabledUI(on, count){
+    $("lc-enabled").checked = !!on;
+    $("lc-enabled-state").textContent = on ? "ON" : "OFF";
+    $("lc-enabled-state").className = "state " + (on ? "on" : "off");
+    $("lc-enabled-note").textContent = on
+      ? ((count||0) + " active item(s) applied to every character")
+      : "characters follow best practice only";
+  }
+
+  function render(items){
+    var list = $("lc-list");
+    $("lc-count").textContent = "· " + items.length + " item(s), "
+      + items.filter(function(i){return i.active;}).length + " active";
+    if (!items.length){ list.innerHTML = '<p class="lc-empty">No items yet — add one above.</p>'; return; }
+    list.innerHTML = "";
+    items.forEach(function(it){
+      var d = document.createElement("div");
+      d.className = "item" + (it.active ? "" : " inactive");
+      d.innerHTML =
+        '<div class="item-head"><span class="badge '+esc(it.type)+'">'+esc(LABEL[it.type]||it.type)+'</span>'+
+          '<span class="item-title">'+esc(it.title)+'</span></div>'+
+        '<p class="item-content">'+esc(it.content)+'</p>'+
+        '<div class="item-acts">'+
+          '<label class="switch"><input type="checkbox" class="act" '+(it.active?"checked":"")+'> Active</label>'+
+          '<button type="button" class="btn btn-ghost edit">Edit</button>'+
+          '<button type="button" class="btn btn-danger del grow">Delete</button>'+
+        '</div>';
+      d.querySelector(".act").addEventListener("change", function(e){ patch(it.id, {active:e.target.checked}); });
+      d.querySelector(".del").addEventListener("click", function(){
+        if (confirm("Delete \""+it.title+"\"?")) del(it.id); });
+      d.querySelector(".edit").addEventListener("click", function(){ startEdit(d, it); });
+      list.appendChild(d);
+    });
+  }
+
+  function startEdit(d, it){
+    d.innerHTML =
+      '<label class="lc-field">Title<input type="text" class="e-title"></label>'+
+      '<label class="lc-field">Content<textarea class="e-content" rows="3"></textarea></label>'+
+      '<div class="item-acts"><button type="button" class="btn btn-primary save">Save</button>'+
+        '<button type="button" class="btn btn-ghost cancel">Cancel</button></div>';
+    d.querySelector(".e-title").value = it.title;
+    d.querySelector(".e-content").value = it.content;
+    d.querySelector(".save").addEventListener("click", function(){
+      patch(it.id, { title:d.querySelector(".e-title").value, content:d.querySelector(".e-content").value });
+    });
+    d.querySelector(".cancel").addEventListener("click", load);
+  }
+
+  function load(){
+    fetch("/api/local-context/items").then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if(!d) return; setEnabledUI(d.enabled, d.active_count); render(d.items||[]); })
+      .catch(function(){ $("lc-list").innerHTML = '<p class="lc-empty">Could not load.</p>'; });
+  }
+
+  function add(){
+    var title = $("lc-title").value.trim(), content = $("lc-content").value.trim();
+    if (!title || !content){ $("lc-add-msg").textContent = "Title and content required."; return; }
+    $("lc-add-msg").textContent = "";
+    fetch("/api/local-context/items", { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ type:$("lc-type").value, title:title, content:content, active:$("lc-active").checked }) })
+      .then(function(r){ return r.ok ? r.json() : r.json().then(function(j){ throw new Error(j.detail||"add failed"); }); })
+      .then(function(){ $("lc-title").value=""; $("lc-content").value=""; load(); })
+      .catch(function(e){ $("lc-add-msg").textContent = e.message; });
+  }
+
+  function patch(id, body){
+    fetch("/api/local-context/items/"+encodeURIComponent(id), { method:"PATCH",
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) })
+      .then(load).catch(load);
+  }
+  function del(id){
+    fetch("/api/local-context/items/"+encodeURIComponent(id), { method:"DELETE" }).then(load).catch(load);
+  }
+  function setEnabled(on){
+    fetch("/api/local-context/enabled", { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ enabled:on }) })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){ if(d) setEnabledUI(d.enabled, d.active_count); })
+      .catch(function(){ load(); });
+  }
+
+  function importFile(){
+    var f = $("lc-file").files[0];
+    if (!f){ $("lc-import-msg").textContent = "Choose a file first."; return; }
+    $("lc-import-msg").textContent = "Importing…";
+    var fd = new FormData(); fd.append("file", f);
+    fetch("/api/local-context/ingest", { method:"POST", body: fd })
+      .then(function(r){ return r.json().then(function(j){ return { ok:r.ok, j:j }; }); })
+      .then(function(res){
+        if (res.ok && res.j.ok){
+          $("lc-import-msg").textContent = "Added "+res.j.added+" candidate(s) — review + activate below.";
+          $("lc-file").value = ""; load();
+        } else { $("lc-import-msg").textContent = res.j.detail || res.j.error || "Import failed."; }
+      }).catch(function(){ $("lc-import-msg").textContent = "Network error."; });
+  }
+
+  $("lc-add").addEventListener("click", add);
+  $("lc-import").addEventListener("click", importFile);
+  $("lc-enabled").addEventListener("change", function(e){ setEnabled(e.target.checked); });
+  load();
+})();
+</script>
+</body>
+</html>

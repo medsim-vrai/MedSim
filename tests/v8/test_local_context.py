@@ -198,3 +198,11 @@ def test_api_set_enabled_requires_auth(client):
     client.cookies.delete(auth.COOKIE_NAME)
     assert client.post("/api/local-context/enabled",
                        json={"enabled": True}).status_code in (401, 403)
+
+
+def test_management_page_renders(client):
+    r = client.get("/portal/local-context")
+    assert r.status_code == 200
+    assert "Local context" in r.text
+    assert "/api/local-context/items" in r.text       # CRUD JS wired
+    assert "/api/local-context/enabled" in r.text      # overlay toggle wired

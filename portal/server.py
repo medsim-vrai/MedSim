@@ -688,6 +688,19 @@ async def scenario_studio_page(
     })
 
 
+@app.get("/portal/local-context", response_class=HTMLResponse)
+async def local_context_page(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-013a P3 — manage the local-context library (standing orders / formulary /
+    treatment priorities): add, edit, activate/deactivate, delete, and flip the
+    program-wide overlay. CRUD via /api/local-context/*. Active items refine every
+    character turn (runtime overlay) AND ground Scenario Studio generation."""
+    return templates.TemplateResponse(request, "local_context.html",
+                                      {"active": "console"})
+
+
 @app.get("/portal/scenarios/{scenario_id}/edit", response_class=HTMLResponse)
 async def scenario_edit(
     scenario_id: str,
@@ -4906,6 +4919,30 @@ async def api_local_context_remove(
     if not _lc.remove_item(item_id):
         raise HTTPException(404, "Unknown local-context item.")
     return JSONResponse({"ok": True})
+
+
+@app.post("/api/local-context/ingest")
+async def api_local_context_ingest(
+    file: Annotated[UploadFile, File()],
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """FR-013a P2 — upload a PDF / Word / Excel / text document; extract + structure
+    it into candidate local-context items, added INACTIVE for review in the P3 UI.
+    Nothing goes live until the instructor activates it (FR-008 posture)."""
+    from . import local_context_ingest as _ing
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Empty file.")
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(400, "File too large (max 8 MB).")
+    key = (vault.get("ANTHROPIC_API_KEY") or "") or (_resolve_anthropic_key(None) or "")
+    try:
+        result = _ing.ingest(file.filename or "upload", data, api_key=key)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001 — parse failure → clean message, not a 500
+        return JSONResponse({"ok": False, "error": f"Ingestion failed: {e}"}, status_code=200)
+    return JSONResponse({"ok": True, "added": result["added"], "items": result["items"]})
 
 
 # ── FR-013b Scenario Studio — guided AI scenario generation ─────────────────
