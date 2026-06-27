@@ -120,6 +120,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(credentials, "VAULT_DIR", sb)
     monkeypatch.setattr(credentials, "VAULT_PATH", sb / "vault.enc")
     monkeypatch.setattr(server_mod, "_anthropic_runtime_key", "")
+    # FR-018 — instructor uploads auto-summarize (vision); stub it so tests never
+    # hit the network. Student uploads (source != instructor) don't call it.
+    import portal.doc_summary as _ds
+    monkeypatch.setattr(_ds, "summarize", lambda data, ext, **kw: "STUB SUMMARY")
     control_room._reset_for_tests()
     if not credentials.is_initialized():
         credentials.initialize("test_passwd_xyz_8chars")
@@ -224,6 +228,29 @@ def test_api_instructor_import_with_role_and_section(client):
     assert doc["source"] == "instructor"
     assert doc["doc_type"] == "ECG / Diagnostics" and doc["section"] == "Diagnostics"
     assert doc["ai_mode"] == "on_ask" and doc["purpose"] == "prior EKG for comparison"
+    assert doc["summary"] == "STUB SUMMARY"          # FR-018 — auto-summarized on inject
+
+
+def test_api_operator_reveal(client):
+    # FR-018 S3 — operator manually reveals a dormant on_ask doc to the AI.
+    _start_room(client)
+    doc = client.post(
+        "/api/medical_records/P-014/documents",
+        files={"file": ("ekg.png", b"\x89PNG", "image/png")},
+        data={"source": "instructor", "ai_mode": "on_ask", "doc_type": "ECG"}).json()["document"]
+    assert doc["revealed"] is False
+    r = client.post(f"/api/medical_records/P-014/documents/{doc['id']}/reveal")
+    assert r.status_code == 200, r.text
+    assert r.json()["document"]["revealed"] is True
+
+
+def test_api_student_upload_not_auto_summarized(client):
+    # Student docs (source != instructor) are NOT auto-summarized; summary stays
+    # empty until the student runs the manual AI-summary flow.
+    _start_room(client)
+    doc = client.post("/api/medical_records/P-014/documents",
+                      files={"file": ("scan.png", b"\x89PNG", "image/png")}).json()["document"]
+    assert doc["summary"] == "" and doc["ai_mode"] == "context"
 
 
 def test_api_student_upload_is_always_ai_context(client):

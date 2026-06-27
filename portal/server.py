@@ -4488,6 +4488,20 @@ async def api_medical_records_attach_document(
                              purpose=purpose, ai_mode=ai_mode)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    # FR-018 — auto-summarize an INSTRUCTOR-injected doc (vision/PDF) so the AI gets
+    # the document's CONTENT, not just the purpose note. Best-effort: the purpose
+    # still feeds the AI if this fails or no key is configured.
+    if source == "instructor":
+        from portal import doc_summary as _sum
+        if _sum.supported(rec.get("ext", "")):
+            key = _resolve_anthropic_key(enc) or ""
+            if key:
+                try:
+                    _summary = _sum.summarize(data, rec.get("ext", ""), api_key=key)
+                    _docs.set_summary(enc.id, rec["id"], _summary, approved=True)
+                    rec = _docs.get_doc(enc.id, rec["id"]) or rec
+                except Exception:  # noqa: BLE001 — best-effort; purpose still feeds the AI
+                    pass
     return JSONResponse({"ok": True, "document": rec,
                          "total": len(_docs.list_docs(enc.id, persona_id))})
 
@@ -4562,6 +4576,21 @@ async def api_medical_records_save_summary(persona_id: str, doc_id: str, request
         body = {}
     out = _docs.set_summary(enc.id, doc_id, str(body.get("summary") or ""),
                             approved=bool(body.get("approved")))
+    if out is None:
+        raise HTTPException(404, "Document not found.")
+    return JSONResponse({"ok": True, "document": out})
+
+
+@app.post("/api/medical_records/{persona_id}/documents/{doc_id}/reveal")
+async def api_medical_records_reveal_document(persona_id: str, doc_id: str):
+    """FR-018 S3 — operator manually reveals an on_ask document to the AI (a backup
+    to the auto-reveal that fires when a student brings it up). Flips revealed=True
+    so the doc joins the character turn context."""
+    from portal import scanned_docs as _docs
+    enc = _encounter_for_persona(persona_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown patient persona {persona_id!r}.")
+    out = _docs.set_reveal(enc.id, doc_id, True)
     if out is None:
         raise HTTPException(404, "Document not found.")
     return JSONResponse({"ok": True, "document": out})

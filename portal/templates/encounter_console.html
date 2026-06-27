@@ -515,6 +515,23 @@
                   (tags.length ? ("· " + tags.join(" · ") + " ") : "") + '· '+fmtTs(d.ts)+'</span></div>'+
                 '<div style="margin-top:6px">'+thumb+'</div>'+
                 (d.purpose ? ('<div class="muted small" style="margin-top:4px">'+esc(d.purpose)+'</div>') : '');
+              // FR-018 S3 — manual operator reveal for a dormant on_ask doc.
+              if (d.source === "instructor" && d.ai_mode === "on_ask" && !d.revealed) {
+                var rb = document.createElement("button"); rb.type = "button";
+                rb.textContent = "🔓 Reveal to AI now";
+                rb.style.cssText = "margin-top:6px;padding:5px 10px;border-radius:8px;" +
+                  "border:1px solid #c7ccd9;background:#fff;cursor:pointer;font:inherit";
+                rb.addEventListener("click", function(){
+                  rb.disabled = true; rb.textContent = "Revealing…";
+                  fetch(base() + "/" + encodeURIComponent(d.id) + "/reveal",
+                        { method:"POST", credentials:"same-origin" })
+                    .then(function(r){ return r.json(); })
+                    .then(function(j){ if (j && j.ok) load();
+                      else { rb.disabled = false; rb.textContent = "🔓 Reveal to AI now"; } })
+                    .catch(function(){ rb.disabled = false; rb.textContent = "🔓 Reveal to AI now"; });
+                });
+                row.appendChild(rb);
+              }
               listEl.appendChild(row);
             });
           });
