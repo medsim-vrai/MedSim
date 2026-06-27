@@ -45,6 +45,25 @@ def test_set_summary():
     assert sd.set_summary("enc1", "nope", "x") is None
 
 
+# ── FR-018 — instructor support docs: roles + reveal ──────────────────────────
+
+def test_instructor_doc_fields_and_reveal():
+    rec = sd.save_doc("enc1", "P-1", "old_ekg.png", b"x", source="instructor",
+                      purpose="prior EKG for comparison", ai_mode="on_ask")
+    assert rec["source"] == "instructor"
+    assert rec["purpose"] == "prior EKG for comparison"
+    assert rec["ai_mode"] == "on_ask" and rec["revealed"] is False
+    upd = sd.set_reveal("enc1", rec["id"])
+    assert upd["revealed"] is True and "reveal_ts" in upd
+    assert sd.set_reveal("enc1", "nope") is None
+
+
+def test_ai_mode_normalizes():
+    assert sd.save_doc("e", "P", "a.pdf", b"%PDF", ai_mode="Context")["ai_mode"] == "context"
+    assert sd.save_doc("e", "P", "b.pdf", b"%PDF", ai_mode="BOGUS")["ai_mode"] == ""
+    assert sd.save_doc("e", "P", "c.pdf", b"%PDF")["ai_mode"] == ""    # student-doc default
+
+
 # ── attach / list / serve API ────────────────────────────────────────────────
 
 @pytest.fixture

@@ -26,6 +26,9 @@ from typing import Any
 DOCS_DIR = Path(__file__).resolve().parent / "data" / "scanned_documents"
 
 ALLOWED_EXT = {"png", "jpg", "jpeg", "webp", "gif", "heic", "heif", "pdf"}
+
+# FR-018 — instructor support-document AI roles (any other value normalizes to "").
+AI_MODES = {"context", "distraction", "on_ask"}
 _CONTENT_TYPE = {
     "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
     "webp": "image/webp", "gif": "image/gif", "heic": "image/heic",
@@ -72,11 +75,14 @@ def _ext_of(filename: str) -> str:
 
 def save_doc(enc_id: str, persona_id: str, filename: str, data: bytes, *,
              author_name: str = "", author_initials: str = "",
-             content_type: str = "", source: str = "scan", kind: str = "") -> dict[str, Any]:
+             content_type: str = "", source: str = "scan", kind: str = "",
+             purpose: str = "", ai_mode: str = "") -> dict[str, Any]:
     """Persist a document for (encounter, patient). `source` distinguishes a
-    student "scan" (FR-014) from an instructor-generated "report" (FR-015); `kind`
-    carries the report's label (e.g. "Lab report"). Raises ValueError on an
-    unsupported type. Returns the new record."""
+    student "scan" (FR-014), an instructor-generated "report" (FR-015), and an
+    instructor "instructor" support doc (FR-018). For FR-018: `purpose` is the
+    instructor's note and `ai_mode` is the AI role (context | distraction | on_ask;
+    any other value normalizes to ""). `kind` carries a report label. Raises
+    ValueError on an unsupported type. Returns the new record."""
     ext = _ext_of(filename)
     if ext not in ALLOWED_EXT:
         raise ValueError(f"unsupported document type: .{ext or '?'} "
@@ -95,8 +101,11 @@ def save_doc(enc_id: str, persona_id: str, filename: str, data: bytes, *,
         "ts": time.time(),
         "author_name": (author_name or "").strip()[:80],
         "author_initials": (author_initials or "").upper().strip()[:4],
-        "source": (source or "scan").strip()[:16],     # "scan" | "report"
+        "source": (source or "scan").strip()[:16],     # "scan" | "report" | "instructor"
         "kind": (kind or "").strip()[:40],              # report label, when source="report"
+        "purpose": (purpose or "").strip()[:300],       # FR-018 — instructor note (instructor-only)
+        "ai_mode": (lambda m: m if m in AI_MODES else "")((ai_mode or "").strip().lower()),
+        "revealed": False,          # FR-018 on_ask — gates AI engagement, not student visibility
         "summary": "",              # FR-014 step 2 — AI draft, then student-approved
         "summary_approved": False,
     }
@@ -134,6 +143,19 @@ def set_summary(enc_id: str, doc_id: str, summary: str, *,
             it["summary"] = (summary or "").strip()
             it["summary_approved"] = bool(approved)
             it["summary_ts"] = time.time()
+            _save_index(enc_id, items)
+            return it
+    return None
+
+
+def set_reveal(enc_id: str, doc_id: str, revealed: bool = True) -> dict[str, Any] | None:
+    """FR-018 — flip a reveal-on-ask instructor doc to live (revealed=True) so the
+    AI starts engaging with it. Returns the updated record, or None if not found."""
+    items = _load_index(enc_id)
+    for it in items:
+        if it.get("id") == doc_id:
+            it["revealed"] = bool(revealed)
+            it["reveal_ts"] = time.time()
             _save_index(enc_id, items)
             return it
     return None
