@@ -12,6 +12,7 @@
 #
 # CLEARS (archived, not destroyed):
 #   ~/.medsim/v7/medsim.db   — rooms, sessions, devices, events, staff, snapshot
+#   portal/data/scanned_documents/  — per-run student-scanned chart docs (deleted)
 # PRESERVES:
 #   ~/.medsim/vault.enc            — credentials (password still works)
 #   portal/data/face_skins/        — saved/developed face skins
@@ -47,6 +48,13 @@ if [[ -f "$DB" ]]; then
   echo "✓ Runtime state cleared → archived to medsim.db.bak.$STAMP"
 else
   echo "• No runtime DB found — already a clean slate."
+fi
+
+# FR-014 — per-run student-scanned chart documents are ephemeral (keyed by the old
+# run's encounter ids); delete them so the next scenario starts with clean charts.
+if [[ -d "portal/data/scanned_documents" ]]; then
+  rm -rf portal/data/scanned_documents/* 2>/dev/null || true
+  echo "✓ Cleared scanned chart documents."
 fi
 
 # Keep only the 5 most recent archives.

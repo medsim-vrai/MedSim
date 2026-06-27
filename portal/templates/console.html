@@ -26,6 +26,7 @@
       </button>
 
       <div class="ct-actions">
+        <a class="ct-classic" href="/portal/reports">🧪 Reports</a>
         <a class="ct-classic" href="/portal/control/setup">Switch to classic control room ↗</a>
         <form action="/logout" method="post" class="logout-form">
           <button type="submit" class="link">Log out</button>
@@ -85,7 +86,8 @@
         <div class="setup-views" role="tablist" aria-label="Set up view">
           <button type="button" class="setup-view-btn active" data-view="wizard">Wizard</button>
           <button type="button" class="setup-view-btn" data-view="board">Board</button>
-          <a class="ct-classic" href="/portal/scenario-studio" style="margin-left:auto">✨ Generate a scenario</a>
+          <a class="ct-classic" href="/portal/local-context" style="margin-left:auto">⚙ Local context</a>
+          <a class="ct-classic" href="/portal/scenario-studio">✨ Generate a scenario</a>
         </div>
 
         <div id="setup-wizard-view">
@@ -177,6 +179,12 @@
                 <button type="button" id="wiz-assign-add" class="wiz-btn">+ Add</button>
               </div>
               <div id="wiz-assign-table" class="wiz-assign-table"></div>
+            </div>
+            <div class="wiz-field" style="margin-top:14px;border-top:1px solid #e2e6f0;padding-top:12px">
+              <p class="muted small" style="margin:0 0 8px">Scenario &amp; characters are set — generate
+                lab/diagnostic reports for these patients to print or email to students.</p>
+              <button type="button" id="wiz-reports" class="wiz-btn">🧪 Generate lab reports →</button>
+              <span id="wiz-reports-msg" class="muted small" style="margin-left:8px"></span>
             </div>
           </div>
 

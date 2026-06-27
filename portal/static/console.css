@@ -339,6 +339,9 @@
 .setup-views .ct-classic:hover {
   background: linear-gradient(135deg, #255d99, #4f37bd); color: #fff;
 }
+/* Both Set-up actions (Local context · Generate a scenario) are .ct-classic
+   gradient buttons; nudge them apart from each other. */
+.setup-views .ct-classic + .ct-classic { margin-left: 8px; }
 .setup-view-btn {
   cursor: pointer; font-size: 13px; font-weight: 600; color: #5a6b79;
   background: #fff; border: 1px solid #c4cfd9; border-radius: 7px; padding: 6px 16px;

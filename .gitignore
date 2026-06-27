@@ -38,6 +38,9 @@ portal/data/local_context/
 # data (per-install), not repo content.
 portal/data/authored/
 
+# FR-014 — student-scanned chart documents (per-run training artifacts; cleared on reset).
+portal/data/scanned_documents/
+
 # Never commit dev TLS material (private keys + local CA). Regenerate per machine
 # with scripts/make-dev-cert.sh.
 portal/data/certs/

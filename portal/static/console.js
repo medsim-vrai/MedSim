@@ -486,6 +486,31 @@
     }
     if (launch) launch.addEventListener("click", launchScenario);
     initLocalContextToggle();            // FR-013 P5 — local-practice overlay switch
+    // FR-015 — opening Reports from Set-up carries the SELECTED beds' patients, so
+    // the report studio reflects this wizard's scenarios (pre-launch, before a room
+    // exists server-side). No selection → the link's default (live beds / catalog).
+    var _repLink = document.querySelector('.ct-actions a[href="/portal/reports"]');
+    if (_repLink) _repLink.addEventListener("click", function (e) {
+      var ids = validBeds().map(function (b) { var s = sampleById(b.sample); return s && s.patient_id; })
+        .filter(Boolean);
+      if (ids.length) {
+        e.preventDefault();
+        window.location.href = "/portal/reports?patients=" + encodeURIComponent(ids.join(","));
+      }
+    });
+    // FR-015 — "Generate lab reports" on the Assignments step: scenario + characters
+    // are locked in by here, so open the report studio in a NEW TAB (keeps the wizard
+    // open AND inherits the live session — avoids the stale-cookie trap) with the
+    // selected beds' patients pre-listed.
+    var _wizRep = document.getElementById("wiz-reports");
+    if (_wizRep) _wizRep.addEventListener("click", function () {
+      var ids = validBeds().map(function (b) { var s = sampleById(b.sample); return s && s.patient_id; })
+        .filter(Boolean);
+      var msg = document.getElementById("wiz-reports-msg");
+      if (!ids.length) { if (msg) msg.textContent = "Pick a scenario for each bed first (step 2)."; return; }
+      if (msg) msg.textContent = "";
+      window.open("/portal/reports?patients=" + encodeURIComponent(ids.join(",")), "_blank", "noopener");
+    });
     var bedCountEl = $("#wiz-bed-count");
     if (bedCountEl) {
       bedCountEl.addEventListener("change", rebuildBedScenarios);

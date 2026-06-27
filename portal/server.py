@@ -4433,6 +4433,422 @@ async def api_medical_records_insert(
                           "total": len(target_enc.chart_inserts)})
 
 
+def _encounter_for_persona(persona_id: str):
+    """Resolve the encounter whose patient is persona_id (mirrors the chart-insert
+    lookup) — the active room's beds, else the single active session."""
+    from portal import ehr_seed as _ehr_seed
+    room = control_room.get_active_room()
+    encs = (list(room.encounters.values()) if (room and room.encounters)
+            else ([control_session.get_active()] if control_session.get_active() else []))
+    for enc in encs:
+        if enc is None:
+            continue
+        per = _ehr_seed.seeds_for_patient_only(enc, ehr_id=getattr(enc, "ehr_id", None)) or []
+        if any(p.get("character_id") == persona_id for p in per):
+            return enc
+    return None
+
+
+@app.post("/api/medical_records/{persona_id}/documents")
+async def api_medical_records_attach_document(
+    persona_id: str,
+    file: Annotated[UploadFile, File()],
+    author_name: Annotated[str, Form()] = "",
+    author_initials: Annotated[str, Form()] = "",
+):
+    """FR-014 step 1 — a student scans/uploads a report/lab image (or PDF) at the
+    records terminal; it attaches to the patient's chart. No vault auth — same
+    room-code workstation trust model as the chart-insert route."""
+    from portal import scanned_docs as _docs
+    enc = _encounter_for_persona(persona_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown patient persona {persona_id!r}.")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Empty file.")
+    if len(data) > 12 * 1024 * 1024:
+        raise HTTPException(400, "File too large (max 12 MB).")
+    try:
+        rec = _docs.save_doc(enc.id, persona_id, file.filename or "scan", data,
+                             author_name=author_name, author_initials=author_initials,
+                             content_type=file.content_type or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return JSONResponse({"ok": True, "document": rec,
+                         "total": len(_docs.list_docs(enc.id, persona_id))})
+
+
+@app.get("/api/medical_records/{persona_id}/documents")
+async def api_medical_records_list_documents(persona_id: str):
+    """List scanned documents attached to this patient (for the chart section)."""
+    from portal import scanned_docs as _docs
+    enc = _encounter_for_persona(persona_id)
+    if enc is None:
+        return JSONResponse({"documents": []})
+    return JSONResponse({"documents": _docs.list_docs(enc.id, persona_id)})
+
+
+@app.get("/api/medical_records/{persona_id}/documents/{doc_id}/file")
+async def api_medical_records_document_file(persona_id: str, doc_id: str):
+    """Stream a scanned document back to the chart viewer."""
+    from portal import scanned_docs as _docs
+    enc = _encounter_for_persona(persona_id)
+    if enc is None:
+        raise HTTPException(404, "Unknown patient.")
+    p = _docs.doc_path(enc.id, doc_id)
+    if p is None:
+        raise HTTPException(404, "Document not found.")
+    rec = _docs.get_doc(enc.id, doc_id) or {}
+    return FileResponse(str(p), media_type=rec.get("content_type") or "application/octet-stream")
+
+
+# ── FR-015 — clinical report generator (R1: labs) ───────────────────────────
+
+def _report_seed(persona_id: str, mode: str = "live") -> dict[str, Any] | None:
+    """Resolve a patient's chart seed for a report. LIVE = grounded in the running
+    encounter's context (modules + scenario_text); PRE = the persona's history
+    alone. seed_from_persona is deterministic per persona id, so previews are
+    stable."""
+    from portal import ehr_seed as _es, library as _lib
+    persona = _lib.get_persona(persona_id)
+    if persona is None:
+        return None
+    modules: list[Any] = []
+    scenario_text, ehr_id = "", "helix"
+    if mode != "pre":
+        enc = _encounter_for_persona(persona_id)
+        if enc is not None:
+            modules = [m for m in (_lib.get_module(mid)
+                                   for mid in (getattr(enc, "selected_modules", []) or [])) if m]
+            scenario_text = getattr(enc, "scenario_text", "") or ""
+            ehr_id = getattr(enc, "ehr_id", None) or "helix"
+    if not scenario_text:
+        # No live encounter context — ground the labs in the SCENARIO that owns this
+        # patient (so a sepsis patient gets sepsis labs, etc.), pre-launch included.
+        for s in _lib.list_sample_scenarios():
+            if persona_id in (s.get("personas") or []):
+                scenario_text = s.get("scenario_text") or ""
+                modules = [m for m in (_lib.get_module(mid)
+                                       for mid in (s.get("modules") or [])) if m]
+                break
+    return _es.seed_from_persona(persona, modules=modules,
+                                 scenario_text=scenario_text, ehr_id=ehr_id)
+
+
+def _report_from_body(body: dict[str, Any]):
+    from portal import report_gen as _rg
+    seed = _report_seed(str(body.get("persona_id") or ""), str(body.get("mode") or "live"))
+    if seed is None:
+        raise HTTPException(404, "Unknown patient.")
+    report = _rg.build_lab_report(
+        seed, panels=(body.get("panels") or None), overrides=(body.get("overrides") or []),
+        generated_by=str(body.get("generated_by") or ""),
+        scenario_name=str(body.get("scenario_name") or ""),
+        catalog=_rg.panel_catalog())
+    return seed, report
+
+
+@app.get("/portal/reports", response_class=HTMLResponse)
+async def reports_page(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-015 R1 — instructor report studio: pick a patient (live bed or persona),
+    choose panels, override specific values, then print / download / email a lab
+    report to students."""
+    from portal import ehr_seed as _es, report_gen as _rg
+    patients: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    # 1) EXPLICIT selection from the wizard (?patients=<ids>) WINS — the instructor
+    #    asked for exactly these beds, even if a stale/previous room is still live.
+    sel = (request.query_params.get("patients") or "").strip()
+    if sel:
+        for pid in [x.strip() for x in sel.split(",") if x.strip()]:
+            if pid in seen:
+                continue
+            per = library.get_persona(pid)
+            if per is None:
+                continue
+            seen.add(pid)
+            label = ""
+            for s in library.list_sample_scenarios():
+                if pid in (s.get("personas") or []):
+                    label = s.get("name") or s.get("id") or ""
+                    break
+            patients.append({"persona_id": pid, "name": per.get("name") or pid,
+                             "label": label, "live": False})
+    # 2) Else: the live room's beds — every patient across every bed (the encounter's
+    #    patient persona AND any roleGroup=="Patient" persona on its roster).
+    room = control_room.get_active_room()
+    if not patients and room is not None and room.encounters:
+        for enc in room.encounters.values():
+            label = enc.encounter_label or enc.scenario_name or ""
+            cands: list[str] = []
+            pp = _es.patient_persona_id(enc)
+            if pp:
+                cands.append(pp)
+            for sp in (getattr(enc, "selected_personas", []) or []):
+                per = library.get_persona(sp) or {}
+                if (per.get("roleGroup") or "") == "Patient":
+                    cands.append(sp)
+            for pid in cands:
+                if pid in seen:
+                    continue
+                seen.add(pid)
+                persona = library.get_persona(pid) or {}
+                patients.append({"persona_id": pid, "name": persona.get("name") or pid,
+                                 "label": label, "live": True})
+    if not patients:
+        # 3) Pre-launch, no selection: list each SCENARIO's patient, labelled by the
+        # scenario, so the report generator reflects the selectable scenarios before
+        # a room is started. Falls back to the raw patient library if no samples.
+        seen2: set[str] = set()
+        for s in library.list_sample_scenarios():
+            sname = s.get("name") or s.get("id") or ""
+            for pid in (s.get("personas") or []):
+                per = library.get_persona(pid) or {}
+                if (per.get("roleGroup") or "") == "Patient" and pid not in seen2:
+                    seen2.add(pid)
+                    patients.append({"persona_id": pid, "name": per.get("name") or pid,
+                                     "label": sname, "live": False})
+                    break
+        if not patients:
+            for p in library.list_personas():
+                if (p.get("roleGroup") or "") == "Patient":
+                    patients.append({"persona_id": p["id"], "name": p.get("name") or p["id"],
+                                     "label": "", "live": False})
+    return templates.TemplateResponse(request, "reports_studio.html",
+                                      {"active": "console", "patients": patients,
+                                       "catalog": _rg.panel_catalog(),
+                                       "diagnostics": _rg.diagnostic_catalog(),
+                                       "referrals": _rg.referral_catalog()})
+
+
+@app.post("/api/reports/lab/preview")
+async def api_reports_lab_preview(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from portal import report_gen as _rg
+    body = await request.json()
+    seed, report = _report_from_body(body)
+    return JSONResponse({"ok": True, "available_panels": _rg.available_panels(seed),
+                         "report": report, "html": _rg.report_html(report)})
+
+
+@app.post("/api/reports/lab/pdf")
+async def api_reports_lab_pdf(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from fastapi import Response
+    from portal import report_gen as _rg
+    body = await request.json()
+    _seed, report = _report_from_body(body)
+    pdf = _rg.report_pdf(report)
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="lab_report.pdf"'})
+
+
+@app.post("/api/reports/lab/email")
+async def api_reports_lab_email(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from portal import report_gen as _rg
+    body = await request.json()
+    _seed, report = _report_from_body(body)
+    smtp = {"host": vault.get("SMTP_HOST"), "port": vault.get("SMTP_PORT"),
+            "user": vault.get("SMTP_USER"), "pass": vault.get("SMTP_PASS"),
+            "from": vault.get("SMTP_FROM"), "from_name": vault.get("SMTP_FROM_NAME")}
+    try:
+        pdf = _rg.report_pdf(report)
+        _rg.email_report(to=str(body.get("to") or ""),
+                         subject=str(body.get("subject") or "Laboratory Report"),
+                         body_text=str(body.get("message") or ""),
+                         pdf_bytes=pdf, filename="lab_report.pdf", smtp=smtp)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=200)
+    except Exception as e:  # noqa: BLE001 — SMTP failure → clean message, not a 500
+        return JSONResponse({"ok": False, "error": f"Email failed: {e}"}, status_code=200)
+    return JSONResponse({"ok": True})
+
+
+# ── FR-015 R3 — diagnostic reports (ECG / imaging) ──────────────────────────
+
+def _diag_from_body(body: dict[str, Any]):
+    from portal import report_gen as _rg
+    seed = _report_seed(str(body.get("persona_id") or ""), str(body.get("mode") or "live"))
+    if seed is None:
+        raise HTTPException(404, "Unknown patient.")
+    try:
+        report = _rg.build_diagnostic_report(
+            seed, study_id=str(body.get("study_id") or ""),
+            fields=(body.get("fields") or {}),
+            generated_by=str(body.get("generated_by") or ""),
+            scenario_name=str(body.get("scenario_name") or ""))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return seed, report
+
+
+@app.post("/api/reports/diagnostic/preview")
+async def api_reports_diag_preview(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from portal import report_gen as _rg
+    body = await request.json()
+    _seed, report = _diag_from_body(body)
+    return JSONResponse({"ok": True, "report": report, "html": _rg.diagnostic_html(report),
+                         "catalog": _rg.diagnostic_catalog()})
+
+
+@app.post("/api/reports/diagnostic/pdf")
+async def api_reports_diag_pdf(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from fastapi import Response
+    from portal import report_gen as _rg
+    body = await request.json()
+    _seed, report = _diag_from_body(body)
+    return Response(content=_rg.diagnostic_pdf(report), media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="diagnostic_report.pdf"'})
+
+
+@app.post("/api/reports/diagnostic/email")
+async def api_reports_diag_email(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from portal import report_gen as _rg
+    body = await request.json()
+    _seed, report = _diag_from_body(body)
+    smtp = {"host": vault.get("SMTP_HOST"), "port": vault.get("SMTP_PORT"),
+            "user": vault.get("SMTP_USER"), "pass": vault.get("SMTP_PASS"),
+            "from": vault.get("SMTP_FROM"), "from_name": vault.get("SMTP_FROM_NAME")}
+    try:
+        _rg.email_report(to=str(body.get("to") or ""),
+                         subject=str(body.get("subject") or report.get("study") or "Diagnostic report"),
+                         body_text=str(body.get("message") or ""),
+                         pdf_bytes=_rg.diagnostic_pdf(report),
+                         filename="diagnostic_report.pdf", smtp=smtp)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=200)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": f"Email failed: {e}"}, status_code=200)
+    return JSONResponse({"ok": True})
+
+
+# ── FR-015 R4 — referral / consult letters ──────────────────────────────────
+
+def _referral_from_body(body: dict[str, Any]):
+    from portal import report_gen as _rg
+    seed = _report_seed(str(body.get("persona_id") or ""), str(body.get("mode") or "live"))
+    if seed is None:
+        raise HTTPException(404, "Unknown patient.")
+    report = _rg.build_referral_report(
+        seed, fields=(body.get("fields") or {}),
+        generated_by=str(body.get("generated_by") or ""),
+        scenario_name=str(body.get("scenario_name") or ""))
+    return seed, report
+
+
+@app.post("/api/reports/referral/preview")
+async def api_reports_ref_preview(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from portal import report_gen as _rg
+    body = await request.json()
+    _seed, report = _referral_from_body(body)
+    return JSONResponse({"ok": True, "report": report, "html": _rg.referral_html(report),
+                         "catalog": _rg.referral_catalog()})
+
+
+@app.post("/api/reports/referral/pdf")
+async def api_reports_ref_pdf(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from fastapi import Response
+    from portal import report_gen as _rg
+    body = await request.json()
+    _seed, report = _referral_from_body(body)
+    return Response(content=_rg.referral_pdf(report), media_type="application/pdf",
+                    headers={"Content-Disposition": 'attachment; filename="referral_letter.pdf"'})
+
+
+@app.post("/api/reports/referral/email")
+async def api_reports_ref_email(
+    request: Request,
+    vault: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    from portal import report_gen as _rg
+    body = await request.json()
+    _seed, report = _referral_from_body(body)
+    smtp = {"host": vault.get("SMTP_HOST"), "port": vault.get("SMTP_PORT"),
+            "user": vault.get("SMTP_USER"), "pass": vault.get("SMTP_PASS"),
+            "from": vault.get("SMTP_FROM"), "from_name": vault.get("SMTP_FROM_NAME")}
+    try:
+        _rg.email_report(to=str(body.get("to") or ""),
+                         subject=str(body.get("subject")
+                                     or f'{report.get("specialty", "Consult")} consult — {report.get("patient", {}).get("name", "")}'),
+                         body_text=str(body.get("message") or ""),
+                         pdf_bytes=_rg.referral_pdf(report),
+                         filename="referral_letter.pdf", smtp=smtp)
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=200)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"ok": False, "error": f"Email failed: {e}"}, status_code=200)
+    return JSONResponse({"ok": True})
+
+
+# ── FR-015 R5 — attach a generated report to the patient's chart ─────────────
+
+def _build_report_pdf(kind: str, body: dict[str, Any]):
+    """Dispatch to the right builder + PDF renderer. Returns (report, pdf_bytes,
+    label). Raises HTTPException(404) on an unknown kind (build helpers 404/400
+    on a bad patient/study)."""
+    from portal import report_gen as _rg
+    if kind == "lab":
+        _seed, report = _report_from_body(body)
+        return report, _rg.report_pdf(report), "Lab report"
+    if kind == "diagnostic":
+        _seed, report = _diag_from_body(body)
+        return report, _rg.diagnostic_pdf(report), (report.get("study") or "Diagnostic report")
+    if kind == "referral":
+        _seed, report = _referral_from_body(body)
+        return report, _rg.referral_pdf(report), f'{report.get("specialty", "Consult")} consult'
+    raise HTTPException(404, "Unknown report kind.")
+
+
+@app.post("/api/reports/{kind}/attach")
+async def api_reports_attach(
+    kind: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """Render the report to PDF and file it in the patient's chart Documents
+    (reuses the FR-014 scanned-docs store, tagged source='report'). Requires a
+    running encounter for this patient — otherwise there's no chart to attach to."""
+    from portal import scanned_docs as _docs
+    body = await request.json()
+    persona_id = str(body.get("persona_id") or "")
+    report, pdf, label = _build_report_pdf(kind, body)
+    enc = _encounter_for_persona(persona_id)
+    if enc is None:
+        return JSONResponse({"ok": False, "error": "Attach to chart needs a running "
+                             "encounter for this patient — start the room first."},
+                            status_code=200)
+    rec = _docs.save_doc(enc.id, persona_id, f"{label}.pdf", pdf,
+                         author_name=str(body.get("generated_by") or ""),
+                         content_type="application/pdf", source="report", kind=label)
+    return JSONResponse({"ok": True, "document": rec,
+                         "total": len(_docs.list_docs(enc.id, persona_id))})
+
+
 # ─────────────────────────────────────────────────────────────────────
 # M41 — Printable QR sheet for the instructor.
 #
