@@ -413,6 +413,113 @@
   </article>
 
   {% endif %}
+
+  {# ── FR-014 — Documents: students/staff add a scanned document to the record.
+     The instructor AI-role injection lives on the patient-control console, NOT
+     here, so this stays off the student flow (no AI notation). #}
+  <article class="mr-card mr-card-add" id="sec-docs">
+    <h2>📎 Documents</h2>
+    <p class="muted small">
+      Add a scanned document (image or PDF) to {{ persona.name }}'s record — choose
+      a file, tag its type, and file it under a chart area.
+    </p>
+    <div id="mr-docs-list"><p class="muted small">Loading…</p></div>
+    <form class="mr-add-form" onsubmit="return false" style="margin-top:12px">
+      <label><span>File (image or PDF)</span>
+        <input type="file" id="mr-doc-file" accept="image/*,application/pdf"></label>
+      <label><span>Type</span>
+        <select id="mr-doc-type">
+          <option value="Lab report">Lab report</option>
+          <option value="Imaging / Radiology">Imaging / Radiology</option>
+          <option value="ECG / Diagnostics">ECG / Diagnostics</option>
+          <option value="Pathology">Pathology</option>
+          <option value="Consult / Referral">Consult / Referral</option>
+          <option value="Other">Other</option>
+        </select></label>
+      <label><span>File under (chart area)</span>
+        <select id="mr-doc-section">
+          <option value="Labs">Labs</option>
+          <option value="Imaging">Imaging</option>
+          <option value="Diagnostics">Diagnostics</option>
+          <option value="Notes">Notes &amp; Updates</option>
+          <option value="Medications">Medications (MAR)</option>
+          <option value="Documents">Documents (general)</option>
+        </select></label>
+      <label><span>Note <span class="muted small">(optional)</span></span>
+        <input type="text" id="mr-doc-purpose" placeholder="e.g. outside hospital lab"></label>
+      <div class="mr-add-actions">
+        <button type="button" class="primary-action" id="mr-doc-upload">📎 Add document</button>
+        <span id="mr-doc-status" class="muted small"></span>
+      </div>
+    </form>
+    <script>
+      (function () {
+        var pid = {{ persona.character_id | tojson }};
+        var listEl = document.getElementById("mr-docs-list");
+        var fileEl = document.getElementById("mr-doc-file");
+        var upEl   = document.getElementById("mr-doc-upload");
+        var stEl   = document.getElementById("mr-doc-status");
+        if (!listEl) return;
+        function esc(s){ s=String(s==null?"":s);
+          return s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;").split('"').join("&quot;"); }
+        function fmtTs(ts){ try { return new Date(ts*1000).toLocaleString(); } catch(e){ return ""; } }
+        function base(){ return "/api/medical_records/" + encodeURIComponent(pid) + "/documents"; }
+        function render(docs){
+          if (!docs.length){ listEl.innerHTML = '<p class="muted small">No documents yet.</p>'; return; }
+          var groups = {};
+          docs.forEach(function(d){ var s = d.section || "Documents"; (groups[s] = groups[s] || []).push(d); });
+          listEl.innerHTML = "";
+          Object.keys(groups).forEach(function(sec){
+            var h = document.createElement("h3"); h.textContent = sec;
+            h.style.cssText = "margin:10px 0 4px;font-size:14px"; listEl.appendChild(h);
+            groups[sec].forEach(function(d){
+              var row = document.createElement("div"); row.className = "mr-insert";
+              var fileUrl = base() + "/" + encodeURIComponent(d.id) + "/file";
+              var isImg = d.content_type && d.content_type.indexOf("image/") === 0;
+              var thumb = isImg
+                ? '<a href="'+fileUrl+'" target="_blank" rel="noopener"><img src="'+fileUrl+'" alt="" style="max-height:90px;border-radius:8px;border:1px solid #e2e6f0"></a>'
+                : '<a href="'+fileUrl+'" target="_blank" rel="noopener">📄 '+esc(d.filename)+'</a>';
+              var tags = [];
+              if (d.doc_type) tags.push(esc(d.doc_type));   // type only — no AI notation on the chart
+              row.innerHTML =
+                '<header><strong>'+esc(d.filename)+'</strong> <span class="muted small">'+
+                  (tags.length ? ("· " + tags.join(" · ") + " ") : "") + '· '+fmtTs(d.ts)+'</span></header>'+
+                '<div style="margin-top:6px">'+thumb+'</div>'+
+                (d.purpose ? ('<div class="muted small" style="margin-top:4px">'+esc(d.purpose)+'</div>') : '');
+              listEl.appendChild(row);
+            });
+          });
+        }
+        function load(){
+          fetch(base()).then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(j){ if(j) render(j.documents || []); })
+            .catch(function(){ listEl.innerHTML = '<p class="muted small">Could not load documents.</p>'; });
+        }
+        upEl.addEventListener("click", function(){
+          var f = fileEl.files[0];
+          if (!f){ stEl.textContent = "Choose a file first."; return; }
+          stEl.textContent = "Adding…"; upEl.disabled = true;
+          var fd = new FormData();
+          fd.append("file", f);
+          // No source/ai_mode → the route files this as a normal chart document
+          // (always part of the AI context); the AI-role CHOICE lives on the console.
+          fd.append("doc_type", document.getElementById("mr-doc-type").value);
+          fd.append("section", document.getElementById("mr-doc-section").value);
+          fd.append("purpose", document.getElementById("mr-doc-purpose").value);
+          fetch(base(), { method:"POST", credentials:"same-origin", body: fd })
+            .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+            .then(function(res){
+              if (res.ok && res.j.ok){ stEl.textContent = "Added.";
+                fileEl.value = ""; document.getElementById("mr-doc-purpose").value = ""; load(); }
+              else { stEl.textContent = res.j.detail || res.j.error || "Add failed."; }
+            })
+            .catch(function(){ stEl.textContent = "Network error."; })
+            .then(function(){ upEl.disabled = false; });
+        });
+        load();
+      })();
+    </script>
+  </article>
   </div>
 
   <div class="hh-foot">Training Simulation — not a medical record system · Helix Health EHR</div>
