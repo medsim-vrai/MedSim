@@ -4502,6 +4502,57 @@ async def api_medical_records_document_file(persona_id: str, doc_id: str):
     return FileResponse(str(p), media_type=rec.get("content_type") or "application/octet-stream")
 
 
+@app.post("/api/medical_records/{persona_id}/documents/{doc_id}/summarize")
+async def api_medical_records_summarize_document(persona_id: str, doc_id: str):
+    """FR-014 step 2 — draft an AI summary of a scanned document (Claude reads the
+    image / PDF). Stored UNAPPROVED; the student edits + approves it into the chart
+    via the summary route below. Workstation trust model (same as upload)."""
+    from portal import scanned_docs as _docs, doc_summary as _sum
+    enc = _encounter_for_persona(persona_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown patient persona {persona_id!r}.")
+    rec = _docs.get_doc(enc.id, doc_id)
+    path = _docs.doc_path(enc.id, doc_id)
+    if rec is None or path is None:
+        raise HTTPException(404, "Document not found.")
+    if not _sum.supported(rec.get("ext", "")):
+        return JSONResponse({"ok": False, "error":
+            "AI summary isn't available for this file type — re-scan as JPG, PNG, "
+            "or PDF (HEIC isn't supported)."}, status_code=200)
+    key = _resolve_anthropic_key(enc) or ""
+    if not key:
+        return JSONResponse({"ok": False, "error":
+            "No Anthropic API key configured — ask your instructor to add it."},
+            status_code=200)
+    try:
+        summary = _sum.summarize(path.read_bytes(), rec.get("ext", ""), api_key=key)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:  # noqa: BLE001 — API/read failure → clean message, not a 500
+        return JSONResponse({"ok": False, "error": f"Summary failed: {e}"}, status_code=200)
+    out = _docs.set_summary(enc.id, doc_id, summary, approved=False) or {}
+    return JSONResponse({"ok": True, "summary": summary, "document": out})
+
+
+@app.post("/api/medical_records/{persona_id}/documents/{doc_id}/summary")
+async def api_medical_records_save_summary(persona_id: str, doc_id: str, request: Request):
+    """FR-014 step 2 — the student saves the edited summary, optionally APPROVING it
+    into the chart (✅); an unapproved draft stays a 📝."""
+    from portal import scanned_docs as _docs
+    enc = _encounter_for_persona(persona_id)
+    if enc is None:
+        raise HTTPException(404, f"Unknown patient persona {persona_id!r}.")
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        body = {}
+    out = _docs.set_summary(enc.id, doc_id, str(body.get("summary") or ""),
+                            approved=bool(body.get("approved")))
+    if out is None:
+        raise HTTPException(404, "Document not found.")
+    return JSONResponse({"ok": True, "document": out})
+
+
 # ── FR-015 — clinical report generator (R1: labs) ───────────────────────────
 
 def _report_seed(persona_id: str, mode: str = "live") -> dict[str, Any] | None:

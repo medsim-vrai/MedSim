@@ -113,3 +113,39 @@ def test_api_attach_unknown_persona_404(client):
     r = client.post("/api/medical_records/NOPE/documents",
                     files={"file": ("x.png", b"\x89PNG", "image/png")})
     assert r.status_code == 404
+
+
+# ── FR-014 step 2 — AI summary save / approve (no network) ────────────────────
+
+def test_api_save_summary_roundtrip(client):
+    _start_room(client)
+    doc = client.post("/api/medical_records/P-014/documents",
+                      files={"file": ("lab.png", b"\x89PNG\r\n", "image/png")}).json()["document"]
+    # Student saves + approves an edited summary — no AI/network involved.
+    r = client.post(f"/api/medical_records/P-014/documents/{doc['id']}/summary",
+                    json={"summary": "  WBC 14.2 (high); rest WNL  ", "approved": True})
+    assert r.status_code == 200, r.text
+    out = r.json()["document"]
+    assert out["summary"] == "WBC 14.2 (high); rest WNL"
+    assert out["summary_approved"] is True
+    lst = client.get("/api/medical_records/P-014/documents").json()["documents"]
+    assert lst[0]["summary_approved"] is True            # persisted
+
+
+def test_api_summarize_unsupported_type_is_friendly(client):
+    _start_room(client)
+    # HEIC uploads are allowed (phone-native) but Claude vision can't read them →
+    # the summarize route must DECLINE cleanly (no network) rather than error.
+    doc = client.post("/api/medical_records/P-014/documents",
+                      files={"file": ("photo.heic", b"ftyp-heic-fake", "image/heic")}).json()["document"]
+    r = client.post(f"/api/medical_records/P-014/documents/{doc['id']}/summarize")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ok"] is False and "isn't available" in body["error"]
+
+
+def test_api_save_summary_unknown_doc_404(client):
+    _start_room(client)
+    r = client.post("/api/medical_records/P-014/documents/nope/summary",
+                    json={"summary": "x"})
+    assert r.status_code == 404

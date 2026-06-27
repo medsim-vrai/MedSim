@@ -357,12 +357,14 @@
        scan reports/labs into the chart, like the real world). #}
   <article class="mr-card" id="sec-docs">
     <h2>📎 Scanned documents</h2>
-    <p class="muted small">Scan or upload a report, lab, or form — it attaches to
-      {{ persona.name }}'s record.</p>
+    <p class="muted small">Add a report, lab, or form to {{ persona.name }}'s record —
+      choose a file from a folder on this device, or take a photo.</p>
     <div id="mr-docs-list"><p class="muted small">Loading…</p></div>
     <div class="mr-add-actions" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <input type="file" id="mr-doc-file" accept="image/*,application/pdf" capture="environment">
-      <button type="button" class="primary-action" id="mr-doc-upload">📸 Scan / Upload</button>
+      {# No `capture` attribute → the picker offers Files/Photos (folder access) AND
+         the camera, instead of forcing the camera. Students attach an existing file. #}
+      <input type="file" id="mr-doc-file" accept="image/*,application/pdf">
+      <button type="button" class="primary-action" id="mr-doc-upload">📎 Add document</button>
       <span id="mr-doc-status" class="muted small"></span>
     </div>
   </article>
@@ -450,25 +452,101 @@
         return s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;").split('"').join("&quot;"); }
       function fmtTs(ts){ try { return new Date(ts*1000).toLocaleString(); } catch(e){ return ""; } }
       function base(){ return "/api/medical_records/" + encodeURIComponent(pid) + "/documents"; }
+      // FR-014 step 2 — AI summary lives on images + PDFs (HEIC can't be read).
+      var SUMMARIZABLE = ["png","jpg","jpeg","webp","gif","pdf"];
+      function summarizable(d){ return SUMMARIZABLE.indexOf((d.ext||"").toLowerCase()) >= 0; }
+      function docUrl(d){ return base() + "/" + encodeURIComponent(d.id); }
+      function mkBtn(label, primary){
+        var b = document.createElement("button"); b.type = "button"; b.textContent = label;
+        b.style.cssText = "margin:8px 8px 0 0;padding:7px 12px;border-radius:8px;font:inherit;" +
+          "font-weight:600;cursor:pointer;border:1px solid " + (primary?"#0a7d33":"#c7ccd9") + ";" +
+          (primary ? "background:#0a7d33;color:#fff;" : "background:#fff;color:#1b2440;");
+        return b;
+      }
       function render(docs){
         if (!docs.length){ listEl.innerHTML = '<p class="muted small">No documents yet.</p>'; return; }
         listEl.innerHTML = "";
         docs.forEach(function(d){
           var row = document.createElement("div"); row.className = "mr-insert";
-          var fileUrl = base() + "/" + encodeURIComponent(d.id) + "/file";
+          var fileUrl = docUrl(d) + "/file";
           var isImg = d.content_type && d.content_type.indexOf("image/") === 0;
           var thumb = isImg
             ? '<a href="'+fileUrl+'" target="_blank" rel="noopener"><img src="'+fileUrl+'" alt="" style="max-height:110px;border-radius:8px;border:1px solid #e2e6f0"></a>'
             : '<a href="'+fileUrl+'" target="_blank" rel="noopener">📄 '+esc(d.filename)+'</a>';
-          row.innerHTML =
-            '<header><strong>'+esc(d.filename)+'</strong> <span class="muted small">'+
-              esc(d.author_name||"")+(d.author_initials?(" ("+esc(d.author_initials)+")"):"")+
-              ' · '+fmtTs(d.ts)+'</span></header>'+
-            '<div style="margin-top:6px">'+thumb+'</div>'+
-            (d.summary ? ('<div class="mr-insert-body" style="margin-top:6px">'+
-              (d.summary_approved?"✅ ":"📝 ")+esc(d.summary)+'</div>') : '');
+          var head = document.createElement("header");
+          head.innerHTML = '<strong>'+esc(d.filename)+'</strong> <span class="muted small">'+
+            esc(d.author_name||"")+(d.author_initials?(" ("+esc(d.author_initials)+")"):"")+
+            ' · '+fmtTs(d.ts)+'</span>';
+          row.appendChild(head);
+          var th = document.createElement("div"); th.style.marginTop = "6px"; th.innerHTML = thumb;
+          row.appendChild(th);
+          var sum = document.createElement("div"); sum.style.marginTop = "6px";
+          row.appendChild(sum);
+          drawSummary(sum, d);
           listEl.appendChild(row);
         });
+      }
+      function drawSummary(box, d){
+        box.innerHTML = "";
+        if (d.summary){
+          var body = document.createElement("div"); body.className = "mr-insert-body";
+          body.textContent = (d.summary_approved ? "✅ " : "📝 draft — ") + d.summary;
+          box.appendChild(body);
+          var edit = mkBtn("✏️ Edit summary", false);
+          edit.addEventListener("click", function(){ editSummary(box, d, d.summary); });
+          box.appendChild(edit);
+        } else if (summarizable(d)){
+          var gen = mkBtn("✨ AI summary", false);
+          var note = document.createElement("span"); note.className = "muted small";
+          note.textContent = " AI drafts a summary you review before it enters the chart.";
+          gen.addEventListener("click", function(){
+            gen.disabled = true; gen.textContent = "Reading document…";
+            fetch(docUrl(d)+"/summarize", { method:"POST" })
+              .then(function(r){ return r.json(); })
+              .then(function(j){
+                if (j && j.ok){ d.summary = j.summary; d.summary_approved = false; editSummary(box, d, j.summary); }
+                else { gen.disabled = false; gen.textContent = "✨ AI summary";
+                       note.textContent = " " + ((j && j.error) || "Summary failed."); }
+              })
+              .catch(function(){ gen.disabled = false; gen.textContent = "✨ AI summary";
+                                 note.textContent = " Network error."; });
+          });
+          box.appendChild(gen); box.appendChild(note);
+        } else {
+          var na = document.createElement("span"); na.className = "muted small";
+          na.textContent = "AI summary isn't available for this file type (re-scan as JPG/PNG/PDF).";
+          box.appendChild(na);
+        }
+      }
+      function editSummary(box, d, text){
+        box.innerHTML = "";
+        var ta = document.createElement("textarea");
+        ta.value = text || ""; ta.rows = 5;
+        ta.style.cssText = "width:100%;font:inherit;padding:8px;border-radius:8px;" +
+          "border:1px solid #c7ccd9;box-sizing:border-box";
+        box.appendChild(ta);
+        var approve = mkBtn("✅ Approve into record", true);
+        var save = mkBtn("💾 Save draft", false);
+        var st = document.createElement("span"); st.className = "muted small"; st.style.marginLeft = "8px";
+        function send(approved){
+          approve.disabled = true; save.disabled = true; st.textContent = "saving…";
+          fetch(docUrl(d)+"/summary", { method:"POST", headers:{"Content-Type":"application/json"},
+                 body: JSON.stringify({ summary: ta.value, approved: approved }) })
+            .then(function(r){ return r.json(); })
+            .then(function(j){
+              if (j && j.ok && j.document){ d.summary = j.document.summary;
+                d.summary_approved = j.document.summary_approved; drawSummary(box, d); }
+              else { st.textContent = (j && j.error) || "Save failed.";
+                     approve.disabled = false; save.disabled = false; }
+            })
+            .catch(function(){ st.textContent = "network error";
+                               approve.disabled = false; save.disabled = false; });
+        }
+        approve.addEventListener("click", function(){ send(true); });
+        save.addEventListener("click", function(){ send(false); });
+        var bar = document.createElement("div");
+        bar.appendChild(approve); bar.appendChild(save); bar.appendChild(st);
+        box.appendChild(bar);
       }
       function load(){
         fetch(base()).then(function(r){ return r.ok ? r.json() : null; })
