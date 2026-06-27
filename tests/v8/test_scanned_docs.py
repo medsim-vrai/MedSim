@@ -70,6 +70,42 @@ def test_instructor_doc_type_and_section():
     assert rec["doc_type"] == "ECG / Diagnostics" and rec["section"] == "Diagnostics"
 
 
+# ── FR-018 S2 — AI-context selection + auto-reveal on mention ──────────────────
+
+def test_is_ai_live():
+    assert sd.is_ai_live({"ai_mode": "context"})
+    assert not sd.is_ai_live({"ai_mode": "on_ask"})
+    assert sd.is_ai_live({"ai_mode": "on_ask", "revealed": True})
+    assert not sd.is_ai_live({"ai_mode": ""})
+
+
+def test_prompt_block_filters_to_ai_live():
+    sd.save_doc("e", "P", "cbc.png", b"x", source="instructor",
+                ai_mode="context", doc_type="Lab report", purpose="CBC trend")
+    ask = sd.save_doc("e", "P", "ekg.png", b"x", source="instructor",
+                      ai_mode="on_ask", doc_type="ECG", purpose="prior tracing")
+    blk = sd.prompt_block_for("e", "P")
+    assert "Lab report" in blk and "CBC trend" in blk      # context doc in
+    assert "ECG" not in blk                                 # dormant on_ask out
+    sd.set_reveal("e", ask["id"], True)
+    assert "ECG" in sd.prompt_block_for("e", "P")           # revealed on_ask now in
+
+
+def test_prompt_block_empty_when_no_live_docs():
+    sd.save_doc("e", "P", "x.png", b"x", source="instructor", ai_mode="on_ask", doc_type="ECG")
+    assert sd.prompt_block_for("e", "P") == ""              # only a dormant on_ask
+
+
+def test_reveal_on_mention_keyword_match():
+    sd.save_doc("e", "P", "old_ekg.png", b"x", source="instructor",
+                ai_mode="on_ask", doc_type="ECG / Diagnostics",
+                purpose="prior EKG for comparison")
+    assert sd.reveal_on_mention("e", "P", "what's the plan today?") == []   # no mention
+    rev = sd.reveal_on_mention("e", "P", "can I see the old EKG?")          # mentions EKG
+    assert len(rev) == 1 and rev[0]["revealed"] is True
+    assert sd.reveal_on_mention("e", "P", "the ekg again") == []            # idempotent
+
+
 # ── attach / list / serve API ────────────────────────────────────────────────
 
 @pytest.fixture

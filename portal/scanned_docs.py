@@ -163,3 +163,82 @@ def set_reveal(enc_id: str, doc_id: str, revealed: bool = True) -> dict[str, Any
             _save_index(enc_id, items)
             return it
     return None
+
+
+# ── FR-018 S2 — AI runtime: which docs are "in the AI" + auto-reveal on mention ──
+
+# Stop-words stripped from a doc's text before deriving "did the student bring it
+# up?" keywords; common doc-noise that would over-match.
+_REVEAL_STOP = {
+    "prior", "report", "reports", "document", "documents", "image", "images",
+    "scan", "scans", "result", "results", "comparison", "patient", "record",
+    "records", "file", "files", "copy", "note", "notes", "the", "for", "and",
+    "with", "from", "this", "that", "into", "onto", "outside", "hospital",
+}
+# A doc TYPE often maps to short clinical words a student would actually say
+# (e.g. "EKG"), which the length filter below would otherwise drop.
+_TYPE_SYNONYMS = {
+    "ecg": ("ecg", "ekg"), "diagnostic": ("ecg", "ekg"),
+    "imaging": ("imaging", "xray", "x-ray", "radiograph", "ct", "mri", "ultrasound"),
+    "radiolog": ("imaging", "xray", "x-ray", "radiograph", "ct", "mri", "ultrasound"),
+    "lab": ("lab", "labs", "bloodwork"),
+    "patholog": ("pathology", "path", "biopsy"),
+    "consult": ("consult", "referral"), "referral": ("consult", "referral"),
+}
+
+
+def is_ai_live(doc: dict[str, Any]) -> bool:
+    """True if a doc is currently part of the AI context: a 'context' doc (incl.
+    student scans, which the route files as context), or an 'on_ask' doc that has
+    been revealed (a student brought it up, or the operator revealed it)."""
+    m = (doc or {}).get("ai_mode")
+    return m == "context" or (m == "on_ask" and bool((doc or {}).get("revealed")))
+
+
+def _doc_keywords(doc: dict[str, Any]) -> set[str]:
+    kws: set[str] = set()
+    dtype = (doc.get("doc_type") or "").lower()
+    for key, syns in _TYPE_SYNONYMS.items():
+        if key in dtype:
+            kws.update(syns)
+    src = " ".join([doc.get("filename") or "", doc.get("purpose") or ""]).lower()
+    for tok in re.split(r"[^a-z0-9]+", src):
+        if len(tok) >= 4 and tok not in _REVEAL_STOP:
+            kws.add(tok)
+    return kws
+
+
+def prompt_block_for(enc_id: str, persona_id: str | None = None) -> str:
+    """FR-018 S2 — the documents block woven into a character's turn context: the
+    docs currently 'in the AI' (context + revealed on_ask). '' if none. Mirrors
+    local_context.overlay_block()'s caller-injected pattern."""
+    live = [d for d in list_docs(enc_id, persona_id) if is_ai_live(d)]
+    if not live:
+        return ""
+    lines = ["DOCUMENTS ON FILE in this patient's record — you are aware of these and "
+             "may reference them naturally when clinically relevant:"]
+    for d in live:
+        head = (d.get("doc_type") or "Document") + (f" ({d.get('filename')})"
+                                                     if d.get("filename") else "")
+        body = (d.get("summary") or "").strip() or (d.get("purpose") or "").strip()
+        lines.append(f"  - {head}: {body}" if body
+                     else f"  - {head} (on file; contents not transcribed)")
+    return "\n".join(lines)
+
+
+def reveal_on_mention(enc_id: str, persona_id: str | None, text: str) -> list[dict[str, Any]]:
+    """FR-018 S2 — when a student 'brings up' an on_ask document (mentions its type /
+    name / purpose), flip it to revealed so it joins the AI context. Returns the docs
+    revealed by THIS utterance (for an operator notice). Already-revealed + context
+    docs are left alone."""
+    msg = (text or "").lower()
+    if not msg.strip():
+        return []
+    revealed: list[dict[str, Any]] = []
+    for d in list_docs(enc_id, persona_id):
+        if d.get("ai_mode") == "on_ask" and not d.get("revealed"):
+            if any(k in msg for k in _doc_keywords(d)):
+                upd = set_reveal(enc_id, d.get("id"), True)
+                if upd:
+                    revealed.append(upd)
+    return revealed

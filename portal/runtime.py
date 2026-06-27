@@ -112,6 +112,23 @@ def take_turn(session_id: str, addressee: str, message: str) -> dict[str, Any]:
         return {"ok": False, "error": "Empty message."}
 
     character = session.characters[addressee]
+    # FR-018 S2 — weave in the patient's LIVE support documents: every "context"
+    # doc, plus any "on_ask" doc the student just brought up (auto-revealed here).
+    # The scenario id is the encounter/session id the docs are stored under. This
+    # covers EVERY turn path centrally; best-effort, never let a doc lookup break a
+    # turn.
+    try:
+        _enc_id = (session.scenario or {}).get("id")
+        if _enc_id:
+            from portal import scanned_docs as _sd
+            _sd.reveal_on_mention(_enc_id, None, message)
+            _doc_block = _sd.prompt_block_for(_enc_id)
+            if _doc_block:
+                _ex = character.get("_extra_context") or ""
+                character = {**character,
+                             "_extra_context": "\n\n".join(p for p in (_ex, _doc_block) if p)}
+    except Exception:  # noqa: BLE001 — documents are best-effort context
+        pass
     system_prompt = _build_system_prompt(character, session.scenario)
     messages = _build_messages(session, addressee, message)
 

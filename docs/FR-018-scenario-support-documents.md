@@ -65,14 +65,19 @@ notice + ask); `revealed` only gates **AI engagement**, not student visibility.
   ai_mode (+ the reveal button for on_ask).
 
 ## Staged build
-- **S1 — Storage model** (this stage): `scanned_docs` fields (`source=instructor`,
-  `purpose`, `ai_mode`, `revealed`) + `set_reveal()`; tests.
-- **S2 — AI runtime wiring:** context/distraction/on_ask behavior in `runtime.py`
-  turn context (the behavioral heart).
-- **S3 — Live injection + operator reveal:** console control + inject/reveal API.
+- **S1 — Storage model** ✅: `scanned_docs` fields (`source=instructor`, `purpose`,
+  `ai_mode`, `revealed`, `doc_type`, `section`) + `set_reveal()`; tests.
+- **S2 — AI runtime wiring** ✅: `prompt_block_for` / `reveal_on_mention` / `is_ai_live`
+  in `scanned_docs.py`, woven centrally in `runtime.take_turn` (covers every turn
+  path) — `context` docs are always in the AI; an `on_ask` doc auto-reveals when a
+  student brings it up (keyword match on type/name/purpose), then joins. Folds in
+  the old S5 (auto-detect). Tests: `test_support_docs_ai.py`.
+- **S3 — Live injection (DONE) + operator reveal (remains):** the patient-control
+  console 📎 Documents card injects live; a manual operator "reveal" button for an
+  on_ask doc is still TODO.
 - **S4 — Authoring injection:** scenario-saved support docs (+ export via FR-017).
-- **S5 — AI auto-detect reveal:** student-turn reference → auto-reveal + operator note.
-- **S6 — Tests + full gate + field verify.**
+- **S6 — Field verify** on a live scenario (talk to the patient; confirm a
+  context doc is used and an on_ask doc joins only after it's raised).
 
 ## Open questions
 - on_ask visibility — default is "visible in chart, AI-dormant"; alternative is
