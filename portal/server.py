@@ -4455,10 +4455,17 @@ async def api_medical_records_attach_document(
     file: Annotated[UploadFile, File()],
     author_name: Annotated[str, Form()] = "",
     author_initials: Annotated[str, Form()] = "",
+    source: Annotated[str, Form()] = "scan",
+    doc_type: Annotated[str, Form()] = "",
+    section: Annotated[str, Form()] = "",
+    purpose: Annotated[str, Form()] = "",
+    ai_mode: Annotated[str, Form()] = "",
 ):
     """FR-014 step 1 — a student scans/uploads a report/lab image (or PDF) at the
-    records terminal; it attaches to the patient's chart. No vault auth — same
-    room-code workstation trust model as the chart-insert route."""
+    records terminal; it attaches to the patient's chart. FR-018 — an instructor
+    import additionally sets source=instructor + doc_type/section (filing) +
+    purpose/ai_mode (the scenario AI role). No vault auth — same room-code
+    workstation trust model as the chart-insert route."""
     from portal import scanned_docs as _docs
     enc = _encounter_for_persona(persona_id)
     if enc is None:
@@ -4471,7 +4478,9 @@ async def api_medical_records_attach_document(
     try:
         rec = _docs.save_doc(enc.id, persona_id, file.filename or "scan", data,
                              author_name=author_name, author_initials=author_initials,
-                             content_type=file.content_type or "")
+                             content_type=file.content_type or "", source=source,
+                             doc_type=doc_type, section=section,
+                             purpose=purpose, ai_mode=ai_mode)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return JSONResponse({"ok": True, "document": rec,

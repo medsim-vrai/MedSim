@@ -76,13 +76,15 @@ def _ext_of(filename: str) -> str:
 def save_doc(enc_id: str, persona_id: str, filename: str, data: bytes, *,
              author_name: str = "", author_initials: str = "",
              content_type: str = "", source: str = "scan", kind: str = "",
-             purpose: str = "", ai_mode: str = "") -> dict[str, Any]:
+             purpose: str = "", ai_mode: str = "",
+             doc_type: str = "", section: str = "") -> dict[str, Any]:
     """Persist a document for (encounter, patient). `source` distinguishes a
     student "scan" (FR-014), an instructor-generated "report" (FR-015), and an
     instructor "instructor" support doc (FR-018). For FR-018: `purpose` is the
-    instructor's note and `ai_mode` is the AI role (context | distraction | on_ask;
-    any other value normalizes to ""). `kind` carries a report label. Raises
-    ValueError on an unsupported type. Returns the new record."""
+    instructor's note, `ai_mode` is the AI role (context | distraction | on_ask;
+    any other value normalizes to ""), `doc_type` is the clinical type (Lab report,
+    Imaging, …) and `section` is the chart area it files under. `kind` carries a
+    report label. Raises ValueError on an unsupported type. Returns the record."""
     ext = _ext_of(filename)
     if ext not in ALLOWED_EXT:
         raise ValueError(f"unsupported document type: .{ext or '?'} "
@@ -105,6 +107,8 @@ def save_doc(enc_id: str, persona_id: str, filename: str, data: bytes, *,
         "kind": (kind or "").strip()[:40],              # report label, when source="report"
         "purpose": (purpose or "").strip()[:300],       # FR-018 — instructor note (instructor-only)
         "ai_mode": (lambda m: m if m in AI_MODES else "")((ai_mode or "").strip().lower()),
+        "doc_type": (doc_type or "").strip()[:40],      # FR-018 — clinical type (Lab report, Imaging, …)
+        "section": (section or "").strip()[:40],        # FR-018 — chart area it surfaces in
         "revealed": False,          # FR-018 on_ask — gates AI engagement, not student visibility
         "summary": "",              # FR-014 step 2 — AI draft, then student-approved
         "summary_approved": False,

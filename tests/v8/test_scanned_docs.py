@@ -64,6 +64,12 @@ def test_ai_mode_normalizes():
     assert sd.save_doc("e", "P", "c.pdf", b"%PDF")["ai_mode"] == ""    # student-doc default
 
 
+def test_instructor_doc_type_and_section():
+    rec = sd.save_doc("e", "P", "ekg.png", b"x", source="instructor",
+                      doc_type="ECG / Diagnostics", section="Diagnostics")
+    assert rec["doc_type"] == "ECG / Diagnostics" and rec["section"] == "Diagnostics"
+
+
 # ── attach / list / serve API ────────────────────────────────────────────────
 
 @pytest.fixture
@@ -168,3 +174,17 @@ def test_api_save_summary_unknown_doc_404(client):
     r = client.post("/api/medical_records/P-014/documents/nope/summary",
                     json={"summary": "x"})
     assert r.status_code == 404
+
+
+def test_api_instructor_import_with_role_and_section(client):
+    _start_room(client)
+    r = client.post("/api/medical_records/P-014/documents",
+                    files={"file": ("prior_ekg.png", b"\x89PNG\r\n", "image/png")},
+                    data={"source": "instructor", "doc_type": "ECG / Diagnostics",
+                          "section": "Diagnostics", "purpose": "prior EKG for comparison",
+                          "ai_mode": "on_ask"})
+    assert r.status_code == 200, r.text
+    doc = r.json()["document"]
+    assert doc["source"] == "instructor"
+    assert doc["doc_type"] == "ECG / Diagnostics" and doc["section"] == "Diagnostics"
+    assert doc["ai_mode"] == "on_ask" and doc["purpose"] == "prior EKG for comparison"
