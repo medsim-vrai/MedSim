@@ -61,7 +61,8 @@ def client(tmp_path: Path, monkeypatch):
     from portal import server
     from fastapi.testclient import TestClient
     with TestClient(server.app) as c:
-        c.cookies.set(auth.COOKIE_NAME, auth.issue_session_token(vault))
+        # admin seat — /portal/credentials is admin-gated as of task #94
+        c.cookies.set(auth.COOKIE_NAME, auth.issue_session_token(vault, role="admin"))
         yield c
     control_room._reset_for_tests()
 

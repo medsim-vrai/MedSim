@@ -7,6 +7,10 @@ from pathlib import Path
 ENABLED = os.getenv("HUB_ADAPTER_ENABLED", "0") == "1"
 HUB_BASE_URL = os.getenv("HUB_BASE_URL", "https://hub.internal/api/v0")
 HUB_SIGNING_KEY = os.getenv("HUB_SIGNING_KEY", "")
+# Service auth for the CONSUME routes (identity/policy) — the authority rejects
+# unauthenticated contract calls (SECURITY-QA §A#1). Dev default matches the
+# authority's dev token; prod deployments MUST set a real shared secret.
+HUB_SERVICE_TOKEN = os.getenv("HUB_SERVICE_TOKEN", "dev-insecure-hub-service-token-change-me")
 QUEUE_DIR = Path(os.getenv("HUB_QUEUE_DIR", str(Path.home() / ".medsim" / "hub_queue")))
 SOURCE = "v8"
 CONTRACT = "0.2.0"

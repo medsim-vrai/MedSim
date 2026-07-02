@@ -110,3 +110,21 @@ def require_instructor(
             detail="Observer seat is read-only — sign in as instructor or admin.",
         )
     return vault
+
+
+def require_admin(
+    medsim_session: Annotated[str | None, Cookie()] = None,
+) -> cred_module.Vault:
+    """Task #94 — like require_vault but ONLY the admin seat passes. Use on
+    admin-only surfaces (credential management, EHR admin/purge). The admin
+    seat is the vault's master password (or a hub-granted admin identity when
+    the adapter flag is on); instructor and observer get 403."""
+    vault = require_vault(medsim_session)
+    if session_role(medsim_session) != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=("Admin seat required — this page manages credentials/system state. "
+                    "Sign out, then sign back in choosing the ADMIN seat (the master "
+                    "vault password unlocks it), and retry."),
+        )
+    return vault

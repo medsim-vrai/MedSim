@@ -1,0 +1,68 @@
+{
+  "$comment": "Consumer-driven expectations for identity.provide. Every entry validates against ../schemas/identity_provide.schema.json. Products round-trip these through consume.identity() and assert their PEP derives the implied permissions. Timestamps are fixed samples, not live.",
+  "schema": "../schemas/identity_provide.schema.json",
+  "samples": [
+    {
+      "_case": "org-admin, enterprise, live, AAL3",
+      "contract": "0.1.0", "schema_version": "0.1.0", "source": "admin",
+      "generated_at": "2026-06-30T15:00:00Z",
+      "tenant_id": "t_coastal_u", "user_id": "u_reyes", "idp_subject": "okta|00u123",
+      "display_name": "Dr. A. Reyes", "status": "active", "primary_role": "ORG-ADMIN",
+      "roles": [{"role": "ORG-ADMIN", "scope_type": "org", "scope_id": "org_coastal", "expires_at": null}],
+      "abac": {"site_ids": ["site_main", "site_north"], "classification_max": "identified", "purposes": ["education", "operations"]},
+      "session": {"valid": true, "aal": "AAL3", "mfa": true, "issued_at": "2026-06-30T14:55:00Z", "expires_at": "2026-06-30T22:55:00Z"},
+      "stale": false
+    },
+    {
+      "_case": "researcher — de-identified ONLY, purpose=research, IRB-scoped, time-boxed",
+      "contract": "0.1.0", "source": "admin",
+      "tenant_id": "t_coastal_u", "user_id": "u_kim", "idp_subject": "okta|00u777",
+      "display_name": "Dr. J. Kim", "status": "active", "primary_role": "RESEARCHER",
+      "roles": [{"role": "RESEARCHER", "scope_type": "irb_study", "scope_id": "IRB-2026-114", "expires_at": "2027-01-01T00:00:00Z"}],
+      "abac": {"irb_study_ids": ["IRB-2026-114"], "classification_max": "de-identified", "purposes": ["research"]},
+      "session": {"valid": true, "aal": "AAL2", "mfa": true}
+    },
+    {
+      "_case": "student — one identity, MANY enrollments (one-key multi-tasking)",
+      "contract": "0.1.0", "source": "admin",
+      "tenant_id": "t_coastal_u", "user_id": "u_stu_88", "idp_subject": null,
+      "display_name": "Student 88", "status": "active", "primary_role": "STUDENT",
+      "roles": [
+        {"role": "STUDENT", "scope_type": "class", "scope_id": "class_nur101", "expires_at": null},
+        {"role": "STUDENT", "scope_type": "class", "scope_id": "class_nur210", "expires_at": null}
+      ],
+      "abac": {"class_ids": ["class_nur101", "class_nur210"], "classification_max": "identified", "purposes": ["education"]},
+      "session": {"valid": true, "aal": "AAL1", "mfa": false}
+    },
+    {
+      "_case": "V8 on-prem — local credential (idp null), single tenant, served from OFFLINE cache",
+      "contract": "0.1.0", "source": "admin",
+      "tenant_id": "v8-local", "user_id": "u_local_instr", "idp_subject": null,
+      "display_name": "Local Instructor", "status": "active", "primary_role": "INSTR",
+      "roles": [{"role": "INSTR", "scope_type": "class", "scope_id": "class_local", "expires_at": null}],
+      "abac": {"classification_max": "identified", "purposes": ["education"]},
+      "session": {"valid": true, "aal": "AAL1", "mfa": false},
+      "stale": true
+    },
+    {
+      "_case": "TB-SA — vendor plane with a TIME-BOXED break-glass elevation into a tenant",
+      "contract": "0.1.0", "source": "admin",
+      "tenant_id": "tb-global", "user_id": "u_tbsa_1", "idp_subject": "okta|00uTB",
+      "display_name": "TB SysAdmin", "status": "active", "primary_role": "TB-SA",
+      "roles": [
+        {"role": "TB-SA", "scope_type": "global", "scope_id": null, "expires_at": null},
+        {"role": "TB-SA", "scope_type": "tenant", "scope_id": "t_coastal_u", "expires_at": "2026-06-30T16:00:00Z"}
+      ],
+      "abac": {"classification_max": "de-identified", "purposes": ["operations", "support"]},
+      "session": {"valid": true, "aal": "AAL3", "mfa": true}
+    },
+    {
+      "_case": "forward-compat — an UNKNOWN role the consumer must ignore+deny, never error",
+      "contract": "0.1.0", "source": "admin",
+      "tenant_id": "t_coastal_u", "user_id": "u_future", "display_name": "Future Role User",
+      "status": "active", "primary_role": "CHAPLAIN",
+      "roles": [{"role": "CHAPLAIN", "scope_type": "site", "scope_id": "site_main"}],
+      "session": {"valid": true}
+    }
+  ]
+}

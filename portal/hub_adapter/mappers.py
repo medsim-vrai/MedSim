@@ -8,6 +8,29 @@ from . import config, contract
 
 SOURCE = "v8"
 
+# identity.provide primary_role (contract roles.catalog) -> V8 operator seat.
+# Deny-by-default: roles with no V8-operational authority (students, researcher,
+# billing, V9-native planes) and UNKNOWN roles map to None — the login then falls
+# back to the locally-unlocked seat, never errors (forward-compat rule: a new hub
+# role must be ignored+denied, not crash a V8 site).
+_HUB_ROLE_TO_SEAT = {
+    "TB-SA": "admin", "ORG-ADMIN": "admin", "SITE-ADMIN": "admin", "SIM-MGR-A": "admin",
+    "INSTR": "instructor", "SIM-MGR-I": "instructor",
+    "INSTR-AST": "observer", "OBSERVER": "observer",
+}
+
+
+def seat_from_identity(ident: dict[str, Any]) -> str | None:
+    """V8 seat ('admin'/'instructor'/'observer') for an identity.provide payload,
+    or None when the identity grants no V8 seat (inactive, unknown role, or a
+    role with no on-prem authority)."""
+    if not ident or ident.get("status") != "active":
+        return None
+    session = ident.get("session") or {}
+    if session.get("valid") is False:
+        return None
+    return _HUB_ROLE_TO_SEAT.get(str(ident.get("primary_role") or ""))
+
 
 def _t(tenant_id: str | None) -> str:
     return tenant_id or config.LOCAL_TENANT_ID

@@ -108,3 +108,68 @@ def unlock(password: str) -> Vault:
     except InvalidToken as e:
         raise ValueError("Invalid master password") from e
     return Vault(_key=key, _data=data)
+
+
+# ── Per-seat passwords (task #94 — real credential separation) ─────────────
+#
+# The MASTER password stays the 'admin' seat (it owns the vault today, so a
+# legacy vault keeps working unchanged — no lockout, no migration step). Each
+# lesser seat can get its OWN password: an envelope entry wrapping the master
+# Fernet key with a key derived from that seat's password. Which password
+# unlocks IS the seat — the login form's radio can only lower privilege.
+# Additive format: vaults without "role_keys" behave exactly as before.
+
+ROLE_PASSWORD_SEATS = ("instructor", "observer")
+
+
+def set_role_password(vault: Vault, role: str, password: str) -> None:
+    """Give `role` its own password (admin-gated at the route). The stored entry
+    wraps the master key, so this seat's password opens the same vault data."""
+    if role not in ROLE_PASSWORD_SEATS:
+        raise ValueError(f"No per-seat password for role: {role}")
+    if len(password) < 8:
+        raise ValueError("Seat password must be at least 8 characters")
+    raw = json.loads(VAULT_PATH.read_text())
+    salt = secrets.token_bytes(16)
+    role_fernet = Fernet(_derive_key(password, salt))
+    raw.setdefault("role_keys", {})[role] = {
+        "salt": base64.b64encode(salt).decode("ascii"),
+        "wrapped": role_fernet.encrypt(vault._key).decode("ascii"),
+    }
+    VAULT_PATH.write_text(json.dumps(raw, indent=2))
+
+
+def clear_role_password(role: str) -> None:
+    raw = json.loads(VAULT_PATH.read_text())
+    if raw.get("role_keys", {}).pop(role, None) is not None:
+        VAULT_PATH.write_text(json.dumps(raw, indent=2))
+
+
+def role_passwords_set() -> dict[str, bool]:
+    """Which seats have their own password (for the credentials page)."""
+    if not is_initialized():
+        return {r: False for r in ROLE_PASSWORD_SEATS}
+    raw = json.loads(VAULT_PATH.read_text())
+    have = raw.get("role_keys", {})
+    return {r: r in have for r in ROLE_PASSWORD_SEATS}
+
+
+def unlock_role(password: str) -> tuple[Vault, str]:
+    """Unlock with ANY seat's password → (vault, seat). The master password is
+    the 'admin' seat; a per-seat password yields that seat. Raises ValueError
+    when no credential matches (indistinguishable from a wrong password)."""
+    try:
+        return unlock(password), "admin"
+    except ValueError:
+        pass
+    raw = json.loads(VAULT_PATH.read_text())
+    for role, entry in (raw.get("role_keys") or {}).items():
+        role_key = _derive_key(password, base64.b64decode(entry["salt"]))
+        try:
+            master_key = Fernet(role_key).decrypt(entry["wrapped"].encode("ascii"))
+        except InvalidToken:
+            continue
+        fernet = Fernet(master_key)
+        data = json.loads(fernet.decrypt(raw["credentials"].encode("ascii")))
+        return Vault(_key=master_key, _data=data), role
+    raise ValueError("Invalid password")

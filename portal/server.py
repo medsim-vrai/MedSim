@@ -81,6 +81,19 @@ CREDENTIAL_FIELDS: list[tuple[str, str, str]] = [
 ]
 
 app = FastAPI(title="medsim portal", docs_url=None, redoc_url=None)
+
+
+@app.middleware("http")
+async def _html_no_cache(request, call_next):  # noqa: ANN001, ANN202
+    """Field lesson (2026-07-02): devices cached stale HTML across code updates —
+    the login page looked different per device and shipped fixes never arrived
+    (the avatar PWA shell had the same disease). Every HTML page must REVALIDATE
+    on load; the hashed /assets bundles stay long-cacheable. setdefault so a
+    route's explicit Cache-Control always wins."""
+    resp = await call_next(request)
+    if resp.headers.get("content-type", "").startswith("text/html"):
+        resp.headers.setdefault("Cache-Control", "no-cache")
+    return resp
 # CORS — the VRAI Faces app is a separate origin (e.g. :5173) and calls the
 # no-auth /api/face/* endpoints (binding GET, skin save). Credential-less, so
 # cookie-gated operator routes stay protected (a cross-origin request can't send
@@ -128,6 +141,10 @@ if _portal_serves_app():
             headers={
                 "Cross-Origin-Opener-Policy": "same-origin",
                 "Cross-Origin-Embedder-Policy": "require-corp",
+                # Always revalidate the ENTRY (it names the hashed bundles) — iPads
+                # were reloading a stale cached shell and never fetching new builds.
+                # The hashed /assets bundles themselves stay long-cacheable.
+                "Cache-Control": "no-cache",
             },
         )
 
@@ -136,7 +153,10 @@ if _portal_serves_app():
     def _vrai_dist_file(fname: str, media: str):  # noqa: ANN202
         async def _serve() -> Response:
             p = _VRAI_DIST / fname
-            return FileResponse(str(p), media_type=media) if p.is_file() \
+            # no-cache is CRITICAL on app-sw.js: a cached service worker keeps
+            # serving the old precached bundle forever — devices never see fixes.
+            return FileResponse(str(p), media_type=media,
+                                headers={"Cache-Control": "no-cache"}) if p.is_file() \
                 else Response(status_code=404)
         return _serve
 
@@ -239,19 +259,20 @@ async def auth_redirect_handler(request: Request, exc: HTTPException):
 # ---------------------------------------------------------------------------
 
 def _default_landing() -> str:
-    """Where a logged-in operator lands. The classic home stays the out-of-box
-    default; the v7.1 'card launch' sets MEDSIM_DEFAULT_VIEW=console to boot straight
-    into the Mission Control card system instead. Classic is always reachable — the
-    card UI has 'Switch to classic control room', and the classic nav links to the
-    card system the other way."""
+    """Where a logged-in operator lands. The Mission Control CARD system is now the
+    out-of-box default, so any launch (bare `python run_portal.py`, folder/preview,
+    or the card scripts) boots straight into it. Set MEDSIM_DEFAULT_VIEW=classic
+    (or home/control/legacy) to opt back into the classic home instead. Either UI
+    reaches the other: the card UI has 'Switch to classic control room', and the
+    classic nav links to the card system the other way."""
     import os as _os
     v = (_os.environ.get("MEDSIM_DEFAULT_VIEW") or "").strip().lower()
-    if v in ("console", "cards", "card", "mission", "v8", "7.1"):
-        # Land on SET UP, not Operate — a fresh launch has no live session, and
-        # opening straight into Operations (empty/stale) is confusing. Start where
-        # you build the session.
-        return "/portal/console?mode=setup"
-    return "/portal/home"
+    if v in ("home", "classic", "control", "legacy", "v7", "old"):
+        return "/portal/home"
+    # Default (unset, or any card alias: console/cards/card/mission/v8/7.1) → cards.
+    # Land on SET UP, not Operate — a fresh launch has no live session, and opening
+    # straight into Operations (empty/stale) is confusing. Start where you build it.
+    return "/portal/console?mode=setup"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -269,23 +290,78 @@ async def login_page(request: Request, error: str | None = None):
     )
 
 
+_SEAT_RANK = {"observer": 0, "instructor": 1, "admin": 2}
+
+
+def _resolve_seat(unlocked_role: str, form_role: str) -> str:
+    """Task #94 — the seat comes from WHICH password unlocked the vault; the
+    login form's radio can only LOWER privilege (an observer view on the master
+    password), never raise it. Legacy vaults (master password only) therefore
+    behave exactly as before: master + radio picks the seat."""
+    form_role = form_role if form_role in _SEAT_RANK else "instructor"
+    if _SEAT_RANK[form_role] < _SEAT_RANK.get(unlocked_role, 0):
+        return form_role
+    return unlocked_role
+
+
+def _hub_seat_overlay(local_seat: str) -> str:
+    """If the hub adapter is ON and an operator identity is configured, the
+    admin authority's identity.provide overrides the local seat (guide §2 step
+    3). Offline serves the adapter's last-known cache; any failure or an
+    unknown/inactive hub role falls back to the LOCAL seat — the hub can never
+    lock a site out (V8's defining offline rule)."""
+    try:
+        from .hub_adapter import config as hub_config
+        if not hub_config.ENABLED:
+            return local_seat
+        user_id = os.environ.get("HUB_OPERATOR_USER_ID", "").strip()
+        if not user_id:
+            return local_seat
+        from .hub_adapter import consume, mappers
+        ident = consume.identity(user_id)
+        seat = mappers.seat_from_identity(ident)
+        if seat is None:
+            if ident:
+                print(f"[auth] hub identity for {user_id!r} grants no V8 seat "
+                      f"(role={ident.get('primary_role')!r}) — using local seat", flush=True)
+            return local_seat
+        if ident.get("stale"):
+            print("[auth] hub identity served from OFFLINE cache (last-known)", flush=True)
+        return seat
+    except Exception as exc:  # noqa: BLE001 — auth must never hard-fail on the hub
+        print(f"[auth] hub identity overlay failed ({type(exc).__name__}); local seat kept",
+              flush=True)
+        return local_seat
+
+
 @app.post("/login")
 async def login_submit(password: Annotated[str, Form()],
                         role: Annotated[str, Form()] = "instructor"):
-    """M18 — `role` form field defaults to 'instructor'; pass
-    'observer' for the read-only TA / preceptor seat. The observer
-    can view every dashboard / debrief page but their cookie is
-    rejected by every mutating route."""
+    """Task #94 — the SEAT is bound at unlock: the master password is the admin
+    seat, per-seat passwords (set on the credentials page) yield their seat, and
+    the form radio can only lower privilege. With the hub adapter ON, the admin
+    authority's identity.provide overrides the local seat (offline-cached)."""
     if not credentials.is_initialized():
         return RedirectResponse("/login?error=not-initialized", status_code=303)
     try:
-        vault = credentials.unlock(password)
+        vault, unlocked_role = credentials.unlock_role(password)
     except (ValueError, FileNotFoundError):
         return RedirectResponse("/login?error=invalid", status_code=303)
+    # Re-arm the process-wide Anthropic key cache at LOGIN. A restart clears it and
+    # resume-on-boot restores encounters with api_key="" (snapshots are secret-free),
+    # so only room START used to refill it — a resumed room + fresh login left the
+    # bedside /listen path keyless and every character ECHOED ("I heard you say…").
+    _capture_anthropic_key(vault.get("ANTHROPIC_API_KEY") or "")
+    seat = _hub_seat_overlay(_resolve_seat(unlocked_role, role))
+    try:
+        from .hub_adapter import emit as hub_emit
+        hub_emit.audit(actor=seat, action="portal.login")  # no-op while flag OFF
+    except Exception:  # noqa: BLE001
+        pass
     response = RedirectResponse(_default_landing(), status_code=303)
     response.set_cookie(
         auth.COOKIE_NAME,
-        auth.issue_session_token(vault, role=role),
+        auth.issue_session_token(vault, role=seat),
         max_age=auth.SESSION_TTL_SECONDS,
         httponly=True,
         samesite="lax",
@@ -472,7 +548,7 @@ async def load_examples(
 @app.get("/portal/credentials", response_class=HTMLResponse)
 async def credentials_page(
     request: Request,
-    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    vault: Annotated[credentials.Vault, Depends(auth.require_admin)],
 ):
     stored = vault.credentials
     rows = []
@@ -484,7 +560,8 @@ async def credentials_page(
         })
     return templates.TemplateResponse(
         request, "credentials.html",
-        {"active": "credentials", "fields": rows},
+        {"active": "credentials", "fields": rows,
+         "seat_passwords": credentials.role_passwords_set()},
     )
 
 
@@ -492,7 +569,7 @@ async def credentials_page(
 async def credentials_save(
     key: Annotated[str, Form()],
     value: Annotated[str, Form()],
-    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    vault: Annotated[credentials.Vault, Depends(auth.require_admin)],
 ):
     known = {k for k, _, _ in CREDENTIAL_FIELDS}
     if key not in known:
@@ -508,10 +585,30 @@ async def credentials_save(
     return RedirectResponse("/portal/credentials", status_code=303)
 
 
+@app.post("/portal/credentials/seat_password")
+async def credentials_seat_password(
+    seat: Annotated[str, Form()],
+    password: Annotated[str, Form()] = "",
+    vault: Annotated[credentials.Vault, Depends(auth.require_admin)] = None,
+):
+    """Task #94 — set (or clear, with an empty password) a per-seat password.
+    Admin-only; the admin seat itself stays the vault master password."""
+    if seat not in credentials.ROLE_PASSWORD_SEATS:
+        raise HTTPException(400, f"Unknown seat: {seat}")
+    if password.strip():
+        try:
+            credentials.set_role_password(vault, seat, password.strip())
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+    else:
+        credentials.clear_role_password(seat)
+    return RedirectResponse("/portal/credentials", status_code=303)
+
+
 @app.post("/portal/credentials/test")
 async def credentials_test(
     key: Annotated[str, Form()],
-    vault: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    vault: Annotated[credentials.Vault, Depends(auth.require_admin)],
 ):
     value = vault.get(key)
     if not value:
@@ -555,6 +652,7 @@ async def scenarios_list(
                 "id": cid,
                 "name": (vrai_faces.resolve_card(cid) or {}).get("name") or cid,
                 "has_avatar": vrai_faces.has_portrait(cid),
+                "is_ai": vrai_faces.is_portrait_ai(cid),
             }
             for cid in (s.get("characters") or [])
         ]
@@ -1248,9 +1346,14 @@ async def personas_page(
     _: Annotated[credentials.Vault, Depends(auth.require_vault)],
 ):
     # Shallow-copy each persona (library dicts may be cached) and annotate the
-    # currently-assigned avatar skin, so the picker can highlight it.
+    # currently-assigned avatar skin, so the picker can highlight it, plus the
+    # AI-generated disclosure flag for the badge.
     personas = [
-        {**p, "avatar_skin": vrai_faces.assigned_skin_id(str(p.get("id") or ""))}
+        {
+            **p,
+            "avatar_skin": vrai_faces.assigned_skin_id(str(p.get("id") or "")),
+            "is_ai": vrai_faces.is_portrait_ai(str(p.get("id") or "")),
+        }
         for p in library.list_personas()
     ]
     return templates.TemplateResponse(
@@ -2940,7 +3043,7 @@ async def api_ehr_state(_: Annotated[credentials.Vault, Depends(auth.require_vau
 
 @app.get("/portal/ehr_admin", response_class=HTMLResponse)
 async def ehr_admin(request: Request,
-                     _: Annotated[credentials.Vault, Depends(auth.require_vault)]):
+                     _: Annotated[credentials.Vault, Depends(auth.require_admin)]):
     sess = control_session.get_active()
     seed = ehr_db.seed(sess.id) if sess else {}
     events = ehr_db.events(sess.id) if sess else []
@@ -2960,7 +3063,7 @@ async def ehr_admin(request: Request,
 
 
 @app.post("/portal/ehr_admin/purge")
-async def ehr_admin_purge(_: Annotated[credentials.Vault, Depends(auth.require_vault)]):
+async def ehr_admin_purge(_: Annotated[credentials.Vault, Depends(auth.require_admin)]):
     sess = control_session.get_active()
     if sess is None:
         return RedirectResponse("/portal/ehr_admin", status_code=303)
@@ -2973,7 +3076,7 @@ async def ehr_admin_purge(_: Annotated[credentials.Vault, Depends(auth.require_v
 @app.post("/portal/ehr_admin/catalog_remove")
 async def ehr_admin_catalog_remove(
     item_id: Annotated[int, Form()],
-    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    _: Annotated[credentials.Vault, Depends(auth.require_admin)],
 ):
     """Instructor prune of a master-catalog addition."""
     ehr_db.remove_catalog_item(item_id)
@@ -3130,6 +3233,9 @@ async def _tts_response(text: str, voice_id: str, language: str | None):
     from fastapi.responses import StreamingResponse
 
     text = (text or "").strip()
+    # FR-020: *stage directions* are display/animation data, never spoken. Fixed
+    # callers strip client-side already; this is the backstop for every /api/tts user.
+    text = voices.strip_stage_directions(text)
     voice_id = (voice_id or "").strip()
     api_key = _session_el_key()
 
@@ -6800,6 +6906,15 @@ async def api_control_operate(
             "sub": "Patient charts · MAR · notes · vitals",
             "open_url": "/portal/medical_records",
         })
+        # FR-019 — Network & device-status map: who's connected, what's linked, how
+        # students are deployed. Open in place or pop out onto another monitor.
+        entities.append({
+            "kind": "network",
+            "id": "network",
+            "title": "Network & devices",
+            "sub": "Live topology · links · student deployment",
+            "open_url": "/portal/network",
+        })
         return JSONResponse({"ok": True, "mode": "room",
                              "label": room.label or "Care room",
                              # room lifecycle state for the Operate room-controls bar
@@ -6840,6 +6955,34 @@ async def api_control_operate(
                              "label": sess.scenario_name or "Session", "entities": entities})
 
     return JSONResponse({"ok": True, "mode": "none", "label": "", "entities": []})
+
+
+# =====================================================================
+# FR-019 — Network & device-status view (Mission Control topology map)
+# =====================================================================
+
+@app.get("/api/network/snapshot")
+async def api_network_snapshot(
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-019 N1 — a live NetworkSnapshot of the running room (control · common
+    devices · patients with their manikin/tablet/supporting devices · the student
+    roster) assembled from control_room + ehr_db + library. Polled ~3s by the
+    Network view; a pure read (returns an empty-but-valid snapshot when idle)."""
+    from portal import network_status
+    return JSONResponse(network_status.build_snapshot())
+
+
+@app.get("/portal/network", response_class=HTMLResponse)
+async def portal_network(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """FR-019 N2 — the network/device-status topology view. Opens from the Mission
+    Control Operate cards (Open / Pop out) and renders the snapshot as a live SVG
+    map in two selectable layouts (tiered + radial). Vanilla-JS, polls the
+    snapshot endpoint."""
+    return templates.TemplateResponse(request, "network.html", {})
 
 
 # =====================================================================
@@ -7571,7 +7714,7 @@ async def vrai_onboard(request: Request):  # noqa: ANN202
     cert warning → /onboard → download the CA → install. No auth — instructions
     + the public CA only."""
     host = (request.headers.get("host") or "").split(":")[0] or "localhost"
-    portal = f"https://{host}:{request.url.port or 8765}"
+    portal = f"https://{host}:{request.url.port or 8760}"
     html = f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MedSim — connect this tablet</title>
