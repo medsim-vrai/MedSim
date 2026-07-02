@@ -15,7 +15,7 @@ portal. Mark each step ✅/❌; paste failures back to Claude Code with the step
 |---|---|---|
 | 0.1 | Restart the portal on current code: `pkill -TERM -f run_portal.py` then `MEDSIM_NO_BROWSER=1 MEDSIM_HOST=0.0.0.0 .venv/bin/python run_portal.py`. Watch for `[resume] restored last session …` if one was active. | ☐ |
 | 0.2 | Log in to the control room (vault). A prior scenario auto-resumes; otherwise configure one (single- or multi-patient). | ☐ |
-| 0.3 | On each tablet: open `http://<lan>:8766`, install the CA (Android: Settings → Security → Install a certificate → CA). Reopen the `https://…:8765` device URL — trusted, no warning. | ☐ |
+| 0.3 | On each tablet: open `http://<lan>:8761`, install the CA (Android: Settings → Security → Install a certificate → CA). Reopen the `https://…:8760` device URL — trusted, no warning. | ☐ |
 | 0.4 | Control room → **Add device → Device type ▾ → Advanced devices**. Confirm the group lists **Telemetry monitor · Vent monitor · Ventilator**. | ☐ |
 
 ## 1. Telemetry monitor

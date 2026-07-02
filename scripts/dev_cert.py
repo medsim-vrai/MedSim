@@ -23,7 +23,7 @@ Usage:
 Trust the CA after generating (a system-security step you run yourself):
   macOS    sudo scripts/trust-ca-mac.sh
   Windows  pwsh -File scripts/trust-ca-windows.ps1   (Run as Administrator)
-  tablet   open https://<host>:8765/rootca.pem and install it as a CA certificate
+  tablet   open https://<host>:8760/rootca.pem and install it as a CA certificate
 """
 from __future__ import annotations
 
@@ -248,7 +248,7 @@ def doctor(cert_dir: Path) -> int:
     else:
         print("    sudo cp portal/data/certs/rootCA.pem /usr/local/share/ca-certificates/medsim.crt "
               "&& sudo update-ca-certificates")
-    print("    tablet: open https://<host>:8765/rootca.pem → install as a CA certificate")
+    print("    tablet: open https://<host>:8760/rootca.pem → install as a CA certificate")
     print("\n" + ("All cert checks passed (trust separately, above)." if ok else "Some checks FAILED — see above."))
     return 0 if ok else 1
 

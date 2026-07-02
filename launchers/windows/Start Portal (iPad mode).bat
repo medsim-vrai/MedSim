@@ -67,7 +67,7 @@ if errorlevel 1 (
 
 set MEDSIM_HOST=0.0.0.0
 REM iPad mode = ONE ORIGIN (ADR-0028): the portal serves the built avatar app from
-REM dist\ AND the API on the same https://<lan-ip>:8765, so the QR's page + api share
+REM dist\ AND the API on the same https://<lan-ip>:8760, so the QR's page + api share
 REM one origin and one cert. Without this the /face/<id> route 404s and the QR can't
 REM link. run_portal.py auto-builds dist\ on first run if it's missing.
 set VRAI_FACES_SERVE=portal

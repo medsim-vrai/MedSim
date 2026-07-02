@@ -6,7 +6,7 @@
 #
 # Use this to access the portal from an iPad/iPhone on the same Wi-Fi as
 # the Mac running the portal. The console prints a LAN URL like
-# http://192.168.x.x:8765 — open that in Safari on iOS/iPadOS.
+# http://192.168.x.x:8760 — open that in Safari on iOS/iPadOS.
 #
 # First time only: macOS Gatekeeper may block — right-click → Open → Open.
 
@@ -72,7 +72,7 @@ fi
 
 export MEDSIM_HOST=0.0.0.0
 # iPad mode = ONE ORIGIN (ADR-0028): the portal serves the BUILT avatar app from
-# dist/ AND the API on the same https://<lan-ip>:8765, so the QR's page + api share
+# dist/ AND the API on the same https://<lan-ip>:8760, so the QR's page + api share
 # one origin and one cert. Without this the /face/<id> route 404s and the QR can't
 # link — the app would only load via the separate vite dev server, whose cross-origin
 # bind to the portal is fragile and strands the tablet on the demo avatar.

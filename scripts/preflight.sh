@@ -11,7 +11,7 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-PORT="${MEDSIM_PORT:-8765}"
+PORT="${MEDSIM_PORT:-8760}"
 TABLET_IP="${1:-}"
 PASS=0; FAIL=0
 ok()   { printf "  \033[32m✓\033[0m %s\n" "$1"; PASS=$((PASS+1)); }

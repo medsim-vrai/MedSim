@@ -3,13 +3,13 @@
 # the Mac or a tablet says "not secure" — it pinpoints whether the problem is the
 # CERT (rare) or TRUST (the usual cause) and prints the exact fix. Changes nothing.
 #
-#   scripts/cert-doctor.sh             # checks the portal on :8765
+#   scripts/cert-doctor.sh             # checks the portal on :8760
 #   PORT=5173 scripts/cert-doctor.sh   # checks a vite dev server instead
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 C="$ROOT_DIR/portal/data/certs"
-PORT="${PORT:-8765}"
+PORT="${PORT:-8760}"
 
 ok()  { printf "  \033[32m✓\033[0m %s\n" "$1"; }
 bad() { printf "  \033[31m✗\033[0m %s\n" "$1"; }

@@ -20,17 +20,17 @@ cd "/Users/petermarotta/Documents/Claude/Projects/Scenario structure to support 
 MEDSIM_HOST=0.0.0.0 ./.venv/bin/python run_portal.py
 ```
 
-Note the **LAN URL** printed at startup (e.g. `http://192.168.1.42:8765`).
+Note the **LAN URL** printed at startup (e.g. `http://192.168.1.42:8760`).
 
 On the instructor laptop:
 
-1. Open `http://127.0.0.1:8765`, log in.
+1. Open `http://127.0.0.1:8760`, log in.
 2. Pick **New scenario** → choose 1 persona (e.g. P-001 Mr. Johnson) → Launch.
 3. The control wizard hands you off to **/portal/control/ops**.
 
 ## Test 1 — A2HS install on iOS Safari
 
-1. On iPad, open `http://<lan-ip>:8765/portal/control/ops`.
+1. On iPad, open `http://<lan-ip>:8760/portal/control/ops`.
    *(Or skip ahead to the device QR — same A2HS hint shows there.)*
 2. Verify the **Add to Home Screen** banner appears at the bottom of the
    landing page.

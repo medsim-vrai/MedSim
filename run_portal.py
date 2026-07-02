@@ -2,7 +2,7 @@
 
 Environment variables:
   MEDSIM_HOST        Bind host (default 127.0.0.1). Set to 0.0.0.0 for LAN.
-  MEDSIM_PORT        Bind port (default 8765).
+  MEDSIM_PORT        Bind port (default 8760).
   MEDSIM_NO_BROWSER  If set, don't auto-open a browser.
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 import uvicorn
 
 HOST = os.environ.get("MEDSIM_HOST", "127.0.0.1")
-PORT = int(os.environ.get("MEDSIM_PORT", "8765"))
+PORT = int(os.environ.get("MEDSIM_PORT", "8760"))
 
 # TLS for tablet testing. When a dev cert exists (scripts/make-dev-cert.sh), the
 # portal serves HTTPS — required so a tablet gets a *secure context* (WebGPU for

@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MedSim · Device Link Topology</title>
+<style>
+  /* FR-019 — Network & device-status tool. Standalone full-screen monitoring view
+     (opens / pops out from Mission Control Operate). Design tokens + the diagram
+     encoding are the source of truth from docs/FR-019-network-status/. The SVG
+     itself is built by /static/network.js from a live NetworkSnapshot. */
+  :root{
+    --bg:#e7e5df; --paper:#fffefb; --border:#e0ddd6; --ink:#22211d;
+    --muted:#6b675f; --faint:#8a8780; --faint2:#a8a49b; --hair:#e6e3dc; --hair2:#cfccc4;
+    --note-bg:#fef4a8; --note-ink:#5b531f;
+    --c-control:#3a3f47; --c-operational:#2f6db0; --c-character:#8a4f9e;
+    --c-physio:#1f8f7a; --c-vrai:#c2862c; --c-supporting:#7b7f88;
+    --c-student:#b0567f; --c-student-tint:#fbeef3; --c-patient:#22211d;
+    --ok:#2f8f6a; --fault:#c0473f; --avail:#b9b6ae;
+    --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:13px;line-height:1.4;-webkit-font-smoothing:antialiased;
+       padding:18px 20px 40px}
+  a{color:inherit}
+
+  header.page{display:flex;align-items:flex-end;justify-content:space-between;
+       gap:16px;flex-wrap:wrap;margin-bottom:14px}
+  header.page h1{font-size:24px;font-weight:600;margin:0;letter-spacing:-.01em}
+  header.page .intro{font-family:var(--mono);font-size:12.5px;color:var(--muted);
+       margin-top:3px;max-width:640px}
+  header.page .back{font-family:var(--mono);font-size:11px;color:var(--muted);
+       text-decoration:none;border:1px solid var(--hair2);border-radius:6px;
+       padding:6px 10px;background:var(--paper);white-space:nowrap}
+  header.page .back:hover{border-color:var(--faint)}
+
+  /* Live status strip + segmented control */
+  .strip{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:16px}
+  .poll{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);
+       font-size:10.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+  .poll .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);
+       animation:dotpulse 1.4s ease-in-out infinite}
+  .poll.stale .dot{background:var(--avail);animation:none}
+  .counts{display:inline-flex;align-items:center;gap:0;font-family:var(--mono);font-size:12px}
+  .counts .c{display:inline-flex;align-items:center;gap:5px;padding:0 11px;
+       border-right:1px solid var(--hair2)}
+  .counts .c:last-child{border-right:0}
+  .counts .c b{font-weight:600}
+  .counts .c i{width:7px;height:7px;border-radius:50%;font-style:normal;display:inline-block}
+  .counts .c.active i{background:var(--ok)}
+  .counts .c.idle   i{background:transparent;border:1.5px solid var(--muted)}
+  .counts .c.available i{background:transparent;border:1.5px dotted var(--avail)}
+  .counts .c.fault  i{background:var(--fault)}
+
+  .refresh{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+       border:1px solid var(--hair2);background:var(--paper);color:var(--ink);border-radius:6px;
+       padding:6px 11px;cursor:pointer}
+  .refresh:hover{border-color:var(--faint)}
+  .refresh:active{transform:translateY(1px)}
+  .refresh.busy{opacity:.55;pointer-events:none}
+  .updated{font-family:var(--mono);font-size:10.5px;color:var(--faint);white-space:nowrap}
+
+  .seg{margin-left:auto;display:inline-flex;background:#dedbd3;border-radius:9px;padding:3px;gap:3px}
+  .seg button{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+       text-transform:uppercase;border:0;background:transparent;color:var(--muted);
+       padding:7px 13px;border-radius:6px;cursor:pointer;font-weight:500}
+  .seg button[aria-selected="true"]{background:var(--paper);color:var(--ink);
+       box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+  /* Two-column body: diagram + legend */
+  .wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+  @media (max-width:1080px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--paper);border:1px solid var(--border);border-radius:6px}
+  .diagram-card{padding:14px 16px 18px;min-width:0}
+  .card-head{display:flex;align-items:baseline;justify-content:space-between;
+       gap:10px;margin-bottom:6px}
+  .card-head .ttl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+       text-transform:uppercase;color:var(--muted)}
+  .card-head .meta{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--faint2)}
+  #diagram{width:100%;max-width:760px;margin:0 auto}
+  #diagram svg{display:block;width:100%;height:auto}
+  #empty{display:none;text-align:center;color:var(--faint);font-family:var(--mono);
+       font-size:12px;padding:60px 10px}
+
+  /* Legend */
+  .legend-card{padding:15px 16px}
+  .legend-card h2{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+       text-transform:uppercase;color:var(--muted);margin:0 0 9px;font-weight:600}
+  .legend-card section{margin-bottom:16px}
+  .legend-card section:last-child{margin-bottom:0}
+  .lg-row{display:flex;align-items:center;gap:9px;padding:3px 0;font-size:12px}
+  .lg-row .sw{width:16px;height:16px;border-radius:4px;flex:0 0 auto;position:relative}
+  .lg-row .bar{width:16px;height:16px;border-radius:3px;flex:0 0 auto;position:relative;
+       background:var(--paper);border:1px solid var(--hair2)}
+  .lg-row .bar::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:3.5px;
+       border-radius:1.5px;background:var(--barc,#999)}
+  .lg-row .name{color:var(--ink)}
+  .lg-row .tag{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-left:auto}
+  .lg-line{display:flex;align-items:center;gap:9px;padding:3px 0;font-size:12px}
+  .lg-line svg{flex:0 0 auto}
+  .lg-note{font-family:var(--mono);font-size:10.5px;color:var(--note-ink);
+       background:var(--note-bg);border-radius:5px;padding:7px 9px;line-height:1.5}
+
+  @keyframes flow{to{stroke-dashoffset:-24}}
+  @keyframes blink{0%,100%{opacity:.9}50%{opacity:.35}}
+  @keyframes pulseRing{0%{transform:scale(.5);opacity:.55}80%,100%{transform:scale(1.35);opacity:0}}
+  @keyframes dotpulse{0%,100%{opacity:1}50%{opacity:.3}}
+  #diagram .flow{animation:flow 1s linear infinite}
+  #diagram .blink{animation:blink 1.4s ease-in-out infinite}
+  #diagram .scan{transform-box:fill-box;transform-origin:center;animation:pulseRing 2.8s ease-out infinite}
+  @media (prefers-reduced-motion:reduce){
+    .poll .dot{animation:none}
+    #diagram .flow{animation:none}
+    #diagram .blink{animation:none}
+    #diagram .scan{display:none}
+  }
+</style>
+</head>
+<body>
+  <header class="page">
+    <div>
+      <h1>MedSim · Device Link Topology</h1>
+      <div class="intro">Color = device class · line style = link state · dashed = assignment, dotted = role.</div>
+    </div>
+    <a class="back" href="/portal/console?mode=operate">← Mission Control</a>
+  </header>
+
+  <div class="strip">
+    <span class="poll" id="poll"><span class="dot"></span><span id="poll-label">Polling</span></span>
+    <button class="refresh" id="refresh" type="button" title="Re-check every device link right now">↻ Refresh</button>
+    <span class="updated" id="updated">—</span>
+    <span class="counts" id="counts">
+      <span class="c active"><i></i><b id="n-active">0</b> active</span>
+      <span class="c idle"><i></i><b id="n-idle">0</b> idle</span>
+      <span class="c available"><i></i><b id="n-available">0</b> available</span>
+      <span class="c fault"><i></i><b id="n-fault">0</b> fault</span>
+    </span>
+    <div class="seg" role="tablist" aria-label="Layout">
+      <button id="seg-A" role="tab" aria-selected="true">Option A · Tiered</button>
+      <button id="seg-C" role="tab" aria-selected="false">Option C · Radial hub</button>
+    </div>
+  </div>
+
+  <main class="wrap">
+    <section class="card diagram-card">
+      <div class="card-head">
+        <span class="ttl" id="diagram-title">Option A · Tiered</span>
+        <span class="meta" id="diagram-meta">—</span>
+      </div>
+      <div id="diagram"></div>
+      <div id="empty">No active room. Launch a scenario from Mission Control to see the network.</div>
+    </section>
+
+    <aside class="card legend-card">
+      <section>
+        <h2>Device classes</h2>
+        <div class="lg-row"><span class="bar" style="--barc:#2f6db0"></span><span class="name">Operational</span><span class="tag">cart · station · records</span></div>
+        <div class="lg-row"><span class="bar" style="--barc:#8a4f9e"></span><span class="name">Character role</span><span class="tag">doctor · nurse · RT…</span></div>
+        <div class="lg-row"><span class="bar" style="--barc:#1f8f7a"></span><span class="name">Manikin (physio)</span><span class="tag">MAN-##</span></div>
+        <div class="lg-row"><span class="bar" style="--barc:#c2862c"></span><span class="name">Tablet (vrai)</span><span class="tag">TAB-##</span></div>
+        <div class="lg-row"><span class="bar" style="--barc:#7b7f88"></span><span class="name">Supporting</span><span class="tag">IV · alarm</span></div>
+        <div class="lg-row"><span class="sw" style="background:#fbeef3;border:1px solid #b0567f"></span><span class="name">Student / participant</span><span class="tag">STU-##</span></div>
+      </section>
+      <section>
+        <h2>Link state</h2>
+        <div class="lg-line"><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#2f6db0" stroke-width="1.7" stroke-dasharray="7 5" stroke-linecap="round"/></svg><span class="name">Active — in use</span></div>
+        <div class="lg-line"><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#2f6db0" stroke-width="1.2" opacity="0.5" stroke-linecap="round"/></svg><span class="name">Idle — ready</span></div>
+        <div class="lg-line"><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#b9b6ae" stroke-width="1" stroke-dasharray="1.5 5" stroke-linecap="round"/></svg><span class="name">Available — unassigned</span></div>
+        <div class="lg-line"><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#c0473f" stroke-width="1.4" stroke-dasharray="5 4" stroke-linecap="round"/></svg><span class="name">Fault — offline</span></div>
+      </section>
+      <section>
+        <h2>Relationships</h2>
+        <div class="lg-line"><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#7b7f88" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.7" stroke-linecap="round"/></svg><span class="name">Assigned to patient</span></div>
+        <div class="lg-line"><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#b0567f" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.65" stroke-linecap="round"/></svg><span class="name">Student → patient</span></div>
+        <div class="lg-line"><svg width="34" height="10"><line x1="1" y1="5" x2="33" y2="5" stroke="#b0567f" stroke-width="1.2" stroke-dasharray="1 4" opacity="0.7" stroke-linecap="round"/></svg><span class="name">Student → role</span></div>
+      </section>
+      <section>
+        <h2>Status pip</h2>
+        <div class="lg-note">Top-right of each device · filled = active · hollow ring = idle · gray dotted = available · red = fault.</div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="/static/network.js"></script>
+</body>
+</html>

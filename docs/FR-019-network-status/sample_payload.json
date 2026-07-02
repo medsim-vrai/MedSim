@@ -1,0 +1,63 @@
+{
+  "$comment": "Sample NetworkSnapshot matching the prototype's seeded scenario exactly. This is what a MedSim poll/push should produce. See schema.ts for the contract.",
+  "sessionId": "sess-2026-0627-A",
+  "timestamp": "2026-06-27T14:32:00Z",
+  "control": {
+    "id": "ctrl",
+    "tag": "CTRL-01",
+    "name": "Instructor Control",
+    "state": "active"
+  },
+  "commonDevices": [
+    { "id": "cart", "tag": "CART-01", "name": "Med Cart",        "cls": "operational", "state": "active",    "area": "hall" },
+    { "id": "stn",  "tag": "STN-01",  "name": "Nurses Station",  "cls": "operational", "state": "active",    "area": "nurses_station" },
+    { "id": "rec",  "tag": "REC-01",  "name": "Records Station", "cls": "operational", "state": "idle",      "area": "nurses_station" },
+
+    { "id": "md", "tag": "MD-01", "name": "Doctor",             "cls": "character", "state": "active",    "role": "doctor",                "assignedToPatientId": "pt1" },
+    { "id": "sn", "tag": "SN-01", "name": "Supervising Nurse",  "cls": "character", "state": "active",    "role": "supervising_nurse" },
+    { "id": "cn", "tag": "CN-01", "name": "Charge Nurse",       "cls": "character", "state": "idle",      "role": "charge_nurse" },
+    { "id": "rt", "tag": "RT-01", "name": "Respiratory Therapist", "cls": "character", "state": "fault", "role": "respiratory_therapist" },
+    { "id": "rx", "tag": "RX-01", "name": "Pharmacist",         "cls": "character", "state": "available", "role": "pharmacist" }
+  ],
+  "units": [
+    {
+      "id": "unitA",
+      "name": "Unit A",
+      "focus": "Med-Surg",
+      "rooms": [
+        {
+          "id": "room1",
+          "label": "Room 1",
+          "capacity": 8,
+          "patients": [
+            {
+              "id": "pt1", "tag": "PT-01", "bed": 1,
+              "manikin": { "id": "man1", "tag": "MAN-01", "name": "Manikin", "cls": "physio", "state": "active" },
+              "tablet":  { "id": "tab1", "tag": "TAB-01", "name": "Tablet",  "cls": "vrai",   "state": "active" },
+              "supporting": [
+                { "id": "ivp1", "tag": "IVP-01", "name": "IV Pump",     "cls": "supporting", "state": "active" },
+                { "id": "alm1", "tag": "ALM-01", "name": "Alarm Panel", "cls": "supporting", "state": "idle" }
+              ]
+            },
+            {
+              "id": "pt2", "tag": "PT-02", "bed": 2,
+              "manikin": { "id": "man2", "tag": "MAN-02", "name": "Manikin", "cls": "physio", "state": "idle" },
+              "tablet":  { "id": "tab2", "tag": "TAB-02", "name": "Tablet",  "cls": "vrai",   "state": "idle" },
+              "supporting": []
+            },
+            {
+              "id": "pt3", "tag": "PT-03", "bed": 3,
+              "manikin": { "id": "man3", "tag": "MAN-03", "name": "Manikin", "cls": "physio", "state": "available", "$comment": "manikin currently out of the room / unassigned" },
+              "tablet":  { "id": "tab3", "tag": "TAB-03", "name": "Tablet",  "cls": "vrai",   "state": "fault" },
+              "supporting": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "students": [
+    { "id": "stu1", "tag": "STU-01", "name": "Student A", "patientIds": ["pt1", "pt2"], "role": "charge_nurse" },
+    { "id": "stu2", "tag": "STU-02", "name": "Student B", "patientIds": ["pt3"], "role": null }
+  ]
+}

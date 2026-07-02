@@ -6,15 +6,15 @@
 # any portal already running before starting a fresh one (no stale code, no
 # "address already in use").
 #
-#   bash scripts/serve.sh            # LOCAL  → https://127.0.0.1:8765, opens Chrome
-#   bash scripts/serve.sh lan        # LAN    → https://<this-mac-ip>:8765 (tablets),
+#   bash scripts/serve.sh            # LOCAL  → https://127.0.0.1:8760, opens Chrome
+#   bash scripts/serve.sh lan        # LAN    → https://<this-mac-ip>:8760 (tablets),
 #                                    #           headless, logs to /tmp/medsim_portal.log
 #   bash scripts/serve.sh stop       # stop any running portal and exit
 #
 # What it sets for you:
 #   • MEDSIM_DEFAULT_VIEW=console  — land on the card UI (/portal/console), not classic.
 #   • VRAI_FACES_SERVE=portal      — serve the BUILT avatar app from the portal origin
-#                                    (:8765). REQUIRED for tablet avatars — otherwise the
+#                                    (:8760). REQUIRED for tablet avatars — otherwise the
 #                                    QR sends the tablet to the vite dev server (:5173) and
 #                                    the avatar binding fetch is cross-origin → "binding
 #                                    fetch failed" / no skin / PTT unreachable.
@@ -31,7 +31,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 MODE="${1:-local}"
-PORT="${MEDSIM_PORT:-8765}"
+PORT="${MEDSIM_PORT:-8760}"
 LOG="${MEDSIM_LOG:-/tmp/medsim_portal.log}"
 PY=".venv/bin/python"
 

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  @keyframes flow { to { stroke-dashoffset: -24; } }
+  @keyframes blink { 0%,100% { opacity:.9 } 50% { opacity:.35 } }
+  @keyframes pulseRing { from { transform:scale(.5); opacity:.5 } to { transform:scale(1.35); opacity:0 } }
+  @keyframes dotpulse { 0%,100% { opacity:1 } 50% { opacity:.25 } }
+  .flow { animation: flow 1s linear infinite; }
+  .blink { animation: blink 1.4s ease-in-out infinite; }
+  .scan { transform-box: fill-box; transform-origin: center; animation: pulseRing 2.8s ease-out infinite; }
+  .lpulse { animation: dotpulse 1.4s ease-in-out infinite; }
+  body { margin:0; background:#e7e5df; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; box-sizing:border-box; padding:30px 34px 48px; font-family:'IBM Plex Sans',sans-serif;">
+  <div style="max-width:1240px; margin:0 auto;">
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap;">
+      <div>
+        <div style="font:600 24px/1.15 'IBM Plex Sans'; color:#22211d; letter-spacing:-.01em;">MedSim · Device Link Topology</div>
+        <div style="margin-top:7px; font:400 12.5px/1.55 'IBM Plex Mono'; color:#6b675f; max-width:680px;">Live link-state map for one room. Hierarchy: <b style="color:#3a3f47;">Control → Common (shared) → Patient</b>. Color = device class, line style = link state. Polls MedSim VRAI and updates as equipment connects, idles, or drops.</div>
+      </div>
+      <div style="display:flex; gap:16px; align-items:center; font-family:'IBM Plex Mono'; font-size:12px; color:#3a3f47; white-space:nowrap;">
+        <span style="display:flex; gap:7px; align-items:center; font-weight:600; color:#2f8f6a;"><span class="lpulse" style="width:8px;height:8px;border-radius:50%;background:#2f8f6a;display:inline-block;"></span>POLLING</span>
+        <span style="width:1px;height:14px;background:#cfccc4;"></span>
+        <span style="display:flex;gap:6px;align-items:center;"><span style="width:8px;height:8px;border-radius:50%;background:#2f8f6a;display:inline-block;"></span>{{ nActive }} active</span>
+        <span style="display:flex;gap:6px;align-items:center;color:#8a8780;"><span style="width:8px;height:8px;border-radius:50%;border:1.5px solid #8a8780;display:inline-block;"></span>{{ nIdle }} idle</span>
+        <span style="display:flex;gap:6px;align-items:center;color:#a8a49b;"><span style="width:8px;height:8px;border-radius:50%;border:1.5px dotted #a8a49b;display:inline-block;"></span>{{ nAvail }} avail</span>
+        <span style="display:flex;gap:6px;align-items:center;color:#c0473f;"><span style="width:8px;height:8px;border-radius:50%;background:#c0473f;display:inline-block;"></span>{{ nFault }} fault</span>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:20px; margin-top:22px; flex-wrap:wrap;">
+      {{ tabs }}
+      <div style="font:400 11px 'IBM Plex Mono'; color:#a8a49b;">{{ currentSub }}</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 340px; gap:24px; margin-top:18px; align-items:start;">
+
+      <div style="background:#fffefb; border:1px solid #e0ddd6; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:18px 18px 16px;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+          <span style="font:600 12px 'IBM Plex Mono'; color:#22211d; letter-spacing:.03em;">{{ currentLabel }}</span>
+          <span style="font:400 10.5px 'IBM Plex Mono'; color:#a8a49b;">ROOM 1 · UNIT A · CAP 8</span>
+        </div>
+        <div style="max-width:700px; margin:0 auto;">{{ current }}</div>
+      </div>
+
+      <div style="background:#fffefb; border:1px solid #e0ddd6; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:18px;">
+        <div style="font:600 11px 'IBM Plex Mono'; color:#22211d; letter-spacing:.08em; margin-bottom:14px;">LEGEND</div>
+
+        <div style="font:600 10px 'IBM Plex Mono'; color:#a8a49b; letter-spacing:.14em; margin-bottom:10px;">DEVICE CLASS</div>
+        <div style="display:flex; flex-direction:column; gap:9px; margin-bottom:18px;">
+          <div style="display:flex; gap:10px; align-items:flex-start;"><span style="flex:0 0 auto; width:13px; height:13px; border-radius:3px; background:#2f6db0; margin-top:1px;"></span><span style="font:400 12px/1.35 'IBM Plex Sans';">Operational <span style="color:#8a8780;">— med cart, nurses &amp; records stations</span></span></div>
+          <div style="display:flex; gap:10px; align-items:flex-start;"><span style="flex:0 0 auto; width:13px; height:13px; border-radius:3px; background:#8a4f9e; margin-top:1px;"></span><span style="font:400 12px/1.35 'IBM Plex Sans';">Character — shared <span style="color:#8a8780;">— doctor, sup./charge nurse, RT, pharmacist</span></span></div>
+          <div style="display:flex; gap:10px; align-items:flex-start;"><span style="flex:0 0 auto; width:13px; height:13px; border-radius:3px; background:#1f8f7a; margin-top:1px;"></span><span style="font:400 12px/1.35 'IBM Plex Sans';">Patient · Manikin <span style="color:#8a8780;">— physiologic engine link</span></span></div>
+          <div style="display:flex; gap:10px; align-items:flex-start;"><span style="flex:0 0 auto; width:13px; height:13px; border-radius:3px; background:#c2862c; margin-top:1px;"></span><span style="font:400 12px/1.35 'IBM Plex Sans';">Patient · Tablet <span style="color:#8a8780;">— VR/AI avatar interface</span></span></div>
+          <div style="display:flex; gap:10px; align-items:flex-start;"><span style="flex:0 0 auto; width:13px; height:13px; border-radius:3px; background:#7b7f88; margin-top:1px;"></span><span style="font:400 12px/1.35 'IBM Plex Sans';">Supporting <span style="color:#8a8780;">— IV pump, alarm panel</span></span></div>
+          <div style="display:flex; gap:10px; align-items:flex-start;"><span style="flex:0 0 auto; width:13px; height:13px; border-radius:7px; background:#fbeef3; border:1.5px solid #b0567f; margin-top:1px;"></span><span style="font:400 12px/1.35 'IBM Plex Sans';">Student — participant <span style="color:#8a8780;">— assigned 1+ patients, may fill charge / supervisor role</span></span></div>
+        </div>
+
+        <div style="font:600 10px 'IBM Plex Mono'; color:#a8a49b; letter-spacing:.14em; margin-bottom:10px;">LINK STATE</div>
+        <div style="display:flex; flex-direction:column; gap:9px; margin-bottom:18px;">
+          <div style="display:flex; gap:10px; align-items:center;"><svg width="48" height="10" style="flex:0 0 auto;"><line class="flow" x1="2" y1="5" x2="46" y2="5" stroke="#3a3f47" stroke-width="1.8" stroke-dasharray="7 5" stroke-linecap="round"/></svg><span style="font:400 12px 'IBM Plex Sans';">Linked &amp; active — in use</span></div>
+          <div style="display:flex; gap:10px; align-items:center;"><svg width="48" height="10" style="flex:0 0 auto;"><line x1="2" y1="5" x2="46" y2="5" stroke="#3a3f47" stroke-width="1.2" opacity=".5" stroke-linecap="round"/></svg><span style="font:400 12px 'IBM Plex Sans';">Linked &amp; idle — ready, not in use</span></div>
+          <div style="display:flex; gap:10px; align-items:center;"><svg width="48" height="10" style="flex:0 0 auto;"><line x1="2" y1="5" x2="46" y2="5" stroke="#a8a49b" stroke-width="1" stroke-dasharray="1.5 5" stroke-linecap="round"/></svg><span style="font:400 12px 'IBM Plex Sans';">Available — unassigned</span></div>
+          <div style="display:flex; gap:10px; align-items:center;"><svg width="48" height="10" style="flex:0 0 auto;"><line x1="2" y1="5" x2="46" y2="5" stroke="#c0473f" stroke-width="1.4" stroke-dasharray="5 4" stroke-linecap="round"/></svg><span style="font:400 12px 'IBM Plex Sans';">Disconnected / fault</span></div>
+          <div style="display:flex; gap:10px; align-items:center;"><svg width="48" height="10" style="flex:0 0 auto;"><line x1="2" y1="5" x2="46" y2="5" stroke="#b0567f" stroke-width="1.2" stroke-dasharray="4 3" stroke-linecap="round"/></svg><span style="font:400 12px 'IBM Plex Sans';">Student → assigned patient</span></div>
+          <div style="display:flex; gap:10px; align-items:center;"><svg width="48" height="10" style="flex:0 0 auto;"><line x1="2" y1="5" x2="46" y2="5" stroke="#b0567f" stroke-width="1.2" stroke-dasharray="1 4" stroke-linecap="round"/></svg><span style="font:400 12px 'IBM Plex Sans';">Student → role filled (charge / superv.)</span></div>
+        </div>
+
+        <div style="font:600 10px 'IBM Plex Mono'; color:#a8a49b; letter-spacing:.14em; margin-bottom:10px;">NOTATION</div>
+        <div style="display:flex; gap:16px; align-items:center; margin-bottom:12px; font:400 11.5px 'IBM Plex Sans'; color:#3a3f47;">
+          <span style="display:flex;gap:6px;align-items:center;"><span style="width:18px;height:12px;border:1.4px solid #3a3f47;border-radius:3px;display:inline-block;"></span>device</span>
+          <span style="display:flex;gap:6px;align-items:center;"><span style="width:14px;height:14px;border:1.4px solid #3a3f47;border-radius:50%;display:inline-block;"></span>patient</span>
+          <span style="display:flex;gap:6px;align-items:center;"><span style="width:14px;height:14px;border:1.4px solid #3a3f47;border-radius:50%;display:inline-block;position:relative;"><span style="position:absolute;inset:3px;border-radius:50%;background:#3a3f47;"></span></span>control</span>
+        </div>
+        <div style="font:400 11px/1.5 'IBM Plex Mono'; color:#8a8780; border-top:1px solid #eeece6; padding-top:11px;">Tags assigned by MedSim at registration. Test scheme: CTRL · CART · STN · REC · MD · SN · CN · RT · RX · MAN · TAB · IVP · ALM · PT · STU.</div>
+      </div>
+    </div>
+
+    <div style="margin-top:22px; background:#fef4a8; padding:14px 18px; border-radius:5px; font:13px/1.55 'IBM Plex Sans'; color:#5b531f; max-width:1240px; box-shadow:0 1px 3px rgba(0,0,0,.08);">
+      <b>Both views are live</b> &nbsp; · Toggle <b>Option A (Tiered)</b> vs <b>Option C (Radial Hub)</b> anytime while MedSim is running — both render the same live polling, so pick whichever reads better. &nbsp; · Your choice is remembered for the session. &nbsp; · Next: real MedSim polling hooks, per-device inspect, and room → unit → multi-unit (ER / ICU / Med-Surg / Psych) scale-out.
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  F = "'IBM Plex Mono', monospace";
+  S = "'IBM Plex Sans', sans-serif";
+  PAL = {
+    cls: { control:'#3a3f47', op:'#2f6db0', char:'#8a4f9e', physio:'#1f8f7a', vrai:'#c2862c', sup:'#7b7f88', patient:'#3a3f47', student:'#b0567f' },
+    fault:'#c0473f', gray:'#b9b6ae', paper:'#fffefb', ink:'#22211d', faint:'#cfccc4'
+  };
+  NODES = {
+    ctrl:{ tag:'CTRL-01', name:'Instructor Control', cls:'control' },
+    cart:{ tag:'CART-01', name:'Med Cart', cls:'op' },
+    stn:{ tag:'STN-01', name:'Nurses Station', cls:'op' },
+    rec:{ tag:'REC-01', name:'Records Stn.', cls:'op' },
+    md:{ tag:'MD-01', name:'Doctor', cls:'char' },
+    sn:{ tag:'SN-01', name:'Superv. Nurse', cls:'char' },
+    cn:{ tag:'CN-01', name:'Charge Nurse', cls:'char' },
+    rt:{ tag:'RT-01', name:'Resp. Therapist', cls:'char' },
+    rx:{ tag:'RX-01', name:'Pharmacist', cls:'char' },
+    man1:{ tag:'MAN-01', name:'Manikin', cls:'physio' },
+    tab1:{ tag:'TAB-01', name:'Tablet', cls:'vrai' },
+    ivp1:{ tag:'IVP-01', name:'IV', cls:'sup' },
+    alm1:{ tag:'ALM-01', name:'Alarm', cls:'sup' },
+    man2:{ tag:'MAN-02', name:'Manikin', cls:'physio' },
+    tab2:{ tag:'TAB-02', name:'Tablet', cls:'vrai' },
+    man3:{ tag:'MAN-03', name:'Manikin', cls:'physio' },
+    tab3:{ tag:'TAB-03', name:'Tablet', cls:'vrai' },
+    pt1:{ tag:'PT-01', cls:'patient' },
+    pt2:{ tag:'PT-02', cls:'patient' },
+    pt3:{ tag:'PT-03', cls:'patient' },
+    stu1:{ tag:'STU-01', name:'Student', cls:'student' },
+    stu2:{ tag:'STU-02', name:'Student', cls:'student' }
+  };
+  STUDENTS = [
+    { id:'stu1', patients:['pt1','pt2'], role:'cn' },
+    { id:'stu2', patients:['pt3'], role:null }
+  ];
+  INIT = {
+    ctrl:'active', cart:'active', stn:'active', rec:'idle',
+    md:'active', sn:'active', cn:'idle', rt:'fault', rx:'available',
+    man1:'active', tab1:'active', ivp1:'active', alm1:'idle',
+    man2:'idle', tab2:'idle', man3:'available', tab3:'fault'
+  };
+  STEPS = [
+    { rt:'idle' },
+    { man2:'active', tab2:'active' },
+    { man3:'idle', tab3:'idle' },
+    { rx:'active' },
+    { alm1:'active' }
+  ];
+  state = { st: { ...this.INIT }, step: 0, view: 'A' };
+
+  componentDidMount() {
+    this._t = setInterval(() => this.tick(), 2800);
+    try { const v = localStorage.getItem('medsim_view'); if (v === 'A' || v === 'C') this.setState({ view: v }); } catch (e) {}
+  }
+  componentWillUnmount() { clearInterval(this._t); }
+  selectView(v) {
+    this.setState({ view: v });
+    try { localStorage.setItem('medsim_view', v); } catch (e) {}
+  }
+  tick() {
+    const s = (this.state.step + 1) % (this.STEPS.length + 1);
+    const st = { ...this.INIT };
+    for (let i = 0; i < s; i++) Object.assign(st, this.STEPS[i]);
+    this.setState({ st, step: s });
+  }
+  tabStyle(v) {
+    const a = this.state.view === v;
+    return {
+      border: 'none', cursor: 'pointer', padding: '9px 16px', borderRadius: 6,
+      fontFamily: this.F, fontSize: 12, fontWeight: 600, letterSpacing: '.03em',
+      background: a ? '#3a3f47' : 'transparent', color: a ? '#fffefb' : '#6b675f',
+      transition: 'background .15s, color .15s'
+    };
+  }
+
+  // ---- primitives -------------------------------------------------
+  defs(sfx) {
+    const e = React.createElement;
+    return e('defs', { key:'d'+sfx },
+      e('pattern', { id:'grid'+sfx, width:18, height:18, patternUnits:'userSpaceOnUse' },
+        e('circle', { cx:1, cy:1, r:1, fill:'#22211d', opacity:.05 })));
+  }
+  backdrop(sfx, H) {
+    const e = React.createElement;
+    return e('g', { key:'b'+sfx },
+      e('rect', { x:0, y:0, width:600, height:H, fill:'#fffefb' }),
+      e('rect', { x:0, y:0, width:600, height:H, fill:'url(#grid'+sfx+')' }));
+  }
+  link(d, cls, state, key) {
+    const e = React.createElement, P = this.PAL, c = P.cls[cls];
+    const p = { d, fill:'none', strokeLinecap:'round', key };
+    if (state === 'active') { p.stroke=c; p.strokeWidth=1.7; p.strokeDasharray='7 5'; p.className='flow'; }
+    else if (state === 'idle') { p.stroke=c; p.strokeWidth=1.2; p.opacity=.5; }
+    else if (state === 'available') { p.stroke=P.gray; p.strokeWidth=1; p.strokeDasharray='1.5 5'; p.opacity=.85; }
+    else if (state === 'fault') { p.stroke=P.fault; p.strokeWidth=1.4; p.strokeDasharray='5 4'; p.opacity=.9; p.className='blink'; }
+    else if (state === 'assign') { p.stroke=c; p.strokeWidth=1.2; p.strokeDasharray='4 3'; p.opacity=.65; }
+    else if (state === 'role') { p.stroke=c; p.strokeWidth=1.2; p.strokeDasharray='1 4'; p.opacity=.7; }
+    else { p.stroke=c; p.strokeWidth=1; p.opacity=.5; }
+    return e('path', p);
+  }
+  studentNode(id, b) {
+    const e = React.createElement, P = this.PAL, D = this.NODES[id], c = P.cls.student;
+    const meta = this.STUDENTS.find(s => s.id === id);
+    const x = b.cx - b.w/2, y = b.top, hc = y + b.h/2;
+    const sub = meta.patients.length + ' PT' + (meta.patients.length>1?'S':'') + (meta.role ? ' · ' + (meta.role==='cn'?'CHARGE NURSE':'SUPERVISOR') : ' · BEDSIDE');
+    return e('g', { key:id },
+      e('rect', { x:x+1.5, y:y+2.5, width:b.w, height:b.h, rx:b.h/2, fill:'rgba(34,33,29,.06)' }),
+      e('rect', { x, y, width:b.w, height:b.h, rx:b.h/2, fill:'#fbeef3', stroke:c, strokeWidth:1.5 }),
+      e('circle', { cx:x+19, cy:hc, r:9.5, fill:c }),
+      e('circle', { cx:x+19, cy:hc-2.6, r:3.1, fill:'#fbeef3' }),
+      e('path', { d:`M${x+13.5},${hc+6.5} a5.5,5 0 0 1 11,0 z`, fill:'#fbeef3' }),
+      e('text', { x:x+36, y:hc-2, fontFamily:this.F, fontSize:9, fill:P.ink, opacity:.65, letterSpacing:'.02em' }, D.tag),
+      e('text', { x:x+36, y:hc+10, fontFamily:this.S, fontSize:9.5, fontWeight:600, fill:c }, sub));
+  }
+  studentLinks(pos) {
+    const out = [];
+    this.STUDENTS.forEach((s, si) => {
+      const sp = pos[s.id];
+      s.patients.forEach((pid, pi) => {
+        const pc = pos[pid];
+        out.push(this.link(`M${sp.cx},${sp.top} C${sp.cx},${sp.top-34} ${pc.cx},${pc.cy+pc.r+46} ${pc.cx},${pc.cy+pc.r}`, 'student', 'assign', 'sl'+si+pi));
+      });
+      if (s.role) {
+        const rp = pos[s.role];
+        out.push(this.link(`M${sp.cx},${sp.top} C${sp.cx},${rp.top+rp.h+90} ${rp.cx},${rp.top+rp.h+70} ${rp.cx},${rp.top+rp.h}`, 'student', 'role', 'sr'+si));
+      }
+    });
+    return out;
+  }
+  pip(x, y, cls, st) {
+    const e = React.createElement, P = this.PAL, c = P.cls[cls];
+    if (st === 'active') return e('circle', { cx:x, cy:y, r:3.1, fill:c });
+    if (st === 'idle') return e('circle', { cx:x, cy:y, r:3, fill:'none', stroke:c, strokeWidth:1.4, opacity:.75 });
+    if (st === 'available') return e('circle', { cx:x, cy:y, r:3, fill:'none', stroke:P.gray, strokeWidth:1.2, strokeDasharray:'1.5 1.5' });
+    if (st === 'fault') return e('g', {}, e('circle', { cx:x, cy:y, r:3.3, fill:P.fault }), e('circle', { cx:x, cy:y, r:6, fill:'none', stroke:P.fault, strokeWidth:1, opacity:.5, className:'blink' }));
+    return null;
+  }
+  block(id, b) {
+    const e = React.createElement, P = this.PAL, D = this.NODES[id], st = this.state.st[id], c = P.cls[D.cls];
+    const x = b.cx - b.w/2, y = b.top;
+    const stroke = st==='available' ? P.gray : st==='fault' ? P.fault : c;
+    const sw = st==='active' ? 1.6 : 1;
+    const dash = st==='available' ? '2.5 3' : st==='fault' ? '4 3' : null;
+    const op = st==='idle' ? .9 : st==='available' ? .72 : 1;
+    const kids = [
+      e('rect', { key:'sh', x:x+1.5, y:y+2.5, width:b.w, height:b.h, rx:5, fill:'rgba(34,33,29,.06)' }),
+      e('rect', { key:'r', x, y, width:b.w, height:b.h, rx:5, fill:P.paper, stroke, strokeWidth:sw, strokeDasharray:dash, opacity:op }),
+      e('rect', { key:'bar', x, y, width:3.5, height:b.h, rx:1.5, fill:c, opacity: st==='available'?.3 : st==='fault'?.4 : st==='idle'?.55 : 1 })
+    ];
+    if (b.w < 82) {
+      kids.push(e('text', { key:'t', x:b.cx+2, y:y+b.h/2+3, textAnchor:'middle', fontFamily:this.F, fontSize:8.5, fontWeight:500, fill:P.ink }, D.tag));
+      kids.push(this.pip(x+b.w-7.5, y+7.5, D.cls, st));
+    } else if (b.h < 32) {
+      kids.push(e('text', { key:'t', x:x+10, y:y+b.h/2+3.5 }, [
+        e('tspan', { key:'a', fontFamily:this.F, fontSize:8.5, fill:P.ink, opacity:.55 }, D.tag+'  '),
+        e('tspan', { key:'b', fontFamily:this.S, fontSize:10, fontWeight:500, fill:P.ink }, D.name)
+      ]));
+      kids.push(this.pip(x+b.w-8, y+b.h/2, D.cls, st));
+    } else {
+      kids.push(e('text', { key:'tg', x:x+11, y:y+b.h/2-2.5, fontFamily:this.F, fontSize:8.5, fill:P.ink, opacity:.55, letterSpacing:'.02em' }, D.tag));
+      kids.push(e('text', { key:'nm', x:x+11, y:y+b.h/2+10.5, fontFamily:this.S, fontSize:10.5, fontWeight:500, fill:P.ink }, D.name));
+      kids.push(this.pip(x+b.w-9.5, y+9.5, D.cls, st));
+    }
+    return e('g', { key:id }, kids);
+  }
+  patient(id, p, bedLabel) {
+    const e = React.createElement, P = this.PAL, D = this.NODES[id];
+    return e('g', { key:id },
+      e('text', { x:p.cx, y:p.cy-p.r-7, textAnchor:'middle', fontFamily:this.F, fontSize:8, fill:'#a8a49b', letterSpacing:'.08em' }, bedLabel),
+      e('circle', { cx:p.cx, cy:p.cy+2.5, r:p.r, fill:'rgba(34,33,29,.05)' }),
+      e('circle', { cx:p.cx, cy:p.cy, r:p.r, fill:P.paper, stroke:P.ink, strokeWidth:1.4 }),
+      e('text', { x:p.cx, y:p.cy+3.5, textAnchor:'middle', fontFamily:this.F, fontSize:10, fontWeight:500, fill:P.ink }, D.tag));
+  }
+  divider(y, t, key) {
+    const e = React.createElement;
+    return e('g', { key },
+      e('line', { x1:20, y1:y, x2:580, y2:y, stroke:'#e6e3dc', strokeWidth:1, strokeDasharray:'2 5' }),
+      e('rect', { x:20, y:y-7, width:t.length*5.7+12, height:14, fill:'#fffefb' }),
+      e('text', { x:26, y:y+3, fontFamily:this.F, fontSize:8.5, fill:'#a8a49b', letterSpacing:'.12em' }, t));
+  }
+
+  // ---- A & B : tiered ---------------------------------------------
+  tieredPos() {
+    return {
+      ctrl:{ cx:300, top:46, w:170, h:46 },
+      cart:{ cx:120, top:162, w:128, h:42 }, stn:{ cx:300, top:162, w:128, h:42 }, rec:{ cx:480, top:162, w:128, h:42 },
+      md:{ cx:84, top:252, w:106, h:38 }, sn:{ cx:194, top:252, w:106, h:38 }, cn:{ cx:300, top:252, w:106, h:38 }, rt:{ cx:406, top:252, w:106, h:38 }, rx:{ cx:516, top:252, w:106, h:38 },
+      pt1:{ cx:132, cy:400, r:25 }, pt2:{ cx:300, cy:400, r:25 }, pt3:{ cx:468, cy:400, r:25 },
+      man1:{ cx:132, top:440, w:134, h:26 }, tab1:{ cx:132, top:472, w:134, h:26 }, ivp1:{ cx:100, top:508, w:64, h:24 }, alm1:{ cx:170, top:508, w:64, h:24 },
+      man2:{ cx:300, top:440, w:134, h:26 }, tab2:{ cx:300, top:472, w:134, h:26 },
+      man3:{ cx:468, top:440, w:134, h:26 }, tab3:{ cx:468, top:472, w:134, h:26 },
+      stu1:{ cx:182, top:752, w:182, h:42 }, stu2:{ cx:436, top:752, w:150, h:42 }
+    };
+  }
+  renderTiered(style) {
+    const e = React.createElement, st = this.state.st, P = this.PAL, H = 820;
+    const pos = this.tieredPos();
+    const top = b => ({ x:b.cx, y:b.top });
+    const ctrlB = { x:300, y:92 }, yBus = 118;
+    const pth = (a, b) => style==='bus'
+      ? `M${a.x},${a.y} L${a.x},${yBus} L${b.x},${yBus} L${b.x},${b.y}`
+      : `M${a.x},${a.y} C${a.x},${(a.y+b.y)/2} ${b.x},${(a.y+b.y)/2} ${b.x},${b.y}`;
+    const ctrlLinks = ['cart','stn','rec','md','sn','cn','rt','rx','man1','tab1','man2','tab2','man3','tab3'];
+    const links = ctrlLinks.map(id => this.link(pth(ctrlB, top(pos[id])), this.NODES[id].cls, st[id], 'c'+id));
+
+    const loc = [];
+    const seg = (ax, ay, bx, by, cls, s, k) => loc.push(this.link(`M${ax},${ay} L${bx},${by}`, cls, s, k));
+    seg(pos.pt1.cx, pos.pt1.cy+pos.pt1.r, pos.man1.cx, pos.man1.top, 'physio', st.man1, 'l1');
+    seg(pos.man1.cx, pos.man1.top+pos.man1.h, pos.tab1.cx, pos.tab1.top, 'vrai', st.tab1, 'l2');
+    seg(pos.tab1.cx, pos.tab1.top+pos.tab1.h, pos.ivp1.cx, pos.ivp1.top, 'sup', st.ivp1, 'l3');
+    seg(pos.tab1.cx, pos.tab1.top+pos.tab1.h, pos.alm1.cx, pos.alm1.top, 'sup', st.alm1, 'l4');
+    seg(pos.pt2.cx, pos.pt2.cy+pos.pt2.r, pos.man2.cx, pos.man2.top, 'physio', st.man2, 'l5');
+    seg(pos.man2.cx, pos.man2.top+pos.man2.h, pos.tab2.cx, pos.tab2.top, 'vrai', st.tab2, 'l6');
+    seg(pos.pt3.cx, pos.pt3.cy+pos.pt3.r, pos.man3.cx, pos.man3.top, 'physio', st.man3, 'l7');
+    seg(pos.man3.cx, pos.man3.top+pos.man3.h, pos.tab3.cx, pos.tab3.top, 'vrai', st.tab3, 'l8');
+    loc.push(this.link(`M${pos.md.cx},${pos.md.top+pos.md.h} C${pos.md.cx},${pos.pt1.cy-26} ${pos.pt1.cx-44},${pos.pt1.cy} ${pos.pt1.cx-pos.pt1.r},${pos.pt1.cy}`, 'char', 'assign', 'la'));
+
+    const room = e('rect', { key:'rm', x:34, y:346, width:532, height:360, rx:8, fill:'none', stroke:P.faint, strokeWidth:1.2, strokeDasharray:'2 4' });
+    const roomLbl = e('text', { key:'rl', x:46, y:364, fontFamily:this.F, fontSize:9.5, fill:'#8a8780', letterSpacing:'.08em' }, 'ROOM 1 · UNIT A · CAP 8');
+    const emptyLbl = e('text', { key:'el', x:46, y:642, fontFamily:this.F, fontSize:8.5, fill:'#b0aca3', letterSpacing:'.06em' }, 'BEDS 4–8 · OPEN CAPACITY');
+    const empties = [150,222,294,366,438].map((x,i) => e('g', { key:'eb'+i },
+      e('circle', { cx:x, cy:668, r:11, fill:'none', stroke:P.faint, strokeWidth:1, strokeDasharray:'2 3' }),
+      e('text', { x, y:672, textAnchor:'middle', fontFamily:this.F, fontSize:12, fill:'#cfccc4' }, '+')));
+
+    const dividers = [ this.divider(140, 'COMMON · SHARED DEVICES', 'dv1'), this.divider(332, 'PATIENT ROOM', 'dv2'), this.divider(726, 'STUDENTS · PARTICIPANTS', 'dv3') ];
+    const stuLinks = this.studentLinks(pos);
+    const stuNodes = ['stu1','stu2'].map(id => this.studentNode(id, pos[id]));
+    const scan = e('circle', { key:'sc', cx:300, cy:69, r:30, fill:'none', stroke:P.cls.control, strokeWidth:1, opacity:.35, className:'scan' });
+    const blocks = ['cart','stn','rec','md','sn','cn','rt','rx','man1','tab1','ivp1','alm1','man2','tab2','man3','tab3'].map(id => this.block(id, pos[id]));
+    const ctrlBlock = this.block('ctrl', pos.ctrl);
+    const circles = [['pt1','BED 1'],['pt2','BED 2'],['pt3','BED 3']].map(([id,bl]) => this.patient(id, pos[id], bl));
+
+    return e('svg', { viewBox:`0 0 600 ${H}`, width:'100%', style:{ display:'block', overflow:'visible' } },
+      this.defs(style), this.backdrop(style, H), ...dividers, room, roomLbl, emptyLbl, ...empties,
+      ...stuLinks, ...links, ...loc, scan, ...circles, ...blocks, ctrlBlock, ...stuNodes);
+  }
+
+  // ---- C : radial -------------------------------------------------
+  chips(id, pp) {
+    const e = React.createElement, P = this.PAL, st = this.state.st;
+    const n = id.slice(2);
+    const devs = [['man'+n,'M','physio'],['tab'+n,'T','vrai']];
+    if (id === 'pt1') devs.push(['ivp1','I','sup'],['alm1','A','sup']);
+    return e('g', { key:'ch'+id }, devs.map((d,i) => {
+      const [did,lab,cls] = d, x = pp.cx - ((devs.length-1)*17)/2 + i*17, y = pp.cy+pp.r+15, s = st[did];
+      const col = s==='available' ? P.gray : s==='fault' ? P.fault : P.cls[cls];
+      return e('g', { key:did },
+        e('rect', { x:x-7.5, y:y-7.5, width:15, height:15, rx:3, fill:P.paper, stroke:col, strokeWidth: s==='active'?1.6:1, strokeDasharray: s==='available'?'2 2' : s==='fault'?'3 2' : null }),
+        e('text', { x, y:y+3, textAnchor:'middle', fontFamily:this.F, fontSize:8, fontWeight:500, fill:col }, lab));
+    }));
+  }
+  renderRadial() {
+    const e = React.createElement, st = this.state.st, P = this.PAL, H = 838;
+    const cx = 300, cy = 296, R = 200;
+    const ring = ['cart','stn','rec','md','sn','cn','rt','rx'];
+    const posR = {};
+    ring.forEach((id,i) => { const ang = (168 + (i+0.5)*(204/8)) * Math.PI/180; posR[id] = { x:cx+R*Math.cos(ang), y:cy+R*Math.sin(ang) }; });
+    const ptPos = { pt1:{ cx:178, cy:612, r:27 }, pt2:{ cx:300, cy:612, r:27 }, pt3:{ cx:422, cy:612, r:27 } };
+
+    const links = ring.map(id => this.link(`M${cx},${cy} L${posR[id].x},${posR[id].y}`, this.NODES[id].cls, st[id], 'r'+id));
+    const plinks = [];
+    ['pt1','pt2','pt3'].forEach(id => {
+      const pp = ptPos[id], n = id.slice(2);
+      plinks.push(this.link(`M${cx-7},${cy} L${pp.cx-7},${pp.cy-pp.r}`, 'physio', st['man'+n], 'pm'+id));
+      plinks.push(this.link(`M${cx+7},${cy} L${pp.cx+7},${pp.cy-pp.r}`, 'vrai', st['tab'+n], 'pt'+id));
+    });
+    const rblocks = ring.map(id => { const p = posR[id]; return this.block(id, { cx:p.x, top:p.y-15, w:88, h:30 }); });
+    const scan = e('circle', { key:'sc', cx, cy, r:62, fill:'none', stroke:P.cls.control, strokeWidth:1, opacity:.25, className:'scan' });
+    const ctrlBlock = this.block('ctrl', { cx, top:cy-22, w:150, h:44 });
+    const room = e('rect', { key:'rm', x:78, y:498, width:444, height:236, rx:8, fill:'none', stroke:P.faint, strokeWidth:1.2, strokeDasharray:'2 4' });
+    const roomLbl = e('text', { key:'rl', x:90, y:518, fontFamily:this.F, fontSize:9.5, fill:'#8a8780', letterSpacing:'.08em' }, 'ROOM 1 · UNIT A · CAP 8');
+    const pcircles = ['pt1','pt2','pt3'].map(id => e('g', { key:'pg'+id }, this.patient(id, ptPos[id], 'BED '+id.slice(3)), this.chips(id, ptPos[id])));
+    const cap = e('text', { key:'cp', x:300, y:708, textAnchor:'middle', fontFamily:this.F, fontSize:8.5, fill:'#b0aca3', letterSpacing:'.06em' }, '+ BEDS 4–8 OPEN');
+
+    const stuPos = { stu1:{ cx:198, top:766, w:170, h:42 }, stu2:{ cx:432, top:766, w:150, h:42 } };
+    const stuLbl = e('text', { key:'slb', x:78, y:756, fontFamily:this.F, fontSize:9, fill:'#a8a49b', letterSpacing:'.12em' }, 'STUDENTS · PARTICIPANTS');
+    const stuLinks = [];
+    this.STUDENTS.forEach((s, si) => {
+      const sp = stuPos[s.id];
+      s.patients.forEach((pid, pi) => {
+        const pc = ptPos[pid];
+        stuLinks.push(this.link(`M${sp.cx},${sp.top} C${sp.cx},${sp.top-24} ${pc.cx},${pc.cy+pc.r+36} ${pc.cx},${pc.cy+pc.r}`, 'student', 'assign', 'rsl'+si+pi));
+      });
+      if (s.role) {
+        const rp = posR[s.role];
+        stuLinks.push(this.link(`M${sp.cx},${sp.top} C${sp.cx-30},${sp.top-150} ${rp.x},${rp.y+130} ${rp.x},${rp.y+16}`, 'student', 'role', 'rsr'+si));
+      }
+    });
+    const stuNodes = ['stu1','stu2'].map(id => this.studentNode(id, stuPos[id]));
+
+    return e('svg', { viewBox:`0 0 600 ${H}`, width:'100%', style:{ display:'block', overflow:'visible' } },
+      this.defs('rad'), this.backdrop('rad', H), room, roomLbl, cap, stuLbl,
+      ...stuLinks, ...links, ...plinks, scan, ...pcircles, ...rblocks, ctrlBlock, ...stuNodes);
+  }
+
+  renderVals() {
+    const devIds = ['cart','stn','rec','md','sn','cn','rt','rx','man1','tab1','ivp1','alm1','man2','tab2','man3','tab3'];
+    let a=0, i=0, av=0, f=0;
+    devIds.forEach(d => { const s = this.state.st[d]; if (s==='active') a++; else if (s==='idle') i++; else if (s==='available') av++; else if (s==='fault') f++; });
+    const e = React.createElement;
+    const view = this.state.view === 'C' ? 'C' : 'A';
+    const current = view==='C' ? this.renderRadial() : this.renderTiered('fan');
+    const label = view==='C' ? 'OPTION C · RADIAL CONTROL HUB' : 'OPTION A · TIERED SCHEMATIC';
+    const sub = view==='C' ? 'hub & spoke overview' : 'control bus → fanned signal paths';
+    const mkTab = (v, lbl) => e('button', { key:v + (view===v?'-on':'-off'), onClick:() => this.selectView(v), style:this.tabStyle(v) }, lbl);
+    const tabs = e('div', { style:{ display:'flex', gap:4, background:'#efece6', border:'1px solid #e0ddd6', padding:4, borderRadius:9 } },
+      mkTab('A','OPTION A · TIERED'), mkTab('C','OPTION C · RADIAL HUB'));
+    return {
+      nActive:a, nIdle:i, nAvail:av, nFault:f,
+      current, currentLabel:label, currentSub:sub, tabs
+    };
+  }
+}
+</script>
+</body>
+</html>

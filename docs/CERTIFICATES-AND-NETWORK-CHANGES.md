@@ -86,7 +86,7 @@ python scripts/dev_cert.py        # auto-detects the LAN IP, writes it as an IP 
 you bounce it (Ctrl+C → relaunch). Always verify the **running** server is serving the
 new cert before touching a tablet:
 ```
-echo | openssl s_client -connect 127.0.0.1:8765 2>/dev/null | openssl x509 -noout -text | grep -A1 "Alternative Name"
+echo | openssl s_client -connect 127.0.0.1:8760 2>/dev/null | openssl x509 -noout -text | grep -A1 "Alternative Name"
 ```
 Tablets need **nothing** (CA unchanged) — just **re-scan the QR** (drops the stale
 cached page and reconnects over the new cert). **Confirmed end-to-end on an iPad
@@ -122,28 +122,28 @@ push-to-talk reports **"portal unreachable."**
 **Actual root cause — an ORIGIN mismatch, not TLS.** The portal was **not serving
 the avatar app** (`VRAI_FACES_SERVE` unset), so the QR deep-linked the tablet to the
 **separate vite dev server on `:5173`**, while the avatar's bind document lives on
-the **API at `:8765`**. The binding `fetch()` is then **cross-origin** (`:5173` →
-`:8765`): the rig never receives its portrait (→ demo face) and can't reach the turn
+the **API at `:8760`**. The binding `fetch()` is then **cross-origin** (`:5173` →
+`:8760`): the rig never receives its portrait (→ demo face) and can't reach the turn
 API (→ PTT unreachable). `server.py`'s own comment names it — the "separate-vite
 (:5173) + cross-origin class of 'binding fetch'" failures (ADR-0028).
 
 **30-second diagnosis (all from the Mac):**
 ```
 # 1. Does the binding itself work? (proves it is NOT the server/cert/portrait)
-curl -ksS "https://127.0.0.1:8765/api/face/<persona-id>/binding?scenario=<enc>" | head -c 200
+curl -ksS "https://127.0.0.1:8760/api/face/<persona-id>/binding?scenario=<enc>" | head -c 200
 #    → HTTP 200 + a long "sourcePhoto" data URI  ⇒ server side is perfect.
 # 2. Is the portal serving the app SAME-ORIGIN? (the question that matters)
 .venv/bin/python -c "from portal import server; print(server._portal_serves_app())"   # must be True
-curl -ksS -o /dev/null -w "%{http_code}\n" "https://127.0.0.1:8765/face/<persona-id>"  # must be 200, not 404
+curl -ksS -o /dev/null -w "%{http_code}\n" "https://127.0.0.1:8760/face/<persona-id>"  # must be 200, not 404
 lsof -nP -iTCP:5173 -sTCP:LISTEN     # vite running = the app is (wrongly) being served there
 ```
 If #1 is 200 but #2 is `False`/`404`, it's THIS — the app is on vite, not the portal.
 
 **Fix.** Launch with **`VRAI_FACES_SERVE=portal`** so the portal serves the built app
-from `dist/` and app + API + speech WS share ONE origin (`:8765`). It is now the
+from `dist/` and app + API + speech WS share ONE origin (`:8760`). It is now the
 **default in `scripts/run_cards.sh`** (commit `91ce3d1`); `run_portal` rebuilds
 `dist/` if missing. **After relaunch, re-print/re-scan the QR** — it then points at
-`:8765/face/…`, not `:5173`. The boot banner confirms it:
+`:8760/face/…`, not `:5173`. The boot banner confirms it:
 `Avatar: portal serves the avatar app (one origin, one cert)`.
 
 > **Confirmed on iPad 2026-06-23** — rig skins with the real portrait, PTT connects.
@@ -159,7 +159,7 @@ The portal banner + `preflight.sh` print this URL. Manual steps, for reference:
 
 **Apple (iPad / Safari):**
 1. **Install the CA:** download `rootca.pem` (from the onboarding page, or
-   `https://<mac-ip>:8765/rootca.pem` if this tablet can already reach the portal) → Allow →
+   `https://<mac-ip>:8760/rootca.pem` if this tablet can already reach the portal) → Allow →
    Settings → **Profile Downloaded → Install** (passcode → Install again).
    ⚠️ Never hand-type a plain-`http://` download link into Safari — HTTPS-First upgrades it and
    the download dies. The :8766 onboarding page's buttons carry explicit schemes and work.
@@ -202,7 +202,7 @@ and functioned on the tablet — no security warning, no Chrome hand-off.
 | Symptom on the iPad | Actual cause | Fix |
 |---|---|---|
 | Operator (localhost) works, but **every tablet** fails: page loads then no image, no STT/TTS, "Send failed", device asks for a "fresh QR" | Leaf has no `IP Address:` SAN for the current IP (IP drift, or the IP was minted as a `DNS:` name) — subresource fetch + speech WS are blocked with no tap-through | **§2b** — bare `python scripts/dev_cert.py` → **restart** portal → verify served SAN → re-scan QR |
-| Avatar **rig loads but stays the demo/default face** (not skinned); diagnostics show **`binding fetch failed`**; PTT says **"portal unreachable"** | The binding GET is fine server-side (returns the portrait). TWO tablet-side causes: **(A)** the portal isn't serving the app, so the QR sends the tablet to the separate **vite dev server (:5173)** and the binding fetch is **cross-origin** back to :8765 (origin mismatch — NOT a cert problem; persists even with the CA fully trusted); **(B)** the **CA isn't trusted** on the tablet (page bypass ≠ `fetch()` trust). | **(A) — the common one:** launch with **`VRAI_FACES_SERVE=portal`** (now the default in `scripts/run_cards.sh`) so app + API + WS share ONE origin, then **re-print/re-scan the QR** (it points to :8765/face, not :5173). **(B):** install AND fully trust the CA (§3) — iOS **Settings → General → About → Certificate Trust Settings → MedSim Dev Local CA → ON** (profile install alone isn't enough). |
+| Avatar **rig loads but stays the demo/default face** (not skinned); diagnostics show **`binding fetch failed`**; PTT says **"portal unreachable"** | The binding GET is fine server-side (returns the portrait). TWO tablet-side causes: **(A)** the portal isn't serving the app, so the QR sends the tablet to the separate **vite dev server (:5173)** and the binding fetch is **cross-origin** back to :8760 (origin mismatch — NOT a cert problem; persists even with the CA fully trusted); **(B)** the **CA isn't trusted** on the tablet (page bypass ≠ `fetch()` trust). | **(A) — the common one:** launch with **`VRAI_FACES_SERVE=portal`** (now the default in `scripts/run_cards.sh`) so app + API + WS share ONE origin, then **re-print/re-scan the QR** (it points to :8760/face, not :5173). **(B):** install AND fully trust the CA (§3) — iOS **Settings → General → About → Certificate Trust Settings → MedSim Dev Local CA → ON** (profile install alone isn't enough). |
 | "This Connection Is Not Private" interstitial | Leaf SAN doesn't cover the current IP, OR the CA trust toggle is off / profile not installed | Re-mint leaf + restart portal (§2), or finish §3 steps 1–2 |
 | Loads only after tapping "visit this website" — and **breaks again after every re-mint** | Running on a per-cert exception instead of CA trust | §3 steps 1–2 (the tap-through dies with each new leaf; CA trust doesn't) |
 | White screen, URL in the bar, spinner forever | TLS failing with **stale tab state** masking the interstitial | Clear Safari Website Data for the portal origins, retry — then fix the cert per above |

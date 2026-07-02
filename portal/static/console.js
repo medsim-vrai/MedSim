@@ -203,7 +203,7 @@
   // ── Operations — live entity cards (room-aware), each open-in-place or pop-out
   //    to another monitor for real-time multi-screen ops. /api/control/operate. ──
   var OP_ICON = { patient: "🛏", character: "💬",
-                  med_cart: "💊", nursing: "🩺", ehr: "📋" };
+                  med_cart: "💊", nursing: "🩺", ehr: "📋", network: "🌐" };
 
   function safeName(s) { return String(s || "x").replace(/[^a-z0-9_]/gi, ""); }
 

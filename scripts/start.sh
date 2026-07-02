@@ -22,7 +22,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PORT="${MEDSIM_PORT:-8765}"
+PORT="${MEDSIM_PORT:-8760}"
 LOG="${MEDSIM_LOG:-/tmp/medsim_portal.log}"
 PY=".venv/bin/python"
 
