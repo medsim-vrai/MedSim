@@ -48,6 +48,12 @@ export interface DeviceSttMetrics {
 }
 
 export interface DeviceSttHandle {
+  /** Open the mic stream up front (the "Establish mic" step) and KEEP it for the session, so each
+   *  take just starts a recorder on the live stream. Re-acquiring getUserMedia per take dropped
+   *  every take after the first on desktop (a freshly re-acquired track is briefly muted, so a short
+   *  hold captured ~nothing). Returns false if mic permission is denied. Optional: the cloud engine
+   *  manages its own mic. */
+  acquireMic?(): Promise<boolean>;
   /** Begin capturing mic audio (call on PTT press). No-op while already recording. */
   start(): Promise<void>;
   /** Stop capturing + transcribe the take on-device → text (call on PTT release). */
@@ -112,11 +118,14 @@ type PortalSttResult =
   | { ok: true; text: string; model: string }
   | { ok: false; error: string };
 
-/** POST the take's PCM to the portal and read text back (ADR-0038). The audio
- *  crosses the room's LAN over TLS to the instructor's Mac ONLY — same trust
- *  boundary as the transcript text that already flows there; never a third party. */
+/** POST the take's ENCODED recording (the MediaRecorder Blob — WebM/Opus on Chrome,
+ *  mp4 on Safari) to the portal and read text back (ADR-0038). We send the container
+ *  as-is and let the server decode it, because decodeAudioData on the CLIENT cannot
+ *  reliably decode desktop-Chrome WebM (the cross-platform crash). The audio crosses the
+ *  room's LAN over TLS to the instructor's Mac ONLY — same trust boundary as the
+ *  transcript text that already flows there; never a third party. */
 async function portalTranscribe(
-  audio: Float32Array,
+  blob: Blob,
   cfg: DeviceSttConfig | undefined,
 ): Promise<PortalSttResult> {
   const base = (cfg?.apiBase ?? '').replace(/\/+$/, '');
@@ -127,12 +136,10 @@ async function portalTranscribe(
   const qs = q.toString();
   const url = `${base}/api/face/stt${qs ? `?${qs}` : ''}`;
   try {
-    // Fresh copy of the underlying bytes (the view may not span its buffer).
-    const bytes = new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength).slice();
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/octet-stream' },
-      body: bytes,
+      headers: { 'content-type': blob.type || 'audio/webm' },
+      body: blob,
     });
     const j: unknown = await res.json().catch(() => null);
     const o = (j && typeof j === 'object' ? j : {}) as
@@ -342,6 +349,16 @@ async function to16kMono(buf: AudioBuffer): Promise<Float32Array> {
   return rendered.getChannelData(0).slice();
 }
 
+// Persistent-mic constraints: DISABLE echo-cancellation / noise-suppression / auto-gain. The mic stays
+// open for the whole session (reliable multi-turn capture), but with echo-cancellation ON, macOS/Chrome
+// put the audio system into "communication mode" and DUCK the speaker output — intermittently silencing
+// the character's reply while the mic is open (turn-1/3 silent, turn-2 audible). We're strictly
+// turn-based (the character never speaks while the student records), so AEC is unnecessary; off keeps
+// playback in normal mode. Server STT (Scribe) is robust without NS/AGC.
+const MIC_CONSTRAINTS: MediaStreamConstraints = {
+  audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+};
+
 export function createDeviceStt(cfg?: DeviceSttConfig): DeviceSttHandle {
   let stream: MediaStream | null = null;
   let recorder: MediaRecorder | null = null;
@@ -389,9 +406,25 @@ export function createDeviceStt(cfg?: DeviceSttConfig): DeviceSttHandle {
       return Math.round(performance.now() - t);
     },
 
+    async acquireMic(): Promise<boolean> {
+      // The "Establish mic" step: open the stream once and keep it hot for the whole session.
+      try {
+        if (!stream || !stream.active) {
+          stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
     async start(): Promise<void> {
       if (recorder && recorder.state === 'recording') return;
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Reuse the persistent stream established up front; only acquire if it isn't open yet (or a
+      // device change ended it). NOT released between takes — that re-acquisition dropped takes 2+.
+      if (!stream || !stream.active) {
+        stream = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+      }
       // iPadOS hands Safari a MUTED audio track right after a Camera-app QR handoff
       // (the camera still holds the audio session) — recording then captures pure
       // silence and the take reads "(no speech detected)" (FR-006 field bug). Wait
@@ -419,12 +452,22 @@ export function createDeviceStt(cfg?: DeviceSttConfig): DeviceSttHandle {
       const rec = recorder;
       if (!rec) { sttEmptyReason = 'no recording was started'; return ''; }
       const t0 = performance.now(); // release → transcript latency (ADR-0026 pilot)
+      // FR-021: trainees release ~200-500ms BEFORE the last word finishes — keep the
+      // recorder running a beat past release so the trailing word is on the clip
+      // (whisper was dropping/garbling the mid-word cut). 450ms after field feedback
+      // that 300 still clipped; costs recMs against a ~2s budget. Fixes bedside PTT,
+      // the survey station, and the portal Mac-STT route in this one shared release
+      // path. Pairs with the trailing-silence pad at transcribe time (below).
+      if (rec.state === 'recording') {
+        await new Promise<void>((r) => setTimeout(r, 450));
+      }
       const stopped = new Promise<void>((resolve) => { rec.onstop = () => resolve(); });
       if (rec.state !== 'inactive') rec.stop();
       await stopped;
-      // Release the mic at once (privacy + battery).
-      stream?.getTracks().forEach((t) => t.stop());
-      stream = null;
+      // Keep the mic stream OPEN for the next take (established once, reused all session). Releasing
+      // it here forced a getUserMedia re-acquire on every press, and the re-acquired track came back
+      // briefly muted → takes 2+ recorded ~nothing ("transcriber returned no words"). The stream is
+      // released in dispose() (End session / unmount).
       recorder = null;
       const tRec = performance.now(); // recorder flush complete
 
@@ -436,6 +479,43 @@ export function createDeviceStt(cfg?: DeviceSttConfig): DeviceSttHandle {
         return '';
       }
 
+      // PORTAL route (Mac / Windows / iPad parity): send the ENCODED recording straight to
+      // the instructor's Mac and let the server decode it. We deliberately DO NOT call
+      // decodeAudioData here — on desktop Chrome the MediaRecorder emits WebM/Opus, which
+      // decodeAudioData cannot reliably decode, throwing into the catch below as
+      // "audio decode/transcription failed" (the cross-platform lock-up; the iPad's mp4
+      // decoded, desktop Chrome's WebM did not). Server-side Scribe handles every container,
+      // so there is no AudioContext, no decode, and no per-browser codec quirk on this path.
+      if (route === 'portal') {
+        const r = await portalTranscribe(blob, cfg);
+        const tInfer = performance.now();
+        sttLastMs = Math.round(tInfer - t0);
+        sttLastStages = {
+          recMs: Math.round(tRec - t0), decodeMs: 0, resampleMs: 0,
+          inferMs: Math.round(tInfer - tRec), clipMs: 0,
+        };
+        if (!r.ok) {
+          sttEmptyReason = r.error;
+          // Arm the on-device BACKUP (instructor requirement): warm the local model in the
+          // background; later takes use it once it's ready.
+          if (!fallbackArmed) {
+            fallbackArmed = true;
+            diag.push({
+              t: performance.now(), moduleId: MODULE, kind: 'warn',
+              message: 'portal STT failed — arming the on-device wasm backup',
+              data: r.error,
+            });
+            void loadAsr().then((a) => { if (a) route = 'local'; });
+          }
+          return '';
+        }
+        sttBackend = `portal·${r.model}`;
+        sttEmptyReason = r.text ? null : 'transcriber returned no words';
+        return r.text;
+      }
+
+      // ON-DEVICE route: decode → resample → whisper. decodeAudioData is required here to get
+      // PCM for the local model; this path is validated on the tablets (Safari mp4).
       const Ctor = audioCtxCtor();
       if (!Ctor) { sttEmptyReason = 'no audio decoder in this browser'; return ''; }
       const ctx = new Ctor();
@@ -444,31 +524,14 @@ export function createDeviceStt(cfg?: DeviceSttConfig): DeviceSttHandle {
         const tDecode = performance.now();
         const audio = await to16kMono(decoded);
         const tResample = performance.now();
-        let text: string;
-        if (route === 'portal') {
-          const r = await portalTranscribe(audio, cfg);
-          if (!r.ok) {
-            sttEmptyReason = r.error;
-            // Arm the on-device BACKUP (instructor requirement): warm the local
-            // model in the background; later takes use it once it's ready.
-            if (!fallbackArmed) {
-              fallbackArmed = true;
-              diag.push({
-                t: performance.now(), moduleId: MODULE, kind: 'warn',
-                message: 'portal STT failed — arming the on-device wasm backup',
-                data: r.error,
-              });
-              void loadAsr().then((a) => { if (a) route = 'local'; });
-            }
-            return '';
-          }
-          sttBackend = `portal·${r.model}`;
-          text = r.text;
-        } else {
-          const asr = await loadAsr();
-          if (!asr) { sttEmptyReason = 'speech model not ready'; return ''; }
-          text = textOf(await asr(audio));
-        }
+        const asr = await loadAsr();
+        if (!asr) { sttEmptyReason = 'speech model not ready'; return ''; }
+        // FR-021: append ~450ms of trailing SILENCE before inference — whisper-tiny
+        // drops a final word that ends exactly at the clip edge; trailing context
+        // lets it finalize the last token. Near-zero cost (padding, not recording).
+        const padded = new Float32Array(audio.length + Math.round(SAMPLE_RATE * 0.45));
+        padded.set(audio);
+        const text = textOf(await asr(padded));
         const tInfer = performance.now();
         sttLastMs = Math.round(tInfer - t0);
         // Split the budget so we can see which phase dominates the ~2s warm take

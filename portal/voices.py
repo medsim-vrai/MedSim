@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, AsyncIterator
@@ -44,6 +45,29 @@ CATALOG_TTL = 600.0                   # seconds to cache a live /v1/voices fetch
 
 # Cost guardrail — never send an absurd amount of text to TTS in one call.
 MAX_TTS_CHARS = 1200
+
+# FR-020: `*stage direction*` spans are kept in the reply DATA (TurnRecord, frames,
+# operator log — the avatar's autoEmote/animation reads them) but must never be
+# SPOKEN. This is the canonical strip, applied at every synthesis boundary
+# (server ElevenLabs paths here + the client speak fallbacks mirror it in JS/TS).
+_STAGE_DIRECTION_RE = re.compile(r"\*[^*]*\*")
+
+
+def strip_stage_directions(text: str) -> str:
+    """Return `text` with `*stage direction*` spans removed, for TTS input ONLY.
+
+    Unbalanced stars → returned unchanged (conservative, mirrors _split_reply's
+    fallback — never risk eating real dialog). Returns '' for a direction-only
+    line; callers then skip voicing entirely (silence + on-screen note, no
+    device-voice fallback reading the note aloud)."""
+    if "*" not in text:
+        return text
+    if text.count("*") % 2:
+        return text
+    out = _STAGE_DIRECTION_RE.sub(" ", text)
+    out = re.sub(r"\s{2,}", " ", out)
+    out = re.sub(r"\s+([.,!?;:])", r"\1", out)
+    return out.strip()
 
 
 # ──────────────────────────────────────────────────────────────────────

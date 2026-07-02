@@ -94,18 +94,33 @@ def session_vocab() -> str | None:
         return None
 
 
-def _transcribe(pcm: bytes, vocab: str | None = None) -> str:
-    """Blocking transcription of raw 16 kHz mono float32 PCM (call off the event loop)."""
+def _transcribe(raw: bytes, vocab: str | None = None, *, encoded: bool = False) -> str:
+    """Blocking transcription (call off the event loop). `encoded=False`: raw 16 kHz
+    mono float32 PCM. `encoded=True`: a MediaRecorder container (WebM/Opus, mp4, …) —
+    faster-whisper decodes it via PyAV, matching the v2 rig client that POSTs the
+    recording as-is (the V9 handoff A1 fix; client-side decodeAudioData crashed
+    desktop Chrome on WebM). Either way the audio stays in memory and is discarded."""
     engine = _load_engine()
     if engine is None:
         raise RuntimeError(_engine_err or "engine unavailable")
     import numpy as np  # faster-whisper dependency, present iff the engine is
-    audio = np.frombuffer(pcm, dtype=np.float32)
+    if encoded:
+        import io
+        from faster_whisper.audio import decode_audio  # PyAV: WebM/Opus, mp4, wav, …
+        audio = decode_audio(io.BytesIO(raw), sampling_rate=SAMPLE_RATE)
+    else:
+        audio = np.frombuffer(raw, dtype=np.float32)
+    # FR-021: append ~450ms of trailing silence — whisper drops a final word that
+    # ends exactly at the clip edge (PTT release); trailing context finalizes it.
+    audio = np.concatenate([audio, np.zeros(int(SAMPLE_RATE * 0.45), dtype=np.float32)])
     segments, _info = engine.transcribe(
         audio,
         language="en",
         beam_size=1,                       # PTT clips are short — greedy is plenty
         vad_filter=True,                   # trim leading/trailing button-press silence
+        # FR-021: pad what VAD keeps — the default trims soft first/last words on
+        # short PTT clips (the field-reported head/tail clipping, server side).
+        vad_parameters={"speech_pad_ms": 400},
         condition_on_previous_text=False,  # takes are independent utterances
         hotwords=vocab,                    # session drug names (ADR-0038 accuracy lever)
     )
@@ -140,14 +155,24 @@ def attach(app: FastAPI) -> None:
         if len(body) > _MAX_BYTES:
             return JSONResponse({"ok": False, "error": "clip too long (>30s)"},
                                 status_code=413)
-        if len(body) < _MIN_BYTES or len(body) % _BYTES_PER_SAMPLE != 0:
+        # v2 rig clients POST the MediaRecorder container as-is (Content-Type
+        # audio/webm | audio/mp4 | …) — the server decodes (V9 handoff A1). The
+        # raw float32-PCM contract stays for older clients.
+        ctype = (request.headers.get("content-type") or "").split(";")[0].strip().lower()
+        encoded = ctype.startswith("audio/")
+        if encoded:
+            if len(body) < 512:   # header-only blob = held too briefly / muted mic
+                return JSONResponse(
+                    {"ok": False, "error": "recording too short/empty"}, status_code=400)
+        elif len(body) < _MIN_BYTES or len(body) % _BYTES_PER_SAMPLE != 0:
             return JSONResponse(
                 {"ok": False, "error": "body must be ≥0.25s of 16kHz mono float32 PCM"},
                 status_code=400)
 
         t0 = time.perf_counter()
         try:
-            text = await asyncio.to_thread(_transcribe, bytes(body), session_vocab())
+            text = await asyncio.to_thread(
+                _transcribe, bytes(body), session_vocab(), encoded=encoded)
         except RuntimeError as e:
             return JSONResponse({"ok": False, "error": f"STT engine unavailable: {e}"},
                                 status_code=503)

@@ -27,6 +27,7 @@ class _FakeEngine:
     def transcribe(self, audio, **kwargs):
         self.calls += 1
         self.last_samples = len(audio)
+        self.last_audio = audio
         self.last_kwargs = kwargs
         return [_FakeSegment(t) for t in self._texts], None
 
@@ -57,8 +58,12 @@ def test_transcribes_pcm_to_joined_trimmed_text(client) -> None:
     assert body["text"] == "Send the ampicillin."
     assert body["model"] == room_stt.model_name()
     assert isinstance(body["ms"], int)
-    # The engine saw exactly the samples we sent (no resample/copy surprises).
-    assert client.fake_engine.last_samples == room_stt.SAMPLE_RATE
+    # The engine saw the samples we sent PLUS the FR-021 trailing-silence pad
+    # (whisper drops a final word ending exactly at the PTT-release clip edge).
+    pad = int(room_stt.SAMPLE_RATE * 0.45)
+    assert client.fake_engine.last_samples == room_stt.SAMPLE_RATE + pad
+    assert all(s == 0.0 for s in client.fake_engine.last_audio[-pad:])   # pad IS silence
+    assert client.fake_engine.last_audio[0] != 0.0                       # speech untouched
 
 
 def test_rejects_too_short_and_misaligned_bodies(client) -> None:

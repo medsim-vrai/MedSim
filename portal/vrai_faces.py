@@ -180,6 +180,34 @@ def has_portrait(character_id: str) -> bool:
     return any((PORTRAITS_DIR / f"{cid}{suf}").is_file() for suf in _PORTRAIT_SUFFIXES)
 
 
+def is_portrait_ai(character_id: str) -> bool:
+    """True when this character's portrait is AI-generated (synthetic), so the
+    UI can show the "AI-generated" disclosure badge (EU AI Act Art. 50 posture).
+
+    Two signals, either suffices:
+    1. `<id>.ai.json` sidecar in face_portraits/ — FACE ENGINE writes this
+       declaration next to every portrait it exports (same sidecar convention
+       as the `.skin` marker).
+    2. The image's embedded C2PA manifest declares the IPTC
+       `trainedAlgorithmicMedia` source type (the standard machine-readable
+       "AI-generated" marking). NOTE: mere presence of C2PA is NOT the test —
+       real cameras embed C2PA capture manifests too."""
+    cid = (character_id or "").strip()
+    if not cid or not PORTRAITS_DIR.is_dir():
+        return False
+    if (PORTRAITS_DIR / f"{cid}.ai.json").is_file():
+        return True
+    for suffix in _PORTRAIT_SUFFIXES:
+        p = PORTRAITS_DIR / f"{cid}{suffix}"
+        if p.is_file():
+            try:
+                head = p.read_bytes()[: 4 * 1024 * 1024]
+            except OSError:
+                return False
+            return b"trainedAlgorithmicMedia" in head
+    return False
+
+
 # ── Skin library ──────────────────────────────────────────────────────
 # A "skin" is a labeled portrait the facilitator saves once and assigns to any
 # character/persona, instead of re-importing a face each time. Stored as
@@ -814,6 +842,13 @@ async def _synthesize_voice(
 
     from . import voices  # lazy: avoid an import-time cycle (mirrors /listen)
 
+    # FR-020: never SPEAK *stage directions* — they stay in the frame text for the
+    # display + emotion/animation side. A direction-only line returns (None, None);
+    # the client's speak fallback applies the same strip, so it stays unvoiced there too.
+    text = voices.strip_stage_directions(text)
+    if not text:
+        return None, None
+
     # (1) ElevenLabs — run whenever a key exists (session OR env/keyfile), not just when an
     #     operator assigned a voice. Standalone, auto-resolve a voice from the persona traits.
     api_key = (sess.elevenlabs_api_key
@@ -921,6 +956,7 @@ def bind_payload(request: Request, scenario_id: str, character_id: str,
     payload["characterId"] = card.get("id") or character_id
     payload["sourcePhoto"] = portrait            # adapter extractPhoto() key
     payload["portraitSource"] = portrait_source  # telemetry; adapter ignores
+    payload["portraitIsAi"] = is_portrait_ai(character_id)  # AI-disclosure (Art. 50); additive
     payload["voiceProfile"] = voice_id_from_profile(card.get("voice_profile"))
     payload["opacityLevel"] = op
     payload["speechWsUrl"] = _speech_ws_url(request, scenario_id, character_id)

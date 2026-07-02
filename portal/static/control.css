@@ -134,6 +134,8 @@
 .tag.safety-sensitive { background: #fdf3cd; color: #6b4500; }
 .tag.safety-high-risk { background: #fdecea; color: #962d22; }
 .tag.safety-baseline { background: #dff5e2; color: #2f7d32; }
+/* AI-generated portrait disclosure (FACE ENGINE; EU AI Act Art. 50) */
+.tag.ai-generated { background: #e3f2fd; color: #1976d2; }
 
 .persona-card.safety-high-risk { border-left: 4px solid #c0392b; }
 .persona-card.safety-sensitive { border-left: 4px solid #d9822b; }

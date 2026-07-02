@@ -29,6 +29,30 @@ MAX_TOKENS = 400
 HISTORY_WINDOW = 10  # last N turns sent to the model
 
 
+def _friendly_llm_error(exc: Exception) -> str:
+    """Turn an Anthropic SDK exception into a short, instructor-actionable line.
+
+    The raw exception (JSON body, request_id, …) gets SPOKEN ALOUD by the bedside
+    TTS via '(the character could not respond: …)', which is useless gibberish in
+    the room. Keep the mapped text short, plain-English, and free of tokens/ids;
+    the full detail still goes to the server log for debugging."""
+    name = type(exc).__name__
+    text = str(exc).lower()
+    if "authentication" in name.lower() or "invalid x-api-key" in text or "401" in text[:24]:
+        return ("Anthropic API key was rejected — update it on the Credentials page "
+                "(/portal/credentials) and try again")
+    if "permission" in name.lower() or "credit balance" in text or "billing" in text:
+        return "Anthropic account issue (billing/permissions) — check console.anthropic.com"
+    if "ratelimit" in name.lower() or "rate_limit" in text or "429" in text[:24]:
+        return "Anthropic rate limit reached — wait a moment and try again"
+    if "overloaded" in text or "529" in text[:24]:
+        return "Anthropic is temporarily overloaded — try again in a moment"
+    if "connection" in name.lower() or "timeout" in name.lower() or "timed out" in text:
+        return "could not reach the Anthropic API — check the internet connection"
+    # Unknown: keep the class name but drop the body (request ids etc. are noise aloud).
+    return f"{name} from the language model — see the server log"
+
+
 @dataclass
 class TurnRecord:
     addressee: str
@@ -149,7 +173,8 @@ def take_turn(session_id: str, addressee: str, message: str) -> dict[str, Any]:
         if not reply:
             reply = "(no response)"
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        print(f"[runtime] LLM turn failed: {type(exc).__name__}: {exc}", flush=True)
+        return {"ok": False, "error": _friendly_llm_error(exc)}
 
     record = TurnRecord(
         addressee=addressee,
@@ -204,7 +229,8 @@ def take_instructor_line(session_id: str, addressee: str, intent: str) -> dict[s
             if getattr(block, "type", None) == "text"
         ).strip() or "(no response)"
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        print(f"[runtime] instructor-direction turn failed: {type(exc).__name__}: {exc}", flush=True)
+        return {"ok": False, "error": _friendly_llm_error(exc)}
 
     session.history.append(TurnRecord(
         addressee=addressee,

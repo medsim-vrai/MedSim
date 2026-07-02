@@ -181,10 +181,23 @@
     });
   }
 
+  // FR-020: *stage direction* spans are shown in the transcript but never SPOKEN.
+  // Balanced *…* pairs are dropped from the TTS input; unbalanced stars leave the
+  // text untouched (never risk eating dialog). Mirrors portal/voices.py.
+  function stripStageDirections(text) {
+    if (!text || text.indexOf("*") === -1) return text;
+    if (((text.match(/\*/g) || []).length % 2) !== 0) return text;
+    return text.replace(/\*[^*]*\*/g, " ")
+               .replace(/\s{2,}/g, " ")
+               .replace(/\s+([.,!?;:])/g, "$1")
+               .trim();
+  }
+
   // ── Public API ─────────────────────────────────────────────────────
   async function speak(text, opts) {
     opts = opts || {};
-    if (!text) return;
+    text = stripStageDirections(text);
+    if (!text) return;   // direction-only line → nothing to voice (note stays on screen)
     cancel();  // never overlap utterances
     const voiceId = opts.voiceId;
     if (voiceId && voiceId !== "browser") {

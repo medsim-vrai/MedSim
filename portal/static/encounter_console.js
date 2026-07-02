@@ -1296,8 +1296,21 @@
   }
   function pttStatus(msg) { var s = $('op-ptt-status'); if (s) s.textContent = msg || ''; }
 
+  // FR-020: *stage direction* spans stay in the transcript but are never SPOKEN.
+  // Balanced *…* pairs are dropped from the TTS input; unbalanced stars leave the
+  // text untouched. Mirrors portal/voices.py strip_stage_directions.
+  function stripStageDirections(text) {
+    if (!text || text.indexOf('*') === -1) return text;
+    if (((text.match(/\*/g) || []).length % 2) !== 0) return text;
+    return text.replace(/\*[^*]*\*/g, ' ')
+               .replace(/\s{2,}/g, ' ')
+               .replace(/\s+([.,!?;:])/g, '$1')
+               .trim();
+  }
+
   function speakLine(voiceId, text) {
-    if (!text) return Promise.resolve();
+    text = stripStageDirections(text);
+    if (!text) return Promise.resolve();   // direction-only → silent (note shown, not read)
     if (!voiceId) {
       if (window.speechSynthesis) {
         var u = new SpeechSynthesisUtterance(text);
@@ -1450,14 +1463,29 @@
     function stopListen(abort) {
       if (!pttListening) return;
       pttListening = false; talk.classList.remove('listening');
-      try { pttRecog && pttRecog.stop(); } catch (e) {}
-      var s = $('op-talk-status'); if (s) s.textContent = 'Idle';
-      var said = (heard || finalText).trim();
-      if (interim) interim.textContent = '';
-      if (!abort) {
-        if (said) sendPttTurn(said);
-        else pttStatus('Didn’t catch that — hold the button, speak, then release (or type below).');
-      }
+      var s = $('op-talk-status'); if (s) s.textContent = abort ? 'Idle' : 'Finishing…';
+      // FR-021: do NOT send the snapshot at release — the recognizer lags real speech
+      // by ~0.3-0.8s, so the LAST words haven't arrived yet and were being discarded.
+      // stop() makes the engine finalize what it heard; onresult keeps updating
+      // `heard` after release, and the send happens ONCE from onend (finals are
+      // delivered before it), with a 900ms safety cap in case onend never fires.
+      var flushed = false;
+      var flush = function () {
+        if (flushed) return;
+        flushed = true;
+        if (pttListening) return;   // a new hold started meanwhile — this take is superseded
+        var said = (heard || finalText).trim();
+        if (interim) interim.textContent = '';
+        if (s) s.textContent = 'Idle';
+        if (!abort) {
+          if (said) sendPttTurn(said);
+          else pttStatus('Didn’t catch that — hold the button, speak, then release (or type below).');
+        }
+      };
+      if (pttRecog) pttRecog.onend = flush;
+      try { pttRecog && pttRecog.stop(); } catch (e) { flush(); }
+      if (abort) flush();           // aborts don't need the tail — clear the UI now
+      else setTimeout(flush, 900);
     }
     talk.addEventListener('mousedown', startListen);
     talk.addEventListener('touchstart', function (e) { e.preventDefault(); startListen(); }, { passive: false });

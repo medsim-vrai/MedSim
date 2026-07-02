@@ -192,4 +192,37 @@ describe('medsim_adapter WebSocket transport (ADR-0007)', () => {
     expect(sockets).toHaveLength(1);
     vi.useRealTimers();
   });
+
+  it('reconnects when the socket goes silent (half-open watchdog)', async () => {
+    vi.useFakeTimers();
+    const { factory, sockets } = mockFactory();
+    const mod = createImpl({ wsFactory: factory });
+    await mod.boot(deps());
+    await mod.bindFromCharacter({ characterId: 'c', sourcePhoto: PORTRAIT, speechWsUrl: 'wss://h/s' });
+    expect(sockets).toHaveLength(1);
+    // No frame ever arrives — not even a keepalive. A half-open socket fires no 'close', so the watchdog
+    // must drop it and reconnect on its own (the cross-worker "filler but no reply" failure mode).
+    vi.advanceTimersByTime(30000);           // WS_SILENCE_LIMIT_MS → force-close
+    vi.advanceTimersByTime(1000);            // RECONNECT_MS → new socket
+    expect(sockets).toHaveLength(2);
+    expect(mod.transport()).toBe('websocket');
+    mod.dispose();
+    vi.useRealTimers();
+  });
+
+  it('a received frame resets the silence watchdog (no needless reconnect)', async () => {
+    vi.useFakeTimers();
+    const { factory, sockets } = mockFactory();
+    const mod = createImpl({ wsFactory: factory });
+    await mod.boot(deps());
+    await mod.bindFromCharacter({ characterId: 'c', sourcePhoto: PORTRAIT, speechWsUrl: 'wss://h/s' });
+    // A keepalive every 15s keeps the 30s watchdog from ever elapsing → the original socket persists.
+    for (let i = 1; i <= 4; i++) {
+      vi.advanceTimersByTime(15000);
+      sockets[0]!.onmessage?.({ data: JSON.stringify({ v: 1, characterId: 'c', seq: i }) });
+    }
+    expect(sockets).toHaveLength(1);
+    mod.dispose();
+    vi.useRealTimers();
+  });
 });

@@ -64,6 +64,10 @@
                       {% else %}
                         <span class="avatar-badge off">○ no avatar yet</span>
                       {% endif %}
+                      {% if c.is_ai %}
+                        <span class="tag ai-generated"
+                              title="This portrait is fully synthetic (FACE ENGINE) — not a real person">AI-generated</span>
+                      {% endif %}
                       <a class="button-link"
                          href="/portal/face/develop/{{ c.id }}?scenario={{ s.id }}"
                          target="_blank" rel="noopener">Develop →</a>

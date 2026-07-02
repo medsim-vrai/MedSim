@@ -125,6 +125,11 @@ export interface WsLike {
 }
 
 const RECONNECT_MS = 1000;   // cross-app reconnect backoff (ADR-0007)
+// The speech server sends a keepalive frame every ~15s. If NOTHING arrives for this long the socket is
+// half-open — the server believes it is still sending (a big reply burst can wedge it that way) but the
+// browser receives nothing and no 'close' event fires for minutes. Detect the silence and reconnect so
+// the next reply is actually delivered (the "turns 2/3 — filler but no reply" failure).
+const WS_SILENCE_LIMIT_MS = 30000;
 
 /** Default factory: adapt the real browser WebSocket to WsLike; null off-browser. */
 function realWs(url: string): WsLike | null {
@@ -152,6 +157,7 @@ export function createImpl(opts?: { wsFactory?: (url: string) => WsLike | null }
   let ws: WsLike | null = null;
   let wsClosedByUs = false;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Bridge: incoming raw → parsed → dispatch.
   function dispatch(raw: unknown): void {
@@ -166,13 +172,32 @@ export function createImpl(opts?: { wsFactory?: (url: string) => WsLike | null }
   // WebSocket transport is a follow-up; BroadcastChannel covers the common
   // case where MedSim and VRAI Faces share an origin. Guarded so non-browser
   // environments (and unit tests, which never boot) simply stay 'none'.
+  function clearWatchdog(): void {
+    if (watchdogTimer !== null) { clearTimeout(watchdogTimer); watchdogTimer = null; }
+  }
+  // Reset on EVERY received frame (replies and keepalives alike); fire if the socket goes silent.
+  function armWatchdog(url: string): void {
+    if (typeof setTimeout === 'undefined') return;
+    clearWatchdog();
+    watchdogTimer = setTimeout(() => {
+      watchdogTimer = null;
+      if (!ws || wsClosedByUs) return;
+      const dead = ws;                       // half-open: drop it ourselves; no 'close' will come in time
+      ws = null;
+      dead.onmessage = null; dead.onclose = null; dead.onerror = null;
+      try { dead.close(); } catch { /* already gone */ }
+      scheduleReconnect(url);                // lastSeq dedups any frames the server replays on reconnect
+    }, WS_SILENCE_LIMIT_MS);
+  }
+
   function connectWs(url: string): boolean {
     const sock = makeWs(url);
     if (!sock) return false;                 // non-browser / no factory → caller falls back
     ws = sock;
-    ws.onmessage = (ev) => dispatch(typeof ev.data === 'string' ? safeJson(ev.data) : ev.data);
-    ws.onclose = () => { ws = null; if (!wsClosedByUs) scheduleReconnect(url); };
+    ws.onmessage = (ev) => { armWatchdog(url); dispatch(typeof ev.data === 'string' ? safeJson(ev.data) : ev.data); };
+    ws.onclose = () => { clearWatchdog(); ws = null; if (!wsClosedByUs) scheduleReconnect(url); };
     ws.onerror = () => { /* a close event follows; reconnect is handled there */ };
+    armWatchdog(url);                         // in case the socket never delivers a single frame
     transport = 'websocket';
     return true;
   }
@@ -199,6 +224,7 @@ export function createImpl(opts?: { wsFactory?: (url: string) => WsLike | null }
   }
   function disconnect(): void {
     wsClosedByUs = true;
+    clearWatchdog();
     if (reconnectTimer !== null) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (ws) { ws.onmessage = null; ws.onclose = null; ws.onerror = null; ws.close(); ws = null; }
     if (channel) { channel.onmessage = null; channel.close(); channel = null; }

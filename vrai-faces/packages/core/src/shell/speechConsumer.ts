@@ -62,6 +62,19 @@ function nextOrTimeout(iter: AsyncIterator<TtsChunk>): Promise<IteratorResult<Tt
   });
 }
 
+/** FR-020: `*stage direction*` spans stay in frame.text (display + autoEmote reads them
+ *  for the character's affect) but are never SPOKEN. Balanced pairs are dropped from the
+ *  TTS input; unbalanced stars leave the text untouched (never risk eating dialog).
+ *  Mirrors portal/voices.py strip_stage_directions — keep the two in sync. */
+function stripStageDirections(text: string): string {
+  if (!text.includes('*')) return text;
+  if (((text.match(/\*/g) ?? []).length % 2) !== 0) return text;
+  return text.replace(/\*[^*]*\*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([.,!?;:])/g, '$1')
+    .trim();
+}
+
 /** Map provider/frame visemes ({t,id,w}) to animation-runtime frames. */
 function toVisemeFrames(
   visemes: ReadonlyArray<{ t: number; id: string; w: number }>,
@@ -93,6 +106,10 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
   let emoMod: EmotionDriverModule | null = null;  // lazily loaded on the first reply (if wired)
 
   async function speakText(text: string, emotion?: string): Promise<void> {
+    // FR-020: mute *stage directions* — they were already shown + fed to autoEmote
+    // from the full frame text; only the dialog is voiced.
+    text = stripStageDirections(text);
+    if (!text) { dlog('[speak] direction-only line — not voiced (FR-020)'); return; }
     const voice = deps.voice();
     dlog('[speak] speakText', { voice, chars: text.length, emotion });
     if (!voice) { dwarn('[speak] no voice bound — nothing to speak'); return; }
@@ -194,6 +211,10 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
     }
   }
 
+  // True once the previous utterance's last audio frame (endOfUtterance) has arrived, so the NEXT
+  // audio frame is a fresh reply. Starts true so the very first reply also resets cleanly.
+  let prevUtteranceEnded = true;
+
   function handleFrame(f: VRAISpeechFrame): void {
     turnMark('frame');   // loop-latency: VRAISpeechFrame arrived (release → here covers STT + AI turn + delivery)
     dlog('[speak] frame', { text: f.text?.slice(0, 50), hasAudio: !!f.audio, emotion: f.emotion?.label });
@@ -205,6 +226,13 @@ export function installSpeechConsumer(deps: SpeechConsumerDeps): () => void {
 
     if (f.audio) {
       // Pre-synthesized audio — the server-side voice path (ADR-0037, the iOS route).
+      // FIRST chunk of a NEW reply (the previous utterance already ended) → flush the scheduler so this
+      // reply plays NOW. Without this, a reply queues gaplessly after the previous one's `playhead`; if
+      // the prior reply was long and still pending, the new reply was scheduled seconds in the future
+      // and the student heard silence ("turn N no audio"). Mid-utterance chunks must NOT flush (that
+      // would clip the reply), so key strictly on the prior frame's endOfUtterance.
+      if (prevUtteranceEnded) deps.audio.flush();
+      prevUtteranceEnded = !!f.endOfUtterance;
       const native = !!f.visemes && f.visemes.length > 0;
       deps.audio.setVisemeSource(native ? 'native' : 'derived');
       const snap = deps.audio.snapshot();

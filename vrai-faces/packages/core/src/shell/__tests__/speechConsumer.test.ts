@@ -15,6 +15,7 @@ function makeFakes() {
     emotion: [] as Array<{ weights: BlendshapeWeights; ease: number | undefined }>,
     visemePushes: [] as Array<Array<{ t: number; weights: BlendshapeWeights }>>,
     enqueued: [] as Array<{ fmt: AudioFmt }>,
+    flushes: 0,
     visemeSources: [] as VisemeSource[],
     ttsReqs: [] as TtsRequest[],
     offFrame: false,
@@ -43,6 +44,8 @@ function makeFakes() {
     },
     setVisemeSource: (s: VisemeSource) => { rec.visemeSources.push(s); },
     enqueueAudio: (_a: ArrayBuffer, fmt: AudioFmt) => { rec.enqueued.push({ fmt }); },
+    flush: () => { rec.flushes++; },
+    snapshot: () => ({ primed: true, queueDepth: 0, visemeSource: 'derived' as VisemeSource }),
   } as unknown as AudioPipelineModule;
 
   const anim = {
@@ -109,6 +112,19 @@ describe('installSpeechConsumer', () => {
     expect(f.rec.visemeSources).toEqual(['native']);
     const last = f.rec.visemePushes[f.rec.visemePushes.length - 1];
     expect(last).toEqual([{ t: 0, weights: { jawOpen: 0.7 } }]);
+  });
+
+  it('flushes the scheduler at each reply boundary, not per chunk (no cross-turn queuing)', () => {
+    const f = makeFakes();
+    installSpeechConsumer(f.deps);
+    const A = () => new ArrayBuffer(4);
+    // reply 1: two chunks (last = endOfUtterance)
+    f.emit({ v: 1, characterId: 'c', seq: 1, audio: A(), audioFormat: 'pcm16-24k' });
+    f.emit({ v: 1, characterId: 'c', seq: 2, audio: A(), audioFormat: 'pcm16-24k', endOfUtterance: true });
+    // reply 2: one chunk → a NEW reply, so it flushes again before playing
+    f.emit({ v: 1, characterId: 'c', seq: 3, audio: A(), audioFormat: 'pcm16-24k', endOfUtterance: true });
+    expect(f.rec.flushes).toBe(2);       // once at the start of each reply — NOT the mid-utterance chunk
+    expect(f.rec.enqueued).toHaveLength(3);
   });
 
   it('bridges energy-derived visemes into the animation runtime', () => {

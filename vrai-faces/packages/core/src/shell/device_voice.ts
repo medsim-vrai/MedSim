@@ -19,6 +19,13 @@ import { createCloudStt } from './cloud_stt';
 
 const MODULE = 'shell.deviceVoice';
 
+// Inline mic glyph. The old '🎤' emoji renders as a blank/tofu box on some desktops (why "Hold to
+// talk" looked icon-less) — an inline SVG draws identically on every platform.
+const MIC_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+  + ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>'
+  + '<path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="22"/></svg>';
+
 export interface DeviceVoiceHandle {
   dispose(): void;
 }
@@ -43,7 +50,9 @@ const STYLE_CSS = `
   bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   display: flex; flex-direction: column; align-items: stretch; gap: 8px;
-  max-width: min(92vw, 460px);
+  /* FIXED width (not max-width) so the panel + button never resize as the status text changes
+     length — the status wraps inside instead of stretching the button. */
+  width: min(92vw, 420px); box-sizing: border-box;
   padding: 10px 14px; border-radius: 18px;
   background: rgba(20, 20, 24, 0.82);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -59,8 +68,12 @@ const STYLE_CSS = `
 .vrai-voice button:active, .vrai-voice button.active { background: rgba(255,255,255,0.26); }
 .vrai-voice button[disabled] { opacity: 0.4; cursor: default; }
 .vrai-voice .vrai-voice-toggle.on { background: #2f7d5b; }
-.vrai-voice .vrai-voice-ptt { flex: 1; font-weight: 600; touch-action: none; }
+.vrai-voice .vrai-voice-ptt { flex: 1; font-weight: 600; touch-action: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
 .vrai-voice .vrai-voice-ptt.active { background: #b5532a; }
+/* COLD state: the "Establish mic" prepare button — distinct (green) from the armed talk button. */
+.vrai-voice .vrai-voice-ptt.establish { background: #2f7d5b; }
+.vrai-voice .vrai-voice-ptt svg { flex: 0 0 auto; }
 .vrai-voice .vrai-voice-opts { min-width: 42px; padding: 0 10px; font-size: 18px; flex: 0 0 auto; }
 .vrai-voice .vrai-voice-controls { display: none; flex-direction: column; gap: 8px; }
 .vrai-voice.vrai-voice-open .vrai-voice-controls { display: flex; }
@@ -110,8 +123,8 @@ export function mountDeviceVoice(
   toggleBtn.setAttribute('aria-label', 'Speech options');
   const pttBtn = document.createElement('button');
   pttBtn.type = 'button';
-  pttBtn.className = 'vrai-voice-ptt';
-  pttBtn.textContent = '🎤 Hold to talk';
+  pttBtn.className = 'vrai-voice-ptt establish';
+  // Content is set by renderPhase() below — COLD shows "Establish mic", WARM shows "Hold to talk".
   mainRow.append(toggleBtn, pttBtn);
 
   const status = document.createElement('div');
@@ -214,6 +227,88 @@ export function mountDeviceVoice(
   let startP: Promise<void> | null = null; // in-flight start(), so stop waits for it
   let readyPoll: number | null = null;     // polls model readiness to show metrics
 
+  // Short "thinking" fillers in the character's voice — fetched once, played on hold-to-talk release to
+  // cover the dead air while the reply synthesizes (and to keep the OS output awake). Best-effort: if
+  // the fetch fails, warmHold() falls back to the inaudible keep-awake noise.
+  let fillerClips: ArrayBuffer[] = [];
+  void (async () => {
+    try {
+      const base = opts.apiBase.replace(/\/+$/, '');
+      const qs = new URLSearchParams({ scenario: opts.scenarioId }).toString();
+      const res = await fetch(`${base}/api/face/${encodeURIComponent(opts.characterId)}/fillers?${qs}`);
+      const j = (await res.json()) as { fillers?: string[] };
+      fillerClips = (j.fillers ?? [])
+        .map((b64) => {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          return bytes.buffer;
+        })
+        .filter((b) => b.byteLength > 1);
+    } catch { /* best-effort — no fillers, warmHold uses the silent keep-awake */ }
+  })();
+
+  // Two-step activation. COLD shows "Establish mic": one tap PREPARES (unlock audio so the character
+  // can be heard, grant the mic permission up front, warm the recognizer) WITHOUT starting the
+  // conversation. It then becomes "Hold to talk" — the ONLY control that sends input and expects a
+  // reply. Replaces the old hidden "first press just warms, press again to talk" that confused users.
+  type Phase = 'cold' | 'warming' | 'warm';
+  let phase: Phase = 'cold';
+  let establishing = false;
+
+  function renderPhase(): void {
+    pttBtn.classList.toggle('establish', phase === 'cold');
+    if (phase === 'warming') {
+      pttBtn.disabled = true;
+      pttBtn.textContent = 'Preparing mic…';
+      return;
+    }
+    pttBtn.disabled = false;
+    if (phase === 'cold') {
+      pttBtn.innerHTML = `${MIC_SVG}<span>Establish mic</span>`;
+      pttBtn.setAttribute('aria-label', 'Establish microphone — prepare to talk');
+    } else {
+      pttBtn.innerHTML = `${MIC_SVG}<span>Hold to talk</span>`;
+      pttBtn.setAttribute('aria-label', 'Hold to talk');
+    }
+  }
+
+  // Confirm mic access + surface the browser permission prompt up front, without recording a take.
+  async function probeMic(): Promise<boolean> {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach((t) => t.stop());   // release immediately — we only needed grant + a check
+      return true;
+    } catch { return false; }
+  }
+
+  // "Establish mic" — PREPARE only; never sends a turn or starts the conversation.
+  async function establish(): Promise<void> {
+    if (phase === 'warm' || establishing) return;
+    establishing = true;
+    phase = 'warming';
+    renderPhase();
+    setStatus('Preparing microphone…');
+    primeSpeechSynthesis();                 // in-gesture: unlock iOS speech
+    void audioPipeline.primeOnUserGesture(); // unlock playback (also flushes the buffered opening line)
+    if (!on) setMaster(true);               // create the recognizer handle + warm the route
+    // Open the mic ONCE and keep it for the whole session (reliable multi-turn — re-acquiring per
+    // take dropped takes 2+). The cloud engine self-manages its mic, so fall back to a probe there.
+    const ok = stt?.acquireMic ? await stt.acquireMic() : await probeMic();
+    if (!ok) {
+      phase = 'cold';
+      renderPhase();
+      setStatus('Microphone blocked — allow mic access for this site, then tap Establish mic.', true);
+      establishing = false;
+      return;
+    }
+    phase = 'warm';
+    renderPhase();
+    setStatus(READY_MSG);
+    audioPipeline.warmOutput();  // wake the output sink now (the opening, if any, plays next)
+    establishing = false;
+  }
+
   function sendUtterance(text: string): void {
     const clean = text.trim();
     if (!clean) return;
@@ -301,14 +396,25 @@ export function mountDeviceVoice(
 
   const onPttDown = (ev: Event): void => {
     ev.preventDefault();
-    if (busy) return;
-    // Warm on first press (lazy): the first hold loads the on-device voice + shows
-    // "Loading…"; once the status reads ready, hold again to talk. No eager load at boot.
-    if (!on) { setMaster(true); return; }
-    if (!stt) return;
+    // FR-021: capture the pointer for the whole hold — a slight finger drift off the
+    // button mid-sentence was firing pointerleave → onPttUp, truncating the utterance
+    // and sending the partial. With capture, only a real release (pointerup) ends the take.
+    if (typeof PointerEvent !== 'undefined' && ev instanceof PointerEvent) {
+      try { pttBtn.setPointerCapture(ev.pointerId); } catch { /* unsupported — harmless */ }
+    }
+    // COLD / warming: the button reads "Establish mic" — PREPARE only, never record (see establish()).
+    if (phase !== 'warm') { void establish(); return; }
+    // WARM: this press is a real talk turn. Keep audio live (idempotent) so the reply can be heard.
+    void audioPipeline.primeOnUserGesture();
+    if (busy || !stt) return;
     // Re-prime iOS speechSynthesis from THIS gesture so the async reply (seconds after
     // release) can speak — iOS won't start an utterance without a recent user gesture.
     primeSpeechSynthesis();
+    // New turn: stop the character's still-playing/queued audio and reset the scheduler, so the upcoming
+    // reply plays immediately instead of queued behind a previous (long) line (playhead far ahead).
+    // (No output warm-up DURING recording — with echo-cancellation off it would leak into the mic; the
+    // DAC is kept awake AFTER release via warmHold() in onPttUp instead.)
+    audioPipeline.flush();
     pttBtn.classList.add('active');
     setStatus('Listening…');
     const s = stt;
@@ -326,11 +432,16 @@ export function mountDeviceVoice(
   const onPttUp = (ev: Event): void => {
     ev.preventDefault();
     const s = stt;
-    if (!on || !s || !pttBtn.classList.contains('active')) return;
+    if (phase !== 'warm' || !s || !pttBtn.classList.contains('active')) return;
     // The mic suspends the playback AudioContext on iOS; resume it from THIS release gesture
     // (resume() needs a user gesture on iOS — the async one at reply time hangs) so the
     // character's reply, arriving seconds later, plays. Pairs with the keep-alive source.
     void audioPipeline.resume();
+    // Spin the OS hardware output (DAC) up the instant the student releases, so the first reply isn't
+    // dropped while the DAC wakes from the near-silent keep-alive (the turn-1 silence). NO filler here —
+    // only the inaudible keep-awake noise: nothing is spoken until the prompt is transcribed below. The
+    // student has released and isn't recording, so this can't leak into the mic.
+    audioPipeline.warmHold();
     pttBtn.classList.remove('active');
     busy = true;
     turnBegin();                          // t0 for the loop-latency profile (release → first audio)
@@ -341,7 +452,12 @@ export function mountDeviceVoice(
         const text = await s.stopAndTranscribe();
         turnMark('stt');                    // transcript ready (release → here = STT)
         renderMetrics();                    // surface backend + latency for the pilot
-        if (text) sendUtterance(text);
+        if (text) {
+          // Prompt is now confirmed — only NOW play the audible "thinking" filler to cover the synthesis
+          // wait (the keep-awake noise from release is still running underneath, holding the DAC awake).
+          audioPipeline.warmHold(fillerClips);
+          sendUtterance(text);
+        }
         else {
           const why = s.metrics().emptyReason;   // FR-006: name the cause, not just the symptom
           setStatus(why ? `(no speech — ${why})` : '(no speech detected)', true);
@@ -361,6 +477,11 @@ export function mountDeviceVoice(
   pttBtn.addEventListener('pointerup', onPttUp);
   pttBtn.addEventListener('pointerleave', onPttUp);
   pttBtn.addEventListener('pointercancel', onPttUp);
+
+  // Initial COLD render: the button reads "Establish mic" with a single on-screen hint (replaces the
+  // old portal "tap the screen to enable audio" banner, which never worked).
+  renderPhase();
+  setStatus('Tap “Establish mic” to prepare — then hold to talk.');
 
   return {
     dispose() {

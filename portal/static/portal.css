@@ -184,6 +184,18 @@ body.login {
 }
 .badge.ok { background: #dff5e2; color: #2f7d32; }
 .badge.muted { background: #eef0f3; color: #6b7785; }
+/* AI-generated portrait disclosure (FACE ENGINE; EU AI Act Art. 50). Self-contained:
+   pages that load only portal.css (scenarios, personas) don't get control.css's .tag. */
+.tag.ai-generated {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.72em;
+  font-weight: 600;
+  background: #e3f2fd;
+  color: #1976d2;
+  white-space: nowrap;
+}
 .test-result { font-size: 0.9em; margin-top: 8px; min-height: 1em; }
 .test-result.ok { color: #2f7d32; }
 .test-result.err { color: #c0392b; }

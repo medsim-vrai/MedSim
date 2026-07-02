@@ -3,10 +3,15 @@ import { audioPipeline } from '../index';
 import { createImpl } from '../impl/create';
 
 describe('audio_pipeline', () => {
-  it('throws if enqueue is called before prime (ADR-0008)', () => {
-    expect(() => audioPipeline.enqueueAudio(new ArrayBuffer(8), 'pcm16-24k')).toThrow(
-      /primeOnUserGesture/,
-    );
+  it('buffers audio enqueued before prime instead of dropping/throwing (opening line)', async () => {
+    // The portal voices the opening line on WS-connect, BEFORE the first user gesture. Enqueuing
+    // then must NOT throw — that used to discard the opening, so the character "started" silent on
+    // desktop. It buffers until primeOnUserGesture() unlocks audio and flushes it.
+    const ap = createImpl();
+    expect(() => ap.enqueueAudio(new ArrayBuffer(8), 'pcm16-24k')).not.toThrow();
+    await ap.primeOnUserGesture();
+    expect(ap.snapshot().primed).toBe(true);
+    ap.dispose();
   });
 
   it('viseme handler unsubscribe is idempotent', () => {

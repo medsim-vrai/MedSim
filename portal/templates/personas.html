@@ -50,6 +50,10 @@
         <div class="avatar-pick">
           <div class="avatar-pick-label">🪞 Use avatar face:
             {% if p.avatar_skin %}<span class="on">on</span>{% else %}<span class="off">off</span>{% endif %}
+            {% if p.is_ai %}
+              <span class="tag ai-generated"
+                    title="This portrait is fully synthetic (FACE ENGINE) — not a real person">AI-generated</span>
+            {% endif %}
           </div>
           {% if skins %}
             <div class="avatar-pick-row">
