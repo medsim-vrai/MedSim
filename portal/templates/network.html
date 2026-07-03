@@ -104,6 +104,10 @@
   .lg-note{font-family:var(--mono);font-size:10.5px;color:var(--note-ink);
        background:var(--note-bg);border-radius:5px;padding:7px 9px;line-height:1.5}
 
+  @keyframes netfade{from{opacity:.35}to{opacity:1}}
+  .manage-toggle{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);
+       font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);
+       cursor:pointer;white-space:nowrap}
   @keyframes flow{to{stroke-dashoffset:-24}}
   @keyframes blink{0%,100%{opacity:.9}50%{opacity:.35}}
   @keyframes pulseRing{0%{transform:scale(.5);opacity:.55}80%,100%{transform:scale(1.35);opacity:0}}
@@ -130,6 +134,8 @@
 
   <div class="strip">
     <span class="poll" id="poll"><span class="dot"></span><span id="poll-label">Polling</span></span>
+    <label class="manage-toggle" title="Click a device to mark it available / fault / back to automatic — a session-scoped instructor override">
+      <input type="checkbox" id="manage-mode"> Manage links</label>
     <button class="refresh" id="refresh" type="button" title="Re-check every device link right now">↻ Refresh</button>
     <span class="updated" id="updated">—</span>
     <span class="counts" id="counts">

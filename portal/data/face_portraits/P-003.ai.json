@@ -1,0 +1,9 @@
+{
+  "ai_generated": true,
+  "generator": "TBSIM FACE ENGINE",
+  "face_id": "FE-0443",
+  "watermark_id": "wm-e51b6f6984de12a0",
+  "model": "flux1-schnell",
+  "backend": "fal",
+  "created_at": "2026-07-03T00:59:42.105698+00:00"
+}

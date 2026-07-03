@@ -85,7 +85,11 @@
     (s.students || []).forEach(function (st) {
       (st.patientIds || []).forEach(function (pid) { L.push({ from: st.id, to: pid, kind: "student", cls: "student" }); });
       if (st.role) {
-        var rd = (s.commonDevices || []).filter(function (d) { return d.cls === "character" && d.role === st.role; })[0];
+        // Link to the seat THIS student fills (server sets studentId), so with two
+        // same-role seats each student's link lands on their own seat — not both on
+        // the first. Fall back to the first matching role seat for older snapshots.
+        var seats = (s.commonDevices || []).filter(function (d) { return d.cls === "character" && d.role === st.role; });
+        var rd = seats.filter(function (d) { return d.studentId === st.id; })[0] || seats[0];
         if (rd) L.push({ from: st.id, to: rd.id, kind: "role", cls: "student" });
       }
     });
@@ -112,13 +116,26 @@
   }
   function deviceBlock(d, n) {
     var w = n.w, h = n.h, x = n.cx - w / 2, y = n.cy - h / 2, col = clsColor(d.cls);
-    return E("g", { transform: "translate(" + x + "," + y + ")" }, [
+    var kids = [
       E("rect", { x: 0, y: 0, width: w, height: h, rx: 5, fill: PAPER, stroke: BORDER, "stroke-width": 1 }),
       E("rect", { x: 0, y: 2, width: 3.5, height: h - 4, rx: 1.5, fill: col }),
       txt(d.tag, { x: 8, y: 10, "font-family": MONO, "font-size": 8, fill: FAINT, "letter-spacing": ".02em" }),
       txt((d.name || "").slice(0, 15), { x: 8, y: h - 8, "font-family": SANS, "font-size": 10, "font-weight": 500, fill: INK }),
       statusPip(w - 8, 9, d.cls, d.state)
-    ]);
+    ];
+    if (d.filledBy) {
+      // N0 — a student fills this character seat: student-colored dashed frame
+      // + who, so the view reads "the student replaced the AI" at a glance.
+      kids.push(E("rect", { x: -1.5, y: -1.5, width: w + 3, height: h + 3, rx: 6, fill: "none", stroke: CLS.student, "stroke-width": 1.2, "stroke-dasharray": "3 2.4" }));
+      kids.push(txt(String(d.filledBy).slice(0, 12).toUpperCase(), { x: w - 8, y: 10, "text-anchor": "end", "font-family": MONO, "font-size": 6.5, fill: CLS.student, "letter-spacing": ".04em" }));
+    }
+    if (d.managed) {
+      // instructor override active — small amber pip INSIDE the block (a label
+      // below the box was overpainted by the next stacked block's rect).
+      kids.push(E("circle", { cx: 6, cy: h - 6, r: 2.6, fill: "#c98a1a" }));
+    }
+    return E("g", { transform: "translate(" + x + "," + y + ")", "data-node-id": d.id || null,
+                    "data-node-state": (d.managed ? "managed:" : "") + (d.state || "") }, kids);
   }
   function controlNode(c, n) {
     var w = n.w, h = n.h, x = n.cx - w / 2, y = n.cy - h / 2;
@@ -150,14 +167,18 @@
       txt(sum, { x: 23, y: h / 2 + 8, "font-family": SANS, "font-size": 8.5, fill: "#7a4361" })
     ]);
   }
-  function chip(x, y, letter, cls, state) {
+  function chip(x, y, letter, cls, state, id, managed) {
     var col = state === "fault" ? FAULT : state === "available" ? AVAIL : clsColor(cls);
     var fill = (state === "active" || state === "fault") ? col : PAPER;
     var ink = (state === "active" || state === "fault") ? "#fff" : col;
-    return E("g", { "class": state === "fault" ? "blink" : null }, [
+    var kids = [
       E("circle", { cx: x, cy: y, r: 6, fill: fill, stroke: col, "stroke-width": 1, "stroke-dasharray": state === "available" ? "1.4 1.6" : null }),
       txt(letter, { x: x, y: y + 3, "text-anchor": "middle", "font-family": MONO, "font-size": 7, "font-weight": 600, fill: ink })
-    ]);
+    ];
+    if (managed) kids.push(E("circle", { cx: x + 5, cy: y - 5, r: 2, fill: "#c98a1a" }));
+    return E("g", { "class": state === "fault" ? "blink" : null,
+                    "data-node-id": id || null,
+                    "data-node-state": (managed ? "managed:" : "") + (state || "") }, kids);
   }
   function supLetter(d) {
     var k = (d.tag || d.name || "").toUpperCase();
@@ -200,7 +221,15 @@
 
   // ── Option A — tiered layout ─────────────────────────────────────────────
   function layoutTiered(s, pos) {
-    var W = 600, M = 24, IW = W - 2 * M, nodes = [], y = 0;
+    // N4 — width scales with the data (beds / shared rows / students) so an
+    // 8-bed or device-heavy room spreads out instead of cramming into 600px.
+    var _ps0 = patients(s), _c0 = s.commonDevices || [];
+    var _free = function (d) { return !d.assignedToPatientId; };
+    var _nOps = _c0.filter(function (d) { return _free(d) && d.cls !== "character"; }).length;
+    var _nCh = _c0.filter(function (d) { return _free(d) && d.cls === "character"; }).length;
+    var W = Math.max(600, _ps0.length * 140, _nOps * 112, _nCh * 112,
+                     (s.students || []).length * 120);
+    var M = 24, IW = W - 2 * M, nodes = [], y = 0;
     var c = s.control || { id: "ctrl", tag: "CTRL-01", name: "Control", state: "active" };
     // Tier 1 — control
     var ctrlN = node(c.id, W / 2, 44, 132, 42); pos[c.id] = ctrlN;
@@ -274,7 +303,10 @@
 
   // ── Option C — radial layout ─────────────────────────────────────────────
   function layoutRadial(s, pos) {
-    var W = 600, cx = W / 2, hubY = 250, nodes = [];
+    // N4 — hub geometry scales with load; the busy arc staggers on 3 radii.
+    var _c1 = (s.commonDevices || []).filter(function (d) { return !d.assignedToPatientId; });
+    var W = Math.max(600, _c1.length * 58, patients(s).length * 150);
+    var cx = W / 2, hubY = 250, nodes = [];
     var c = s.control || { id: "ctrl", tag: "CTRL-01", name: "Control", state: "active" };
     var ctrlN = node(c.id, cx, hubY, 124, 40); pos[c.id] = ctrlN;
     // Upper arc — common devices. Stagger alternating devices in/out so labels
@@ -287,7 +319,7 @@
     var common = _all.filter(function (d) { return !d.assignedToPatientId; }), n = common.length || 1;
     common.forEach(function (d, i) {
       var t = (i + 0.5) / n, ang = (-165 + t * 150) * Math.PI / 180;
-      var R = 178 + (i % 2) * 34;
+      var R = 168 + (n > 10 ? (i % 3) : (i % 2)) * 28;   // N4: 3-deep stagger; capped so R<=224 stays in viewBox
       var dx = cx + R * Math.cos(ang), dy = hubY + R * Math.sin(ang);
       var dn = node(d.id, dx, dy, 92, 28); pos[d.id] = dn;
       nodes.push(deviceBlock(d, dn));
@@ -313,7 +345,7 @@
       chips.forEach(function (cc, j) {
         var t = cn === 1 ? 0 : (j / (cn - 1) - 0.5);
         var ang = (-90 + t * 150) * Math.PI / 180;
-        nodes.push(chip(px + (pr + 8) * Math.cos(ang), py + (pr + 8) * Math.sin(ang), cc[0], cc[1].cls, cc[1].state));
+        nodes.push(chip(px + (pr + 8) * Math.cos(ang), py + (pr + 8) * Math.sin(ang), cc[0], cc[1].cls, cc[1].state, cc[1].id, cc[1].managed));
       });
       // assigned characters → chips in the lower arc (purple); pos set for role links
       var team = charsByPatient[p.id] || [];
@@ -322,7 +354,7 @@
         var ang = (90 + t * 120) * Math.PI / 180;
         var hx = px + (pr + 9) * Math.cos(ang), hy = py + (pr + 9) * Math.sin(ang);
         pos[d.id] = node(d.id, hx, hy, 0, 0, 1);
-        nodes.push(chip(hx, hy, (d.name || "?").charAt(0).toUpperCase(), "character", d.state));
+        nodes.push(chip(hx, hy, (d.name || "?").charAt(0).toUpperCase(), "character", d.state, d.id, d.managed));
       });
     });
     if (r0 && r0.capacity > ps.length) {
@@ -373,8 +405,46 @@
     svg.appendChild(linkLayer); svg.appendChild(nodeLayer);
     drawLinks(linkLayer, deriveLinks(s), pos, view);
     lay.nodes.forEach(function (nd) { nodeLayer.appendChild(nd); });
+    // N4 — smooth transition: fade the canvas only when the GEOMETRY changed
+    // (assignment/layout shifts), not on every poll repaint.
+    var sig = view + "|" + Object.keys(pos).sort().map(function (k) {
+      return k + ":" + Math.round(pos[k].cx) + "," + Math.round(pos[k].cy);
+    }).join(";");
+    if (_lastSig && sig !== _lastSig) svg.style.animation = "netfade .3s ease";
+    _lastSig = sig;
     host.innerHTML = ""; host.appendChild(svg);
   }
+  var _lastSig = null;
+
+  // N4 (decision 2) — manage mode: click a device to cycle auto → available →
+  // fault → auto (server-side, instructor-gated). ONE delegated listener on the
+  // persistent host (survives the per-poll innerHTML swap — no listener leak),
+  // with an in-flight guard so rapid clicks on the same node can't double-fire
+  // off the same stale attribute before the next poll repaints.
+  var _managePending = {};
+  (function bindManage() {
+    var host = document.getElementById("diagram");
+    if (!host) return;
+    host.addEventListener("click", function (ev) {
+      var mm = document.getElementById("manage-mode");
+      if (!mm || !mm.checked) return;
+      var g = ev.target && ev.target.closest ? ev.target.closest("g[data-node-id]") : null;
+      if (!g) return;
+      var id = g.getAttribute("data-node-id");
+      if (!id || _managePending[id]) return;
+      var st = g.getAttribute("data-node-state") || "";
+      var next = st.indexOf("managed:") !== 0 ? "available"
+               : st === "managed:available" ? "fault" : "auto";
+      _managePending[id] = true;
+      fetch("/api/network/device_state", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: id, state: next })
+      }).then(function () { return poll(); })
+        .catch(function () {})
+        .then(function () { delete _managePending[id]; });
+    });
+  })();
   function setText(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
 
   function selectView(v) {

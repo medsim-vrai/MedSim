@@ -228,6 +228,9 @@
         <option value="charge_nurse">Charge nurse</option>
         <option value="supervisor">Supervisor</option>
         <option value="instructor">Instructor</option>
+        <option value="doctor">Doctor (fills the AI seat)</option>
+        <option value="respiratory_therapist">Respiratory therapist (fills the AI seat)</option>
+        <option value="pharmacist">Pharmacist (fills the AI seat)</option>
       </select>
       <button type="button" id="staff-add" class="primary-action">+ Add</button>
     </div>
@@ -242,7 +245,7 @@
       if (!panel) return;
       let ENCS = [];
       const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
-      const roleLabel = (r) => ({ nurse: 'Nurse', charge_nurse: 'Charge', supervisor: 'Supervisor', instructor: 'Instructor' })[r] || 'Nurse';
+      const roleLabel = (r) => ({ nurse: 'Nurse', charge_nurse: 'Charge', supervisor: 'Supervisor', instructor: 'Instructor', doctor: 'Doctor', respiratory_therapist: 'Resp. therapist', pharmacist: 'Pharmacist' })[r] || 'Nurse';
       const status = (s) => { const el = document.getElementById('med-access-status'); if (el) el.textContent = s || ''; };
       function api(method, url, body) {
         return fetch(url, {

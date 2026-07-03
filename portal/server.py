@@ -799,6 +799,68 @@ async def local_context_page(
                                       {"active": "console"})
 
 
+# ── FR-017 — scenario exchange (export / import between MedSim systems) ──────
+
+@app.get("/portal/scenarios/import", response_class=HTMLResponse)
+async def scenario_import_page(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    return templates.TemplateResponse(request, "scenario_import.html",
+                                      {"active": "scenarios", "report": None,
+                                       "error": None})
+
+
+@app.post("/portal/scenarios/import", response_class=HTMLResponse)
+async def scenario_import_submit(
+    request: Request,
+    bundle_file: Annotated[UploadFile, File()],
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """FR-017 — validate → remap collisions → land scenario/characters/personas/
+    docs → show the post-import checklist with a jump to the edit form."""
+    from . import scenario_exchange
+    error = None
+    report = None
+    try:
+        # Reject oversized uploads on the declared size BEFORE buffering the body.
+        if (bundle_file.size or 0) > scenario_exchange._MAX_BUNDLE_BYTES:
+            raise ValueError("bundle too large")
+        raw = await bundle_file.read()
+        if len(raw) > scenario_exchange._MAX_BUNDLE_BYTES:
+            raise ValueError("bundle too large")
+        report = scenario_exchange.import_bundle(json.loads(raw.decode("utf-8")))
+    except json.JSONDecodeError:
+        error = "That file isn't a MedSim scenario bundle (invalid JSON)."
+    except ValueError as exc:
+        error = f"Import refused: {exc}"
+    except Exception as exc:  # noqa: BLE001 — import must fail closed, readable
+        error = f"Import failed: {type(exc).__name__}: {exc}"
+    return templates.TemplateResponse(request, "scenario_import.html",
+                                      {"active": "scenarios", "report": report,
+                                       "error": error})
+
+
+@app.get("/portal/scenarios/{scenario_id}/export")
+async def scenario_export(
+    scenario_id: str,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """FR-017 — download the scenario + its dependencies as one shareable file."""
+    from . import scenario_exchange
+    bundle = scenario_exchange.export_bundle(scenario_id)
+    if bundle is None:
+        raise HTTPException(404, "Unknown scenario")
+    fname = f"{scenario_id}{scenario_exchange.FILE_SUFFIX}"
+    # _jdump: compact (base64 docs make this large) + tolerant of YAML-native
+    # types (bare dates load as datetime.date, which plain json.dumps rejects).
+    return Response(
+        scenario_exchange._jdump(bundle),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
 @app.get("/portal/scenarios/{scenario_id}/edit", response_class=HTMLResponse)
 async def scenario_edit(
     scenario_id: str,
@@ -1353,6 +1415,7 @@ async def personas_page(
             **p,
             "avatar_skin": vrai_faces.assigned_skin_id(str(p.get("id") or "")),
             "is_ai": vrai_faces.is_portrait_ai(str(p.get("id") or "")),
+            "has_portrait": vrai_faces.has_portrait(str(p.get("id") or "")),
         }
         for p in library.list_personas()
     ]
@@ -1365,6 +1428,30 @@ async def personas_page(
             "skins": vrai_faces.list_skins(),
         },
     )
+
+
+@app.post("/portal/face/request-engine/{character_id}")
+async def face_request_engine(
+    character_id: str,
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+):
+    """Ask FACE ENGINE to generate a synthetic portrait for this character/persona
+    (the portal sends only ageRange/sex; FACE ENGINE derives the demographics,
+    generates, safety-screens, signs, and drop-files it). Refuses to overwrite an
+    existing portrait."""
+    if vrai_faces.has_portrait(character_id):
+        return HTMLResponse(
+            f"<p>{character_id} already has a portrait — not overwriting. "
+            f"<a href='javascript:history.back()'>Back</a></p>", status_code=409)
+    result = await vrai_faces.request_face_from_engine(character_id)
+    if result.get("status") != "done":
+        detail = result.get("error") or result.get("status") or "unknown error"
+        return HTMLResponse(
+            f"<p>FACE ENGINE request for {character_id} failed: {detail} "
+            f"<a href='javascript:history.back()'>Back</a></p>", status_code=502)
+    back = request.headers.get("referer") or "/portal/personas"
+    return RedirectResponse(back, status_code=303)
 
 
 @app.post("/portal/personas/{persona_id}/avatar")
@@ -6971,6 +7058,27 @@ async def api_network_snapshot(
     Network view; a pure read (returns an empty-but-valid snapshot when idle)."""
     from portal import network_status
     return JSONResponse(network_status.build_snapshot())
+
+
+@app.post("/api/network/device_state")
+async def api_network_device_state(
+    request: Request,
+    _: Annotated[credentials.Vault, Depends(auth.require_instructor)],
+):
+    """N4 (FR-019 decision 2) — instructor-managed link state. Body:
+    {"id": <node id>, "state": "available"|"fault"|"auto"}. A session-scoped
+    override painted on top of heartbeat-derived state; 'auto' returns the
+    node to derived truth. Never persisted — a restart always restores the
+    heartbeat picture."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON body required.") from None
+    from portal import network_status
+    if not network_status.set_state_override(str(body.get("id") or ""),
+                                             str(body.get("state") or "")):
+        raise HTTPException(400, "state must be 'available', 'fault' or 'auto'")
+    return JSONResponse({"ok": True})
 
 
 @app.get("/portal/network", response_class=HTMLResponse)

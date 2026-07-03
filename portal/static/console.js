@@ -1425,7 +1425,7 @@
 
   // ── #80 Assignments step — open vs assign students/groups to beds ──────────
   function _aesc(s) { var d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; }
-  function _roleLbl(r) { return ({ nurse: "Nurse", charge_nurse: "Charge", supervisor: "Supervisor", instructor: "Instructor" })[r] || "Nurse"; }
+  function _roleLbl(r) { return ({ nurse: "Nurse", charge_nurse: "Charge", supervisor: "Supervisor", instructor: "Instructor", doctor: "Doctor", respiratory_therapist: "Resp. therapist", pharmacist: "Pharmacist" })[r] || "Nurse"; }
   function _bedsForAssign() {
     return bedScenarios().map(function (b, i) {
       var s = (b && b.sample && sampleById(b.sample)) || {};

@@ -1425,3 +1425,47 @@ def attach(app: FastAPI, jinja: Any = None) -> None:
     async def ws_face(ws: WebSocket, scenario_id: str,  # noqa: ANN202
                       character_id: str):
         await handle_face_ws(ws, scenario_id, character_id)
+
+
+# ── FACE ENGINE integration (request a synthetic face on demand) ─────────
+# FACE ENGINE is the standalone synthetic-portrait service (default local :8790).
+# The portal only sends what the card knows (ageRange/sex); FACE ENGINE derives the
+# full demographic spec, generates + screens + signs the face, and delivers it as the
+# standard drop-file — so resolve_portrait()/is_portrait_ai() pick it up unchanged.
+
+FACE_ENGINE_URL = os.environ.get("FACE_ENGINE_URL", "http://127.0.0.1:8790")
+
+
+async def request_face_from_engine(character_id: str,
+                                   timeout_s: float = 60.0) -> dict[str, Any]:
+    """Ask FACE ENGINE to generate this character's portrait; poll until delivered.
+    Returns {"status": "done"|"failed"|"error", ...}. Never raises."""
+    import asyncio
+
+    import httpx
+
+    card = resolve_card(character_id) or {}
+    payload = {
+        "character_id": character_id,
+        "age_range": str(card.get("ageRange") or card.get("age") or "") or None,
+        "sex": (card.get("sex") or None),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(f"{FACE_ENGINE_URL}/api/vrai/request", json=payload)
+            if resp.status_code == 401:
+                return {"status": "error",
+                        "error": "FACE ENGINE requires an operator token (RBAC enabled)"}
+            resp.raise_for_status()
+            request_id = resp.json()["request_id"]
+            deadline = asyncio.get_event_loop().time() + timeout_s
+            while asyncio.get_event_loop().time() < deadline:
+                await asyncio.sleep(1.0)
+                status = (await client.get(
+                    f"{FACE_ENGINE_URL}/api/vrai/request/{request_id}")).json()
+                if status.get("status") in ("done", "failed"):
+                    return status
+            return {"status": "error", "error": f"timed out after {timeout_s:.0f}s"}
+    except Exception as exc:  # FACE ENGINE down/unreachable — surface, don't crash the portal
+        return {"status": "error",
+                "error": f"FACE ENGINE unreachable at {FACE_ENGINE_URL}: {exc}"}

@@ -99,7 +99,11 @@ class StaffMember:
     never surface in the student-join / debrief flows. Persisted in the
     ``staff_member`` table (schema v8).
 
-    ``role`` is 'nurse' | 'charge_nurse' | 'supervisor' | 'instructor'.
+    ``role`` is 'nurse' | 'charge_nurse' | 'supervisor' | 'instructor', or an
+    allied-health CHARACTER role ('doctor' | 'respiratory_therapist' |
+    'pharmacist') — N0 (FR-019): rostering a student into a character role
+    FILLS that seat on the network view (the student replaces the AI
+    character); allied roles scope like a nurse (assignments or all).
     ``assignments`` is the list of encounter_ids a NURSE is scoped to for
     med pulls — empty means "all of the cart's patients" (the
     no-assignments-show-all rule). charge_nurse / supervisor / instructor

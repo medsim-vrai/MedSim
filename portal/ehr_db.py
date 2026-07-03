@@ -1233,7 +1233,10 @@ def remove_student(student_id: str) -> None:
 
 _mem_staff: dict[str, dict[str, Any]] = {}
 
-_STAFF_ROLES = ("nurse", "charge_nurse", "supervisor", "instructor")
+# nurse/charge/supervisor/instructor = med-cart access tiers; doctor/RT/pharmacist
+# are the N0 (FR-019) character-role seats a student can FILL (scope like a nurse).
+_STAFF_ROLES = ("nurse", "charge_nurse", "supervisor", "instructor",
+                "doctor", "respiratory_therapist", "pharmacist")
 _STAFF_COLS = ("staff_id, room_id, display_name, initials, role, "
                "assignments_json, created_at, last_seen")
 

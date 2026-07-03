@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Import scenario{% endblock %}
+{% block content %}
+<h1>Import a scenario</h1>
+<p class="muted">Load a <code>.medsim-scenario.json</code> bundle exported from another
+  MedSim VRAI system. Imports never overwrite: a scenario or character whose id is
+  already taken lands under a new id (identical characters are simply linked).</p>
+
+{% if error %}
+  <div class="banner error" style="margin:12px 0; padding:10px 14px; border:1px solid #d88;
+       border-radius:8px; background:#fdf2f2; color:#8a2a2a;">{{ error }}</div>
+{% endif %}
+
+{% if report %}
+  <section class="cred-row" style="margin:12px 0;">
+    <header><h2>Imported: {{ report.scenario_name }}</h2>
+      <code class="key">{{ report.scenario_id }}</code></header>
+    <p class="muted">
+      {{ report.characters | length }} character(s)
+      {% if report.personas %} · {{ report.personas | length }} persona(s){% endif %}
+      {% if report.documents %} · {{ report.documents }} support document(s){% endif %}
+    </p>
+    <ul>
+      {% for c in report.characters %}
+        <li><code>{{ c.id }}</code> — {{ c.action }}{% if c.as != c.id %} → <code>{{ c.as }}</code>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% if report.checklist %}
+      <h3>Before first launch</h3>
+      <ul>
+        {% for item in report.checklist %}<li>⚠ {{ item }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+    {% if report.warnings %}
+      <ul>{% for w in report.warnings %}<li class="muted">note: {{ w }}</li>{% endfor %}</ul>
+    {% endif %}
+    <div class="actions" style="margin-top:10px;">
+      <a class="primary-action" href="/portal/scenarios/{{ report.scenario_id }}/edit">Review &amp; edit</a>
+      <a class="secondary" href="/portal/scenarios">Back to scenarios</a>
+    </div>
+  </section>
+{% endif %}
+
+<form method="post" action="/portal/scenarios/import" enctype="multipart/form-data"
+      style="margin-top:14px;">
+  <input type="file" name="bundle_file" accept=".json,application/json" required>
+  <button type="submit" class="primary-action">Import</button>
+</form>
+{% endblock %}

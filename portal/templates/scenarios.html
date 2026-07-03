@@ -19,6 +19,8 @@
 <header class="page-header">
   <h1>Scenarios</h1>
   <a href="/portal/scenarios/new" class="primary-action">+ New scenario</a>
+  <a href="/portal/scenarios/import" class="secondary"
+     title="Load a .medsim-scenario.json bundle exported from another MedSim system">Import…</a>
 </header>
 
 <p class="muted">Scenarios are stored as YAML in <code>scenarios/</code>.
@@ -71,6 +73,13 @@
                       <a class="button-link"
                          href="/portal/face/develop/{{ c.id }}?scenario={{ s.id }}"
                          target="_blank" rel="noopener">Develop →</a>
+                      {% if not c.has_avatar %}
+                        <form method="post" action="/portal/face/request-engine/{{ c.id }}"
+                              class="inline-action"
+                              title="FACE ENGINE generates a fully-synthetic portrait (takes a few seconds)">
+                          <button type="submit" class="secondary">✨ FACE ENGINE</button>
+                        </form>
+                      {% endif %}
                     </div>
                   </li>
                 {% endfor %}
@@ -83,6 +92,8 @@
           <button data-launch-id="{{ s.id }}" data-launch-mode="voice" class="primary-action voice-launch">Launch (voice) 🎙</button>
           <a href="/portal/scenarios/{{ s.id }}/edit" class="button-link">Edit</a>
           <a href="/portal/scenarios/{{ s.id }}/documents" class="button-link">📎 Docs</a>
+          <a href="/portal/scenarios/{{ s.id }}/export" class="button-link"
+             title="Download this scenario + its characters and documents as a shareable bundle">Export</a>
           <form method="post" action="/portal/scenarios/{{ s.id }}/duplicate" class="inline-action">
             <button type="submit" class="secondary">Duplicate</button>
           </form>

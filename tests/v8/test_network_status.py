@@ -224,3 +224,155 @@ def test_network_page_renders(client):
     assert "/static/network.js" in html               # the renderer
     assert "Tiered" in html and "Radial" in html      # both layout toggles
     assert "Device Link Topology" in html
+
+
+# ── N0: roster ROLES fill the character tier (FR-019 decision 1) ─────────────
+
+def _n0_room(monkeypatch, staff):
+    enc = _enc("e1", patient_persona_id="ppid", selected_personas=["ppid", "doc1"])
+    room = _room([enc], shared_personas=["rt1"], staff=staff)
+    monkeypatch.setattr(ns._cr, "get_active_room", lambda: room)
+    monkeypatch.setattr(ns._db, "device_stations", lambda eid: [])
+    monkeypatch.setattr(ns._db, "get_device_station", lambda cid: None)
+    personas = {
+        "ppid": {"name": "Mr X", "role": "patient"},
+        "doc1": {"name": "Dr Who", "role": "doctor"},
+        "rt1": {"name": "RT", "role": "respiratory therapist"},
+    }
+    monkeypatch.setattr(ns._lib, "get_persona", lambda pid: personas.get(pid))
+    return room
+
+
+def _char_node(snap, role):
+    return next(n for n in snap["commonDevices"]
+                if n.get("cls") == "character" and n.get("role") == role)
+
+
+def test_student_in_role_fills_character_seat_active_when_seen(monkeypatch):
+    staff = {"s1": _staff("s1", display_name="Sam", role="doctor",
+                          initials="SM", last_seen=time.time())}
+    _n0_room(monkeypatch, staff)
+    snap = ns.build_snapshot()
+    doc = _char_node(snap, "doctor")
+    assert doc["studentId"] == "s1"
+    assert doc["filledBy"] == "Sam"
+    assert doc["state"] == "active"           # recently signed in → seat live
+    # the unfilled RT seat stays an idle AI character
+    rt = _char_node(snap, "respiratory_therapist")
+    assert "studentId" not in rt and rt["state"] == "idle"
+
+
+def test_rostered_but_absent_student_leaves_seat_idle(monkeypatch):
+    staff = {"s1": _staff("s1", display_name="Sam", role="respiratory_therapist",
+                          last_seen=None)}
+    _n0_room(monkeypatch, staff)
+    snap = ns.build_snapshot()
+    rt = _char_node(snap, "respiratory_therapist")
+    assert rt["studentId"] == "s1" and rt["state"] == "idle"
+
+
+def test_two_students_same_role_fill_distinct_seats_once(monkeypatch):
+    staff = {
+        "s1": _staff("s1", display_name="A", role="doctor", last_seen=time.time()),
+        "s2": _staff("s2", display_name="B", role="doctor", last_seen=time.time()),
+    }
+    _n0_room(monkeypatch, staff)
+    snap = ns.build_snapshot()
+    doc_nodes = [n for n in snap["commonDevices"]
+                 if n.get("cls") == "character" and n.get("role") == "doctor"]
+    assert len(doc_nodes) == 1                      # one doctor seat in this room
+    assert doc_nodes[0]["studentId"] in ("s1", "s2")   # first fill wins, no clobber
+
+
+def test_plain_nurse_role_fills_no_character_seat(monkeypatch):
+    staff = {"s1": _staff("s1", display_name="N", role="nurse",
+                          last_seen=time.time())}
+    _n0_room(monkeypatch, staff)
+    snap = ns.build_snapshot()
+    assert all("studentId" not in n for n in snap["commonDevices"])
+
+
+# ── N4: instructor-managed link state (FR-019 decision 2) ────────────────────
+
+@pytest.fixture(autouse=True)
+def _clear_overrides():
+    ns._state_overrides.clear()
+    yield
+    ns._state_overrides.clear()
+
+
+def test_override_paints_on_top_of_derived_state(monkeypatch):
+    _n0_room(monkeypatch, {})
+    assert ns.set_state_override("records", "fault") is True
+    snap = ns.build_snapshot()
+    rec = next(n for n in snap["commonDevices"] if n["id"] == "records")
+    assert rec["state"] == "fault" and rec["managed"] is True
+    # 'auto' clears → derived truth returns, no managed flag
+    assert ns.set_state_override("records", "auto") is True
+    snap = ns.build_snapshot()
+    rec = next(n for n in snap["commonDevices"] if n["id"] == "records")
+    assert rec["state"] in ("active", "idle") and "managed" not in rec
+
+
+def test_override_rejects_bad_input():
+    assert ns.set_state_override("", "fault") is False
+    assert ns.set_state_override("x", "bogus") is False
+    assert ns.set_state_override("x", "available") is True
+
+
+def test_device_state_route_requires_instructor():
+    from portal import server
+    c = TestClient(server.app)
+    r = c.post("/api/network/device_state", json={"id": "x", "state": "fault"})
+    assert r.status_code == 401
+
+
+def test_device_state_route_sets_and_validates(client):
+    r = client.post("/api/network/device_state", json={"id": "records", "state": "available"})
+    assert r.status_code == 200 and ns._state_overrides.get("records") == "available"
+    r = client.post("/api/network/device_state", json={"id": "records", "state": "nah"})
+    assert r.status_code == 400
+
+
+# ── N0 review fixes: real register_staff seeds last_seen==created_at ──────────
+
+def test_just_rostered_student_is_idle_not_active(monkeypatch):
+    # register_staff seeds last_seen == created_at (== now); a never-signed-in
+    # student must read IDLE, not active-for-30-min.
+    now = time.time()
+    staff = {"s1": _staff("s1", display_name="New", role="doctor",
+                          last_seen=now, created_at=now)}
+    _n0_room(monkeypatch, staff)
+    snap = ns.build_snapshot()
+    doc = _char_node(snap, "doctor")
+    assert doc["studentId"] == "s1" and doc["state"] == "idle"
+
+
+def test_genuinely_active_student_is_active(monkeypatch):
+    now = time.time()
+    staff = {"s1": _staff("s1", display_name="Live", role="doctor",
+                          created_at=now - 120, last_seen=now - 5)}  # touched since join
+    _n0_room(monkeypatch, staff)
+    snap = ns.build_snapshot()
+    assert _char_node(snap, "doctor")["state"] == "active"
+
+
+def test_staff_roles_whitelist_admits_character_roles():
+    # The whole N0 feature is dead if ehr_db clamps doctor/RT/pharmacist to nurse.
+    from portal import ehr_db
+    for r in ("doctor", "respiratory_therapist", "pharmacist"):
+        assert r in ehr_db._STAFF_ROLES
+
+
+def test_stale_override_self_prunes(monkeypatch):
+    _n0_room(monkeypatch, {})
+    assert ns.set_state_override("no_such_node", "fault") is True
+    ns.build_snapshot()                       # a build with the node absent…
+    assert "no_such_node" not in ns._state_overrides   # …drops the ghost override
+
+
+def test_overrides_clear_when_session_ends(monkeypatch):
+    ns.set_state_override("records", "fault")
+    monkeypatch.setattr(ns._cr, "get_active_room", lambda: None)
+    ns.build_snapshot()
+    assert ns._state_overrides == {}

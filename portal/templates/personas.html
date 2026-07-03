@@ -46,6 +46,13 @@
         <div class="persona-card-actions">
           <a href="/portal/face/develop/{{ p.id }}" target="_blank" rel="noopener"
              class="button-link">🪞 Develop avatar →</a>
+          {% if not p.has_portrait %}
+            <form method="post" action="/portal/face/request-engine/{{ p.id }}"
+                  class="inline-action"
+                  title="FACE ENGINE generates a fully-synthetic portrait for this persona (takes a few seconds)">
+              <button type="submit" class="secondary">✨ Request from FACE ENGINE</button>
+            </form>
+          {% endif %}
         </div>
         <div class="avatar-pick">
           <div class="avatar-pick-label">🪞 Use avatar face:

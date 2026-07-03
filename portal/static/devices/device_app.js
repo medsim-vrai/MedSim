@@ -1693,6 +1693,7 @@
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   const _cabRoleLabel = (r) => ({
     nurse: 'Nurse', charge_nurse: 'Charge nurse',
+    doctor: 'Doctor', respiratory_therapist: 'Respiratory therapist', pharmacist: 'Pharmacist',
     supervisor: 'Supervisor', instructor: 'Instructor',
   })[r] || 'Nurse';
 
