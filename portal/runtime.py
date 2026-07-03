@@ -29,6 +29,27 @@ MAX_TOKENS = 400
 HISTORY_WINDOW = 10  # last N turns sent to the model
 
 
+def _is_auth_error(exc: Exception) -> bool:
+    """An Anthropic auth/key rejection (vs a rate-limit / network / overload)."""
+    name, text = type(exc).__name__.lower(), str(exc).lower()
+    return "authentication" in name or "invalid x-api-key" in text or "401" in text[:24]
+
+
+def _note_key(state: str, exc: Exception | None = None) -> None:
+    """FR-128 — record the Anthropic key verdict for the readiness cockpit. Lazy
+    import (readiness imports server-adjacent modules; this avoids an import cycle).
+    Only auth-class errors flip it to rejected — a rate-limit/outage is not a key
+    problem and must not paint the cockpit red."""
+    try:
+        from . import readiness
+        if state == "ok":
+            readiness.note_key_ok()
+        elif exc is not None and _is_auth_error(exc):
+            readiness.note_key_rejected(f"{type(exc).__name__} on a character turn")
+    except Exception:  # noqa: BLE001 — telemetry must never affect the turn
+        pass
+
+
 def _friendly_llm_error(exc: Exception) -> str:
     """Turn an Anthropic SDK exception into a short, instructor-actionable line.
 
@@ -172,8 +193,10 @@ def take_turn(session_id: str, addressee: str, message: str) -> dict[str, Any]:
         ).strip()
         if not reply:
             reply = "(no response)"
+        _note_key("ok")   # FR-128 — a real reply proves the key works
     except Exception as exc:  # noqa: BLE001
         print(f"[runtime] LLM turn failed: {type(exc).__name__}: {exc}", flush=True)
+        _note_key("rejected", exc)
         return {"ok": False, "error": _friendly_llm_error(exc)}
 
     record = TurnRecord(
@@ -228,8 +251,10 @@ def take_instructor_line(session_id: str, addressee: str, intent: str) -> dict[s
             block.text for block in response.content
             if getattr(block, "type", None) == "text"
         ).strip() or "(no response)"
+        _note_key("ok")
     except Exception as exc:  # noqa: BLE001
         print(f"[runtime] instructor-direction turn failed: {type(exc).__name__}: {exc}", flush=True)
+        _note_key("rejected", exc)
         return {"ok": False, "error": _friendly_llm_error(exc)}
 
     session.history.append(TurnRecord(

@@ -249,8 +249,24 @@ async def _persist_session_state() -> None:
 
 @app.exception_handler(HTTPException)
 async def auth_redirect_handler(request: Request, exc: HTTPException):
-    if exc.status_code == 401 and "text/html" in request.headers.get("accept", ""):
+    wants_html = "text/html" in request.headers.get("accept", "")
+    if exc.status_code == 401 and wants_html:
         return RedirectResponse("/login?error=expired", status_code=303)
+    # FR-128 — a BROWSER navigation to an admin-only page (require_admin) should
+    # get a readable page, not raw 403 JSON. API/XHR callers still get JSON.
+    if exc.status_code == 403 and wants_html:
+        body = (
+            "<!doctype html><meta charset=utf-8><title>Admin seat required</title>"
+            "<div style=\"max-width:34rem;margin:14vh auto;font:15px/1.6 system-ui;"
+            "color:#1c2333;padding:0 1.2rem\">"
+            "<h1 style=\"font-size:1.3rem\">Admin seat required</h1>"
+            f"<p>{exc.detail}</p>"
+            "<p><a href=\"/logout\" style=\"color:#2b59c3;font-weight:600\">Sign out</a>"
+            " and sign back in choosing the <b>Admin</b> seat (your master vault "
+            "password unlocks it), then retry. Or "
+            "<a href=\"/portal/console\" style=\"color:#2b59c3\">return to Mission Control</a>.</p>"
+            "</div>")
+        return HTMLResponse(body, status_code=403)
     return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
@@ -440,6 +456,7 @@ async def home_page(
 async def mission_control_console(
     request: Request,
     _: Annotated[credentials.Vault, Depends(auth.require_vault)],
+    medsim_session: Annotated[str | None, Cookie()] = None,
     mode: str = "operate",
 ):
     """FR-011 G3 — Mission Control: the 3-mode GUI shell (Set up · Operate ·
@@ -523,7 +540,8 @@ async def mission_control_console(
                  "personas": personas, "devices": devices_catalog, "skins": skins}
     return templates.TemplateResponse(request, "console.html", {
         "mode": mode, "bootstrap": bootstrap,
-        "samples": samples, "ehrs": ehrs, "default_ehr": default_ehr})
+        "samples": samples, "ehrs": ehrs, "default_ehr": default_ehr,
+        "is_admin": auth.session_role(medsim_session) == "admin"})
 
 
 @app.post("/portal/examples/load")
@@ -582,6 +600,8 @@ async def credentials_save(
     # up the new Anthropic key without restarting the room.
     if key == "ANTHROPIC_API_KEY":
         _capture_anthropic_key(value.strip() if value.strip() else "")
+        from portal import readiness
+        readiness.note_key_changed()   # FR-128 — a new key clears the old verdict
     return RedirectResponse("/portal/credentials", status_code=303)
 
 
@@ -614,6 +634,7 @@ async def credentials_test(
     if not value:
         return JSONResponse({"ok": False, "message": "Not set."})
     if key == "ANTHROPIC_API_KEY":
+        from portal import readiness
         try:
             from anthropic import Anthropic
             client = Anthropic(api_key=value)
@@ -622,8 +643,10 @@ async def credentials_test(
                 max_tokens=1,
                 messages=[{"role": "user", "content": "ok"}],
             )
+            readiness.note_key_ok()   # FR-128 — cockpit goes green without a live turn
             return JSONResponse({"ok": True, "message": "Anthropic API key accepted."})
         except Exception as exc:  # noqa: BLE001
+            readiness.note_key_rejected(f"{type(exc).__name__} on test")
             return JSONResponse({"ok": False, "message": f"{type(exc).__name__}: {exc}"})
     if key == "ELEVENLABS_API_KEY":
         h = voices.health(value)

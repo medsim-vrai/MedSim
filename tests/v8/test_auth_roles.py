@@ -223,3 +223,45 @@ def test_hub_overlay_failure_never_blocks_login(client, monkeypatch):
     r = _login(c, pw, "instructor")
     assert r.status_code == 303 and "error" not in r.headers["location"]
     assert auth.session_role(c.cookies.get(auth.COOKIE_NAME)) == "instructor"
+
+
+# ── FR-128: admin surfaces reachable from the card UI + friendly gate ────────
+
+def test_console_shows_credentials_only_for_admin(client):
+    c, pw = client
+    _login(c, pw, "admin")
+    assert "/portal/credentials" in c.get("/portal/console").text        # admin sees it
+    c.cookies.clear()
+    _login(c, pw, "instructor")
+    body = c.get("/portal/console").text
+    assert "⚙ Credentials" not in body and 'href="/portal/credentials"' not in body
+
+
+def test_admin_gate_serves_friendly_html_to_browser(client):
+    c, pw = client
+    _login(c, pw, "instructor")
+    # browser navigation (Accept: text/html) → readable 403 page, not raw JSON
+    r = c.get("/portal/credentials", headers={"accept": "text/html"})
+    assert r.status_code == 403
+    assert "Admin seat required" in r.text and "<" in r.text          # HTML, not JSON
+    assert "Sign out" in r.text
+    # an XHR/API caller (json accept) still gets JSON
+    r2 = c.get("/portal/credentials", headers={"accept": "application/json"})
+    assert r2.status_code == 403 and r2.headers["content-type"].startswith("application/json")
+
+
+def test_readiness_voice_reflects_key_verdict(client):
+    c, pw = client
+    from portal import readiness
+    _login(c, pw, "admin")
+    # seed an Anthropic key so 'voice' isn't red-for-missing
+    c.post("/portal/credentials", data={"key": "ANTHROPIC_API_KEY", "value": "sk-ant-x"},
+           follow_redirects=False)
+    readiness.note_key_rejected("AuthenticationError on a character turn")
+    snap = c.get("/api/control/readiness").json()
+    voice = next(ch for ch in snap["checks"] if ch["id"] == "voice")
+    assert voice["status"] == "red" and "REJECTED" in voice["detail"]
+    readiness.note_key_ok()
+    snap2 = c.get("/api/control/readiness").json()
+    voice2 = next(ch for ch in snap2["checks"] if ch["id"] == "voice")
+    assert voice2["status"] == "green" and "verified" in voice2["detail"]

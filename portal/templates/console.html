@@ -27,6 +27,10 @@
 
       <div class="ct-actions">
         <a class="ct-classic" href="/portal/reports">🧪 Reports</a>
+        {% if is_admin %}
+        <a class="ct-classic" href="/portal/credentials"
+           title="API keys, seat passwords, EHR admin — Admin seat only">⚙ Credentials</a>
+        {% endif %}
         <a class="ct-classic" href="/portal/control/setup">Switch to classic control room ↗</a>
         <form action="/logout" method="post" class="logout-form">
           <button type="submit" class="link">Log out</button>

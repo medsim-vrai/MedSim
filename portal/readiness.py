@@ -25,6 +25,26 @@ log = logging.getLogger(__name__)
 GREEN, AMBER, RED = "green", "amber", "red"
 _CERT_PATH = Path(__file__).parent / "data" / "certs" / "dev-cert.pem"
 
+# FR-128 — Anthropic key VERDICT: the cheapest correct signal of key health for the
+# Operate readiness bar, WITHOUT calling Anthropic on every poll. Live character
+# turns and the credentials "Test" button already learn the truth (auth error vs
+# success); they record it here, and _voice reflects it. "unknown" = set but never
+# exercised (stays green — matches prior behavior); a fresh key save resets it.
+_key_verdict: dict[str, Any] = {"state": "unknown", "detail": ""}
+
+
+def note_key_ok() -> None:
+    _key_verdict.update(state="ok", detail="")
+
+
+def note_key_rejected(detail: str = "") -> None:
+    _key_verdict.update(state="rejected", detail=(detail or "").strip()[:160])
+
+
+def note_key_changed() -> None:
+    """A new key was saved — forget the old verdict until it's exercised again."""
+    _key_verdict.update(state="unknown", detail="")
+
 # The documented graceful-restart command (G7 resumes the session on boot).
 # Restart is ALWAYS an operator action — the GUI detects + resumes, never self-restarts.
 _RESTART_HINT = ("pkill -TERM -f run_portal.py  &&  "
@@ -116,7 +136,14 @@ def _voice(vault: Any = None) -> dict[str, Any]:
                       "Add it in Setup → credentials.")
     tts = "ElevenLabs TTS" if stored.get("ELEVENLABS_API_KEY") \
         else "browser TTS (no ElevenLabs key)"
-    return _check("voice", "Voice / AI", GREEN, f"Anthropic key set · {tts}.")
+    # FR-128 — reflect what live turns / the Test button learned, so the cockpit
+    # warns BEFORE a character does. A rejected key is RED even though one is set.
+    if _key_verdict["state"] == "rejected":
+        d = _key_verdict["detail"] or "the last character turn was refused"
+        return _check("voice", "Voice / AI", RED,
+                      f"Anthropic key was REJECTED ({d}) — update it in credentials.")
+    verified = " (verified)" if _key_verdict["state"] == "ok" else ""
+    return _check("voice", "Voice / AI", GREEN, f"Anthropic key set{verified} · {tts}.")
 
 
 def _speech(vault: Any = None) -> dict[str, Any]:
