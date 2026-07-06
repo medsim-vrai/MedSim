@@ -727,3 +727,18 @@ Full spec, phasing, effort: **`docs/FR-013-local-context-and-scenario-gen.md`**.
 3. Real unknowns → `research/RB-*`. A dependency / data-flow / security / clinical-logic
    change → an **ADR** before `Shipped`.
 4. On ship, **validate in a test session** and move to `Validated` with the note.
+
+## FR-022 (P2) — SERVICE COMMUNITY (geospatial patient modeling + service-population faces)
+
+**Priority:** P2 · **Status:** **Proposed / planning note** (filed 2026-07-05, operator directive) ·
+**Effort:** L–XL · **Lands in:** V8 instructor control interface + FACE ENGINE (FACE GENERATOR) integration.
+
+Instructor-operated tool that models the local **service community** students rotate through, in two parts:
+**(A) clinical context** — a geospatial patient-modeling system generates local condition/acuity prevalence
+to seed scenarios + patient charts; **(B) service population** — the **FACE GENERATOR** produces a
+demographically-matched synthetic face cohort so patient avatars resemble the real community (with optional
+on-face condition rendering via the Condition Editor). Lives as a new **Service Community** area in Mission
+Control **Set up** (sibling to ⚙ Local context + ✨ Scenario Studio); defines/imports the localized context
+and feeds FR-013 + Scenario Studio. Interfaces FACE ENGINE (all already built there) via
+`/api/geo/{resolve,profile,generate,cohort}`, the Condition Editor, and the `/api/vrai/request` + M13 export
+bridge; V8 needs `FACE_ENGINE_BASE_URL` (hidden-if-absent). **Full note:** `FR-022-service-community.md`.
