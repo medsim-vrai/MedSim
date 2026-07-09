@@ -343,7 +343,15 @@ def _hub_seat_overlay(local_seat: str) -> str:
             return local_seat
         if ident.get("stale"):
             print("[auth] hub identity served from OFFLINE cache (last-known)", flush=True)
-        return seat
+        # G1 (2026-07-09): a SINGLE site-wide HUB_OPERATOR_USER_ID means every login resolves the
+        # SAME hub identity, so the hub must never RAISE a seat — otherwise an observer per-seat
+        # password would silently become admin. Consistent with V8's "radio only lowers" rule: the
+        # hub seat can only LOWER the local seat, never elevate it (elevation stays with the local
+        # per-seat password). Per-user operator ids — so the hub can safely raise — are the follow-up.
+        if _SEAT_RANK.get(seat, 0) < _SEAT_RANK.get(local_seat, 0):
+            print(f"[auth] hub lowered seat {local_seat!r} -> {seat!r}", flush=True)
+            return seat
+        return local_seat
     except Exception as exc:  # noqa: BLE001 — auth must never hard-fail on the hub
         print(f"[auth] hub identity overlay failed ({type(exc).__name__}); local seat kept",
               flush=True)

@@ -200,6 +200,21 @@ def test_hub_overlay_flag_on_uses_authority_role(client, monkeypatch):
     assert auth.session_role(c.cookies.get(auth.COOKIE_NAME)) == "instructor"
 
 
+def test_hub_overlay_cannot_raise_seat_g1(client, monkeypatch):
+    # G1 (2026-07-09): a SINGLE site-wide operator id means every login resolves the SAME hub
+    # identity, so the hub must NOT raise a seat — else an observer/instructor per-seat password
+    # would silently become admin. Local instructor + authority ADMIN -> stays instructor (the hub
+    # can only LOWER). Elevation stays with the local per-seat password.
+    c, pw = client
+    from portal import auth
+    from portal.hub_adapter import config as hub_config, consume
+    monkeypatch.setattr(hub_config, "ENABLED", True)
+    monkeypatch.setenv("HUB_OPERATOR_USER_ID", "u_site1")
+    monkeypatch.setattr(consume, "identity", lambda uid, tenant_id=None: _sample("org-admin"))
+    _login(c, pw, "instructor")   # master pw, radio lowers to instructor; authority says ADMIN
+    assert auth.session_role(c.cookies.get(auth.COOKIE_NAME)) == "instructor"  # NOT raised to admin
+
+
 def test_hub_overlay_unknown_role_keeps_local_seat(client, monkeypatch):
     c, pw = client
     from portal import auth
