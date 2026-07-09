@@ -5,12 +5,17 @@ save, budget charge, auth events)."""
 from __future__ import annotations
 import json
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from . import config, contract, mappers
 from .queue import Spool
 
 _spool = Spool(config.QUEUE_DIR)
+# Single background worker for spool replay (EMIT_ASYNC). One worker serializes replays so two
+# drains can never double-send the same spooled event; the durable enqueue happens BEFORE we submit,
+# so the newly-enqueued event is always caught by the replay we kick.
+_replay_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hub-emit")
 
 
 def _online_sender(evt: dict[str, Any]) -> bool:
@@ -34,8 +39,11 @@ def _online_sender(evt: dict[str, Any]) -> bool:
 def _emit(evt: dict[str, Any]) -> None:
     if not config.ENABLED:
         return
-    _spool.enqueue(evt)            # durable first — survives a crash mid-flight
-    _spool.replay(_online_sender)  # best-effort flush; offline simply leaves it queued
+    _spool.enqueue(evt)                # durable first — survives a crash mid-flight
+    if config.EMIT_ASYNC:
+        _replay_pool.submit(_spool.replay, _online_sender)  # background: never blocks the caller
+    else:
+        _spool.replay(_online_sender)  # inline best-effort flush (legacy; offline leaves it queued)
 
 
 def flush() -> int:

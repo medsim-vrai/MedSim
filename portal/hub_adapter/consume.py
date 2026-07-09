@@ -4,6 +4,7 @@ V8 is single-tenant, so roster/entitlement consume are optional (the local roste
 authoritative for Studio)."""
 from __future__ import annotations
 import json
+import time
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -41,8 +42,15 @@ def identity(user_id: str, tenant_id: str | None = None) -> dict[str, Any]:
         with urllib.request.urlopen(req, timeout=config.TIMEOUT_S,
                                     context=config.ssl_context()) as resp:
             val = json.loads(resp.read().decode())
+            val["_cached_at"] = time.time()  # for offline soft-expiry (below)
             cache[user_id] = val
             _write_cache(cache)
             return val
     except Exception:
-        return cache.get(user_id, {})     # offline: serve last-known; never hard-fail auth
+        # Offline: serve last-known — but NOT past the soft max-age (a revoked-but-stale HIGHER role
+        # must not persist forever on an offline box). Beyond it, drop to {} so the caller uses the
+        # LOCAL vault seat — still fail-soft, never a hard auth failure.
+        cached = cache.get(user_id) or {}
+        if cached and (time.time() - cached.get("_cached_at", 0)) > config.CACHE_MAX_AGE_S:
+            return {}
+        return cached

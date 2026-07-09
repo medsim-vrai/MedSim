@@ -21,6 +21,17 @@ LOCAL_TENANT_ID = os.getenv("HUB_LOCAL_TENANT_ID", "v8-local")
 CAPABILITIES = ["identity.consume", "session.emit", "reporting.emit", "audit.emit"]
 TIMEOUT_S = float(os.getenv("HUB_TIMEOUT_S", "5"))
 
+# Emit dispatch: with EMIT_ASYNC on, an emit ENQUEUES to the durable spool (fast, local) and replays
+# it in a BACKGROUND worker, so a slow/unreachable authority never blocks the login/request path (the
+# V8 analogue of V9's async-emit fix; found ~4s/login stall on the V8-5 outage drill). Default OFF =
+# the inline replay behavior unchanged; the canary/cutover sets HUB_EMIT_ASYNC=1.
+EMIT_ASYNC = os.getenv("HUB_EMIT_ASYNC", "0") == "1"
+# Identity-cache soft-expiry (seconds): offline, never serve a cached identity older than this — an
+# offline box must not hold a revoked-but-stale HIGHER role indefinitely (V8-5 red-team HIGH). Past
+# the window, consume returns {} so the caller falls to the LOCAL vault seat (still fail-soft, never a
+# hard auth failure). Default 12h; set before seat #2 / any unattended-cohort use.
+CACHE_MAX_AGE_S = float(os.getenv("HUB_CACHE_MAX_AGE_S", "43200"))
+
 _SSL_CTX = None
 
 
