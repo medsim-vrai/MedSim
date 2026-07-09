@@ -38,7 +38,8 @@ def identity(user_id: str, tenant_id: str | None = None) -> dict[str, Any]:
         req = urllib.request.Request(f"{config.HUB_BASE_URL}/identity/{user_id}",
                                      headers={"X-Hub-Tenant": tid,
                                               "Authorization": f"Bearer {config.HUB_SERVICE_TOKEN}"})
-        with urllib.request.urlopen(req, timeout=config.TIMEOUT_S) as resp:
+        with urllib.request.urlopen(req, timeout=config.TIMEOUT_S,
+                                    context=config.ssl_context()) as resp:
             val = json.loads(resp.read().decode())
             cache[user_id] = val
             _write_cache(cache)

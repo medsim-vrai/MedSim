@@ -24,7 +24,8 @@ def _online_sender(evt: dict[str, Any]) -> bool:
                                      headers={"Content-Type": "application/json",
                                               "X-Hub-Signature": sig,
                                               "X-Hub-Event-Id": evt["event_id"]})
-        with urllib.request.urlopen(req, timeout=config.TIMEOUT_S) as resp:
+        with urllib.request.urlopen(req, timeout=config.TIMEOUT_S,
+                                    context=config.ssl_context()) as resp:
             return 200 <= resp.status < 300
     except Exception:
         return False
