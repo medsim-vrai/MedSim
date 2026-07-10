@@ -36,18 +36,49 @@ export function setMorphBasis(doc: MorphBasisDoc | null): void {
   BAKED = doc;
 }
 
-/** Fetch + parse the baked ARKit rig once (memoized). No-op → procedural fallback on absence/error. */
-export function loadMorphBasis(): Promise<void> {
+/**
+ * Rig-lab sandbox (DEFAULT OFF). `?rigBasis=<name>` (query OR hash) loads a candidate-repair basis
+ * from `/assets/face/face_mesh_morphbasis.<name>.json`, so a fix to the rigid-landmark drift
+ * (see the CN-rig audit) can be seen in the REAL Three.js runtime before it ever ships as the default.
+ * `<name>` is restricted to `[a-z0-9]+`, so the flag cannot point the fetch anywhere but a sibling
+ * asset (no path traversal, no cross-origin). Returns the URLs to try IN ORDER: the sandbox override
+ * first, then the shipped basis — a missing or typo'd sandbox asset silently renders the real rig.
+ * With no flag (production), this is exactly `[MORPH_BASIS_URL]` — the loader is byte-for-byte the old
+ * single fetch.
+ */
+export function resolveBasisUrls(searchAndHash: string): string[] {
+  const m = searchAndHash.match(/[?&#]rigBasis=([a-z0-9]+)/i);
+  const name = m ? m[1]!.toLowerCase() : null;
+  return name && name !== 'shipped'
+    ? [`/assets/face/face_mesh_morphbasis.${name}.json`, MORPH_BASIS_URL]
+    : [MORPH_BASIS_URL];
+}
+
+/**
+ * Fetch + parse the baked ARKit rig once (memoized). No-op → procedural fallback on absence/error.
+ * `searchAndHash` defaults to the live URL; it exists so tests (and an explicit override) can drive
+ * the sandbox flag without touching `location`.
+ */
+export function loadMorphBasis(searchAndHash?: string): Promise<void> {
   if (_basisPromise) return _basisPromise;
+  const qs = searchAndHash ?? (typeof location !== 'undefined' ? `${location.search}${location.hash}` : '');
   _basisPromise = (async (): Promise<void> => {
-    try {
-      if (typeof fetch !== 'function') return;
-      const res = await fetch(MORPH_BASIS_URL);
-      if (!res.ok) return;
-      const raw = (await res.json()) as Partial<MorphBasisDoc> | null;
-      if (raw && raw.shapes && typeof raw.canonicalHeight === 'number') BAKED = raw as MorphBasisDoc;
-    } catch {
-      // leave BAKED null → procedural rig
+    if (typeof fetch !== 'function') return;
+    for (const url of resolveBasisUrls(qs)) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue; // 404 on a sandbox asset → fall through to the shipped basis
+        const raw = (await res.json()) as Partial<MorphBasisDoc> | null;
+        if (raw && raw.shapes && typeof raw.canonicalHeight === 'number') {
+          BAKED = raw as MorphBasisDoc;
+          if (url !== MORPH_BASIS_URL && typeof console !== 'undefined') {
+            console.info(`[rig-lab] morph basis override active: ${url}`);
+          }
+          return;
+        }
+      } catch {
+        // try the next candidate; if all fail, leave BAKED null → procedural rig
+      }
     }
   })();
   return _basisPromise;
