@@ -20,6 +20,27 @@ from pathlib import Path
 
 import uvicorn
 
+
+def _load_dotenv() -> None:
+    """Load KEY=VALUE lines from a repo-root ``.env`` (if present) into the environment, WITHOUT
+    overriding anything already set in the shell. Stdlib-only. ``.env.example`` documents the keys —
+    until now nothing actually read a ``.env``, so hub/identity settings had to be exported by hand
+    per launcher; this makes the file the single durable config seam for every launch script."""
+    path = Path(__file__).resolve().parent / ".env"
+    if not path.is_file():
+        return
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        if key and key not in os.environ:
+            os.environ[key] = val.strip()
+
+
+_load_dotenv()
+
 HOST = os.environ.get("MEDSIM_HOST", "127.0.0.1")
 PORT = int(os.environ.get("MEDSIM_PORT", "8760"))
 
