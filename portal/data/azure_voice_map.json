@@ -1,0 +1,4 @@
+{
+  "_comment": "Azure voice CASTING map for TTS_PROVIDER=azure — the voice re-cast is CONFIG, not code. Keys are ElevenLabs voice ids (the ids stored in session voice_assignments / the 37-persona catalog); values are Azure neural voice names (e.g. en-US-AndrewNeural). Anything unmapped speaks '_default'. Fill this in during the provider-validation bake-off (Task #54) once Azure credentials exist; AZURE_TTS_DEFAULT_VOICE env overrides '_default'.",
+  "_default": "en-US-JennyNeural"
+}

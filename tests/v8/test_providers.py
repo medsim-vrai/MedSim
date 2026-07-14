@@ -14,7 +14,9 @@ from types import SimpleNamespace
 import pytest
 
 from portal import readiness, runtime
+from portal.providers import tts as tts_mod
 from portal.providers.chat import AnthropicChat, AzureOpenAIChat, BedrockChat, make_chat
+from portal.providers.tts import AzureTts, ElevenLabsTts, make_tts
 
 
 @pytest.fixture(autouse=True)
@@ -252,3 +254,150 @@ def test_bedrock_complete_uses_a_lazily_imported_boto3(monkeypatch):
     out = chat.complete(system="s", messages=[{"role": "user", "content": "hi"}], max_tokens=40)
     assert out == "bedrock reply"
     assert calls["modelId"] == "anthropic.claude-haiku-4-5-20251001-v1:0"
+
+
+# =================================================================================================
+# TTS providers (gate 1b) — TTS_PROVIDER selects the engine; default = ElevenLabs, byte-identical.
+# =================================================================================================
+
+
+def test_make_tts_default_is_elevenlabs_and_delegates(monkeypatch):
+    monkeypatch.delenv("TTS_PROVIDER", raising=False)
+    tts = make_tts()
+    assert isinstance(tts, ElevenLabsTts)
+
+    seen = {}
+    sentinel = object()
+
+    def _fake_synth(text, voice_id, api_key, *, language=None):
+        seen.update(text=text, voice_id=voice_id, api_key=api_key, language=language)
+        return sentinel
+
+    from portal import voices
+
+    monkeypatch.setattr(voices, "synthesize_stream", _fake_synth)
+    out = tts.synthesize_stream("hello", "v-1", "el-key", language="en")
+    assert out is sentinel  # a pure delegate — same generator object, same behavior
+    assert seen == {"text": "hello", "voice_id": "v-1", "api_key": "el-key", "language": "en"}
+
+
+def test_tts_provider_env_selects_azure(monkeypatch):
+    monkeypatch.setenv("TTS_PROVIDER", "azure")
+    monkeypatch.setenv("AZURE_SPEECH_KEY", "azkey")
+    monkeypatch.setenv("AZURE_SPEECH_REGION", "usgovvirginia")
+    tts = make_tts()
+    assert isinstance(tts, AzureTts)
+    assert tts.available() is True
+    assert tts.label == "azure/usgovvirginia"
+
+
+async def test_azure_tts_unconfigured_is_unavailable_and_raises():
+    tts = AzureTts("", "", "tts.speech.microsoft.com", "en-US-JennyNeural")
+    assert tts.available() is False
+    agen = tts.synthesize_stream("hello", "v-1", "ignored")
+    with pytest.raises(ValueError, match="not configured"):
+        await agen.__anext__()
+    # Empty text raises the same ValueError contract voices.synthesize_stream established.
+    tts2 = AzureTts("k", "eastus", "tts.speech.microsoft.com", "en-US-JennyNeural")
+    agen2 = tts2.synthesize_stream("   ", "v-1", "ignored")
+    with pytest.raises(ValueError, match="empty text"):
+        await agen2.__anext__()
+
+
+def test_azure_voice_casting_map_and_default():
+    tts = AzureTts("k", "eastus", "tts.speech.microsoft.com", "en-US-JennyNeural")
+    tts._map = {"el-voice-abc": "en-US-AndrewNeural"}
+    assert tts.map_voice("el-voice-abc") == "en-US-AndrewNeural"  # cast
+    assert tts.map_voice("el-voice-unmapped") == "en-US-JennyNeural"  # default
+    assert tts.map_voice("") == "en-US-JennyNeural"  # no assignment at all -> default
+    tts._map = {"_default": "en-GB-SoniaNeural"}
+    assert tts.map_voice("anything") == "en-GB-SoniaNeural"  # map-file default wins
+
+
+class _FakeAzureResponse:
+    status_code = 200
+    request = None
+
+    async def aiter_bytes(self):
+        yield b"mp3-bytes-1"
+        yield b"mp3-bytes-2"
+
+    async def aread(self):
+        return b""
+
+
+class _FakeAzureStreamCM:
+    def __init__(self, capture, response):
+        self._capture = capture
+        self._response = response
+
+    async def __aenter__(self):
+        return self._response
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+class _FakeAzureClient:
+    def __init__(self, capture, response=None):
+        self._capture = capture
+        self._response = response or _FakeAzureResponse()
+
+    def stream(self, method, url, *, content, headers):
+        self._capture.update(method=method, url=url, content=content, headers=headers)
+        return _FakeAzureStreamCM(self._capture, self._response)
+
+
+async def test_azure_tts_builds_the_right_request(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(tts_mod, "_azure_client", lambda: _FakeAzureClient(captured))
+    tts = AzureTts("azkey", "eastus", "tts.speech.microsoft.com", "en-US-JennyNeural")
+    tts._map = {"el-voice-abc": "en-US-AndrewNeural"}
+
+    chunks = [
+        c async for c in tts.synthesize_stream("Hi <there> & welcome", "el-voice-abc", "ignored")
+    ]
+    assert chunks == [b"mp3-bytes-1", b"mp3-bytes-2"]
+    assert captured["url"] == "https://eastus.tts.speech.microsoft.com/cognitiveservices/v1"
+    assert captured["headers"]["Ocp-Apim-Subscription-Key"] == "azkey"
+    assert captured["headers"]["X-Microsoft-OutputFormat"] == "audio-24khz-48kbitrate-mono-mp3"
+    ssml = captured["content"].decode()
+    assert "en-US-AndrewNeural" in ssml  # the CAST voice, not the ElevenLabs id
+    assert "Hi &lt;there&gt; &amp; welcome" in ssml  # XML-escaped text node
+    # The Gov-cloud suffix swaps the endpoint host, nothing else.
+    gov = AzureTts("azkey", "usgovvirginia", "tts.speech.azure.us", "en-US-JennyNeural")
+    captured2 = {}
+    monkeypatch.setattr(tts_mod, "_azure_client", lambda: _FakeAzureClient(captured2))
+    _ = [c async for c in gov.synthesize_stream("hi", "", "ignored")]
+    assert captured2["url"] == "https://usgovvirginia.tts.speech.azure.us/cognitiveservices/v1"
+
+
+# --- /api/tts route contract — gating per provider, fallback semantics unchanged ------------------
+
+
+async def test_tts_route_elevenlabs_gating_unchanged(monkeypatch):
+    from portal import server
+
+    monkeypatch.delenv("TTS_PROVIDER", raising=False)
+    # No key on the box (isolate from any dev keyfile/env leakage) -> 503 fallback, same reason as ever.
+    monkeypatch.setattr(server, "_session_el_key", lambda: "")
+    resp = await server._tts_response("hello", "v-1", None)
+    assert resp.status_code == 503
+    assert b"ElevenLabs not configured" in resp.body
+    # Key present but no voice -> "no voice_id", unchanged.
+    monkeypatch.setattr(server, "_session_el_key", lambda: "el-key")
+    resp = await server._tts_response("hello", "", None)
+    assert resp.status_code == 503
+    assert b"no voice_id" in resp.body
+
+
+async def test_tts_route_azure_unconfigured_falls_back(monkeypatch):
+    from portal import server
+
+    monkeypatch.setenv("TTS_PROVIDER", "azure")
+    monkeypatch.delenv("AZURE_SPEECH_KEY", raising=False)
+    monkeypatch.delenv("AZURE_SPEECH_REGION", raising=False)
+    monkeypatch.setattr(server, "_session_el_key", lambda: "")
+    resp = await server._tts_response("hello", "v-1", None)
+    assert resp.status_code == 503
+    assert b"azure TTS not configured" in resp.body
