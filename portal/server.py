@@ -3357,18 +3357,24 @@ async def _tts_response(text: str, voice_id: str, language: str | None):
     voice_id = (voice_id or "").strip()
     api_key = _session_el_key()
 
-    if not text or not voice_id or not api_key:
-        return JSONResponse(
-            {"fallback": True,
-             "reason": ("no text" if not text else
-                        "no voice_id" if not voice_id else
-                        "ElevenLabs not configured")},
-            status_code=503,
-        )
+    # Gate 1b: TTS_PROVIDER selects the engine (default elevenlabs = today's behavior, byte-identical).
+    # ElevenLabs gates on the per-session key + a voice id, unchanged; an alternate provider gates on
+    # its own org-wide config and maps/defaults the voice itself.
+    from portal.providers.tts import make_tts
+    tts = make_tts()
+    if tts.name == "elevenlabs":
+        configured = bool(voice_id and api_key)
+        reason = ("no text" if not text else
+                  "no voice_id" if not voice_id else "ElevenLabs not configured")
+    else:
+        configured = tts.available()
+        reason = "no text" if not text else f"{tts.name} TTS not configured"
+    if not text or not configured:
+        return JSONResponse({"fallback": True, "reason": reason}, status_code=503)
 
     # Probe the first chunk so a hard failure (bad key, 4xx) becomes a
     # clean 503+fallback rather than a half-streamed broken response.
-    agen = voices.synthesize_stream(text, voice_id, api_key, language=language or None)
+    agen = tts.synthesize_stream(text, voice_id, api_key, language=language or None)
     try:
         first = await agen.__anext__()
     except StopAsyncIteration:

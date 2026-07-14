@@ -849,22 +849,28 @@ async def _synthesize_voice(
     if not text:
         return None, None
 
-    # (1) ElevenLabs — run whenever a key exists (session OR env/keyfile), not just when an
-    #     operator assigned a voice. Standalone, auto-resolve a voice from the persona traits.
+    # (1) Managed TTS. The default (ElevenLabs) runs whenever a key exists (session OR env/keyfile),
+    #     not just when an operator assigned a voice — behavior unchanged. An alternate provider
+    #     (TTS_PROVIDER=azure, gate 1b) runs whenever ITS org-wide env config is present; it maps
+    #     the assigned ElevenLabs voice id through the casting map (default voice for anything
+    #     unmapped), so the ElevenLabs-catalog standalone-voice lookup is skipped for it.
+    from .providers.tts import make_tts
+    tts = make_tts()
     api_key = (sess.elevenlabs_api_key
                if sess is not None and getattr(sess, "elevenlabs_api_key", "")
                else voices.get_api_key(None))
-    if api_key:
+    usable = bool(api_key) if tts.name == "elevenlabs" else tts.available()
+    if usable:
         voice_id = ""
         if sess is not None:
             assigns = getattr(sess, "voice_assignments", None) or {}
             voice_id = str(assigns.get(character_id, "")).strip()
-        if not voice_id:
+        if not voice_id and tts.name == "elevenlabs":
             voice_id = await _standalone_voice_id(character_id, api_key)
-        if voice_id:
+        if voice_id or tts.name != "elevenlabs":
             try:
                 buf = bytearray()
-                async for chunk in voices.synthesize_stream(text, voice_id, api_key):
+                async for chunk in tts.synthesize_stream(text, voice_id, api_key):
                     buf.extend(chunk)
                 if buf:
                     import base64

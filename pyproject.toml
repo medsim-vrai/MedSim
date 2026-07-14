@@ -27,6 +27,12 @@ kb = [
   "chromadb>=0.5",
   "voyageai>=0.2",
 ]
+providers = [
+  # LLM_PROVIDER=bedrock (portal/providers/chat.py) — the DoD IL4/IL5 path for sites where
+  # Anthropic is not procurable (FASCSA). Lazy-imported: absent by default, doesn't affect the
+  # default Anthropic-only install.
+  "boto3>=1.34",
+]
 serve = [
   "fastapi>=0.110",
   "uvicorn[standard]>=0.30",
