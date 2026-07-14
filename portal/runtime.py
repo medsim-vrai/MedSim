@@ -15,6 +15,7 @@ When B5/B6/B7/B8/B9/B10/B11/B12 land per the PDF, this file becomes the
 "local mode" fallback and the proper orchestrator takes over the Launch
 endpoint.
 """
+
 from __future__ import annotations
 
 import secrets
@@ -23,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import scenarios
+from .providers.chat import make_chat
 
 MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 400
@@ -42,6 +44,7 @@ def _note_key(state: str, exc: Exception | None = None) -> None:
     problem and must not paint the cockpit red."""
     try:
         from . import readiness
+
         if state == "ok":
             readiness.note_key_ok()
         elif exc is not None and _is_auth_error(exc):
@@ -60,8 +63,10 @@ def _friendly_llm_error(exc: Exception) -> str:
     name = type(exc).__name__
     text = str(exc).lower()
     if "authentication" in name.lower() or "invalid x-api-key" in text or "401" in text[:24]:
-        return ("Anthropic API key was rejected — update it on the Credentials page "
-                "(/portal/credentials) and try again")
+        return (
+            "Anthropic API key was rejected — update it on the Credentials page "
+            "(/portal/credentials) and try again"
+        )
     if "permission" in name.lower() or "credit balance" in text or "billing" in text:
         return "Anthropic account issue (billing/permissions) — check console.anthropic.com"
     if "ratelimit" in name.lower() or "rate_limit" in text or "429" in text[:24]:
@@ -166,34 +171,28 @@ def take_turn(session_id: str, addressee: str, message: str) -> dict[str, Any]:
         _enc_id = (session.scenario or {}).get("id")
         if _enc_id:
             from portal import scanned_docs as _sd
+
             _sd.reveal_on_mention(_enc_id, None, message)
             _doc_block = _sd.prompt_block_for(_enc_id)
             if _doc_block:
                 _ex = character.get("_extra_context") or ""
-                character = {**character,
-                             "_extra_context": "\n\n".join(p for p in (_ex, _doc_block) if p)}
+                character = {
+                    **character,
+                    "_extra_context": "\n\n".join(p for p in (_ex, _doc_block) if p),
+                }
     except Exception:  # noqa: BLE001 — documents are best-effort context
         pass
     system_prompt = _build_system_prompt(character, session.scenario)
     messages = _build_messages(session, addressee, message)
 
     try:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=session.api_key)
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=system_prompt,
-            messages=messages,
-        )
-        # The response.content is a list of content blocks; pull the text.
-        reply = "".join(
-            block.text for block in response.content
-            if getattr(block, "type", None) == "text"
+        chat = make_chat(session_api_key=session.api_key, model=MODEL)
+        reply = chat.complete(
+            system=system_prompt, messages=messages, max_tokens=MAX_TOKENS
         ).strip()
         if not reply:
             reply = "(no response)"
-        _note_key("ok")   # FR-128 — a real reply proves the key works
+        _note_key("ok")  # FR-128 — a real reply proves the key works
     except Exception as exc:  # noqa: BLE001
         print(f"[runtime] LLM turn failed: {type(exc).__name__}: {exc}", flush=True)
         _note_key("rejected", exc)
@@ -239,32 +238,28 @@ def take_instructor_line(session_id: str, addressee: str, intent: str) -> dict[s
     )
     messages = _build_messages(session, addressee, direction)
     try:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=session.api_key)
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=system_prompt,
-            messages=messages,
+        chat = make_chat(session_api_key=session.api_key, model=MODEL)
+        reply = (
+            chat.complete(system=system_prompt, messages=messages, max_tokens=MAX_TOKENS).strip()
+            or "(no response)"
         )
-        reply = "".join(
-            block.text for block in response.content
-            if getattr(block, "type", None) == "text"
-        ).strip() or "(no response)"
         _note_key("ok")
     except Exception as exc:  # noqa: BLE001
-        print(f"[runtime] instructor-direction turn failed: {type(exc).__name__}: {exc}", flush=True)
+        print(
+            f"[runtime] instructor-direction turn failed: {type(exc).__name__}: {exc}", flush=True
+        )
         _note_key("rejected", exc)
         return {"ok": False, "error": _friendly_llm_error(exc)}
 
-    session.history.append(TurnRecord(
-        addressee=addressee,
-        student_utterance=f"[instructor direction] {intent.strip()}",
-        character_response=reply,
-        timestamp=time.time(),
-    ))
-    return {"ok": True, "character_id": addressee,
-            "character_name": name, "reply": reply}
+    session.history.append(
+        TurnRecord(
+            addressee=addressee,
+            student_utterance=f"[instructor direction] {intent.strip()}",
+            character_response=reply,
+            timestamp=time.time(),
+        )
+    )
+    return {"ok": True, "character_id": addressee, "character_name": name, "reply": reply}
 
 
 def take_turn_stream(session_id: str, addressee: str, message: str):
@@ -286,25 +281,20 @@ def take_turn_stream(session_id: str, addressee: str, message: str):
     messages = _build_messages(session, addressee, message)
 
     def _gen():
-        from anthropic import Anthropic
-        client = Anthropic(api_key=session.api_key)
+        chat = make_chat(session_api_key=session.api_key, model=MODEL)
         parts: list[str] = []
-        with client.messages.stream(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            system=system_prompt,
-            messages=messages,
-        ) as stream:
-            for delta in stream.text_stream:
-                parts.append(delta)
-                yield delta
+        for delta in chat.stream(system=system_prompt, messages=messages, max_tokens=MAX_TOKENS):
+            parts.append(delta)
+            yield delta
         reply = "".join(parts).strip() or "(no response)"
-        session.history.append(TurnRecord(
-            addressee=addressee,
-            student_utterance=message.strip(),
-            character_response=reply,
-            timestamp=time.time(),
-        ))
+        session.history.append(
+            TurnRecord(
+                addressee=addressee,
+                student_utterance=message.strip(),
+                character_response=reply,
+                timestamp=time.time(),
+            )
+        )
 
     return _gen()
 
@@ -312,6 +302,7 @@ def take_turn_stream(session_id: str, addressee: str, message: str):
 # ---------------------------------------------------------------------------
 # Prompt construction
 # ---------------------------------------------------------------------------
+
 
 def _build_system_prompt(character: dict[str, Any], scenario: dict[str, Any]) -> str:
     name = character.get("name") or character.get("id", "the character")
@@ -439,15 +430,17 @@ def _build_messages(
             messages.append({"role": "assistant", "content": turn.character_response})
         else:
             other_name = session.characters.get(turn.addressee, {}).get("name", turn.addressee)
-            messages.append({
-                "role": "user",
-                "content": (
-                    f"[Scene: the student said to {other_name}: "
-                    f"'{turn.student_utterance}' and {other_name} replied: "
-                    f"'{turn.character_response}']\n\n"
-                    "Acknowledge if relevant, or wait. Do not impersonate the other character."
-                ),
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        f"[Scene: the student said to {other_name}: "
+                        f"'{turn.student_utterance}' and {other_name} replied: "
+                        f"'{turn.character_response}']\n\n"
+                        "Acknowledge if relevant, or wait. Do not impersonate the other character."
+                    ),
+                }
+            )
             # Skip the assistant turn — let the model decide whether to respond.
             # But Anthropic API requires alternating roles, so we must add
             # something. Add a minimal assistant beat.
